@@ -1,13 +1,17 @@
 # Dispatch V2 LLM Context Budget
 
-Each stage prompt is built from exactly four layers:
+Each stage prompt is built from eight layers:
 
 1. static prefix
 2. dispatch context
 3. stage-local candidate window
-4. upstream summary
+4. reference frame
+5. comparison pack
+6. geospatial context
+7. burst context
+8. upstream summary
 
-Do not dump full runtime state into any stage request.
+Do not dump full runtime state or raw map tiles into any stage request.
 
 ## Static Prefix
 
@@ -47,3 +51,20 @@ Rules:
 - every tool response must be schema-validated
 - every tool fetch must be logged to `llm_context_fetch_trace`
 - tool fetch must not replace the top-K budget discipline
+
+## Multi-Pass Stages
+
+Selective multi-pass rollout applies to:
+
+- `driver`
+- `route-generation`
+- `route-critique`
+- `scenario`
+- `final-selection`
+
+Loop:
+
+1. `propose`
+2. `critique`
+3. `compare`
+4. `commit`

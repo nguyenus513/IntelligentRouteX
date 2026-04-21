@@ -17,10 +17,11 @@ class DecisionBrainResolverTest {
                 properties,
                 new LegacyMlBrain(),
                 new LlmBrain(
-                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm())),
+                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm()), properties.getDecision(), new DecisionStageLogger(properties)),
                         properties.getDecision().getLlm(),
                         new LegacyMlBrain(),
-                        new DecisionStageLogger(properties)),
+                        new DecisionStageLogger(properties),
+                        new ContextToolRegistry()),
                 new StudentBrain(new LegacyMlBrain()));
 
         ResolvedDecisionBrain resolved = resolver.resolve();
@@ -32,7 +33,7 @@ class DecisionBrainResolverTest {
     }
 
     @Test
-    void llmAuthoritativeModeMarksPairBundleAndFinalSelectionAsAuthoritative() {
+    void llmAuthoritativeModeMarksGuardedPrimaryStagesAsAuthoritative() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         properties.getDecision().setMode("llm-authoritative");
         properties.getDecision().getLlm().setApiKeyEnv("PATH");
@@ -40,18 +41,22 @@ class DecisionBrainResolverTest {
                 properties,
                 new LegacyMlBrain(),
                 new LlmBrain(
-                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm())),
+                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm()), properties.getDecision(), new DecisionStageLogger(properties)),
                         properties.getDecision().getLlm(),
                         new LegacyMlBrain(),
-                        new DecisionStageLogger(properties)),
+                        new DecisionStageLogger(properties),
+                        new ContextToolRegistry()),
                 new StudentBrain(new LegacyMlBrain()));
 
         ResolvedDecisionBrain resolved = resolver.resolve();
 
         assertEquals(DecisionRuntimeMode.LLM_AUTHORITATIVE, resolved.runtimeMode());
         assertTrue(resolved.shouldApplyAuthoritatively(DecisionStageName.PAIR_BUNDLE));
+        assertTrue(resolved.shouldApplyAuthoritatively(DecisionStageName.DRIVER));
+        assertTrue(resolved.shouldApplyAuthoritatively(DecisionStageName.ROUTE_CRITIQUE));
+        assertTrue(resolved.shouldApplyAuthoritatively(DecisionStageName.SCENARIO));
         assertTrue(resolved.shouldApplyAuthoritatively(DecisionStageName.FINAL_SELECTION));
-        assertFalse(resolved.shouldApplyAuthoritatively(DecisionStageName.DRIVER));
+        assertFalse(resolved.shouldApplyAuthoritatively(DecisionStageName.ROUTE_GENERATION));
     }
 
     @Test
@@ -63,10 +68,11 @@ class DecisionBrainResolverTest {
                 properties,
                 new LegacyMlBrain(),
                 new LlmBrain(
-                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm())),
+                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm()), properties.getDecision(), new DecisionStageLogger(properties)),
                         properties.getDecision().getLlm(),
                         new LegacyMlBrain(),
-                        new DecisionStageLogger(properties)),
+                        new DecisionStageLogger(properties),
+                        new ContextToolRegistry()),
                 new StudentBrain(new LegacyMlBrain()));
 
         ResolvedDecisionBrain resolved = resolver.resolve();

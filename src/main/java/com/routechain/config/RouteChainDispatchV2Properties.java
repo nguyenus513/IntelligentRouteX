@@ -1174,7 +1174,14 @@ public class RouteChainDispatchV2Properties {
     public static final class Decision {
         private String mode = "llm";
         private boolean fallbackToLegacy = true;
-        private java.util.List<String> authoritativeStages = new java.util.ArrayList<>(java.util.List.of("pair-bundle", "final-selection"));
+        private java.util.List<String> authoritativeStages = new java.util.ArrayList<>(java.util.List.of(
+                "pair-bundle",
+                "driver",
+                "route-critique",
+                "scenario",
+                "final-selection"));
+        private final EffortPolicy effortPolicy = new EffortPolicy();
+        private final ContextSelection contextSelection = new ContextSelection();
         private final Llm llm = new Llm();
 
         public String getMode() {
@@ -1206,6 +1213,92 @@ public class RouteChainDispatchV2Properties {
         public Llm getLlm() {
             return llm;
         }
+
+        public EffortPolicy getEffortPolicy() {
+            return effortPolicy;
+        }
+
+        public ContextSelection getContextSelection() {
+            return contextSelection;
+        }
+    }
+
+    public static final class EffortPolicy {
+        private boolean dynamicEnabled = true;
+        private int lowComplexityThreshold = 3;
+        private int highComplexityThreshold = 8;
+        private Duration latencyPressureThreshold = Duration.ofMillis(900);
+
+        public boolean isDynamicEnabled() {
+            return dynamicEnabled;
+        }
+
+        public void setDynamicEnabled(boolean dynamicEnabled) {
+            this.dynamicEnabled = dynamicEnabled;
+        }
+
+        public int getLowComplexityThreshold() {
+            return lowComplexityThreshold;
+        }
+
+        public void setLowComplexityThreshold(int lowComplexityThreshold) {
+            this.lowComplexityThreshold = lowComplexityThreshold;
+        }
+
+        public int getHighComplexityThreshold() {
+            return highComplexityThreshold;
+        }
+
+        public void setHighComplexityThreshold(int highComplexityThreshold) {
+            this.highComplexityThreshold = highComplexityThreshold;
+        }
+
+        public Duration getLatencyPressureThreshold() {
+            return latencyPressureThreshold;
+        }
+
+        public void setLatencyPressureThreshold(Duration latencyPressureThreshold) {
+            this.latencyPressureThreshold = latencyPressureThreshold;
+        }
+    }
+
+    public static final class ContextSelection {
+        private boolean dynamicEnabled = true;
+        private boolean toolFetchEnabled = true;
+        private int compactCandidateThreshold = 3;
+        private int denseCandidateThreshold = 8;
+
+        public boolean isDynamicEnabled() {
+            return dynamicEnabled;
+        }
+
+        public void setDynamicEnabled(boolean dynamicEnabled) {
+            this.dynamicEnabled = dynamicEnabled;
+        }
+
+        public boolean isToolFetchEnabled() {
+            return toolFetchEnabled;
+        }
+
+        public void setToolFetchEnabled(boolean toolFetchEnabled) {
+            this.toolFetchEnabled = toolFetchEnabled;
+        }
+
+        public int getCompactCandidateThreshold() {
+            return compactCandidateThreshold;
+        }
+
+        public void setCompactCandidateThreshold(int compactCandidateThreshold) {
+            this.compactCandidateThreshold = compactCandidateThreshold;
+        }
+
+        public int getDenseCandidateThreshold() {
+            return denseCandidateThreshold;
+        }
+
+        public void setDenseCandidateThreshold(int denseCandidateThreshold) {
+            this.denseCandidateThreshold = denseCandidateThreshold;
+        }
     }
 
     public static final class Llm {
@@ -1218,6 +1311,13 @@ public class RouteChainDispatchV2Properties {
         private int maxRetries = 2;
         private boolean parallelToolCalls = false;
         private boolean strictStructuredOutputs = true;
+        private boolean multiPassEnabled = true;
+        private java.util.List<String> multiPassStages = new java.util.ArrayList<>(java.util.List.of(
+                "driver",
+                "route-generation",
+                "route-critique",
+                "scenario",
+                "final-selection"));
 
         public String getProvider() {
             return provider;
@@ -1289,6 +1389,24 @@ public class RouteChainDispatchV2Properties {
 
         public void setStrictStructuredOutputs(boolean strictStructuredOutputs) {
             this.strictStructuredOutputs = strictStructuredOutputs;
+        }
+
+        public boolean isMultiPassEnabled() {
+            return multiPassEnabled;
+        }
+
+        public void setMultiPassEnabled(boolean multiPassEnabled) {
+            this.multiPassEnabled = multiPassEnabled;
+        }
+
+        public java.util.List<String> getMultiPassStages() {
+            return multiPassStages;
+        }
+
+        public void setMultiPassStages(java.util.List<String> multiPassStages) {
+            this.multiPassStages = multiPassStages == null
+                    ? new java.util.ArrayList<>()
+                    : new java.util.ArrayList<>(multiPassStages);
         }
     }
 }

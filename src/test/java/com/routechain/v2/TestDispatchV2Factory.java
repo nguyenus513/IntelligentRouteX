@@ -325,8 +325,8 @@ public final class TestDispatchV2Factory {
         LegacyMlBrain legacyMlBrain = configuration.legacyMlBrain();
         StudentBrain studentBrain = configuration.studentBrain(legacyMlBrain);
         NineRouterResponsesClient nineRouterResponsesClient = configuration.nineRouterResponsesClient(properties);
-        LlmStageScheduler llmStageScheduler = configuration.llmStageScheduler(nineRouterResponsesClient);
-        LlmBrain llmBrain = configuration.llmBrain(llmStageScheduler, properties, legacyMlBrain, decisionStageLogger);
+        LlmStageScheduler llmStageScheduler = configuration.llmStageScheduler(properties, nineRouterResponsesClient, decisionStageLogger);
+        LlmBrain llmBrain = configuration.llmBrain(llmStageScheduler, properties, legacyMlBrain, decisionStageLogger, contextToolRegistry);
         DecisionBrainResolver decisionBrainResolver = configuration.decisionBrainResolver(properties, legacyMlBrain, llmBrain, studentBrain);
         DispatchV2Core core = configuration.dispatchV2Core(
                 properties,

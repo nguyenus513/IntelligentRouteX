@@ -10,6 +10,9 @@ public enum DispatchBenchmarkDecisionMode {
     LLM_SHADOW("llm-shadow", "llm-shadow", List.of()),
     LLM_AUTHORITATIVE("llm-authoritative", "llm-authoritative", List.of(
             DecisionStageName.PAIR_BUNDLE.wireName(),
+            DecisionStageName.DRIVER.wireName(),
+            DecisionStageName.ROUTE_CRITIQUE.wireName(),
+            DecisionStageName.SCENARIO.wireName(),
             DecisionStageName.FINAL_SELECTION.wireName()));
 
     private final String wireName;

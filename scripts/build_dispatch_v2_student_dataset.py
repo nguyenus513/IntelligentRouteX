@@ -12,6 +12,7 @@ FAMILIES = (
     "dispatch_outcome",
     "route_leg_vector_trace",
     "route_vector_summary_trace",
+    "llm_reasoning_cycle_trace",
 )
 
 
@@ -120,6 +121,7 @@ def build_rows(
         "dispatch_execution": [],
         "dispatch_outcomes": [],
         "route_vectors": [],
+        "llm_reasoning_cycles": [],
     }
 
     for trace_id in trace_ids:
@@ -258,6 +260,18 @@ def build_rows(
                 ],
                 "payload": row,
             })
+        for row in grouped["llm_reasoning_cycle_trace"].get(trace_id, []):
+            outputs["llm_reasoning_cycles"].append({
+                "traceId": trace_id,
+                "tickId": row.get("tickId"),
+                "stageName": row.get("stageName"),
+                "brainType": "llm",
+                "authorityMode": authority_mode,
+                "selectedIds": [],
+                "outcomeRefs": [],
+                "routeVectorRefs": route_vector_refs,
+                "payload": row,
+            })
     return outputs
 
 
@@ -389,6 +403,7 @@ def main(argv: list[str] | None = None) -> int:
     append_jsonl(output_dir / "dispatch_execution.jsonl", rows["dispatch_execution"])
     append_jsonl(output_dir / "dispatch_outcomes.jsonl", rows["dispatch_outcomes"])
     append_jsonl(output_dir / "route_vectors.jsonl", rows["route_vectors"])
+    append_jsonl(output_dir / "llm_reasoning_cycles.jsonl", rows["llm_reasoning_cycles"])
 
     manifest = {
         "schemaVersion": "dispatch-v2-student-dataset-manifest/v1",

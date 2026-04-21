@@ -11,6 +11,10 @@ Required fields:
 - `stageName`
 - `dispatchContext`
 - `candidateSet`
+- `referenceFrame`
+- `comparisonPack`
+- `geospatialContext`
+- `burstContext`
 - `constraints`
 - `objectiveWeights`
 - `upstreamRefs`
@@ -48,6 +52,31 @@ LLM-only additive fields:
 - `tokenUsage`
 - `retryCount`
 - `rawResponseHash`
+- `authorityMode`
+- `authoritativeStageSet`
+- `decisionQualityFlags`
+- `contextProfile`
+- `overlaySet`
+- `contextCompressionApplied`
+- `effortSelectionReason`
+
+## Assessment Items
+
+`assessments.items[]` should include:
+
+- `id`
+- `score`
+- `rank`
+- `selected`
+- `confidence`
+- `reasonCodes`
+- `dominanceReasonCodes`
+- `regretToBestAlternative`
+- `driverFitSummary`
+- `routeVectorRefs`
+- `geospatialFlags`
+- `burstSensitivityFlags`
+- `rationale`
 
 ## Reason Codes
 

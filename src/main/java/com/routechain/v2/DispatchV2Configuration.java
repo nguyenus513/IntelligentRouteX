@@ -600,16 +600,19 @@ public class DispatchV2Configuration {
     }
 
     @Bean
-    LlmStageScheduler llmStageScheduler(NineRouterResponsesClient nineRouterResponsesClient) {
-        return new LlmStageScheduler(nineRouterResponsesClient);
+    LlmStageScheduler llmStageScheduler(RouteChainDispatchV2Properties properties,
+                                        NineRouterResponsesClient nineRouterResponsesClient,
+                                        DecisionStageLogger decisionStageLogger) {
+        return new LlmStageScheduler(nineRouterResponsesClient, properties.getDecision(), decisionStageLogger);
     }
 
     @Bean
     LlmBrain llmBrain(LlmStageScheduler llmStageScheduler,
                       RouteChainDispatchV2Properties properties,
                       LegacyMlBrain legacyMlBrain,
-                      DecisionStageLogger decisionStageLogger) {
-        return new LlmBrain(llmStageScheduler, properties.getDecision().getLlm(), legacyMlBrain, decisionStageLogger);
+                      DecisionStageLogger decisionStageLogger,
+                      ContextToolRegistry contextToolRegistry) {
+        return new LlmBrain(llmStageScheduler, properties.getDecision().getLlm(), legacyMlBrain, decisionStageLogger, contextToolRegistry);
     }
 
     @Bean

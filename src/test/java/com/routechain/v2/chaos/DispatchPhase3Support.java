@@ -384,6 +384,7 @@ final class DispatchPhase3Support {
                 result.globalSelectionResult().selectedCount(),
                 executedAssignmentCount,
                 conflictFreeAssignments(result),
+                executedAssignmentCount <= result.globalSelectionResult().selectedCount(),
                 executedAssignmentCount == 0 ? 0.0 : bundledAssignments / (double) executedAssignmentCount,
                 averageBundleSize,
                 routeFallbackRate(result),
@@ -392,6 +393,11 @@ final class DispatchPhase3Support {
                 landingValueAverage,
                 robustUtilityAverage,
                 result.globalSelectionResult().objectiveValue(),
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
                 distinctDegrades(result).isEmpty() ? 0.0 : 1.0,
                 fallbackRate(result.mlStageMetadata().stream().map(MlStageMetadata::fallbackUsed).toList()),
                 fallbackRate(result.liveStageMetadata().stream().map(LiveStageMetadata::fallbackUsed).toList()));
@@ -399,13 +405,14 @@ final class DispatchPhase3Support {
 
     static DispatchQualityMetrics aggregateMetrics(List<DispatchQualityMetrics> samples) {
         if (samples.isEmpty()) {
-            return new DispatchQualityMetrics("dispatch-quality-metrics/v1", 0, 0, true, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+            return new DispatchQualityMetrics("dispatch-quality-metrics/v1", 0, 0, true, true, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
         }
         return new DispatchQualityMetrics(
                 "dispatch-quality-metrics/v1",
                 (int) Math.round(samples.stream().mapToInt(DispatchQualityMetrics::selectedProposalCount).average().orElse(0.0)),
                 (int) Math.round(samples.stream().mapToInt(DispatchQualityMetrics::executedAssignmentCount).average().orElse(0.0)),
                 samples.stream().allMatch(DispatchQualityMetrics::conflictFreeAssignments),
+                samples.stream().allMatch(DispatchQualityMetrics::executionValid),
                 samples.stream().mapToDouble(DispatchQualityMetrics::bundleRate).average().orElse(0.0),
                 samples.stream().mapToDouble(DispatchQualityMetrics::averageBundleSize).average().orElse(0.0),
                 samples.stream().mapToDouble(DispatchQualityMetrics::routeFallbackRate).average().orElse(0.0),
@@ -414,6 +421,11 @@ final class DispatchPhase3Support {
                 samples.stream().mapToDouble(DispatchQualityMetrics::landingValueAverage).average().orElse(0.0),
                 samples.stream().mapToDouble(DispatchQualityMetrics::robustUtilityAverage).average().orElse(0.0),
                 samples.stream().mapToDouble(DispatchQualityMetrics::selectorObjectiveValue).average().orElse(0.0),
+                samples.stream().mapToDouble(DispatchQualityMetrics::routeCostQuality).average().orElse(0.0),
+                samples.stream().mapToDouble(DispatchQualityMetrics::driverEntryQuality).average().orElse(0.0),
+                samples.stream().mapToDouble(DispatchQualityMetrics::burstRobustness).average().orElse(0.0),
+                samples.stream().mapToDouble(DispatchQualityMetrics::dispatchRegretAverage).average().orElse(0.0),
+                samples.stream().mapToDouble(DispatchQualityMetrics::courierUtilizationEstimate).average().orElse(0.0),
                 samples.stream().mapToDouble(DispatchQualityMetrics::degradeRate).average().orElse(0.0),
                 samples.stream().mapToDouble(DispatchQualityMetrics::workerFallbackRate).average().orElse(0.0),
                 samples.stream().mapToDouble(DispatchQualityMetrics::liveSourceFallbackRate).average().orElse(0.0));

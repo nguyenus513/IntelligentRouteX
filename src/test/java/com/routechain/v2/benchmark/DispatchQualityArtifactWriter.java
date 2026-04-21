@@ -89,6 +89,7 @@ public final class DispatchQualityArtifactWriter {
         builder.append("- scenario: `").append(result.scenarioPack()).append(" / ").append(result.scenarioName()).append("`\n");
         builder.append("- workload: `").append(result.workloadSize()).append("`\n");
         builder.append("- decision mode: `").append(result.decisionMode()).append("`\n");
+        builder.append("- runtime classification: `").append(result.runtimeClassification()).append("`\n");
         builder.append("- authoritative stages: `").append(result.authoritativeStages()).append("`\n");
         builder.append("- execution mode: `").append(result.executionMode()).append("`\n");
         builder.append("- authority class: `").append(result.runAuthorityClass()).append("`\n");
@@ -104,8 +105,14 @@ public final class DispatchQualityArtifactWriter {
         builder.append("- selected proposals: `").append(metrics.selectedProposalCount()).append("`\n");
         builder.append("- executed assignments: `").append(metrics.executedAssignmentCount()).append("`\n");
         builder.append("- conflict free: `").append(metrics.conflictFreeAssignments()).append("`\n");
+        builder.append("- execution valid: `").append(metrics.executionValid()).append("`\n");
         builder.append("- bundle rate: `").append(metrics.bundleRate()).append("`\n");
         builder.append("- robust utility avg: `").append(metrics.robustUtilityAverage()).append("`\n");
+        builder.append("- route cost quality: `").append(metrics.routeCostQuality()).append("`\n");
+        builder.append("- driver entry quality: `").append(metrics.driverEntryQuality()).append("`\n");
+        builder.append("- burst robustness: `").append(metrics.burstRobustness()).append("`\n");
+        builder.append("- dispatch regret avg: `").append(metrics.dispatchRegretAverage()).append("`\n");
+        builder.append("- context efficiency: `").append(result.intelligenceMetrics().contextEfficiency()).append("`\n");
         builder.append("- selector objective: `").append(metrics.selectorObjectiveValue()).append("`\n");
         if (!result.workerBaseUrls().isEmpty()) {
             builder.append("- worker base urls: `").append(result.workerBaseUrls()).append("`\n");
@@ -197,7 +204,7 @@ public final class DispatchQualityArtifactWriter {
 
     private static String csvForComparison(DispatchQualityComparisonReport report) {
         StringBuilder builder = new StringBuilder();
-        builder.append("baseline,scenarioPack,scenarioName,workloadSize,decisionMode,executionMode,selectedProposalCount,executedAssignmentCount,conflictFreeAssignments,bundleRate,averageBundleSize,routeFallbackRate,averageProjectedPickupEtaMinutes,averageProjectedCompletionEtaMinutes,landingValueAverage,robustUtilityAverage,selectorObjectiveValue,degradeRate,workerFallbackRate,liveSourceFallbackRate,llmExactMatchRate,tokenTotal,stageFallbacks,geometryCoverage,averageRouteDistanceMeters,averageRouteTravelTimeSeconds,averageRouteCost,averageCongestionScore\n");
+        builder.append("baseline,scenarioPack,scenarioName,workloadSize,decisionMode,runtimeClassification,executionMode,selectedProposalCount,executedAssignmentCount,conflictFreeAssignments,executionValid,bundleRate,averageBundleSize,routeFallbackRate,averageProjectedPickupEtaMinutes,averageProjectedCompletionEtaMinutes,landingValueAverage,robustUtilityAverage,selectorObjectiveValue,routeCostQuality,driverEntryQuality,burstRobustness,dispatchRegretAverage,courierUtilizationEstimate,degradeRate,workerFallbackRate,liveSourceFallbackRate,llmExactMatchRate,tokenTotal,stageFallbacks,geometryCoverage,averageRouteDistanceMeters,averageRouteTravelTimeSeconds,averageRouteCost,averageCongestionScore,averageMajorRoadRatio,averageStraightnessScore,averageTurnCount,routeDominanceRate,averageRouteRegret,averagePathEfficiency,averageEtaDominanceScore,contextEfficiency,stageCoherence,fallbackRecoveryQuality,adaptationQuality,decisionConsistencyVariance\n");
         for (DispatchQualityBenchmarkResult result : report.baselineResults()) {
             DispatchQualityMetrics metrics = result.metrics();
             builder.append(csv(result.baselineId())).append(',')
@@ -205,10 +212,12 @@ public final class DispatchQualityArtifactWriter {
                     .append(csv(result.scenarioName())).append(',')
                     .append(csv(result.workloadSize())).append(',')
                     .append(csv(result.decisionMode())).append(',')
+                    .append(csv(result.runtimeClassification())).append(',')
                     .append(csv(result.executionMode())).append(',')
                     .append(metrics.selectedProposalCount()).append(',')
                     .append(metrics.executedAssignmentCount()).append(',')
                     .append(metrics.conflictFreeAssignments()).append(',')
+                    .append(metrics.executionValid()).append(',')
                     .append(metrics.bundleRate()).append(',')
                     .append(metrics.averageBundleSize()).append(',')
                     .append(metrics.routeFallbackRate()).append(',')
@@ -217,6 +226,11 @@ public final class DispatchQualityArtifactWriter {
                     .append(metrics.landingValueAverage()).append(',')
                     .append(metrics.robustUtilityAverage()).append(',')
                     .append(metrics.selectorObjectiveValue()).append(',')
+                    .append(metrics.routeCostQuality()).append(',')
+                    .append(metrics.driverEntryQuality()).append(',')
+                    .append(metrics.burstRobustness()).append(',')
+                    .append(metrics.dispatchRegretAverage()).append(',')
+                    .append(metrics.courierUtilizationEstimate()).append(',')
                     .append(metrics.degradeRate()).append(',')
                     .append(metrics.workerFallbackRate()).append(',')
                     .append(metrics.liveSourceFallbackRate()).append(',')
@@ -227,14 +241,26 @@ public final class DispatchQualityArtifactWriter {
                     .append(result.routeVectorMetrics().averageTotalDistanceMeters()).append(',')
                     .append(result.routeVectorMetrics().averageTotalTravelTimeSeconds()).append(',')
                     .append(result.routeVectorMetrics().averageRouteCost()).append(',')
-                    .append(result.routeVectorMetrics().averageCongestionScore()).append('\n');
+                    .append(result.routeVectorMetrics().averageCongestionScore()).append(',')
+                    .append(result.routeVectorMetrics().averageMajorRoadRatio()).append(',')
+                    .append(result.routeVectorMetrics().averageStraightnessScore()).append(',')
+                    .append(result.routeVectorMetrics().averageTurnCount()).append(',')
+                    .append(result.routeVectorMetrics().routeDominanceRate()).append(',')
+                    .append(result.routeVectorMetrics().averageRouteRegret()).append(',')
+                    .append(result.routeVectorMetrics().averagePathEfficiency()).append(',')
+                    .append(result.routeVectorMetrics().averageEtaDominanceScore()).append(',')
+                    .append(result.intelligenceMetrics().contextEfficiency()).append(',')
+                    .append(result.intelligenceMetrics().stageCoherence()).append(',')
+                    .append(result.intelligenceMetrics().fallbackRecoveryQuality()).append(',')
+                    .append(result.intelligenceMetrics().adaptationQuality()).append(',')
+                    .append(result.intelligenceMetrics().decisionConsistencyVariance()).append('\n');
         }
         return builder.toString();
     }
 
     private static String csvForAblation(DispatchAblationResult result) {
         StringBuilder builder = new StringBuilder();
-        builder.append("variant,scenarioPack,scenarioName,workloadSize,executionMode,toggledComponent,selectedProposalCount,executedAssignmentCount,conflictFreeAssignments,bundleRate,averageBundleSize,routeFallbackRate,averageProjectedPickupEtaMinutes,averageProjectedCompletionEtaMinutes,landingValueAverage,robustUtilityAverage,selectorObjectiveValue,degradeRate,workerFallbackRate,liveSourceFallbackRate\n");
+        builder.append("variant,scenarioPack,scenarioName,workloadSize,executionMode,toggledComponent,selectedProposalCount,executedAssignmentCount,conflictFreeAssignments,bundleRate,averageBundleSize,routeFallbackRate,averageProjectedPickupEtaMinutes,averageProjectedCompletionEtaMinutes,landingValueAverage,robustUtilityAverage,selectorObjectiveValue,routeCostQuality,driverEntryQuality,burstRobustness,degradeRate,workerFallbackRate,liveSourceFallbackRate\n");
         appendMetricsRow(builder, "control", result, result.controlMetrics());
         appendMetricsRow(builder, "variant", result, result.variantMetrics());
         return builder.toString();
@@ -261,6 +287,9 @@ public final class DispatchQualityArtifactWriter {
                 .append(metrics.landingValueAverage()).append(',')
                 .append(metrics.robustUtilityAverage()).append(',')
                 .append(metrics.selectorObjectiveValue()).append(',')
+                .append(metrics.routeCostQuality()).append(',')
+                .append(metrics.driverEntryQuality()).append(',')
+                .append(metrics.burstRobustness()).append(',')
                 .append(metrics.degradeRate()).append(',')
                 .append(metrics.workerFallbackRate()).append(',')
                 .append(metrics.liveSourceFallbackRate()).append('\n');

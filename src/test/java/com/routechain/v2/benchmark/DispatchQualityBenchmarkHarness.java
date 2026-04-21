@@ -43,8 +43,11 @@ import com.routechain.v2.integration.WorkerReadyState;
 import com.routechain.v2.perf.DispatchPerfBenchmarkHarness;
 import com.routechain.v2.perf.DispatchPerfMachineProfile;
 import com.routechain.v2.perf.DispatchPerfWorkloadFactory;
+import com.routechain.v2.route.DriverCandidate;
 import com.routechain.v2.route.RouteProposal;
 import com.routechain.v2.route.RouteProposalSource;
+import com.routechain.v2.selector.SelectedProposal;
+import com.routechain.v2.decision.DecisionStageName;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -142,6 +145,7 @@ public final class DispatchQualityBenchmarkHarness {
                 gitCommit(),
                 DispatchPerfMachineProfile.capture(request.machineLabel()),
                 request.decisionMode().wireName(),
+                runtimeClassification(request.decisionMode(), execution.authoritativeStages()),
                 execution.authoritativeStages(),
                 request.executionMode().wireName(),
                 runAuthorityClass,
@@ -163,6 +167,7 @@ public final class DispatchQualityBenchmarkHarness {
                 result.decisionStages(),
                 false,
                 metricsFrom(result),
+                intelligenceMetrics(result, feedbackSummary, request.scenarioPack()),
                 feedbackSummary.llmShadowAgreement(),
                 routeVectorMetrics(result),
                 feedbackSummary.tokenUsageSummary(),
@@ -188,6 +193,7 @@ public final class DispatchQualityBenchmarkHarness {
                 gitCommit(),
                 DispatchPerfMachineProfile.capture(request.machineLabel()),
                 request.decisionMode().wireName(),
+                runtimeClassification(request.decisionMode(), request.decisionMode().authoritativeStages()),
                 request.decisionMode().authoritativeStages(),
                 request.executionMode().wireName(),
                 request.authorityRun() ? "AUTHORITY_REAL" : "LOCAL_NON_AUTHORITY",
@@ -209,6 +215,7 @@ public final class DispatchQualityBenchmarkHarness {
                 List.of(),
                 true,
                 emptyMetrics(),
+                DispatchIntelligenceMetrics.empty(),
                 DispatchLlmShadowAgreementSummary.empty(),
                 DispatchRouteVectorMetrics.empty(),
                 DispatchTokenUsageSummary.empty(),
@@ -483,6 +490,7 @@ public final class DispatchQualityBenchmarkHarness {
 
     private DispatchQualityMetrics metricsFrom(DispatchV2Result result) {
         int executedAssignmentCount = result.dispatchExecutionSummary().executedAssignmentCount();
+        int selectedProposalCount = result.globalSelectionResult().selectedCount();
         long bundledAssignments = result.assignments().stream()
                 .filter(assignment -> assignment.orderIds().size() > 1)
                 .count();
@@ -507,11 +515,15 @@ public final class DispatchQualityBenchmarkHarness {
                 .mapToDouble(robustUtility -> robustUtility.robustUtility())
                 .average()
                 .orElse(0.0);
+        boolean conflictFree = conflictFreeAssignments(result);
+        boolean executionValid = executedAssignmentCount <= selectedProposalCount
+                && result.dispatchExecutionSummary().resolvedButRejectedCount() <= result.dispatchExecutionSummary().skippedProposalCount();
         return new DispatchQualityMetrics(
                 "dispatch-quality-metrics/v1",
-                result.globalSelectionResult().selectedCount(),
+                selectedProposalCount,
                 executedAssignmentCount,
-                conflictFreeAssignments(result),
+                conflictFree,
+                executionValid,
                 executedAssignmentCount == 0 ? 0.0 : bundledAssignments / (double) executedAssignmentCount,
                 averageBundleSize,
                 routeFallbackRate(result),
@@ -520,6 +532,11 @@ public final class DispatchQualityBenchmarkHarness {
                 landingValueAverage,
                 robustUtilityAverage,
                 result.globalSelectionResult().objectiveValue(),
+                routeCostQuality(result),
+                driverEntryQuality(result),
+                burstRobustness(result),
+                dispatchRegretAverage(result),
+                courierUtilizationEstimate(result),
                 distinctDegrades(result).isEmpty() ? 0.0 : 1.0,
                 fallbackRate(result.mlStageMetadata().stream().map(MlStageMetadata::fallbackUsed).toList()),
                 fallbackRate(result.liveStageMetadata().stream().map(LiveStageMetadata::fallbackUsed).toList()));
@@ -601,6 +618,12 @@ public final class DispatchQualityBenchmarkHarness {
                 0,
                 0,
                 true,
+                true,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
                 0.0,
                 0.0,
                 0.0,
@@ -897,6 +920,8 @@ public final class DispatchQualityBenchmarkHarness {
             return DispatchRouteVectorMetrics.empty();
         }
         long geometryAvailable = proposals.stream().filter(RouteProposal::geometryAvailable).count();
+        double bestTravelTime = proposals.stream().mapToDouble(RouteProposal::totalTravelTimeSeconds).filter(value -> value > 0.0).min().orElse(0.0);
+        double bestRouteCost = proposals.stream().mapToDouble(RouteProposal::routeCost).filter(value -> value > 0.0).min().orElse(0.0);
         return new DispatchRouteVectorMetrics(
                 "dispatch-route-vector-metrics/v1",
                 proposals.size(),
@@ -904,7 +929,168 @@ public final class DispatchQualityBenchmarkHarness {
                 proposals.stream().mapToDouble(RouteProposal::totalDistanceMeters).average().orElse(0.0),
                 proposals.stream().mapToDouble(RouteProposal::totalTravelTimeSeconds).average().orElse(0.0),
                 proposals.stream().mapToDouble(RouteProposal::routeCost).average().orElse(0.0),
-                proposals.stream().mapToDouble(RouteProposal::congestionScore).average().orElse(0.0));
+                proposals.stream().mapToDouble(RouteProposal::congestionScore).average().orElse(0.0),
+                proposals.stream().mapToDouble(RouteProposal::majorRoadRatio).average().orElse(0.0),
+                proposals.stream().mapToDouble(RouteProposal::straightnessScore).average().orElse(0.0),
+                proposals.stream().mapToInt(RouteProposal::turnCount).average().orElse(0.0),
+                routeDominanceRate(proposals, bestTravelTime, bestRouteCost),
+                averageRouteRegret(result, bestRouteCost),
+                proposals.stream().mapToDouble(RouteProposal::straightnessScore).average().orElse(0.0),
+                averageEtaDominanceScore(proposals, bestTravelTime));
+    }
+
+    private double dispatchRegretAverage(DispatchV2Result result) {
+        List<RouteProposal> proposals = result.routeProposals();
+        if (proposals.isEmpty()) {
+            return 0.0;
+        }
+        double bestRouteValue = proposals.stream().mapToDouble(RouteProposal::routeValue).max().orElse(0.0);
+        if (bestRouteValue <= 0.0) {
+            return 0.0;
+        }
+        return selectedRouteProposals(result).stream()
+                .mapToDouble(proposal -> Math.max(0.0, bestRouteValue - proposal.routeValue()))
+                .average()
+                .orElse(0.0);
+    }
+
+    private double routeCostQuality(DispatchV2Result result) {
+        List<RouteProposal> selected = selectedRouteProposals(result);
+        if (selected.isEmpty()) {
+            return 0.0;
+        }
+        double bestRouteCost = result.routeProposals().stream().mapToDouble(RouteProposal::routeCost).filter(value -> value > 0.0).min().orElse(0.0);
+        if (bestRouteCost <= 0.0) {
+            return 0.0;
+        }
+        return selected.stream()
+                .mapToDouble(proposal -> Math.max(0.0, 1.0 - ((proposal.routeCost() - bestRouteCost) / bestRouteCost)))
+                .average()
+                .orElse(0.0);
+    }
+
+    private double driverEntryQuality(DispatchV2Result result) {
+        if (result.driverCandidates().isEmpty()) {
+            return 0.0;
+        }
+        Set<String> selectedIds = result.globalSelectionResult().selectedProposals().stream()
+                .map(SelectedProposal::proposalId)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<String, Double> driverFitByProposal = result.routeProposals().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        RouteProposal::proposalId,
+                        proposal -> result.driverCandidates().stream()
+                                .filter(candidate -> candidate.driverId().equals(proposal.driverId())
+                                        && candidate.bundleId().equals(proposal.bundleId())
+                                        && candidate.anchorOrderId().equals(proposal.anchorOrderId()))
+                                .mapToDouble(DriverCandidate::driverFitScore)
+                                .max()
+                                .orElse(0.0),
+                        (left, right) -> left));
+        return selectedIds.stream()
+                .mapToDouble(proposalId -> driverFitByProposal.getOrDefault(proposalId, 0.0))
+                .average()
+                .orElse(0.0);
+    }
+
+    private double burstRobustness(DispatchV2Result result) {
+        if (result.robustUtilities().isEmpty()) {
+            return 0.0;
+        }
+        return result.robustUtilities().stream()
+                .mapToDouble(utility -> {
+                    if (utility.expectedValue() == 0.0) {
+                        return utility.stabilityScore();
+                    }
+                    return Math.max(0.0, Math.min(1.0, utility.worstCaseValue() / Math.max(1.0, utility.expectedValue())));
+                })
+                .average()
+                .orElse(0.0);
+    }
+
+    private double courierUtilizationEstimate(DispatchV2Result result) {
+        long driverCount = result.driverCandidates().stream().map(candidate -> candidate.driverId()).distinct().count();
+        if (driverCount <= 0) {
+            return 0.0;
+        }
+        return result.dispatchExecutionSummary().executedAssignmentCount() / (double) driverCount;
+    }
+
+    private double routeDominanceRate(List<RouteProposal> proposals, double bestTravelTime, double bestRouteCost) {
+        if (proposals.isEmpty() || bestTravelTime <= 0.0 || bestRouteCost <= 0.0) {
+            return 0.0;
+        }
+        long dominated = proposals.stream()
+                .filter(proposal -> proposal.totalTravelTimeSeconds() > bestTravelTime * 1.15
+                        && proposal.routeCost() > bestRouteCost * 1.10)
+                .count();
+        return dominated / (double) proposals.size();
+    }
+
+    private double averageRouteRegret(DispatchV2Result result, double bestRouteCost) {
+        if (bestRouteCost <= 0.0) {
+            return 0.0;
+        }
+        return selectedRouteProposals(result).stream()
+                .mapToDouble(proposal -> Math.max(0.0, proposal.routeCost() - bestRouteCost))
+                .average()
+                .orElse(0.0);
+    }
+
+    private double averageEtaDominanceScore(List<RouteProposal> proposals, double bestTravelTime) {
+        if (proposals.isEmpty() || bestTravelTime <= 0.0) {
+            return 0.0;
+        }
+        return proposals.stream()
+                .filter(proposal -> proposal.totalTravelTimeSeconds() > 0.0)
+                .mapToDouble(proposal -> bestTravelTime / proposal.totalTravelTimeSeconds())
+                .average()
+                .orElse(0.0);
+    }
+
+    private List<RouteProposal> selectedRouteProposals(DispatchV2Result result) {
+        Set<String> selectedIds = result.globalSelectionResult().selectedProposals().stream()
+                .map(SelectedProposal::proposalId)
+                .collect(java.util.stream.Collectors.toSet());
+        return result.routeProposals().stream()
+                .filter(proposal -> selectedIds.contains(proposal.proposalId()))
+                .toList();
+    }
+
+    private DispatchIntelligenceMetrics intelligenceMetrics(DispatchV2Result result,
+                                                            DispatchQualityFeedbackSummary feedbackSummary,
+                                                            ScenarioPack scenarioPack) {
+        int tokenTotal = (int) feedbackSummary.tokenUsageSummary().totalTokens();
+        int goodDecisionCount = Math.max(1, result.dispatchExecutionSummary().executedAssignmentCount());
+        double contextEfficiency = goodDecisionCount / (double) Math.max(1, tokenTotal);
+        double stageCoherence = feedbackSummary.llmShadowAgreement().overallExactMatchRate();
+        if (stageCoherence == 0.0 && !result.decisionStages().isEmpty()) {
+            stageCoherence = 1.0 - routeFallbackRate(result);
+        }
+        double fallbackRecoveryQuality = 1.0 - fallbackRate(result.mlStageMetadata().stream().map(MlStageMetadata::fallbackUsed).toList());
+        double adaptationQuality = switch (scenarioPack) {
+            case HEAVY_RAIN, TRAFFIC_SHOCK, LIVE_SOURCE_DEGRADATION -> 1.0 - Math.min(1.0, routeFallbackRate(result));
+            default -> 1.0;
+        };
+        double consistencyVariance = result.fallbackUsed() ? 1.0 : 0.0;
+        return new DispatchIntelligenceMetrics(
+                "dispatch-intelligence-metrics/v1",
+                contextEfficiency,
+                stageCoherence,
+                fallbackRecoveryQuality,
+                adaptationQuality,
+                consistencyVariance,
+                feedbackSummary.tokenUsageSummary().requestCount());
+    }
+
+    private String runtimeClassification(DispatchBenchmarkDecisionMode decisionMode, List<String> authoritativeStages) {
+        return switch (decisionMode) {
+            case LEGACY -> "legacy-baseline";
+            case LLM_SHADOW -> "llm-shadow";
+            case LLM_AUTHORITATIVE -> authoritativeStages.contains(DecisionStageName.ROUTE_GENERATION.wireName())
+                    ? "llm-full-primary"
+                    : "llm-guarded-primary";
+        };
     }
 
     private ScenarioDefinition scenarioDefinition(ScenarioPack scenarioPack) {
@@ -919,7 +1105,7 @@ public final class DispatchQualityBenchmarkHarness {
 
                 @Override
                 public DispatchV2Request request(DispatchPerfBenchmarkHarness.WorkloadSize workloadSize, String traceId, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
-                    return DispatchPerfWorkloadFactory.request(workloadSize, traceId);
+                    return DispatchPerfWorkloadFactory.request(workloadSize, traceId, DispatchPerfWorkloadFactory.ScenarioWorldProfile.NORMAL_CLEAR);
                 }
 
                 @Override
@@ -938,7 +1124,7 @@ public final class DispatchQualityBenchmarkHarness {
 
                 @Override
                 public DispatchV2Request request(DispatchPerfBenchmarkHarness.WorkloadSize workloadSize, String traceId, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
-                    DispatchV2Request request = DispatchPerfWorkloadFactory.request(workloadSize, traceId);
+                    DispatchV2Request request = DispatchPerfWorkloadFactory.request(workloadSize, traceId, DispatchPerfWorkloadFactory.ScenarioWorldProfile.HEAVY_RAIN);
                     return new DispatchV2Request(
                             request.schemaVersion(),
                             traceId,
@@ -971,7 +1157,7 @@ public final class DispatchQualityBenchmarkHarness {
 
                 @Override
                 public DispatchV2Request request(DispatchPerfBenchmarkHarness.WorkloadSize workloadSize, String traceId, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
-                    DispatchV2Request request = DispatchPerfWorkloadFactory.request(workloadSize, traceId);
+                    DispatchV2Request request = DispatchPerfWorkloadFactory.request(workloadSize, traceId, DispatchPerfWorkloadFactory.ScenarioWorldProfile.TRAFFIC_SHOCK);
                     return DispatchHotStartCertificationHarness.copyWithDecisionTime(
                             request,
                             traceId,
@@ -999,7 +1185,7 @@ public final class DispatchQualityBenchmarkHarness {
 
                 @Override
                 public DispatchV2Request request(DispatchPerfBenchmarkHarness.WorkloadSize workloadSize, String traceId, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
-                    return DispatchPerfWorkloadFactory.request(workloadSize, traceId);
+                    return DispatchPerfWorkloadFactory.request(workloadSize, traceId, DispatchPerfWorkloadFactory.ScenarioWorldProfile.DENSE_HOTSPOT);
                 }
 
                 @Override
@@ -1020,7 +1206,7 @@ public final class DispatchQualityBenchmarkHarness {
 
                 @Override
                 public DispatchV2Request request(DispatchPerfBenchmarkHarness.WorkloadSize workloadSize, String traceId, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
-                    return DispatchPerfWorkloadFactory.request(workloadSize, traceId);
+                    return DispatchPerfWorkloadFactory.request(workloadSize, traceId, DispatchPerfWorkloadFactory.ScenarioWorldProfile.LUNCH_PEAK);
                 }
 
                 @Override
@@ -1044,7 +1230,7 @@ public final class DispatchQualityBenchmarkHarness {
 
                 @Override
                 public DispatchV2Request request(DispatchPerfBenchmarkHarness.WorkloadSize workloadSize, String traceId, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
-                    return DispatchPerfWorkloadFactory.request(workloadSize, traceId);
+                    return DispatchPerfWorkloadFactory.request(workloadSize, traceId, DispatchPerfWorkloadFactory.ScenarioWorldProfile.DINNER_PEAK);
                 }
 
                 @Override

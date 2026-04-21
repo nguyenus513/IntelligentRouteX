@@ -9,12 +9,26 @@ public record DispatchRouteVectorMetrics(
         double averageTotalDistanceMeters,
         double averageTotalTravelTimeSeconds,
         double averageRouteCost,
-        double averageCongestionScore) implements SchemaVersioned {
+        double averageCongestionScore,
+        double averageMajorRoadRatio,
+        double averageStraightnessScore,
+        double averageTurnCount,
+        double routeDominanceRate,
+        double averageRouteRegret,
+        double averagePathEfficiency,
+        double averageEtaDominanceScore) implements SchemaVersioned {
 
     public static DispatchRouteVectorMetrics empty() {
         return new DispatchRouteVectorMetrics(
                 "dispatch-route-vector-metrics/v1",
                 0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
                 0.0,
                 0.0,
                 0.0,

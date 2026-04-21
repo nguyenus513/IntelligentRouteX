@@ -23,6 +23,7 @@ These logs are the training source of truth:
 - `llm_usage_meta`
 - `llm_context_selection_trace`
 - `llm_context_fetch_trace`
+- `llm_reasoning_cycle_trace`
 
 ## Rules
 

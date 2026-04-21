@@ -27,6 +27,7 @@ public final class NineRouterResponsesClient {
     private final RouteChainDispatchV2Properties.Llm properties;
     private final ResponsesTransport transport;
     private final ObjectMapper objectMapper;
+    private final PromptPackRegistry promptPackRegistry;
     private volatile ModelResolution cachedModelResolution;
 
     public NineRouterResponsesClient(RouteChainDispatchV2Properties.Llm properties) {
@@ -39,6 +40,7 @@ public final class NineRouterResponsesClient {
         this.properties = properties;
         this.transport = transport;
         this.objectMapper = objectMapper;
+        this.promptPackRegistry = new PromptPackRegistry(objectMapper);
     }
 
     public RuntimeConfiguration runtimeConfiguration() {
@@ -64,6 +66,7 @@ public final class NineRouterResponsesClient {
         RuntimeConfiguration runtimeConfiguration = runtimeConfiguration();
         ModelResolution modelResolution = resolveModel(runtimeConfiguration.baseUrl(), apiKey, runtimeConfiguration.configuredModelFamily());
         DecisionEffort appliedEffort = requestedEffort == null ? DecisionEffort.MEDIUM : requestedEffort;
+        Duration requestTimeout = requestTimeout(input.stageName(), requestedEffort);
         int retryCount = 0;
         int maxAttempts = Math.max(1, properties.getMaxRetries() + 1);
         String lastFailureReason = "provider-empty-response";
@@ -73,7 +76,7 @@ public final class NineRouterResponsesClient {
                 TransportResponse response = transport.post(
                         runtimeConfiguration.baseUrl(),
                         apiKey,
-                        properties.getTimeoutMs(),
+                        requestTimeout,
                         requestBody,
                         objectMapper);
                 if (response.statusCode() >= 400) {
@@ -128,6 +131,25 @@ public final class NineRouterResponsesClient {
                 "modelDiscoverySource", modelResolution.discoverySource()));
     }
 
+    private Duration requestTimeout(DecisionStageName stageName, DecisionEffort requestedEffort) {
+        Duration configuredTimeout = properties.getTimeoutMs();
+        if (configuredTimeout == null || configuredTimeout.isNegative() || configuredTimeout.isZero()) {
+            configuredTimeout = Duration.ofSeconds(45);
+        }
+        DecisionEffort effectiveEffort = requestedEffort == null ? DecisionEffort.MEDIUM : requestedEffort;
+        return switch (effectiveEffort) {
+            case MEDIUM -> configuredTimeout;
+            case HIGH -> configuredTimeout.multipliedBy(2);
+            case XHIGH -> {
+                Duration boosted = configuredTimeout.multipliedBy(3);
+                if (stageName == DecisionStageName.ROUTE_GENERATION || stageName == DecisionStageName.FINAL_SELECTION) {
+                    yield boosted.compareTo(Duration.ofSeconds(90)) < 0 ? Duration.ofSeconds(90) : boosted;
+                }
+                yield boosted;
+            }
+        };
+    }
+
     private JsonNode buildRequestBody(DecisionStageInputV1 input, DecisionEffort appliedEffort, String model) {
         Map<String, Object> body = new LinkedHashMap<>();
         java.util.List<Map<String, Object>> contentItems = java.util.List.of(
@@ -171,12 +193,34 @@ public final class NineRouterResponsesClient {
                                                 "items", Map.of(
                                                         "type", "object",
                                                         "additionalProperties", false,
-                                                        "properties", Map.of(
-                                                                "id", Map.of("type", "string"),
-                                                                "score", Map.of("type", "number"),
-                                                                "selected", Map.of("type", "boolean"),
-                                                                "rationale", Map.of("type", "string")),
-                                                        "required", java.util.List.of("id", "score", "selected", "rationale")))),
+                                "properties", Map.ofEntries(
+                                        Map.entry("id", Map.of("type", "string")),
+                                        Map.entry("score", Map.of("type", "number")),
+                                        Map.entry("rank", Map.of("type", "integer")),
+                                        Map.entry("selected", Map.of("type", "boolean")),
+                                        Map.entry("confidence", Map.of("type", "number")),
+                                        Map.entry("reasonCodes", Map.of("type", "array", "items", Map.of("type", "string"))),
+                                        Map.entry("dominanceReasonCodes", Map.of("type", "array", "items", Map.of("type", "string"))),
+                                        Map.entry("regretToBestAlternative", Map.of("type", "number")),
+                                        Map.entry("driverFitSummary", Map.of("type", "string")),
+                                        Map.entry("routeVectorRefs", Map.of("type", "array", "items", Map.of("type", "string"))),
+                                        Map.entry("geospatialFlags", Map.of("type", "array", "items", Map.of("type", "string"))),
+                                        Map.entry("burstSensitivityFlags", Map.of("type", "array", "items", Map.of("type", "string"))),
+                                        Map.entry("rationale", Map.of("type", "string"))),
+                                                        "required", java.util.List.of(
+                                                                "id",
+                                                                "score",
+                                                                "rank",
+                                                                "selected",
+                                                                "confidence",
+                                                                "reasonCodes",
+                                                                "dominanceReasonCodes",
+                                                                "regretToBestAlternative",
+                                                                "driverFitSummary",
+                                                                "routeVectorRefs",
+                                                                "geospatialFlags",
+                                                                "burstSensitivityFlags",
+                                                                "rationale")))),
                                 "required", java.util.List.of("summary", "reasonCodes", "items"))),
                 "required", java.util.List.of("selectedIds", "assessments"));
     }
@@ -261,6 +305,28 @@ public final class NineRouterResponsesClient {
         if (selectedIds == null || !selectedIds.isArray() || assessments == null || !assessments.isObject()) {
             throw new IllegalStateException("provider-schema-invalid");
         }
+        JsonNode items = assessments.get("items");
+        if (items == null || !items.isArray()) {
+            throw new IllegalStateException("provider-schema-invalid");
+        }
+        for (JsonNode item : items) {
+            if (!item.isObject()
+                    || !item.hasNonNull("id")
+                    || !item.hasNonNull("score")
+                    || !item.hasNonNull("rank")
+                    || !item.hasNonNull("selected")
+                    || !item.hasNonNull("confidence")
+                    || !item.hasNonNull("reasonCodes")
+                    || !item.hasNonNull("dominanceReasonCodes")
+                    || !item.hasNonNull("regretToBestAlternative")
+                    || !item.hasNonNull("driverFitSummary")
+                    || !item.hasNonNull("routeVectorRefs")
+                    || !item.hasNonNull("geospatialFlags")
+                    || !item.hasNonNull("burstSensitivityFlags")
+                    || !item.hasNonNull("rationale")) {
+                throw new IllegalStateException("provider-schema-invalid");
+            }
+        }
         return objectMapper.convertValue(outputNode, new TypeReference<>() {
         });
     }
@@ -315,23 +381,11 @@ public final class NineRouterResponsesClient {
     }
 
     private String systemPrompt(DecisionStageInputV1 input) {
-        return String.join(
-                "\n",
-                "Return strict JSON only.",
-                "Honor hard constraints and keep output compact.",
-                "Do not invent ids that do not exist in the candidate window.",
-                "Static prefix: " + String.valueOf(input.constraints().getOrDefault("staticPrefix", "")),
-                "Schema: stage_output_v1 with selectedIds[] and assessments.items[].");
+        return promptPackRegistry.renderSystemPrompt(input);
     }
 
     private String dynamicPrompt(DecisionStageInputV1 input) {
-        java.util.List<String> sections = new ArrayList<>();
-        sections.add("dispatchContext=" + serialize(input.dispatchContext()));
-        sections.add("candidateSet=" + serialize(input.candidateSet()));
-        sections.add("constraints=" + serialize(input.constraints()));
-        sections.add("objectiveWeights=" + serialize(input.objectiveWeights()));
-        sections.add("upstreamRefs=" + serialize(input.upstreamRefs()));
-        return String.join("\n", sections);
+        return promptPackRegistry.renderDynamicPrompt(input);
     }
 
     private String classifyHttpFailure(int statusCode, String body) {

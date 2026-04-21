@@ -32,6 +32,13 @@ public final class StudentBrain implements DecisionBrain {
                         null,
                         java.util.Map.of(),
                         0,
-                        null));
+                        null,
+                        "student",
+                        legacy.meta().authoritativeStageSet(),
+                        java.util.List.of("student-not-trained"),
+                        legacy.meta().contextProfile(),
+                        legacy.meta().overlaySet(),
+                        legacy.meta().contextCompressionApplied(),
+                        "student-fallback"));
     }
 }

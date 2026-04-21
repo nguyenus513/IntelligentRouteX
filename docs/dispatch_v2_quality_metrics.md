@@ -17,6 +17,9 @@ Phase 2 must derive metrics from existing Dispatch V2 runtime outputs only. It m
 - `landingValueAverage`
 - `robustUtilityAverage`
 - `selectorObjectiveValue`
+- `routeCostQuality`
+- `driverEntryQuality`
+- `burstRobustness`
 - `degradeRate`
 - `workerFallbackRate`
 - `liveSourceFallbackRate`
@@ -32,6 +35,9 @@ Phase 2 must derive metrics from existing Dispatch V2 runtime outputs only. It m
 - `averageProjectedPickupEtaMinutes` and `averageProjectedCompletionEtaMinutes` come from executed assignments.
 - `landingValueAverage` and `robustUtilityAverage` come from `RobustUtility`.
 - `selectorObjectiveValue` comes from `GlobalSelectionResult.objectiveValue`.
+- `routeCostQuality` compares selected route cost against the best available route cost in the same proposal pool.
+- `driverEntryQuality` summarizes selected proposal driver-fit quality from the driver shortlist stage.
+- `burstRobustness` summarizes how well selected proposals preserve value under stressed scenario outcomes.
 - `degradeRate` is observation-only in raw dispatch outputs and is aggregated across sampled dispatches.
 - `workerFallbackRate` comes from `MlStageMetadata.fallbackUsed`.
 - `liveSourceFallbackRate` comes from `LiveStageMetadata.fallbackUsed`.

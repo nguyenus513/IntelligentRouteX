@@ -16,10 +16,20 @@ public record DecisionStageMetaV1(
         String appliedEffort,
         Map<String, Object> tokenUsage,
         int retryCount,
-        String rawResponseHash) implements SchemaVersioned {
+        String rawResponseHash,
+        String authorityMode,
+        java.util.List<String> authoritativeStageSet,
+        java.util.List<String> decisionQualityFlags,
+        String contextProfile,
+        java.util.List<String> overlaySet,
+        boolean contextCompressionApplied,
+        String effortSelectionReason) implements SchemaVersioned {
 
     public DecisionStageMetaV1 {
         tokenUsage = tokenUsage == null ? Map.of() : Map.copyOf(tokenUsage);
+        authoritativeStageSet = authoritativeStageSet == null ? java.util.List.of() : java.util.List.copyOf(authoritativeStageSet);
+        decisionQualityFlags = decisionQualityFlags == null ? java.util.List.of() : java.util.List.copyOf(decisionQualityFlags);
+        overlaySet = overlaySet == null ? java.util.List.of() : java.util.List.copyOf(overlaySet);
     }
 
     public static DecisionStageMetaV1 legacy(long latencyMs) {
@@ -35,6 +45,13 @@ public record DecisionStageMetaV1(
                 null,
                 Map.of(),
                 0,
-                null);
+                null,
+                "legacy",
+                java.util.List.of(),
+                java.util.List.of(),
+                "legacy-static",
+                java.util.List.of(),
+                false,
+                "legacy-default");
     }
 }
