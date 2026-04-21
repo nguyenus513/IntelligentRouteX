@@ -22,6 +22,8 @@ Phase 2 now passes the minimum completion gate for authoritative LLM rollout:
 
 This is not marked `PASS` yet because authority coverage is intentionally limited to the first safe rollout set, and route-vector traces are not present in every benchmark cell.
 
+`209de162` remains a keeper on `main`. It improves observability and route trace completeness, but it does not close the remaining authority gate by itself.
+
 ## What Changed
 
 - `NineRouterResponsesClient` now:
@@ -148,6 +150,13 @@ This confirms the builder works across:
 - `driver`, `route-critique`, `scenario`, and `route-generation` are not yet promoted to clean authoritative coverage in this report
 - route-vector traces are not emitted in every scenario/mode cell, so `route-vector-availability=required` intentionally filters out trace roots without those families
 - `llm-shadow` still exhibits route-generation fallback in some live cells; this does not block the minimum gate but it does block broader authority expansion
+- heavy quality harness execution on Windows is still execution-sensitive; timeout-prone runs must be classified before treating them as logic regressions
+
+## Benchmark Execution Notes
+
+- `DispatchQualityBenchmarkHarnessTest` timeouts are currently treated as execution-flakiness unless timeout classification proves a dispatch logic failure.
+- Windows-heavy local runs should use sequential isolated cells and per-cell artifact flushing.
+- Promotion decisions should read the new per-stage blocker summary before widening the authoritative stage set.
 
 ## Recommended Next Gate
 

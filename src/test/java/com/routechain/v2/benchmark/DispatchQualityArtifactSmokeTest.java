@@ -1,8 +1,10 @@
 package com.routechain.v2.benchmark;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.routechain.v2.perf.DispatchPerfBenchmarkHarness;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -11,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DispatchQualityArtifactSmokeTest {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().findAndRegisterModules();
     private final DispatchQualityBenchmarkHarness harness = new DispatchQualityBenchmarkHarness();
 
     @Test
@@ -59,6 +62,12 @@ class DispatchQualityArtifactSmokeTest {
 
         assertFalse(artifacts.rawJsonPaths().isEmpty());
         assertTrue(artifacts.rawJsonPaths().stream().allMatch(path -> path.toFile().isFile()));
+        DispatchQualityBenchmarkResult firstResult = OBJECT_MAPPER.readValue(
+                Files.readString(artifacts.rawJsonPaths().getFirst()),
+                DispatchQualityBenchmarkResult.class);
+        assertNotNull(firstResult.executionPolicy());
+        assertNotNull(firstResult.artifactWriteCompletedAt());
+        assertNotNull(firstResult.timeoutPhase());
         if (run.comparisonReport() != null) {
             assertNotNull(artifacts.comparisonJsonPath());
             assertTrue(artifacts.comparisonJsonPath().toFile().isFile());

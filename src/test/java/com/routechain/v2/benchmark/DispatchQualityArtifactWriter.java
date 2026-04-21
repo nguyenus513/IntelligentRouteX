@@ -24,11 +24,12 @@ public final class DispatchQualityArtifactWriter {
         List<Path> rawJsonPaths = new ArrayList<>();
         List<Path> rawMarkdownPaths = new ArrayList<>();
         for (DispatchQualityBenchmarkResult result : run.rawResults()) {
-            String stem = benchmarkStem(result);
+            DispatchQualityBenchmarkResult writtenResult = result.withArtifactWriteCompletedAt(java.time.Instant.now());
+            String stem = benchmarkStem(writtenResult);
             Path jsonPath = outputDirectory.resolve(stem + ".json");
             Path markdownPath = outputDirectory.resolve(stem + ".md");
-            OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValue(jsonPath.toFile(), result);
-            Files.writeString(markdownPath, markdownForBenchmarkResult(result));
+            OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValue(jsonPath.toFile(), writtenResult);
+            Files.writeString(markdownPath, markdownForBenchmarkResult(writtenResult));
             rawJsonPaths.add(jsonPath);
             rawMarkdownPaths.add(markdownPath);
         }
@@ -92,8 +93,15 @@ public final class DispatchQualityArtifactWriter {
         builder.append("- runtime classification: `").append(result.runtimeClassification()).append("`\n");
         builder.append("- authoritative stages: `").append(result.authoritativeStages()).append("`\n");
         builder.append("- execution mode: `").append(result.executionMode()).append("`\n");
+        builder.append("- execution policy: `").append(result.executionPolicy() == null ? "" : result.executionPolicy().policyName()).append("`\n");
+        builder.append("- os profile: `").append(result.osProfile()).append("`\n");
         builder.append("- authority class: `").append(result.runAuthorityClass()).append("`\n");
         builder.append("- authority eligible: `").append(result.authorityEligible()).append("`\n");
+        builder.append("- timeout phase: `").append(result.timeoutPhase().wireName()).append("`\n");
+        builder.append("- cell started at: `").append(result.cellStartedAt()).append("`\n");
+        builder.append("- dispatch completed at: `").append(result.dispatchCompletedAt()).append("`\n");
+        builder.append("- cell completed at: `").append(result.cellCompletedAt()).append("`\n");
+        builder.append("- artifact write completed at: `").append(result.artifactWriteCompletedAt()).append("`\n");
         builder.append("- model manifest: `").append(result.resolvedModelManifestPath()).append("`\n");
         builder.append("- manifest exists: `").append(result.manifestExists()).append("`\n");
         builder.append("- ml attach status: `").append(result.mlAttachStatus()).append("`\n");
@@ -153,6 +161,21 @@ public final class DispatchQualityArtifactWriter {
                             .append("` reason=`")
                             .append(result.stageFallbackSummary().latestFallbackReasonByStage().getOrDefault(stage, ""))
                             .append("`\n"));
+        }
+        if (!result.promotionBlockers().isEmpty()) {
+            builder.append("\n## Promotion Blockers\n\n");
+            for (DispatchStagePromotionBlocker blocker : result.promotionBlockers()) {
+                builder.append("- `").append(blocker.stageName()).append("` ")
+                        .append("ready=`").append(blocker.readyForPromotion()).append("` ")
+                        .append("authoritativeCandidate=`").append(blocker.authoritativeCandidate()).append("` ")
+                        .append("fallbackCount=`").append(blocker.fallbackCount()).append("` ")
+                        .append("providerErrorCount=`").append(blocker.providerErrorCount()).append("` ")
+                        .append("routeVectorCoverage=`").append(blocker.routeVectorCoverage()).append("` ")
+                        .append("tokenUsagePresent=`").append(blocker.tokenUsagePresent()).append("` ")
+                        .append("mlAttachStatus=`").append(blocker.mlAttachStatus()).append("` ")
+                        .append("reasons=`").append(blocker.blockerReasons()).append("`")
+                        .append('\n');
+            }
         }
         if (!result.notes().isEmpty()) {
             builder.append("- notes: `").append(result.notes()).append("`\n");

@@ -72,12 +72,18 @@ public final class DispatchQualityBenchmarkHarness {
     private static final String ROUTEFINDER_WORKER = "ml-routefinder-worker";
     private static final String GREEDRL_WORKER = "ml-greedrl-worker";
     private static final String FORECAST_WORKER = "ml-forecast-worker";
+    private static final List<String> PROMOTION_BLOCKER_STAGES = List.of(
+            DecisionStageName.DRIVER.wireName(),
+            DecisionStageName.ROUTE_CRITIQUE.wireName(),
+            DecisionStageName.SCENARIO.wireName(),
+            DecisionStageName.ROUTE_GENERATION.wireName());
 
     public DispatchQualityBenchmarkRun benchmark(BenchmarkRequest request) {
+        DispatchQualityExecutionPolicy executionPolicy = executionPolicy(request);
         List<DispatchQualityBenchmarkResult> results = request.baselines().stream()
                 .map(baseline -> request.workloadSize() == DispatchPerfBenchmarkHarness.WorkloadSize.XL && !request.runDeferredXl()
-                        ? deferredResult(request, baseline, "deferred-on-current-machine")
-                        : runScenario(request, baseline))
+                        ? deferredResult(request, baseline, executionPolicy, "deferred-on-current-machine")
+                        : runScenario(request, baseline, executionPolicy))
                 .toList();
         DispatchQualityComparisonReport comparisonReport = request.baselines().containsAll(List.of(
                 DispatchPerfBenchmarkHarness.BaselineId.A,
@@ -123,73 +129,161 @@ public final class DispatchQualityBenchmarkHarness {
                 deltaSummary(controlMetrics, variantMetrics));
     }
 
-    private DispatchQualityBenchmarkResult runScenario(BenchmarkRequest request, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
-        ScenarioExecution execution = executeDispatch(request, baselineId);
-        DispatchV2Result result = execution.result();
-        DispatchQualityFeedbackSummary feedbackSummary = feedbackSummary(feedbackDirectory(request, baselineId));
+    private DispatchQualityBenchmarkResult runScenario(BenchmarkRequest request,
+                                                       DispatchPerfBenchmarkHarness.BaselineId baselineId,
+                                                       DispatchQualityExecutionPolicy executionPolicy) {
+        Instant cellStartedAt = Instant.now();
+        try {
+            ScenarioExecution execution = executeDispatch(request, baselineId);
+            Instant dispatchCompletedAt = Instant.now();
+            DispatchV2Result result = execution.result();
+            DispatchQualityFeedbackSummary feedbackSummary = feedbackSummary(feedbackDirectory(request, baselineId, executionPolicy));
+            List<DispatchStagePromotionBlocker> promotionBlockers = promotionBlockers(
+                    request,
+                    execution.authoritativeStages(),
+                    execution.attachDiagnostics(),
+                    feedbackSummary,
+                    routeVectorMetrics(result));
+            List<String> notes = new ArrayList<>();
+            if (!request.authorityRun() && request.executionMode() == ExecutionMode.LOCAL_REAL) {
+                notes.add("non-authoritative-local-real-run");
+            }
+            if (request.decisionMode() == DispatchBenchmarkDecisionMode.LLM_AUTHORITATIVE) {
+                notes.add("authoritative-stage-intent-from-benchmark-mode");
+            }
+            if (execution.attachDiagnostics().mlAttachStatus() == DispatchQualityMlAttachStatus.ML_ATTACH_FAIL) {
+                notes.add("ML_ATTACH_FAIL");
+            }
+            String runAuthorityClass = request.authorityRun() ? "AUTHORITY_REAL" : "LOCAL_NON_AUTHORITY";
+            boolean authorityEligible = request.authorityRun() && notes.stream().noneMatch("non-authoritative-local-real-run"::equals);
+            Instant cellCompletedAt = Instant.now();
+            return new DispatchQualityBenchmarkResult(
+                    "dispatch-quality-benchmark-result/v1",
+                    cellStartedAt,
+                    gitCommit(),
+                    DispatchPerfMachineProfile.capture(request.machineLabel()),
+                    request.decisionMode().wireName(),
+                    runtimeClassification(request.decisionMode(), execution.authoritativeStages()),
+                    execution.authoritativeStages(),
+                    request.executionMode().wireName(),
+                    runAuthorityClass,
+                    request.authorityRun(),
+                    authorityEligible,
+                    false,
+                    execution.attachDiagnostics().resolvedModelManifestPath(),
+                    execution.attachDiagnostics().manifestExists(),
+                    execution.attachDiagnostics().workerBaseUrls(),
+                    execution.attachDiagnostics().activeMlFlags(),
+                    execution.attachDiagnostics().workerStatusSnapshot(),
+                    execution.attachDiagnostics().mlAttachStatus(),
+                    execution.attachDiagnostics().mlAttachmentFailureReasons(),
+                    baselineId.name(),
+                    request.scenarioPack().wireName(),
+                    request.scenarioPack().wireName(),
+                    request.workloadSize().name(),
+                    traceFamilyId(request, baselineId),
+                    result.decisionStages(),
+                    executionPolicy,
+                    osProfile(),
+                    cellStartedAt,
+                    dispatchCompletedAt,
+                    cellCompletedAt,
+                    null,
+                    DispatchQualityTimeoutPhase.NONE,
+                    promotionBlockers,
+                    false,
+                    metricsFrom(result),
+                    intelligenceMetrics(result, feedbackSummary, request.scenarioPack()),
+                    feedbackSummary.llmShadowAgreement(),
+                    routeVectorMetrics(result),
+                    feedbackSummary.tokenUsageSummary(),
+                    feedbackSummary.stageFallbackSummary(),
+                    distinctDegrades(result),
+                    distinctSources(result.mlStageMetadata().stream()
+                            .filter(MlStageMetadata::applied)
+                            .map(MlStageMetadata::sourceModel)
+                            .toList()),
+                    distinctSources(result.liveStageMetadata().stream()
+                            .filter(LiveStageMetadata::applied)
+                            .map(LiveStageMetadata::sourceName)
+                            .toList()),
+                    List.copyOf(notes));
+        } catch (RuntimeException exception) {
+            if (!isTimeoutFailure(exception)) {
+                throw exception;
+            }
+            return timeoutResult(request, baselineId, executionPolicy, cellStartedAt, classifyTimeoutPhase(exception), exception);
+        }
+    }
+
+    private DispatchQualityBenchmarkResult timeoutResult(BenchmarkRequest request,
+                                                         DispatchPerfBenchmarkHarness.BaselineId baselineId,
+                                                         DispatchQualityExecutionPolicy executionPolicy,
+                                                         Instant cellStartedAt,
+                                                         DispatchQualityTimeoutPhase timeoutPhase,
+                                                         RuntimeException exception) {
         List<String> notes = new ArrayList<>();
-        if (!request.authorityRun() && request.executionMode() == ExecutionMode.LOCAL_REAL) {
-            notes.add("non-authoritative-local-real-run");
+        notes.add(timeoutPhase.wireName());
+        String message = blankToEmpty(exception.getMessage());
+        if (!message.isBlank()) {
+            notes.add("timeout-message:" + message);
         }
-        if (request.decisionMode() == DispatchBenchmarkDecisionMode.LLM_AUTHORITATIVE) {
-            notes.add("authoritative-stage-intent-from-benchmark-mode");
-        }
-        if (execution.attachDiagnostics().mlAttachStatus() == DispatchQualityMlAttachStatus.ML_ATTACH_FAIL) {
-            notes.add("ML_ATTACH_FAIL");
-        }
-        String runAuthorityClass = request.authorityRun() ? "AUTHORITY_REAL" : "LOCAL_NON_AUTHORITY";
-        boolean authorityEligible = request.authorityRun() && notes.stream().noneMatch("non-authoritative-local-real-run"::equals);
         return new DispatchQualityBenchmarkResult(
                 "dispatch-quality-benchmark-result/v1",
-                Instant.now(),
+                cellStartedAt,
                 gitCommit(),
                 DispatchPerfMachineProfile.capture(request.machineLabel()),
                 request.decisionMode().wireName(),
-                runtimeClassification(request.decisionMode(), execution.authoritativeStages()),
-                execution.authoritativeStages(),
+                runtimeClassification(request.decisionMode(), request.decisionMode().authoritativeStages()),
+                request.decisionMode().authoritativeStages(),
                 request.executionMode().wireName(),
-                runAuthorityClass,
-                request.authorityRun(),
-                authorityEligible,
+                request.authorityRun() ? "AUTHORITY_REAL" : "LOCAL_NON_AUTHORITY",
                 false,
-                execution.attachDiagnostics().resolvedModelManifestPath(),
-                execution.attachDiagnostics().manifestExists(),
-                execution.attachDiagnostics().workerBaseUrls(),
-                execution.attachDiagnostics().activeMlFlags(),
-                execution.attachDiagnostics().workerStatusSnapshot(),
-                execution.attachDiagnostics().mlAttachStatus(),
-                execution.attachDiagnostics().mlAttachmentFailureReasons(),
+                false,
+                false,
+                "",
+                false,
+                Map.of(),
+                Map.of(),
+                List.of(),
+                DispatchQualityMlAttachStatus.ATTACHED,
+                List.of(timeoutPhase.wireName()),
                 baselineId.name(),
                 request.scenarioPack().wireName(),
                 request.scenarioPack().wireName(),
                 request.workloadSize().name(),
                 traceFamilyId(request, baselineId),
-                result.decisionStages(),
+                List.of(),
+                executionPolicy,
+                osProfile(),
+                cellStartedAt,
+                null,
+                Instant.now(),
+                null,
+                timeoutPhase,
+                List.of(),
                 false,
-                metricsFrom(result),
-                intelligenceMetrics(result, feedbackSummary, request.scenarioPack()),
-                feedbackSummary.llmShadowAgreement(),
-                routeVectorMetrics(result),
-                feedbackSummary.tokenUsageSummary(),
-                feedbackSummary.stageFallbackSummary(),
-                distinctDegrades(result),
-                distinctSources(result.mlStageMetadata().stream()
-                        .filter(MlStageMetadata::applied)
-                        .map(MlStageMetadata::sourceModel)
-                        .toList()),
-                distinctSources(result.liveStageMetadata().stream()
-                        .filter(LiveStageMetadata::applied)
-                        .map(LiveStageMetadata::sourceName)
-                        .toList()),
+                emptyMetrics(),
+                DispatchIntelligenceMetrics.empty(),
+                DispatchLlmShadowAgreementSummary.empty(),
+                DispatchRouteVectorMetrics.empty(),
+                DispatchTokenUsageSummary.empty(),
+                DispatchStageFallbackSummary.empty(),
+                List.of(),
+                List.of(),
+                List.of(),
                 List.copyOf(notes));
     }
 
     private DispatchQualityBenchmarkResult deferredResult(BenchmarkRequest request,
-                                                         DispatchPerfBenchmarkHarness.BaselineId baselineId,
-                                                         String note) {
+                                                          DispatchPerfBenchmarkHarness.BaselineId baselineId,
+                                                          DispatchQualityExecutionPolicy executionPolicy,
+                                                          String note) {
+        Instant cellStartedAt = Instant.now();
+        Instant cellCompletedAt = Instant.now();
         return new DispatchQualityBenchmarkResult(
                 "dispatch-quality-benchmark-result/v1",
-                Instant.now(),
+                cellStartedAt,
                 gitCommit(),
                 DispatchPerfMachineProfile.capture(request.machineLabel()),
                 request.decisionMode().wireName(),
@@ -213,6 +307,14 @@ public final class DispatchQualityBenchmarkHarness {
                 request.workloadSize().name(),
                 traceFamilyId(request, baselineId),
                 List.of(),
+                executionPolicy,
+                osProfile(),
+                cellStartedAt,
+                null,
+                cellCompletedAt,
+                null,
+                DispatchQualityTimeoutPhase.NONE,
+                List.of(),
                 true,
                 emptyMetrics(),
                 DispatchIntelligenceMetrics.empty(),
@@ -227,12 +329,13 @@ public final class DispatchQualityBenchmarkHarness {
     }
 
     private ScenarioExecution executeDispatch(BenchmarkRequest request, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
+        DispatchQualityExecutionPolicy executionPolicy = executionPolicy(request);
         ScenarioDefinition scenario = scenarioDefinition(request.scenarioPack());
         RouteChainDispatchV2Properties properties = baseProperties(
                 baselineId,
                 request.decisionMode(),
                 request.executionMode(),
-                feedbackDirectory(request, baselineId));
+                feedbackDirectory(request, baselineId, executionPolicy));
         scenario.configureProperties(properties, baselineId);
         ScenarioDependencies dependencies = request.executionMode() == ExecutionMode.CONTROLLED
                 ? scenario.controlledDependencies(baselineId)
@@ -637,6 +740,83 @@ public final class DispatchQualityBenchmarkHarness {
                 0.0);
     }
 
+    static DispatchQualityTimeoutPhase classifyTimeoutPhase(Throwable throwable) {
+        String joinedMessage = flattenThrowableMessages(throwable).toLowerCase(Locale.ROOT);
+        if (joinedMessage.contains("task output") || joinedMessage.contains("task lock") || joinedMessage.contains("lock")) {
+            return DispatchQualityTimeoutPhase.TASK_LOCK_TIMEOUT;
+        }
+        if (joinedMessage.contains("artifact") || joinedMessage.contains("markdown") || joinedMessage.contains("json write")) {
+            return DispatchQualityTimeoutPhase.ARTIFACT_WRITE_TIMEOUT;
+        }
+        if (joinedMessage.contains("dispatch") || joinedMessage.contains("stage")) {
+            return DispatchQualityTimeoutPhase.DISPATCH_TIMEOUT;
+        }
+        return DispatchQualityTimeoutPhase.UNKNOWN_TIMEOUT;
+    }
+
+    private static boolean isTimeoutFailure(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof java.util.concurrent.TimeoutException || current instanceof InterruptedException) {
+                return true;
+            }
+            String message = blankToEmpty(current.getMessage()).toLowerCase(Locale.ROOT);
+            if (message.contains("timeout") || message.contains("timed out")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private static String flattenThrowableMessages(Throwable throwable) {
+        List<String> messages = new ArrayList<>();
+        Throwable current = throwable;
+        while (current != null) {
+            String message = blankToEmpty(current.getMessage());
+            if (!message.isBlank()) {
+                messages.add(message);
+            }
+            current = current.getCause();
+        }
+        return String.join(" | ", messages);
+    }
+
+    private DispatchQualityExecutionPolicy executionPolicy(BenchmarkRequest request) {
+        boolean windows = isWindows();
+        boolean heavyMode = windows
+                && (request.authorityRun()
+                || request.executionMode() == ExecutionMode.LOCAL_REAL
+                || request.workloadSize() != DispatchPerfBenchmarkHarness.WorkloadSize.S);
+        long perCellTimeoutMillis = switch (request.workloadSize()) {
+            case S -> heavyMode ? 90_000L : 45_000L;
+            case M -> heavyMode ? 180_000L : 120_000L;
+            case L -> heavyMode ? 300_000L : 240_000L;
+            case XL -> heavyMode ? 480_000L : 360_000L;
+        };
+        long totalHarnessTimeoutMillis = perCellTimeoutMillis * Math.max(1, request.baselines().size());
+        return new DispatchQualityExecutionPolicy(
+                heavyMode ? "windows-sequential-heavy" : "default-quality-harness",
+                true,
+                heavyMode,
+                heavyMode,
+                heavyMode,
+                !request.runDeferredXl(),
+                perCellTimeoutMillis,
+                totalHarnessTimeoutMillis);
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+    }
+
+    private static String osProfile() {
+        return "%s %s (%s)".formatted(
+                System.getProperty("os.name", "unknown-os"),
+                System.getProperty("os.version", "unknown-version"),
+                System.getProperty("os.arch", "unknown-arch"));
+    }
+
     private RouteChainDispatchV2Properties baseProperties(DispatchPerfBenchmarkHarness.BaselineId baselineId,
                                                           DispatchBenchmarkDecisionMode decisionMode,
                                                           ExecutionMode executionMode,
@@ -720,8 +900,13 @@ public final class DispatchQualityBenchmarkHarness {
         return properties;
     }
 
-    private Path feedbackDirectory(BenchmarkRequest request, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
-        return request.outputRoot()
+    private Path feedbackDirectory(BenchmarkRequest request,
+                                   DispatchPerfBenchmarkHarness.BaselineId baselineId,
+                                   DispatchQualityExecutionPolicy executionPolicy) {
+        Path root = executionPolicy.isolatedOutputRoots()
+                ? request.outputRoot().resolve("cells").resolve(cellKey(request, baselineId))
+                : request.outputRoot();
+        return root
                 .resolve("feedback")
                 .resolve(request.scenarioPack().wireName())
                 .resolve(request.workloadSize().name().toLowerCase(Locale.ROOT))
@@ -743,6 +928,15 @@ public final class DispatchQualityBenchmarkHarness {
         return "quality-%s-%s-%s-%s".formatted(
                 request.scenarioPack().wireName(),
                 request.workloadSize().name().toLowerCase(Locale.ROOT),
+                request.decisionMode().wireName(),
+                baselineId.name().toLowerCase(Locale.ROOT));
+    }
+
+    private String cellKey(BenchmarkRequest request, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
+        return "%s-%s-%s-%s-%s".formatted(
+                request.scenarioPack().wireName(),
+                request.workloadSize().name().toLowerCase(Locale.ROOT),
+                request.executionMode().wireName(),
                 request.decisionMode().wireName(),
                 baselineId.name().toLowerCase(Locale.ROOT));
     }
@@ -889,6 +1083,65 @@ public final class DispatchQualityBenchmarkHarness {
                 totalFallbacks,
                 counts,
                 reasons);
+    }
+
+    private List<DispatchStagePromotionBlocker> promotionBlockers(BenchmarkRequest request,
+                                                                  List<String> authoritativeStages,
+                                                                  MlAttachDiagnostics diagnostics,
+                                                                  DispatchQualityFeedbackSummary feedbackSummary,
+                                                                  DispatchRouteVectorMetrics routeVectorMetrics) {
+        return PROMOTION_BLOCKER_STAGES.stream()
+                .map(stageName -> promotionBlocker(request, authoritativeStages, diagnostics, feedbackSummary, routeVectorMetrics, stageName))
+                .toList();
+    }
+
+    private DispatchStagePromotionBlocker promotionBlocker(BenchmarkRequest request,
+                                                           List<String> authoritativeStages,
+                                                           MlAttachDiagnostics diagnostics,
+                                                           DispatchQualityFeedbackSummary feedbackSummary,
+                                                           DispatchRouteVectorMetrics routeVectorMetrics,
+                                                           String stageName) {
+        int fallbackCount = feedbackSummary.stageFallbackSummary().fallbackCountsByStage().getOrDefault(stageName, 0);
+        String fallbackReason = feedbackSummary.stageFallbackSummary().latestFallbackReasonByStage().getOrDefault(stageName, "");
+        int providerErrorCount = fallbackReason.contains("provider-http-error") ? 1 : 0;
+        double routeCoverage = requiresRouteVectorCoverage(stageName) ? routeVectorMetrics.geometryCoverage() : 1.0;
+        boolean tokenUsagePresent = feedbackSummary.tokenUsageSummary().requestCount() > 0;
+        boolean authoritativeCandidate = authoritativeStages.contains(stageName)
+                || request.decisionMode().authoritativeStages().contains(stageName);
+        List<String> blockerReasons = new ArrayList<>();
+        if (!authoritativeCandidate && request.decisionMode() == DispatchBenchmarkDecisionMode.LLM_AUTHORITATIVE) {
+            blockerReasons.add("not-in-authoritative-stage-set");
+        }
+        if (fallbackCount > 0) {
+            blockerReasons.add("fallback-count:" + fallbackCount);
+        }
+        if (providerErrorCount > 0) {
+            blockerReasons.add("provider-http-error");
+        }
+        if (requiresRouteVectorCoverage(stageName) && routeCoverage < 1.0) {
+            blockerReasons.add("route-vector-coverage-below-1.0");
+        }
+        if (request.decisionMode() != DispatchBenchmarkDecisionMode.LEGACY && !tokenUsagePresent) {
+            blockerReasons.add("token-usage-missing");
+        }
+        if (diagnostics.mlAttachStatus() != DispatchQualityMlAttachStatus.ATTACHED) {
+            blockerReasons.add("ml-attach-" + diagnostics.mlAttachStatus().name().toLowerCase(Locale.ROOT));
+        }
+        return new DispatchStagePromotionBlocker(
+                stageName,
+                authoritativeCandidate,
+                fallbackCount,
+                providerErrorCount,
+                routeCoverage,
+                tokenUsagePresent,
+                diagnostics.mlAttachStatus(),
+                blockerReasons.isEmpty(),
+                List.copyOf(blockerReasons));
+    }
+
+    private boolean requiresRouteVectorCoverage(String stageName) {
+        return DecisionStageName.ROUTE_CRITIQUE.wireName().equals(stageName)
+                || DecisionStageName.ROUTE_GENERATION.wireName().equals(stageName);
     }
 
     private List<String> jsonTextList(JsonNode node) {

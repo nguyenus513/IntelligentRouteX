@@ -39,6 +39,10 @@ class DispatchQualityBenchmarkHarnessTest {
         assertTrue(run.rawResults().stream().allMatch(result -> result.decisionStages().size() == 12));
         assertTrue(run.rawResults().stream().allMatch(result -> !result.deferred()));
         assertTrue(run.rawResults().stream().allMatch(result -> result.decisionMode().equals("legacy")));
+        assertTrue(run.rawResults().stream().allMatch(result -> result.executionPolicy() != null));
+        assertTrue(run.rawResults().stream().allMatch(result -> result.timeoutPhase() == DispatchQualityTimeoutPhase.NONE));
+        assertTrue(run.rawResults().stream().allMatch(result -> result.cellStartedAt() != null));
+        assertTrue(run.rawResults().stream().allMatch(result -> result.cellCompletedAt() != null));
     }
 
     @Test
@@ -67,6 +71,10 @@ class DispatchQualityBenchmarkHarnessTest {
         assertTrue(fullV2.metrics().workerFallbackRate() >= 0.0);
         assertTrue(fullV2.metrics().liveSourceFallbackRate() >= 0.0);
         assertTrue(fullV2.routeVectorMetrics().geometryCoverage() >= 0.0);
+        assertEquals(4, fullV2.promotionBlockers().size());
+        assertEquals(
+                List.of("driver", "route-critique", "scenario", "route-generation"),
+                fullV2.promotionBlockers().stream().map(DispatchStagePromotionBlocker::stageName).toList());
     }
 
     @Test
@@ -182,7 +190,6 @@ class DispatchQualityBenchmarkHarnessTest {
 
     @Test
     void llmShadowBenchmarkModePopulatesDecisionFeedbackSummaries() {
-        String previousApiKey = System.getenv("OPENAI_API_KEY");
         DispatchQualityBenchmarkRun run = harness.benchmark(new DispatchQualityBenchmarkHarness.BenchmarkRequest(
                 List.of(DispatchPerfBenchmarkHarness.BaselineId.C),
                 DispatchPerfBenchmarkHarness.WorkloadSize.S,
@@ -200,6 +207,45 @@ class DispatchQualityBenchmarkHarnessTest {
         assertNotNull(result.stageFallbackSummary());
         assertNotNull(result.tokenUsageSummary());
         assertTrue(result.stageFallbackSummary().totalStageOutputs() >= 1);
+    }
+
+    @Test
+    void authorityLocalRealRunUsesWindowsSafeHeavyPolicyOnWindows() {
+        String previous = System.getProperty("os.name");
+        System.setProperty("os.name", "Windows 11");
+        try {
+            DispatchQualityBenchmarkRun run = harness.benchmark(new DispatchQualityBenchmarkHarness.BenchmarkRequest(
+                    List.of(DispatchPerfBenchmarkHarness.BaselineId.C),
+                    DispatchPerfBenchmarkHarness.WorkloadSize.S,
+                    DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
+                    DispatchBenchmarkDecisionMode.LEGACY,
+                    DispatchQualityBenchmarkHarness.ExecutionMode.LOCAL_REAL,
+                    DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
+                    true,
+                    false,
+                    tempDir));
+
+            DispatchQualityBenchmarkResult result = run.rawResults().getFirst();
+            assertEquals("windows-sequential-heavy", result.executionPolicy().policyName());
+            assertTrue(result.executionPolicy().windowsSafeHeavyMode());
+            assertTrue(result.executionPolicy().isolatedOutputRoots());
+            assertTrue(result.osProfile().startsWith("Windows 11"));
+        } finally {
+            restoreProperty("os.name", previous);
+        }
+    }
+
+    @Test
+    void timeoutClassificationSeparatesDispatchArtifactAndTaskLockSignals() {
+        assertEquals(
+                DispatchQualityTimeoutPhase.DISPATCH_TIMEOUT,
+                DispatchQualityBenchmarkHarness.classifyTimeoutPhase(new RuntimeException("dispatch stage timed out after 30s")));
+        assertEquals(
+                DispatchQualityTimeoutPhase.ARTIFACT_WRITE_TIMEOUT,
+                DispatchQualityBenchmarkHarness.classifyTimeoutPhase(new RuntimeException("artifact write timed out during markdown flush")));
+        assertEquals(
+                DispatchQualityTimeoutPhase.TASK_LOCK_TIMEOUT,
+                DispatchQualityBenchmarkHarness.classifyTimeoutPhase(new RuntimeException("task lock timed out while waiting for task output")));
     }
 
     private void restoreProperty(String name, String previous) {

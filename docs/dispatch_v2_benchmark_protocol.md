@@ -125,3 +125,35 @@ CI in v1 validates only:
 - artifact schema fields are populated
 
 Full S/M/L/XL benchmark sweeps remain local-first.
+
+## Windows Heavy Harness Mode
+
+Local Windows runs are allowed, but heavy quality-harness cells must be treated as execution-sensitive.
+
+Default rule for Windows heavy cells:
+
+- run cells sequentially
+- isolate each cell under its own output root
+- finish JSON/Markdown artifact flush for one cell before starting the next
+- keep XL deferred unless explicitly enabled
+
+Heavy mode should be used automatically for:
+
+- `local-real` authority diagnostics
+- non-`S` workload sweeps
+- any run whose purpose is authority evidence rather than quick logic smoke coverage
+
+Artifacts from heavy mode must record:
+
+- execution policy name
+- OS profile
+- cell start/completion timestamps
+- dispatch completion timestamp
+- artifact write completion timestamp
+- timeout phase classification when a timeout-like failure occurs
+
+Operator checklist for local authority runs:
+
+- use Windows heavy mode on Windows instead of ad hoc parallel sweeps
+- inspect timeout classification before treating a failed cell as a logic regression
+- inspect promotion blockers for `driver`, `route-critique`, `scenario`, and `route-generation`
