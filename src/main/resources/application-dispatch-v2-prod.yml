@@ -29,6 +29,17 @@ routechain:
     feedback:
       storage-mode: FILE
       base-dir: data/dispatch-v2-feedback
+    decision:
+      mode: llm
+      authoritative-stages:
+        - pair-bundle
+        - driver
+        - route-critique
+        - scenario
+        - final-selection
+      llm:
+        base-url: https://r8cp2m4.9router.com/v1
+        model: gpt-5.4
     performance:
       telemetry-enabled: true
       budget-enforcement-enabled: false

@@ -20,7 +20,9 @@ public final class RouteVectorEnricher {
     public RouteProposal enrich(String traceId, RouteProposal proposal, DispatchCandidateContext context) {
         List<RouteStop> stops = toRouteStops(proposal, context);
         if (stops.size() < 2) {
-            return proposal.withRouteVectors(emptySummary(proposal), List.of());
+            RouteVectorSummary summary = emptySummary(proposal);
+            writeTraceFamilies(traceId, proposal.proposalId(), summary, List.of());
+            return proposal.withRouteVectors(summary, List.of());
         }
         List<LegRouteVector> legs = new ArrayList<>();
         double corridorPreferenceTotal = 0.0;
@@ -35,12 +37,7 @@ public final class RouteVectorEnricher {
             corridorPreferenceTotal += result.corridorPreferenceScore();
         }
         RouteVectorSummary summary = summarize(proposal, legs, corridorPreferenceTotal / legs.size());
-        decisionStageLogger.writeFamily("route_leg_vector_trace", traceId, proposal.proposalId(), java.util.Map.of(
-                "schemaVersion", "route-leg-vector-trace/v1",
-                "traceId", traceId,
-                "proposalId", proposal.proposalId(),
-                "legs", legs));
-        decisionStageLogger.writeFamily("route_vector_summary_trace", traceId, proposal.proposalId(), summary);
+        writeTraceFamilies(traceId, proposal.proposalId(), summary, legs);
         return proposal.withRouteVectors(summary, legs);
     }
 
@@ -115,5 +112,17 @@ public final class RouteVectorEnricher {
                 0.0,
                 "",
                 false);
+    }
+
+    private void writeTraceFamilies(String traceId,
+                                    String proposalId,
+                                    RouteVectorSummary summary,
+                                    List<LegRouteVector> legs) {
+        decisionStageLogger.writeFamily("route_leg_vector_trace", traceId, proposalId, java.util.Map.of(
+                "schemaVersion", "route-leg-vector-trace/v1",
+                "traceId", traceId,
+                "proposalId", proposalId,
+                "legs", legs));
+        decisionStageLogger.writeFamily("route_vector_summary_trace", traceId, proposalId, summary);
     }
 }

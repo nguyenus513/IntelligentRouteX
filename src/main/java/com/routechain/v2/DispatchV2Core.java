@@ -474,6 +474,13 @@ public final class DispatchV2Core {
         joinPayload.put("agreementAvailable", agreementAvailable);
         joinPayload.put("authoritativeApplied", authoritativeApplied);
         joinPayload.put("authorityMode", properties.getDecision().getMode());
+        joinPayload.put("authoritativeStageSet", properties.getDecision().getAuthoritativeStages());
+        joinPayload.put("decisionQualityFlags", output.meta().decisionQualityFlags());
+        joinPayload.put("contextProfile", output.meta().contextProfile());
+        joinPayload.put("overlaySet", output.meta().overlaySet());
+        joinPayload.put("candidateUniverseCount", safeCandidateIds.size());
+        joinPayload.put("selectedCount", output.selectedIds().size());
+        joinPayload.put("effortSelectionReason", output.meta().effortSelectionReason());
         joinPayload.put("upstreamRefs", upstreamRefs == null ? List.of() : upstreamRefs);
         decisionStageLogger.writeFamily("decision_stage_join", traceId, output.stageName().wireName(), joinPayload);
     }
@@ -688,7 +695,14 @@ public final class DispatchV2Core {
                         meta.appliedEffort(),
                         meta.tokenUsage(),
                         meta.retryCount(),
-                        meta.rawResponseHash()));
+                        meta.rawResponseHash(),
+                        meta.authorityMode(),
+                        meta.authoritativeStageSet(),
+                        appendDistinct(meta.decisionQualityFlags(), "authority-fallback"),
+                        meta.contextProfile(),
+                        meta.overlaySet(),
+                        meta.contextCompressionApplied(),
+                        meta.effortSelectionReason()));
     }
 
     private boolean shouldApplyAuthoritatively(ResolvedDecisionBrain resolvedDecisionBrain,
