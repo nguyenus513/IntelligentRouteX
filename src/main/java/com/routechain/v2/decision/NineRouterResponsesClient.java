@@ -58,6 +58,12 @@ public final class NineRouterResponsesClient {
     }
 
     public LlmInvocationResult invoke(DecisionStageInputV1 input, DecisionEffort requestedEffort) {
+        return invoke(input, requestedEffort, promptPackRegistry.renderPrompt(input));
+    }
+
+    LlmInvocationResult invoke(DecisionStageInputV1 input,
+                               DecisionEffort requestedEffort,
+                               PromptPackRegistry.RenderedPrompt renderedPrompt) {
         String apiKey = System.getenv(properties.getApiKeyEnv());
         if (apiKey == null || apiKey.isBlank()) {
             throw failure("llm-api-key-missing", Map.of(
@@ -71,7 +77,7 @@ public final class NineRouterResponsesClient {
         int maxAttempts = Math.max(1, properties.getMaxRetries() + 1);
         String lastFailureReason = "provider-empty-response";
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            JsonNode requestBody = buildRequestBody(input, appliedEffort, modelResolution.resolvedModelId());
+            JsonNode requestBody = buildRequestBody(renderedPrompt, input.stageName(), appliedEffort, modelResolution.resolvedModelId());
             try {
                 TransportResponse response = transport.post(
                         runtimeConfiguration.baseUrl(),
@@ -150,19 +156,22 @@ public final class NineRouterResponsesClient {
         };
     }
 
-    private JsonNode buildRequestBody(DecisionStageInputV1 input, DecisionEffort appliedEffort, String model) {
+    private JsonNode buildRequestBody(PromptPackRegistry.RenderedPrompt renderedPrompt,
+                                      DecisionStageName stageName,
+                                      DecisionEffort appliedEffort,
+                                      String model) {
         Map<String, Object> body = new LinkedHashMap<>();
         java.util.List<Map<String, Object>> contentItems = java.util.List.of(
                 Map.of(
                         "role", "system",
                         "content", java.util.List.of(Map.of(
                                 "type", "input_text",
-                                "text", systemPrompt(input)))),
+                                "text", renderedPrompt.systemPrompt()))),
                 Map.of(
                         "role", "user",
                         "content", java.util.List.of(Map.of(
                                 "type", "input_text",
-                                "text", dynamicPrompt(input)))));
+                                "text", renderedPrompt.dynamicPrompt()))));
         body.put("model", model);
         body.put("parallel_tool_calls", properties.isParallelToolCalls());
         body.put("reasoning", Map.of("effort", appliedEffort.wireValue()));
@@ -171,12 +180,12 @@ public final class NineRouterResponsesClient {
                         "type", "json_schema",
                         "name", "stage_output_v1",
                         "strict", properties.isStrictStructuredOutputs(),
-                        "schema", outputSchema())));
+                        "schema", outputSchema(stageName))));
         body.put("input", contentItems);
         return objectMapper.valueToTree(body);
     }
 
-    private Map<String, Object> outputSchema() {
+    private Map<String, Object> outputSchema(DecisionStageName stageName) {
         return Map.of(
                 "type", "object",
                 "additionalProperties", false,
@@ -380,12 +389,8 @@ public final class NineRouterResponsesClient {
         }
     }
 
-    private String systemPrompt(DecisionStageInputV1 input) {
-        return promptPackRegistry.renderSystemPrompt(input);
-    }
-
-    private String dynamicPrompt(DecisionStageInputV1 input) {
-        return promptPackRegistry.renderDynamicPrompt(input);
+    PromptPackRegistry.RenderedPrompt renderPrompt(DecisionStageInputV1 input) {
+        return promptPackRegistry.renderPrompt(input);
     }
 
     private String classifyHttpFailure(int statusCode, String body) {

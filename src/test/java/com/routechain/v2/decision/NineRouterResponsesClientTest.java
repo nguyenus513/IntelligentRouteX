@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class NineRouterResponsesClientTest {
 
@@ -113,6 +114,42 @@ class NineRouterResponsesClientTest {
         NineRouterResponsesClient.LlmInvocationResult result = client.invoke(stageInput(DecisionStageName.ROUTE_GENERATION), DecisionEffort.XHIGH);
 
         assertEquals(1, postCalls.get());
+        assertEquals("cx/gpt-5.4", result.providerModel());
+    }
+
+    @Test
+    void sendsStageSpecificRenderedPromptResourcesInRequestBody() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        NineRouterResponsesClient client = new NineRouterResponsesClient(
+                properties.getDecision().getLlm(),
+                new StubTransport(
+                        "{\"data\":[{\"id\":\"cx/gpt-5.4\",\"root\":\"gpt-5.4\"}]}",
+                        (baseUrl, apiKey, timeout, requestBody, objectMapper) -> {
+                            JsonNode input = requestBody.path("input");
+                            assertEquals(2, input.size());
+                            String systemText = input.get(0).path("content").get(0).path("text").asText();
+                            String userText = input.get(1).path("content").get(0).path("text").asText();
+                            assertTrue(systemText.contains("You are the final-selection decision module"));
+                            assertTrue(systemText.contains("Balance value, ETA, robustness, conflict summary, and confidence."));
+                            assertTrue(userText.contains("\"schemaVersion\""));
+                            assertTrue(userText.contains("decision-stage-packet/v2"));
+                            assertTrue(userText.contains("\"candidateWindow\""));
+                            assertFalse(userText.contains("\"burstContext\""));
+                            return new NineRouterResponsesClient.TransportResponse(
+                                    200,
+                                    "{\"output\":[{\"content\":[{\"text\":\"{\\\"selectedIds\\\":[\\\"proposal-1\\\"],\\\"assessments\\\":{\\\"summary\\\":\\\"ok\\\",\\\"reasonCodes\\\":[],\\\"items\\\":[{\\\"id\\\":\\\"proposal-1\\\",\\\"score\\\":0.88,\\\"rank\\\":1,\\\"selected\\\":true,\\\"confidence\\\":0.84,\\\"reasonCodes\\\":[],\\\"dominanceReasonCodes\\\":[],\\\"regretToBestAlternative\\\":0.0,\\\"driverFitSummary\\\":\\\"ok\\\",\\\"routeVectorRefs\\\":[],\\\"geospatialFlags\\\":[],\\\"burstSensitivityFlags\\\":[],\\\"rationale\\\":\\\"ok\\\"}]}}\"}]}]}");
+                        }),
+                JsonMapper.builder().findAndAddModules().build());
+
+        PromptPackRegistry.RenderedPrompt rendered = client.renderPrompt(stageInput(DecisionStageName.FINAL_SELECTION));
+        NineRouterResponsesClient.LlmInvocationResult result = client.invoke(
+                stageInput(DecisionStageName.FINAL_SELECTION),
+                DecisionEffort.HIGH,
+                rendered);
+
+        assertEquals("decision-stage-prompt-spec/v1", rendered.metadata().get("promptSpecVersion"));
+        assertEquals("final-selection", rendered.metadata().get("stagePromptName"));
         assertEquals("cx/gpt-5.4", result.providerModel());
     }
 

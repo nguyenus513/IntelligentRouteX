@@ -29,12 +29,15 @@ public final class LlmBrain implements DecisionBrain {
             return fallback(input, "llm-stage-not-supported");
         }
         NineRouterResponsesClient.RuntimeConfiguration runtimeConfiguration = llmStageScheduler.runtimeConfiguration();
-        decisionStageLogger.writeFamily("llm_request_meta", input.traceId(), input.stageName().wireName(), Map.of(
+        PromptPackRegistry.RenderedPrompt renderedPrompt = llmStageScheduler.renderPrompt(input);
+        java.util.LinkedHashMap<String, Object> requestMeta = new java.util.LinkedHashMap<>(Map.of(
                 "stageName", input.stageName().wireName(),
                 "configuredModelFamily", runtimeConfiguration.configuredModelFamily(),
                 "providerBaseUrl", runtimeConfiguration.baseUrl(),
                 "providerWireApi", runtimeConfiguration.wireApi(),
                 "provider", properties.getProvider()));
+        requestMeta.putAll(renderedPrompt.metadata());
+        decisionStageLogger.writeFamily("llm_request_meta", input.traceId(), input.stageName().wireName(), Map.copyOf(requestMeta));
         try {
             decisionStageLogger.writeFamily("llm_context_selection_trace", input.traceId(), input.stageName().wireName(), input);
             if (input.contextSelection().containsKey("toolFetchPlan")) {
@@ -43,6 +46,7 @@ public final class LlmBrain implements DecisionBrain {
                 fetchTrace.put("traceId", input.traceId());
                 fetchTrace.put("stageName", input.stageName().wireName());
                 fetchTrace.put("profileName", input.contextSelection().getOrDefault("profileName", "balanced"));
+                fetchTrace.putAll(renderedPrompt.metadata());
                 fetchTrace.put("tools", toolResponses(input));
                 decisionStageLogger.writeFamily("llm_context_fetch_trace", input.traceId(), input.stageName().wireName(), fetchTrace);
             }

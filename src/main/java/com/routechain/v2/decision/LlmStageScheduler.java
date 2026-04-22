@@ -29,6 +29,10 @@ public final class LlmStageScheduler {
         return client.runtimeConfiguration();
     }
 
+    PromptPackRegistry.RenderedPrompt renderPrompt(DecisionStageInputV1 input) {
+        return client.renderPrompt(input);
+    }
+
     public DecisionStageOutputV1 evaluate(DecisionStageInputV1 input) {
         long startedAt = System.nanoTime();
         DecisionEffortPolicy.EffortDecision effortDecision = effortPolicy.select(input);
@@ -76,42 +80,71 @@ public final class LlmStageScheduler {
 
     private List<PassTrace> runSinglePass(DecisionStageInputV1 input,
                                           DecisionEffortPolicy.EffortDecision effortDecision) {
-        NineRouterResponsesClient.LlmInvocationResult result = client.invoke(passInput(input, "commit", "single-pass final commit"), effortDecision.requestedEffort());
+        DecisionStageInputV1 commitInput = passInput(input, "commit", "single-pass final commit");
+        PromptPackRegistry.RenderedPrompt renderedPrompt = client.renderPrompt(commitInput);
+        logPromptSpec(commitInput, "commit", renderedPrompt);
+        NineRouterResponsesClient.LlmInvocationResult result = client.invoke(commitInput, effortDecision.requestedEffort(), renderedPrompt);
         return List.of(new PassTrace("commit", "single-pass final commit", result));
     }
 
     private List<PassTrace> runMultiPass(DecisionStageInputV1 input,
                                          DecisionEffortPolicy.EffortDecision effortDecision) {
         List<PassTrace> traces = new ArrayList<>();
+        DecisionStageInputV1 proposeInput = passInput(input, "propose", "produce a shortlist and provisional ranking");
+        PromptPackRegistry.RenderedPrompt proposePrompt = client.renderPrompt(proposeInput);
+        logPromptSpec(proposeInput, "propose", proposePrompt);
         NineRouterResponsesClient.LlmInvocationResult propose = client.invoke(
-                passInput(input, "propose", "produce a shortlist and provisional ranking"),
-                effortDecision.requestedEffort());
+                proposeInput,
+                effortDecision.requestedEffort(),
+                proposePrompt);
         traces.add(new PassTrace("propose", "produce a shortlist and provisional ranking", propose));
 
+        DecisionStageInputV1 critiqueInput = passInput(input.withUpstreamSummary(withPassSummary(input.upstreamSummary(), traces)),
+                "critique",
+                "identify dominated candidates, missing trade-offs, regret, and conflict risk");
+        PromptPackRegistry.RenderedPrompt critiquePrompt = client.renderPrompt(critiqueInput);
+        logPromptSpec(critiqueInput, "critique", critiquePrompt);
         NineRouterResponsesClient.LlmInvocationResult critique = client.invoke(
-                passInput(input.withUpstreamSummary(withPassSummary(input.upstreamSummary(), traces)),
-                        "critique",
-                        "identify dominated candidates, missing trade-offs, regret, and conflict risk"),
-                effortDecision.requestedEffort());
+                critiqueInput,
+                effortDecision.requestedEffort(),
+                critiquePrompt);
         traces.add(new PassTrace("critique", "identify dominated candidates, missing trade-offs, regret, and conflict risk", critique));
 
         DecisionStageInputV1 compareInput = input
                 .withComparisonPack(comparisonPackBuilder.augmentForPasses(input.comparisonPack(), propose.parsedOutput(), critique.parsedOutput()))
                 .withUpstreamSummary(withPassSummary(input.upstreamSummary(), traces));
+        DecisionStageInputV1 comparePassInput = passInput(compareInput, "compare", "re-rank candidates using critique feedback and relative deltas");
+        PromptPackRegistry.RenderedPrompt comparePrompt = client.renderPrompt(comparePassInput);
+        logPromptSpec(comparePassInput, "compare", comparePrompt);
         NineRouterResponsesClient.LlmInvocationResult compare = client.invoke(
-                passInput(compareInput, "compare", "re-rank candidates using critique feedback and relative deltas"),
-                effortDecision.requestedEffort());
+                comparePassInput,
+                effortDecision.requestedEffort(),
+                comparePrompt);
         traces.add(new PassTrace("compare", "re-rank candidates using critique feedback and relative deltas", compare));
 
+        DecisionStageInputV1 commitInput = input
+                .withComparisonPack(comparisonPackBuilder.augmentForPasses(input.comparisonPack(), compare.parsedOutput(), critique.parsedOutput()))
+                .withUpstreamSummary(withPassSummary(input.upstreamSummary(), traces));
+        DecisionStageInputV1 commitPassInput = passInput(commitInput, "commit", "return the final authoritative stage_output_v1 decision");
+        PromptPackRegistry.RenderedPrompt commitPrompt = client.renderPrompt(commitPassInput);
+        logPromptSpec(commitPassInput, "commit", commitPrompt);
         NineRouterResponsesClient.LlmInvocationResult commit = client.invoke(
-                passInput(input
-                                .withComparisonPack(comparisonPackBuilder.augmentForPasses(input.comparisonPack(), compare.parsedOutput(), critique.parsedOutput()))
-                                .withUpstreamSummary(withPassSummary(input.upstreamSummary(), traces)),
-                        "commit",
-                        "return the final authoritative stage_output_v1 decision"),
-                effortDecision.requestedEffort());
+                commitPassInput,
+                effortDecision.requestedEffort(),
+                commitPrompt);
         traces.add(new PassTrace("commit", "return the final authoritative stage_output_v1 decision", commit));
         return List.copyOf(traces);
+    }
+
+    private void logPromptSpec(DecisionStageInputV1 input,
+                               String passType,
+                               PromptPackRegistry.RenderedPrompt renderedPrompt) {
+        LinkedHashMap<String, Object> payload = new LinkedHashMap<>(renderedPrompt.metadata());
+        payload.put("schemaVersion", "llm-prompt-spec-trace/v1");
+        payload.put("traceId", input.traceId());
+        payload.put("stageName", input.stageName().wireName());
+        payload.put("passType", passType);
+        decisionStageLogger.writeFamily("llm_prompt_spec_trace", input.traceId(), input.stageName().wireName() + "-" + passType, Map.copyOf(payload));
     }
 
     private DecisionStageInputV1 passInput(DecisionStageInputV1 input, String passType, String passObjective) {

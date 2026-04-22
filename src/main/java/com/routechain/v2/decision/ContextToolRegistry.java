@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Map;
 
 public final class ContextToolRegistry {
+    private final StageVisibilityPolicy visibilityPolicy = new StageVisibilityPolicy();
+
     private static final List<String> DEFAULT_TOOLS = List.of(
             "get_bundle_details",
             "get_driver_details",
@@ -12,12 +14,13 @@ public final class ContextToolRegistry {
             "get_scenario_breakdown");
 
     public Map<String, Object> toolManifest(DecisionStageName stageName) {
+        List<String> allowedTools = visibilityPolicy.allowedTools(stageName);
         return Map.of(
                 "stageName", stageName == null ? "" : stageName.wireName(),
                 "tools", DEFAULT_TOOLS.stream()
                         .map(toolName -> Map.of(
                                 "name", toolName,
-                                "enabled", stageName != null && stageName.supportsLlmDecision(),
+                                "enabled", stageName != null && stageName.supportsLlmDecision() && allowedTools.contains(toolName),
                                 "description", toolDescription(toolName)))
                         .toList(),
                 "parallelToolCalls", false);
@@ -27,26 +30,33 @@ public final class ContextToolRegistry {
         if (toolName == null || input == null) {
             return Map.of();
         }
-            return switch (toolName) {
+        if (!visibilityPolicy.allowedTools(input.stageName()).contains(toolName)) {
+            return Map.of(
+                    "toolName", toolName,
+                    "status", "not-allowed-for-stage",
+                    "stageName", input.stageName().wireName());
+        }
+        return switch (toolName) {
             case "get_bundle_details" -> Map.of(
                     "bundleWindow", input.candidateSet().getOrDefault("window", List.of()),
-                    "referenceFrame", input.referenceFrame(),
-                    "geospatialContext", input.geospatialContext());
+                    "referenceFrame", visibilityPolicy.referenceFrame(input),
+                    "geospatialContext", visibilityPolicy.geospatialContext(input));
             case "get_driver_details" -> Map.of(
                     "driverWindow", input.candidateSet().getOrDefault("window", List.of()),
-                    "comparisonPack", input.comparisonPack(),
-                    "geospatialContext", input.geospatialContext());
+                    "comparisonPack", visibilityPolicy.comparisonPack(input),
+                    "geospatialContext", visibilityPolicy.geospatialContext(input));
             case "get_route_vector_summary" -> Map.of(
                     "routeVectorWindow", input.candidateSet().getOrDefault("window", List.of()),
-                    "comparisonPack", input.comparisonPack(),
-                    "referenceFrame", input.referenceFrame());
+                    "comparisonPack", visibilityPolicy.comparisonPack(input),
+                    "referenceFrame", visibilityPolicy.referenceFrame(input));
             case "get_conflict_summary" -> Map.of(
                     "selectedIds", input.candidateSet().getOrDefault("selectedProposalIds", List.of()),
-                    "comparisonPack", input.comparisonPack());
+                    "comparisonPack", visibilityPolicy.comparisonPack(input),
+                    "upstreamSummary", visibilityPolicy.upstreamSummary(input));
             case "get_scenario_breakdown" -> Map.of(
                     "scenarioWindow", input.candidateSet().getOrDefault("window", List.of()),
                     "burstContext", input.burstContext(),
-                    "comparisonPack", input.comparisonPack());
+                    "comparisonPack", visibilityPolicy.comparisonPack(input));
             default -> Map.of();
         };
     }
