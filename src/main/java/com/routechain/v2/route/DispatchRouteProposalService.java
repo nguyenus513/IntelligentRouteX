@@ -18,6 +18,7 @@ import com.routechain.v2.integration.MlStageMetadataAccumulator;
 import com.routechain.v2.integration.RouteFinderClient;
 import com.routechain.v2.integration.RouteFinderFeatureVector;
 import com.routechain.v2.integration.RouteFinderResult;
+import com.routechain.v2.harvest.HarvestRecorder;
 import com.routechain.v2.decision.DecisionStageLogger;
 import com.routechain.v2.routing.RouteVectorEnricher;
 
@@ -38,6 +39,29 @@ public final class DispatchRouteProposalService {
     private final RouteFinderClient routeFinderClient;
     private final RouteVectorEnricher routeVectorEnricher;
     private final DecisionStageLogger decisionStageLogger;
+    private final HarvestRecorder harvestRecorder;
+
+    public DispatchRouteProposalService(RouteChainDispatchV2Properties properties,
+                                        RouteProposalEngine routeProposalEngine,
+                                        RouteProposalValidator routeProposalValidator,
+                                        RouteValueScorer routeValueScorer,
+                                        RouteProposalPruner routeProposalPruner,
+                                        EtaLegCacheFactory etaLegCacheFactory,
+                                        RouteFinderClient routeFinderClient,
+                                        RouteVectorEnricher routeVectorEnricher,
+                                        DecisionStageLogger decisionStageLogger,
+                                        HarvestRecorder harvestRecorder) {
+        this.properties = properties;
+        this.routeProposalEngine = routeProposalEngine;
+        this.routeProposalValidator = routeProposalValidator;
+        this.routeValueScorer = routeValueScorer;
+        this.routeProposalPruner = routeProposalPruner;
+        this.etaLegCacheFactory = etaLegCacheFactory;
+        this.routeFinderClient = routeFinderClient;
+        this.routeVectorEnricher = routeVectorEnricher;
+        this.decisionStageLogger = decisionStageLogger;
+        this.harvestRecorder = harvestRecorder;
+    }
 
     public DispatchRouteProposalService(RouteChainDispatchV2Properties properties,
                                         RouteProposalEngine routeProposalEngine,
@@ -48,15 +72,16 @@ public final class DispatchRouteProposalService {
                                         RouteFinderClient routeFinderClient,
                                         RouteVectorEnricher routeVectorEnricher,
                                         DecisionStageLogger decisionStageLogger) {
-        this.properties = properties;
-        this.routeProposalEngine = routeProposalEngine;
-        this.routeProposalValidator = routeProposalValidator;
-        this.routeValueScorer = routeValueScorer;
-        this.routeProposalPruner = routeProposalPruner;
-        this.etaLegCacheFactory = etaLegCacheFactory;
-        this.routeFinderClient = routeFinderClient;
-        this.routeVectorEnricher = routeVectorEnricher;
-        this.decisionStageLogger = decisionStageLogger;
+        this(properties,
+                routeProposalEngine,
+                routeProposalValidator,
+                routeValueScorer,
+                routeProposalPruner,
+                etaLegCacheFactory,
+                routeFinderClient,
+                routeVectorEnricher,
+                decisionStageLogger,
+                null);
     }
 
     public DispatchRouteProposalStage evaluate(DispatchV2Request request,
@@ -257,6 +282,9 @@ public final class DispatchRouteProposalService {
                     featureVector,
                     properties.getMl().getRoutefinder().getAlternativesTimeout().toMillis());
             mlStageMetadataAccumulator.accept(alternatives);
+            if (harvestRecorder != null) {
+                harvestRecorder.recordRouteFinderTeacher(traceId, seed.proposal().proposalId(), "alternatives", featureVector, alternatives);
+            }
             if (alternatives.applied()) {
                 generatedCandidates.addAll(alternatives.routes().stream()
                         .limit(Math.max(1, properties.getMl().getRoutefinder().getMaxAlternativesPerDriverCandidate()))
@@ -277,6 +305,9 @@ public final class DispatchRouteProposalService {
                     featureVector,
                     properties.getMl().getRoutefinder().getRefineTimeout().toMillis());
             mlStageMetadataAccumulator.accept(refined);
+            if (harvestRecorder != null) {
+                harvestRecorder.recordRouteFinderTeacher(traceId, seed.proposal().proposalId(), "refine", featureVector, refined);
+            }
             if (refined.applied()) {
                 refined.routes().stream().findFirst()
                         .map(route -> routeProposalEngine.externalCandidate(

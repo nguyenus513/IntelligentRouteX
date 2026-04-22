@@ -43,6 +43,9 @@ import com.routechain.v2.feedback.SnapshotBuilder;
 import com.routechain.v2.feedback.SnapshotService;
 import com.routechain.v2.feedback.SnapshotStore;
 import com.routechain.v2.feedback.WarmStartManager;
+import com.routechain.v2.harvest.HarvestRailWriter;
+import com.routechain.v2.harvest.HarvestRecorder;
+import com.routechain.v2.harvest.HarvestRuntimeMetadataResolver;
 import com.routechain.v2.cluster.DispatchPairClusterService;
 import com.routechain.v2.cluster.EtaLegCacheFactory;
 import com.routechain.v2.cluster.MicroClusterer;
@@ -284,8 +287,9 @@ public class DispatchV2Configuration {
     @Bean
     PairSimilarityScorer pairSimilarityScorer(RouteChainDispatchV2Properties properties,
                                               PairHardGateEvaluator pairHardGateEvaluator,
-                                              TabularScoringClient tabularScoringClient) {
-        return new PairSimilarityScorer(properties, pairHardGateEvaluator, tabularScoringClient);
+                                              TabularScoringClient tabularScoringClient,
+                                              HarvestRecorder harvestRecorder) {
+        return new PairSimilarityScorer(properties, pairHardGateEvaluator, tabularScoringClient, harvestRecorder);
     }
 
     @Bean
@@ -363,7 +367,8 @@ public class DispatchV2Configuration {
                                                           BundleValidator bundleValidator,
                                                           BundleScorer bundleScorer,
                                                           BundleDominancePruner bundleDominancePruner,
-                                                          GreedRlClient greedRlClient) {
+                                                          GreedRlClient greedRlClient,
+                                                          HarvestRecorder harvestRecorder) {
         return new DispatchBundleStageService(
                 properties,
                 boundaryCandidateSelector,
@@ -373,7 +378,8 @@ public class DispatchV2Configuration {
                 bundleValidator,
                 bundleScorer,
                 bundleDominancePruner,
-                greedRlClient);
+                greedRlClient,
+                harvestRecorder);
     }
 
     @Bean
@@ -389,8 +395,9 @@ public class DispatchV2Configuration {
     @Bean
     CandidateDriverShortlister candidateDriverShortlister(RouteChainDispatchV2Properties properties,
                                                           DriverRouteFeatureBuilder driverRouteFeatureBuilder,
-                                                          TabularScoringClient tabularScoringClient) {
-        return new CandidateDriverShortlister(properties, driverRouteFeatureBuilder, tabularScoringClient);
+                                                          TabularScoringClient tabularScoringClient,
+                                                          HarvestRecorder harvestRecorder) {
+        return new CandidateDriverShortlister(properties, driverRouteFeatureBuilder, tabularScoringClient, harvestRecorder);
     }
 
     @Bean
@@ -422,8 +429,9 @@ public class DispatchV2Configuration {
 
     @Bean
     RouteValueScorer routeValueScorer(RouteChainDispatchV2Properties properties,
-                                      TabularScoringClient tabularScoringClient) {
-        return new RouteValueScorer(properties, tabularScoringClient);
+                                      TabularScoringClient tabularScoringClient,
+                                      HarvestRecorder harvestRecorder) {
+        return new RouteValueScorer(properties, tabularScoringClient, harvestRecorder);
     }
 
     @Bean
@@ -440,7 +448,8 @@ public class DispatchV2Configuration {
                                                               EtaLegCacheFactory etaLegCacheFactory,
                                                               RouteFinderClient routeFinderClient,
                                                               RouteVectorEnricher routeVectorEnricher,
-                                                              DecisionStageLogger decisionStageLogger) {
+                                                              DecisionStageLogger decisionStageLogger,
+                                                              HarvestRecorder harvestRecorder) {
         return new DispatchRouteProposalService(
                 properties,
                 routeProposalEngine,
@@ -450,7 +459,8 @@ public class DispatchV2Configuration {
                 etaLegCacheFactory,
                 routeFinderClient,
                 routeVectorEnricher,
-                decisionStageLogger);
+                decisionStageLogger,
+                harvestRecorder);
     }
 
     @Bean
@@ -491,7 +501,8 @@ public class DispatchV2Configuration {
                                                     PostDropShiftFeatureBuilder postDropShiftFeatureBuilder,
                                                     ScenarioGateEvaluator scenarioGateEvaluator,
                                                     ScenarioEvaluator scenarioEvaluator,
-                                                    RobustUtilityAggregator robustUtilityAggregator) {
+                                                    RobustUtilityAggregator robustUtilityAggregator,
+                                                    HarvestRecorder harvestRecorder) {
         return new DispatchScenarioService(
                 properties,
                 forecastClient,
@@ -500,7 +511,8 @@ public class DispatchV2Configuration {
                 postDropShiftFeatureBuilder,
                 scenarioGateEvaluator,
                 scenarioEvaluator,
-                robustUtilityAggregator);
+                robustUtilityAggregator,
+                harvestRecorder);
     }
 
     @Bean
@@ -574,6 +586,23 @@ public class DispatchV2Configuration {
         return new DecisionStageLogger(properties);
     }
 
+    @Bean(destroyMethod = "close")
+    HarvestRailWriter harvestRailWriter(RouteChainDispatchV2Properties properties) {
+        return new HarvestRailWriter(properties);
+    }
+
+    @Bean
+    HarvestRuntimeMetadataResolver harvestRuntimeMetadataResolver(RouteChainDispatchV2Properties properties) {
+        return new HarvestRuntimeMetadataResolver(properties);
+    }
+
+    @Bean
+    HarvestRecorder harvestRecorder(RouteChainDispatchV2Properties properties,
+                                    HarvestRailWriter harvestRailWriter,
+                                    HarvestRuntimeMetadataResolver harvestRuntimeMetadataResolver) {
+        return new HarvestRecorder(properties, harvestRailWriter, harvestRuntimeMetadataResolver);
+    }
+
     @Bean
     ContextToolRegistry contextToolRegistry() {
         return new ContextToolRegistry();
@@ -639,8 +668,10 @@ public class DispatchV2Configuration {
     }
 
     @Bean
-    RouteVectorEnricher routeVectorEnricher(BestPathRouter bestPathRouter, DecisionStageLogger decisionStageLogger) {
-        return new RouteVectorEnricher(bestPathRouter, decisionStageLogger);
+    RouteVectorEnricher routeVectorEnricher(BestPathRouter bestPathRouter,
+                                            DecisionStageLogger decisionStageLogger,
+                                            HarvestRecorder harvestRecorder) {
+        return new RouteVectorEnricher(bestPathRouter, decisionStageLogger, harvestRecorder);
     }
 
     @Bean
@@ -757,7 +788,8 @@ public class DispatchV2Configuration {
                                   PostDispatchHardeningService postDispatchHardeningService,
                                   DecisionBrainResolver decisionBrainResolver,
                                   ContextAssembler contextAssembler,
-                                  DecisionStageLogger decisionStageLogger) {
+                                  DecisionStageLogger decisionStageLogger,
+                                  HarvestRecorder harvestRecorder) {
         return new DispatchV2Core(
                 properties,
                 dispatchEtaContextService,
@@ -772,7 +804,8 @@ public class DispatchV2Configuration {
                 postDispatchHardeningService,
                 decisionBrainResolver,
                 contextAssembler,
-                decisionStageLogger);
+                decisionStageLogger,
+                harvestRecorder);
     }
 
     @Bean

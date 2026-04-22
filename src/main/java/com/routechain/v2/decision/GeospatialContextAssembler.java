@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 final class GeospatialContextAssembler {
+    private final GeoContextAssembler geoContextAssembler = new GeoContextAssembler();
 
     Map<String, Object> build(DecisionStageName stageName, Map<String, Object> candidateSet, Map<String, Object> dispatchContext) {
         List<Map<String, Object>> window = rows(candidateSet.get("window"));
@@ -12,13 +13,15 @@ final class GeospatialContextAssembler {
             return Map.of("stageName", stageName.wireName(), "tileContextSummaries", List.of());
         }
         LinkedHashMap<String, Object> context = new LinkedHashMap<>();
+        Map<String, Object> geoSummary = geoContextAssembler.build(stageName, window, dispatchContext);
         context.put("stageName", stageName.wireName());
         context.put("zoneId", dispatchContext.getOrDefault("zoneId", dispatchContext.getOrDefault("corridorSignature", "unknown-zone")));
         context.put("corridorId", dispatchContext.getOrDefault("corridorSignature", "unknown-corridor"));
-        context.put("localDriverAreaSummary", firstWithKeys(window, "driverLat", "driverLng"));
-        context.put("pickupDropClusterSummary", clusterSummary(window));
-        context.put("corridorSummary", corridorSummary(window, dispatchContext));
-        context.put("tileContextSummaries", tileSummaries(window));
+        context.put("localDriverAreaSummary", geoSummary.getOrDefault("localDriverAreaSummary", Map.of()));
+        context.put("pickupDropClusterSummary", geoSummary.getOrDefault("pickupDropClusterSummary", clusterSummary(window)));
+        context.put("corridorSummary", geoSummary.getOrDefault("corridorSummary", corridorSummary(window, dispatchContext)));
+        context.put("selectedTiles", geoSummary.getOrDefault("selectedTiles", List.of()));
+        context.put("tileContextSummaries", geoSummary.getOrDefault("tileContextSummaries", tileSummaries(window)));
         context.put("geospatialReferenceFrame", Map.of(
                 "driverToFirstPickupEtaSeconds", min(window, "driverToFirstPickupEtaSeconds", "pickupEtaMinutes"),
                 "effectiveDistanceMeters", min(window, "effectiveDistanceMeters"),

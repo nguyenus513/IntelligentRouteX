@@ -8,6 +8,7 @@ import com.routechain.v2.integration.NoOpTabularScoringClient;
 import com.routechain.v2.integration.MlStageMetadataAccumulator;
 import com.routechain.v2.integration.TabularScoreResult;
 import com.routechain.v2.integration.TabularScoringClient;
+import com.routechain.v2.harvest.HarvestRecorder;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -17,18 +18,27 @@ public final class CandidateDriverShortlister {
     private final RouteChainDispatchV2Properties properties;
     private final DriverRouteFeatureBuilder driverRouteFeatureBuilder;
     private final TabularScoringClient tabularScoringClient;
+    private final HarvestRecorder harvestRecorder;
+
+    public CandidateDriverShortlister(RouteChainDispatchV2Properties properties,
+                                      DriverRouteFeatureBuilder driverRouteFeatureBuilder,
+                                      TabularScoringClient tabularScoringClient,
+                                      HarvestRecorder harvestRecorder) {
+        this.properties = properties;
+        this.driverRouteFeatureBuilder = driverRouteFeatureBuilder;
+        this.tabularScoringClient = tabularScoringClient;
+        this.harvestRecorder = harvestRecorder;
+    }
 
     public CandidateDriverShortlister(RouteChainDispatchV2Properties properties,
                                       DriverRouteFeatureBuilder driverRouteFeatureBuilder,
                                       TabularScoringClient tabularScoringClient) {
-        this.properties = properties;
-        this.driverRouteFeatureBuilder = driverRouteFeatureBuilder;
-        this.tabularScoringClient = tabularScoringClient;
+        this(properties, driverRouteFeatureBuilder, tabularScoringClient, null);
     }
 
     public CandidateDriverShortlister(RouteChainDispatchV2Properties properties,
                                       DriverRouteFeatureBuilder driverRouteFeatureBuilder) {
-        this(properties, driverRouteFeatureBuilder, new NoOpTabularScoringClient());
+        this(properties, driverRouteFeatureBuilder, new NoOpTabularScoringClient(), null);
     }
 
     public DriverShortlistResult shortlist(String traceId,
@@ -94,6 +104,29 @@ public final class CandidateDriverShortlister {
                         features.driverFitScore()),
                 properties.getMl().getTabular().getReadTimeout().toMillis());
         mlStageMetadataAccumulator.accept(scoreResult);
+        if (harvestRecorder != null) {
+            harvestRecorder.recordTabularTeacher(
+                    traceId,
+                    "driver-shortlist/rerank",
+                    "driver:%s:%s".formatted(features.bundleId(), features.driverId()),
+                    "driver-fit-score",
+                    new DriverFitFeatureVector(
+                            "driver-fit-feature-vector/v1",
+                            traceId,
+                            features.bundleId(),
+                            features.anchorOrderId(),
+                            features.driverId(),
+                            features.pickupEtaMinutes(),
+                            features.etaUncertainty(),
+                            features.bundleScore(),
+                            features.anchorScore(),
+                            features.bundleSupportScore(),
+                            features.corridorAffinity(),
+                            features.urgencyLift(),
+                            features.boundaryPenalty(),
+                            features.driverFitScore()),
+                    scoreResult);
+        }
         if (!scoreResult.applied()) {
             degradeReasons.add("driver-fit-ml-unavailable");
             return features;

@@ -14,6 +14,7 @@ import com.routechain.v2.integration.ForecastResult;
 import com.routechain.v2.integration.MlStageMetadataAccumulator;
 import com.routechain.v2.integration.PostDropShiftFeatureVector;
 import com.routechain.v2.integration.ZoneBurstFeatureVector;
+import com.routechain.v2.harvest.HarvestRecorder;
 import com.routechain.v2.route.DispatchCandidateContext;
 import com.routechain.v2.route.DispatchRouteCandidateStage;
 import com.routechain.v2.route.DispatchRouteProposalStage;
@@ -34,6 +35,27 @@ public final class DispatchScenarioService {
     private final ScenarioGateEvaluator scenarioGateEvaluator;
     private final ScenarioEvaluator scenarioEvaluator;
     private final RobustUtilityAggregator robustUtilityAggregator;
+    private final HarvestRecorder harvestRecorder;
+
+    public DispatchScenarioService(RouteChainDispatchV2Properties properties,
+                                   ForecastClient forecastClient,
+                                   DemandShiftFeatureBuilder demandShiftFeatureBuilder,
+                                   ZoneBurstFeatureBuilder zoneBurstFeatureBuilder,
+                                   PostDropShiftFeatureBuilder postDropShiftFeatureBuilder,
+                                   ScenarioGateEvaluator scenarioGateEvaluator,
+                                   ScenarioEvaluator scenarioEvaluator,
+                                   RobustUtilityAggregator robustUtilityAggregator,
+                                   HarvestRecorder harvestRecorder) {
+        this.properties = properties;
+        this.forecastClient = forecastClient;
+        this.demandShiftFeatureBuilder = demandShiftFeatureBuilder;
+        this.zoneBurstFeatureBuilder = zoneBurstFeatureBuilder;
+        this.postDropShiftFeatureBuilder = postDropShiftFeatureBuilder;
+        this.scenarioGateEvaluator = scenarioGateEvaluator;
+        this.scenarioEvaluator = scenarioEvaluator;
+        this.robustUtilityAggregator = robustUtilityAggregator;
+        this.harvestRecorder = harvestRecorder;
+    }
 
     public DispatchScenarioService(RouteChainDispatchV2Properties properties,
                                    ForecastClient forecastClient,
@@ -43,14 +65,15 @@ public final class DispatchScenarioService {
                                    ScenarioGateEvaluator scenarioGateEvaluator,
                                    ScenarioEvaluator scenarioEvaluator,
                                    RobustUtilityAggregator robustUtilityAggregator) {
-        this.properties = properties;
-        this.forecastClient = forecastClient;
-        this.demandShiftFeatureBuilder = demandShiftFeatureBuilder;
-        this.zoneBurstFeatureBuilder = zoneBurstFeatureBuilder;
-        this.postDropShiftFeatureBuilder = postDropShiftFeatureBuilder;
-        this.scenarioGateEvaluator = scenarioGateEvaluator;
-        this.scenarioEvaluator = scenarioEvaluator;
-        this.robustUtilityAggregator = robustUtilityAggregator;
+        this(properties,
+                forecastClient,
+                demandShiftFeatureBuilder,
+                zoneBurstFeatureBuilder,
+                postDropShiftFeatureBuilder,
+                scenarioGateEvaluator,
+                scenarioEvaluator,
+                robustUtilityAggregator,
+                null);
     }
 
     public DispatchScenarioStage evaluate(DispatchV2Request request,
@@ -140,6 +163,12 @@ public final class DispatchScenarioService {
         ForecastResult demandShift = forecastClient.forecastDemandShift(demandShiftFeatures, 180L);
         ForecastResult zoneBurst = forecastClient.forecastZoneBurst(zoneBurstFeatures, 180L);
         ForecastResult postDropShift = forecastClient.forecastPostDropShift(postDropShiftFeatures, 180L);
+        if (harvestRecorder != null) {
+            String traceId = demandShiftFeatures.traceId();
+            harvestRecorder.recordForecastTeacher(traceId, demandShiftFeatures.corridorId(), "demand-shift", demandShiftFeatures, demandShift);
+            harvestRecorder.recordForecastTeacher(traceId, zoneBurstFeatures.corridorId(), "zone-burst", zoneBurstFeatures, zoneBurst);
+            harvestRecorder.recordForecastTeacher(traceId, postDropShiftFeatures.corridorId(), "post-drop-shift", postDropShiftFeatures, postDropShift);
+        }
         acceptMetadata(metadataAccumulator, demandShift);
         acceptMetadata(metadataAccumulator, zoneBurst);
         acceptMetadata(metadataAccumulator, postDropShift);

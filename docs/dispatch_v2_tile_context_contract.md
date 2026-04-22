@@ -1,0 +1,24 @@
+# Dispatch V2 Tile Context Contract
+
+- `GeoTileSelector` chooses prioritized AOI tiles from candidate geometry and corridor context.
+- `TileFeatureEncoder` emits compressed tile vectors only.
+- `GeoContextAssembler` builds:
+  - `localDriverAreaSummary`
+  - `pickupDropClusterSummary`
+  - `corridorSummary`
+  - `selectedTiles`
+  - `tileContextSummaries`
+- Required tile feature keys:
+  - `tileId`
+  - `zoomLevel`
+  - `priorityScore`
+  - `majorRoadRatio`
+  - `minorRoadRatio`
+  - `intersectionDensity`
+  - `trafficLevel`
+  - `weatherRisk`
+  - `hotspotScore`
+  - `merchantDensity`
+  - `avgExpectedSpeedMps`
+  - `turnComplexity`
+  - `corridorOverlapRatio`

@@ -38,6 +38,9 @@ import com.routechain.v2.feedback.SnapshotBuilder;
 import com.routechain.v2.feedback.SnapshotService;
 import com.routechain.v2.feedback.SnapshotStore;
 import com.routechain.v2.feedback.WarmStartManager;
+import com.routechain.v2.harvest.HarvestRailWriter;
+import com.routechain.v2.harvest.HarvestRecorder;
+import com.routechain.v2.harvest.HarvestRuntimeMetadataResolver;
 import com.routechain.v2.bundle.BoundaryCandidateSelector;
 import com.routechain.v2.bundle.BoundaryExpansionEngine;
 import com.routechain.v2.bundle.BundleDominancePruner;
@@ -205,10 +208,14 @@ public final class TestDispatchV2Factory {
         OrderBuffer orderBuffer = configuration.orderBuffer(properties);
         PairFeatureBuilder pairFeatureBuilder = configuration.pairFeatureBuilder(baselineTravelTimeEstimator);
         PairHardGateEvaluator pairHardGateEvaluator = configuration.pairHardGateEvaluator(properties);
+        HarvestRailWriter harvestRailWriter = configuration.harvestRailWriter(properties);
+        HarvestRuntimeMetadataResolver harvestRuntimeMetadataResolver = configuration.harvestRuntimeMetadataResolver(properties);
+        HarvestRecorder harvestRecorder = configuration.harvestRecorder(properties, harvestRailWriter, harvestRuntimeMetadataResolver);
         PairSimilarityScorer pairSimilarityScorer = configuration.pairSimilarityScorer(
                 properties,
                 pairHardGateEvaluator,
-                tabularScoringClient);
+                tabularScoringClient,
+                harvestRecorder);
         EtaLegCacheFactory etaLegCacheFactory = configuration.etaLegCacheFactory(properties, etaService);
         PairSimilarityGraphBuilder pairSimilarityGraphBuilder = configuration.pairSimilarityGraphBuilder(
                 properties,
@@ -237,10 +244,11 @@ public final class TestDispatchV2Factory {
                 bundleValidator,
                 bundleScorer,
                 bundleDominancePruner,
-                greedRlClient);
+                greedRlClient,
+                harvestRecorder);
         PickupAnchorSelector pickupAnchorSelector = configuration.pickupAnchorSelector(properties);
         DriverRouteFeatureBuilder driverRouteFeatureBuilder = configuration.driverRouteFeatureBuilder();
-        CandidateDriverShortlister candidateDriverShortlister = configuration.candidateDriverShortlister(properties, driverRouteFeatureBuilder, tabularScoringClient);
+        CandidateDriverShortlister candidateDriverShortlister = configuration.candidateDriverShortlister(properties, driverRouteFeatureBuilder, tabularScoringClient, harvestRecorder);
         DriverReranker driverReranker = configuration.driverReranker();
         DispatchRouteCandidateService dispatchRouteCandidateService = configuration.dispatchRouteCandidateService(
                 pickupAnchorSelector,
@@ -249,13 +257,13 @@ public final class TestDispatchV2Factory {
                 etaLegCacheFactory);
         RouteProposalEngine routeProposalEngine = configuration.routeProposalEngine();
         RouteProposalValidator routeProposalValidator = configuration.routeProposalValidator();
-        RouteValueScorer routeValueScorer = configuration.routeValueScorer(properties, tabularScoringClient);
+        RouteValueScorer routeValueScorer = configuration.routeValueScorer(properties, tabularScoringClient, harvestRecorder);
         RouteProposalPruner routeProposalPruner = configuration.routeProposalPruner(properties);
         DecisionStageLogger decisionStageLogger = configuration.decisionStageLogger(properties);
         RoadGraphProvider roadGraphProvider = configuration.roadGraphProvider();
         RouteCostFunction routeCostFunction = configuration.routeCostFunction();
         BestPathRouter bestPathRouter = configuration.bestPathRouter(roadGraphProvider, routeCostFunction);
-        RouteVectorEnricher routeVectorEnricher = configuration.routeVectorEnricher(bestPathRouter, decisionStageLogger);
+        RouteVectorEnricher routeVectorEnricher = configuration.routeVectorEnricher(bestPathRouter, decisionStageLogger, harvestRecorder);
         DispatchRouteProposalService dispatchRouteProposalService = configuration.dispatchRouteProposalService(
                 properties,
                 routeProposalEngine,
@@ -265,7 +273,8 @@ public final class TestDispatchV2Factory {
                 etaLegCacheFactory,
                 routeFinderClient,
                 routeVectorEnricher,
-                decisionStageLogger);
+                decisionStageLogger,
+                harvestRecorder);
         ScenarioGateEvaluator scenarioGateEvaluator = configuration.scenarioGateEvaluator(properties);
         ScenarioEvaluator scenarioEvaluator = configuration.scenarioEvaluator(properties);
         var demandShiftFeatureBuilder = configuration.demandShiftFeatureBuilder();
@@ -280,7 +289,8 @@ public final class TestDispatchV2Factory {
                 postDropShiftFeatureBuilder,
                 scenarioGateEvaluator,
                 scenarioEvaluator,
-                robustUtilityAggregator);
+                robustUtilityAggregator,
+                harvestRecorder);
         SelectorCandidateBuilder selectorCandidateBuilder = configuration.selectorCandidateBuilder(properties);
         ConflictGraphBuilder conflictGraphBuilder = configuration.conflictGraphBuilder();
         GreedyRepairSelector greedyRepairSelector = configuration.greedyRepairSelector();
@@ -342,7 +352,8 @@ public final class TestDispatchV2Factory {
                 postDispatchHardeningService,
                 decisionBrainResolver,
                 contextAssembler,
-                decisionStageLogger);
+                decisionStageLogger,
+                harvestRecorder);
         DispatchReplayLoader dispatchReplayLoader = configuration.dispatchReplayLoader(
                 dispatchReplayRecorder,
                 decisionLogService,

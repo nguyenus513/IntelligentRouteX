@@ -7,6 +7,10 @@ __pycache__/
 .venv/
 .pytest_cache/
 .portable-runtime-seeds/
+$buildDir/
+data/bronze/
+data/silver/
+data/gold/
 services/models/materialized/chronos-2/
 services/models/materialized/greedrl/
 services/models/materialized/tabular/

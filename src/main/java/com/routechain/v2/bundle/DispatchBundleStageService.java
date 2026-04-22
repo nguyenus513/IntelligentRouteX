@@ -11,6 +11,7 @@ import com.routechain.v2.integration.GreedRlBundleFeatureVector;
 import com.routechain.v2.integration.GreedRlBundleResult;
 import com.routechain.v2.integration.GreedRlClient;
 import com.routechain.v2.integration.MlStageMetadataAccumulator;
+import com.routechain.v2.harvest.HarvestRecorder;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -28,6 +29,29 @@ public final class DispatchBundleStageService {
     private final BundleScorer bundleScorer;
     private final BundleDominancePruner bundleDominancePruner;
     private final GreedRlClient greedRlClient;
+    private final HarvestRecorder harvestRecorder;
+
+    public DispatchBundleStageService(RouteChainDispatchV2Properties properties,
+                                      BoundaryCandidateSelector boundaryCandidateSelector,
+                                      BoundaryExpansionEngine boundaryExpansionEngine,
+                                      BundleSeedGenerator bundleSeedGenerator,
+                                      BundleFamilyEnumerator bundleFamilyEnumerator,
+                                      BundleValidator bundleValidator,
+                                      BundleScorer bundleScorer,
+                                      BundleDominancePruner bundleDominancePruner,
+                                      GreedRlClient greedRlClient,
+                                      HarvestRecorder harvestRecorder) {
+        this.properties = properties;
+        this.boundaryCandidateSelector = boundaryCandidateSelector;
+        this.boundaryExpansionEngine = boundaryExpansionEngine;
+        this.bundleSeedGenerator = bundleSeedGenerator;
+        this.bundleFamilyEnumerator = bundleFamilyEnumerator;
+        this.bundleValidator = bundleValidator;
+        this.bundleScorer = bundleScorer;
+        this.bundleDominancePruner = bundleDominancePruner;
+        this.greedRlClient = greedRlClient;
+        this.harvestRecorder = harvestRecorder;
+    }
 
     public DispatchBundleStageService(RouteChainDispatchV2Properties properties,
                                       BoundaryCandidateSelector boundaryCandidateSelector,
@@ -38,15 +62,16 @@ public final class DispatchBundleStageService {
                                       BundleScorer bundleScorer,
                                       BundleDominancePruner bundleDominancePruner,
                                       GreedRlClient greedRlClient) {
-        this.properties = properties;
-        this.boundaryCandidateSelector = boundaryCandidateSelector;
-        this.boundaryExpansionEngine = boundaryExpansionEngine;
-        this.bundleSeedGenerator = bundleSeedGenerator;
-        this.bundleFamilyEnumerator = bundleFamilyEnumerator;
-        this.bundleValidator = bundleValidator;
-        this.bundleScorer = bundleScorer;
-        this.bundleDominancePruner = bundleDominancePruner;
-        this.greedRlClient = greedRlClient;
+        this(properties,
+                boundaryCandidateSelector,
+                boundaryExpansionEngine,
+                bundleSeedGenerator,
+                bundleFamilyEnumerator,
+                bundleValidator,
+                bundleScorer,
+                bundleDominancePruner,
+                greedRlClient,
+                null);
     }
 
     public DispatchBundleStage evaluate(EtaContext etaContext, DispatchPairClusterStage pairClusterStage) {
@@ -133,6 +158,22 @@ public final class DispatchBundleStageService {
             List<BundleCandidate> generatedCandidates = new ArrayList<>(bundleFamilyEnumerator.enumerate(seed, context));
             GreedRlBundleResult greedRlResult = proposeGreedRlBundles(seed);
             greedRlMetadata.accept(greedRlResult);
+            if (harvestRecorder != null) {
+                harvestRecorder.recordGreedRlTeacher(
+                        seed.cluster().clusterId(),
+                        seed.cluster().clusterId(),
+                        new GreedRlBundleFeatureVector(
+                                "greedrl-bundle-feature-vector/v1",
+                                seed.cluster().clusterId(),
+                                seed.cluster().clusterId(),
+                                List.copyOf(seed.workingOrderIds()),
+                                List.copyOf(seed.prioritizedOrderIds()),
+                                List.copyOf(seed.acceptedBoundaryOrderIds()),
+                                Map.copyOf(seed.supportScoreByOrder()),
+                                properties.getBundle().getMaxSize(),
+                                properties.getMl().getGreedrl().getMaxProposalsPerCluster()),
+                        greedRlResult);
+            }
             if (greedRlResult.applied()) {
                 generatedCandidates.addAll(toBundleCandidates(seed, context, greedRlResult.proposals()));
             } else if (!greedRlResult.degradeReason().isBlank() && !"greedrl-client-disabled".equals(greedRlResult.degradeReason())) {

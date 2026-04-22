@@ -4,6 +4,7 @@ import com.routechain.config.RouteChainDispatchV2Properties;
 import com.routechain.v2.integration.MlStageMetadataAccumulator;
 import com.routechain.v2.integration.TabularScoreResult;
 import com.routechain.v2.integration.TabularScoringClient;
+import com.routechain.v2.harvest.HarvestRecorder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,13 +13,22 @@ public final class PairSimilarityScorer {
     private final RouteChainDispatchV2Properties properties;
     private final PairHardGateEvaluator pairHardGateEvaluator;
     private final TabularScoringClient tabularScoringClient;
+    private final HarvestRecorder harvestRecorder;
+
+    public PairSimilarityScorer(RouteChainDispatchV2Properties properties,
+                                PairHardGateEvaluator pairHardGateEvaluator,
+                                TabularScoringClient tabularScoringClient,
+                                HarvestRecorder harvestRecorder) {
+        this.properties = properties;
+        this.pairHardGateEvaluator = pairHardGateEvaluator;
+        this.tabularScoringClient = tabularScoringClient;
+        this.harvestRecorder = harvestRecorder;
+    }
 
     public PairSimilarityScorer(RouteChainDispatchV2Properties properties,
                                 PairHardGateEvaluator pairHardGateEvaluator,
                                 TabularScoringClient tabularScoringClient) {
-        this.properties = properties;
-        this.pairHardGateEvaluator = pairHardGateEvaluator;
-        this.tabularScoringClient = tabularScoringClient;
+        this(properties, pairHardGateEvaluator, tabularScoringClient, null);
     }
 
     public PairCompatibility score(PairFeatureVector features) {
@@ -40,6 +50,15 @@ public final class PairSimilarityScorer {
         if (properties.isMlEnabled() && properties.getMl().getTabular().isEnabled()) {
             TabularScoreResult scoreResult = tabularScoringClient.scorePair(features, properties.getPair().getMlTimeout().toMillis());
             mlStageMetadataAccumulator.accept(scoreResult);
+            if (harvestRecorder != null) {
+                harvestRecorder.recordTabularTeacher(
+                        "pair-graph",
+                        "pair-graph",
+                        "pair:%s:%s".formatted(features.leftOrderId(), features.rightOrderId()),
+                        "pair-score",
+                        features,
+                        scoreResult);
+            }
             if (scoreResult.applied()) {
                 score = Math.max(0.0, Math.min(1.0, score + scoreResult.value()));
             } else {

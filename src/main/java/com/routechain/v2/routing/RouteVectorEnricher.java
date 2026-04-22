@@ -2,19 +2,27 @@ package com.routechain.v2.routing;
 
 import com.routechain.domain.Order;
 import com.routechain.v2.decision.DecisionStageLogger;
+import com.routechain.v2.harvest.HarvestRecorder;
 import com.routechain.v2.route.DispatchCandidateContext;
 import com.routechain.v2.route.RouteProposal;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 public final class RouteVectorEnricher {
     private final BestPathRouter bestPathRouter;
     private final DecisionStageLogger decisionStageLogger;
+    private final HarvestRecorder harvestRecorder;
 
-    public RouteVectorEnricher(BestPathRouter bestPathRouter, DecisionStageLogger decisionStageLogger) {
+    public RouteVectorEnricher(BestPathRouter bestPathRouter, DecisionStageLogger decisionStageLogger, HarvestRecorder harvestRecorder) {
         this.bestPathRouter = bestPathRouter;
         this.decisionStageLogger = decisionStageLogger;
+        this.harvestRecorder = harvestRecorder;
+    }
+
+    public RouteVectorEnricher(BestPathRouter bestPathRouter, DecisionStageLogger decisionStageLogger) {
+        this(bestPathRouter, decisionStageLogger, null);
     }
 
     public RouteProposal enrich(String traceId, RouteProposal proposal, DispatchCandidateContext context) {
@@ -22,6 +30,9 @@ public final class RouteVectorEnricher {
         if (stops.size() < 2) {
             RouteVectorSummary summary = emptySummary(proposal);
             writeTraceFamilies(traceId, proposal.proposalId(), summary, List.of());
+            if (harvestRecorder != null) {
+                harvestRecorder.recordRouteVector(traceId, Instant.now(), proposal, summary, List.of(), stops);
+            }
             return proposal.withRouteVectors(summary, List.of());
         }
         List<LegRouteVector> legs = new ArrayList<>();
@@ -38,6 +49,9 @@ public final class RouteVectorEnricher {
         }
         RouteVectorSummary summary = summarize(proposal, legs, corridorPreferenceTotal / legs.size());
         writeTraceFamilies(traceId, proposal.proposalId(), summary, legs);
+        if (harvestRecorder != null) {
+            harvestRecorder.recordRouteVector(traceId, Instant.now(), proposal, summary, legs, stops);
+        }
         return proposal.withRouteVectors(summary, legs);
     }
 

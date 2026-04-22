@@ -1,0 +1,29 @@
+# Dispatch V2 Harvest Scope
+
+- Replay rail under `decision-stage/*` remains unchanged and stays replay/debug only.
+- Bronze training rail writes append-only JSONL under `data/bronze/<family>/`.
+- Runtime semantics stay unchanged:
+  - same 12-stage runtime order
+  - same selector/executor behavior
+  - same replay identity
+- Bronze v1 required families:
+  - `harvest-run-manifest`
+  - `decision-stage-input`
+  - `decision-stage-output`
+  - `decision-stage-join`
+  - `dispatch-execution`
+  - `dispatch-outcome`
+  - `geo-tile-selection-trace`
+  - `tile-feature-trace`
+  - `bundle-geometry-trace`
+  - `driver-pickup-fit-trace`
+  - `route-vector-trace`
+  - `route-stop-trace`
+  - `traffic-context-trace`
+  - `tabular-teacher-trace`
+  - `greedrl-teacher-trace`
+  - `routefinder-teacher-trace`
+  - `forecast-teacher-trace`
+- Gold v1 guarantees:
+  - `unified_dispatch_distillation.parquet`
+  - `selection_score.parquet`

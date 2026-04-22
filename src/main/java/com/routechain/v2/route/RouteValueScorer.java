@@ -5,6 +5,7 @@ import com.routechain.v2.integration.MlStageMetadataAccumulator;
 import com.routechain.v2.integration.NoOpTabularScoringClient;
 import com.routechain.v2.integration.TabularScoreResult;
 import com.routechain.v2.integration.TabularScoringClient;
+import com.routechain.v2.harvest.HarvestRecorder;
 import com.routechain.v2.bundle.BundleCandidate;
 
 import java.util.ArrayList;
@@ -13,14 +14,22 @@ import java.util.List;
 public final class RouteValueScorer {
     private final RouteChainDispatchV2Properties properties;
     private final TabularScoringClient tabularScoringClient;
+    private final HarvestRecorder harvestRecorder;
 
-    public RouteValueScorer(RouteChainDispatchV2Properties properties, TabularScoringClient tabularScoringClient) {
+    public RouteValueScorer(RouteChainDispatchV2Properties properties,
+                            TabularScoringClient tabularScoringClient,
+                            HarvestRecorder harvestRecorder) {
         this.properties = properties;
         this.tabularScoringClient = tabularScoringClient;
+        this.harvestRecorder = harvestRecorder;
+    }
+
+    public RouteValueScorer(RouteChainDispatchV2Properties properties, TabularScoringClient tabularScoringClient) {
+        this(properties, tabularScoringClient, null);
     }
 
     public RouteValueScorer() {
-        this(RouteChainDispatchV2Properties.defaults(), new NoOpTabularScoringClient());
+        this(RouteChainDispatchV2Properties.defaults(), new NoOpTabularScoringClient(), null);
     }
 
     public RouteValueScoringOutcome score(String traceId, RouteProposalCandidate candidate, DispatchCandidateContext context) {
@@ -94,27 +103,37 @@ public final class RouteValueScorer {
         List<String> degradeReasons = new ArrayList<>(proposal.degradeReasons());
         MlStageMetadataAccumulator mlStageMetadataAccumulator = new MlStageMetadataAccumulator("route-proposal-pool");
         if (properties.isMlEnabled() && properties.getMl().getTabular().isEnabled()) {
+            RouteValueFeatureVector featureVector = new RouteValueFeatureVector(
+                    "route-value-feature-vector/v1",
+                    traceId,
+                    proposal.proposalId(),
+                    proposal.bundleId(),
+                    proposal.anchorOrderId(),
+                    proposal.driverId(),
+                    proposal.source().name(),
+                    proposal.projectedPickupEtaMinutes(),
+                    proposal.projectedCompletionEtaMinutes(),
+                    score,
+                    candidate.driverCandidate().rerankScore(),
+                    bundle.score(),
+                    candidate.pickupAnchor().score(),
+                    context.averagePairSupport(bundle.orderIds()),
+                    urgencyLift,
+                    boundaryPenalty,
+                    fallbackPenalty);
             TabularScoreResult scoreResult = tabularScoringClient.scoreRouteValue(
-                    new RouteValueFeatureVector(
-                            "route-value-feature-vector/v1",
-                            traceId,
-                            proposal.proposalId(),
-                            proposal.bundleId(),
-                            proposal.anchorOrderId(),
-                            proposal.driverId(),
-                            proposal.source().name(),
-                            proposal.projectedPickupEtaMinutes(),
-                            proposal.projectedCompletionEtaMinutes(),
-                            score,
-                            candidate.driverCandidate().rerankScore(),
-                            bundle.score(),
-                            candidate.pickupAnchor().score(),
-                            context.averagePairSupport(bundle.orderIds()),
-                            urgencyLift,
-                            boundaryPenalty,
-                            fallbackPenalty),
+                    featureVector,
                     properties.getMl().getTabular().getReadTimeout().toMillis());
             mlStageMetadataAccumulator.accept(scoreResult);
+            if (harvestRecorder != null) {
+                harvestRecorder.recordTabularTeacher(
+                        traceId,
+                        "route-proposal-pool",
+                        proposal.proposalId(),
+                        "route-value-score",
+                        featureVector,
+                        scoreResult);
+            }
             if (scoreResult.applied()) {
                 adjustedScore = Math.max(0.0, Math.min(1.0, score + scoreResult.value()));
             } else {

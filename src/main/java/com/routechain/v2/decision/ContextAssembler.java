@@ -329,6 +329,7 @@ public final class ContextAssembler {
 
     private Map<String, Object> bundleWindowRow(BundleCandidate bundle, Map<String, Order> ordersById) {
         LinkedHashMap<String, Object> row = baseRow(bundle.bundleId(), bundle.bundleId(), null, null);
+        row.put("candidateSource", bundle.proposalSource().name());
         row.put("family", bundle.family().name());
         row.put("orderCount", bundle.orderIds().size());
         row.put("boundaryCross", bundle.boundaryCross());
@@ -340,6 +341,7 @@ public final class ContextAssembler {
 
     private Map<String, Object> anchorWindowRow(PickupAnchor anchor, Map<String, Order> ordersById) {
         LinkedHashMap<String, Object> row = baseRow(anchor.anchorOrderId(), anchor.bundleId(), null, anchor.anchorOrderId());
+        row.put("candidateSource", "pickup-anchor");
         row.put("anchorRank", anchor.anchorRank());
         row.put("score", anchor.score());
         Order anchorOrder = ordersById.get(anchor.anchorOrderId());
@@ -355,6 +357,8 @@ public final class ContextAssembler {
                                                 Map<String, Driver> driversById,
                                                 Map<String, Order> ordersById) {
         LinkedHashMap<String, Object> row = baseRow(driverCandidate.driverId(), driverCandidate.bundleId(), driverCandidate.driverId(), driverCandidate.anchorOrderId());
+        row.put("candidateSource", "driver-shortlist");
+        row.put("candidateOrdinal", driverCandidate.rank());
         row.put("pickupEtaMinutes", driverCandidate.pickupEtaMinutes());
         row.put("driverFitScore", driverCandidate.driverFitScore());
         row.put("rerankScore", driverCandidate.rerankScore());
@@ -376,6 +380,9 @@ public final class ContextAssembler {
                     anchorOrder.pickupPoint().latitude(),
                     anchorOrder.pickupPoint().longitude()));
             row.put("haversineDistanceMeters", row.get("effectiveDistanceMeters"));
+            row.put("driverToFirstPickupDistanceMeters", row.get("effectiveDistanceMeters"));
+            row.put("deadheadDistanceMeters", row.get("effectiveDistanceMeters"));
+            row.put("deadheadReductionMeters", 0.0);
         }
         return Map.copyOf(row);
     }
@@ -384,6 +391,7 @@ public final class ContextAssembler {
                                                Map<String, Order> ordersById,
                                                Map<String, Driver> driversById) {
         LinkedHashMap<String, Object> row = baseRow(proposal.proposalId(), proposal.bundleId(), proposal.driverId(), proposal.anchorOrderId());
+        row.put("candidateSource", proposal.source().name());
         row.put("routeValue", proposal.routeValue());
         row.put("projectedPickupEtaMinutes", proposal.projectedPickupEtaMinutes());
         row.put("projectedCompletionEtaMinutes", proposal.projectedCompletionEtaMinutes());
@@ -396,6 +404,11 @@ public final class ContextAssembler {
         row.put("straightnessScore", proposal.straightnessScore());
         row.put("distanceMeters", proposal.totalDistanceMeters());
         row.put("travelTimeSeconds", proposal.totalTravelTimeSeconds());
+        row.put("routeDistanceMeters", proposal.totalDistanceMeters());
+        row.put("routeTravelTimeSeconds", proposal.totalTravelTimeSeconds());
+        row.put("pickupEta", proposal.projectedPickupEtaMinutes() * 60.0);
+        row.put("completionEta", proposal.projectedCompletionEtaMinutes() * 60.0);
+        row.put("stopOrder", proposal.stopOrder());
         Driver driver = driversById.get(proposal.driverId());
         Order firstStop = proposal.stopOrder().stream().map(ordersById::get).filter(java.util.Objects::nonNull).findFirst().orElse(null);
         List<Order> routeOrders = proposal.stopOrder().stream().map(ordersById::get).filter(java.util.Objects::nonNull).toList();
@@ -415,6 +428,8 @@ public final class ContextAssembler {
                     firstStop.pickupPoint().latitude(),
                     firstStop.pickupPoint().longitude()));
             row.put("haversineDistanceMeters", row.get("effectiveDistanceMeters"));
+            row.put("driverToFirstPickupDistanceMeters", row.get("effectiveDistanceMeters"));
+            row.put("deadheadDistanceMeters", row.get("effectiveDistanceMeters"));
         }
         centroidFields(row, routeOrders);
         row.put("corridorOverlapRatio", proposal.geometryAvailable() ? proposal.majorRoadRatio() : 0.0);
@@ -477,11 +492,29 @@ public final class ContextAssembler {
         row.put("pickupDropDirectionalConsistency", directionalConsistency(safeOrders));
         row.put("bundleCentroidLat", safeOrders.stream().mapToDouble(order -> order.pickupPoint().latitude()).average().orElse(0.0));
         row.put("bundleCentroidLng", safeOrders.stream().mapToDouble(order -> order.pickupPoint().longitude()).average().orElse(0.0));
+        row.put("routeSpreadMeters", routeSpreadMeters(safeOrders));
+        row.put("bundleCompactnessScore", compactnessScore(safeOrders));
+        row.put("boundaryParticipation", safeOrders.stream().filter(Order::urgent).count() / (double) safeOrders.size());
+        row.put("avgPairSupport", Math.max(0.0, 1.0 - Math.min(1.0, clusterRadiusMeters(safeOrders, true) / 2_500.0)));
         Order first = safeOrders.getFirst();
         row.putIfAbsent("pickupLat", first.pickupPoint().latitude());
         row.putIfAbsent("pickupLng", first.pickupPoint().longitude());
         row.putIfAbsent("dropLat", first.dropoffPoint().latitude());
         row.putIfAbsent("dropLng", first.dropoffPoint().longitude());
+    }
+
+    private double routeSpreadMeters(List<Order> orders) {
+        double pickupLat = orders.stream().mapToDouble(order -> order.pickupPoint().latitude()).average().orElse(0.0);
+        double pickupLng = orders.stream().mapToDouble(order -> order.pickupPoint().longitude()).average().orElse(0.0);
+        double dropLat = orders.stream().mapToDouble(order -> order.dropoffPoint().latitude()).average().orElse(0.0);
+        double dropLng = orders.stream().mapToDouble(order -> order.dropoffPoint().longitude()).average().orElse(0.0);
+        return haversineMeters(pickupLat, pickupLng, dropLat, dropLng);
+    }
+
+    private double compactnessScore(List<Order> orders) {
+        double pickupRadius = clusterRadiusMeters(orders, true);
+        double dropRadius = clusterRadiusMeters(orders, false);
+        return Math.max(0.0, 1.0 - Math.min(1.0, (pickupRadius + dropRadius) / 4_000.0));
     }
 
     private double clusterRadiusMeters(List<Order> orders, boolean pickup) {

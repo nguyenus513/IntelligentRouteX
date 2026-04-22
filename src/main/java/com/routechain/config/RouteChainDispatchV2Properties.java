@@ -32,6 +32,7 @@ public class RouteChainDispatchV2Properties {
     private final Weather weather = new Weather();
     private final Traffic traffic = new Traffic();
     private final Feedback feedback = new Feedback();
+    private final Harvest harvest = new Harvest();
     private final WarmHotStart warmHotStart = new WarmHotStart();
     private final Performance performance = new Performance();
     private final Decision decision = new Decision();
@@ -166,6 +167,10 @@ public class RouteChainDispatchV2Properties {
 
     public Feedback getFeedback() {
         return feedback;
+    }
+
+    public Harvest getHarvest() {
+        return harvest;
     }
 
     public WarmHotStart getWarmHotStart() {
@@ -1100,6 +1105,54 @@ public class RouteChainDispatchV2Properties {
 
         public void setMaxFiles(int maxFiles) {
             this.maxFiles = maxFiles;
+        }
+    }
+
+    public static final class Harvest {
+        private boolean enabled = true;
+        private String baseDir = "data/bronze";
+        private int queueCapacity = 4_096;
+        private Duration flushInterval = Duration.ofMillis(250);
+        private long maxFileSizeBytes = 8L * 1024L * 1024L;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getBaseDir() {
+            return baseDir;
+        }
+
+        public void setBaseDir(String baseDir) {
+            this.baseDir = baseDir;
+        }
+
+        public int getQueueCapacity() {
+            return queueCapacity;
+        }
+
+        public void setQueueCapacity(int queueCapacity) {
+            this.queueCapacity = queueCapacity;
+        }
+
+        public Duration getFlushInterval() {
+            return flushInterval;
+        }
+
+        public void setFlushInterval(Duration flushInterval) {
+            this.flushInterval = flushInterval;
+        }
+
+        public long getMaxFileSizeBytes() {
+            return maxFileSizeBytes;
+        }
+
+        public void setMaxFileSizeBytes(long maxFileSizeBytes) {
+            this.maxFileSizeBytes = maxFileSizeBytes;
         }
     }
 
