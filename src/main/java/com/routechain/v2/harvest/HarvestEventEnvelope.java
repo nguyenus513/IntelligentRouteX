@@ -9,6 +9,8 @@ import java.util.Map;
 public record HarvestEventEnvelope(
         String schemaVersion,
         String rowType,
+        String timeLayer,
+        String antiLeakageClass,
         String traceId,
         String runId,
         String tickId,
@@ -29,6 +31,8 @@ public record HarvestEventEnvelope(
         LinkedHashMap<String, Object> row = new LinkedHashMap<>();
         row.put("schemaVersion", schemaVersion);
         row.put("rowType", rowType);
+        row.put("timeLayer", timeLayer);
+        row.put("antiLeakageClass", antiLeakageClass);
         row.put("traceId", traceId);
         row.put("runId", runId);
         row.put("tickId", tickId);

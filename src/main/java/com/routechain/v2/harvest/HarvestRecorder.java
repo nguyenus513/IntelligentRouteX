@@ -27,6 +27,20 @@ import java.util.Map;
 import java.util.Set;
 
 public final class HarvestRecorder {
+    private static final String ROW_TYPE_STAGE = "stage";
+    private static final String ROW_TYPE_CANDIDATE = "candidate";
+    private static final String ROW_TYPE_SUMMARY = "summary";
+    private static final String ROW_TYPE_OUTCOME = "outcome";
+
+    private static final String TIME_LAYER_OBSERVATION = "observation";
+    private static final String TIME_LAYER_TEACHER = "teacher";
+    private static final String TIME_LAYER_OUTCOME = "outcome";
+
+    private static final String LEAKAGE_METADATA_ONLY = "METADATA_ONLY";
+    private static final String LEAKAGE_DECISION_SAFE = "DECISION_SAFE";
+    private static final String LEAKAGE_TEACHER_DECISION = "TEACHER_DECISION";
+    private static final String LEAKAGE_OUTCOME_ONLY = "OUTCOME_ONLY";
+
     private final RouteChainDispatchV2Properties properties;
     private final HarvestRailWriter writer;
     private final HarvestRuntimeMetadataResolver metadataResolver;
@@ -45,7 +59,7 @@ public final class HarvestRecorder {
             return;
         }
         HarvestRuntimeMetadata metadata = metadataResolver.resolve();
-        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        LinkedHashMap<String, Object> payload = baseProvenance("runtime-manifest", false, "");
         payload.put("runId", request.traceId());
         payload.put("commitSha", metadata.commitSha());
         payload.put("machineClass", metadata.machineClass());
@@ -62,7 +76,9 @@ public final class HarvestRecorder {
         payload.put("harvestWriterStats", writer.stats());
         write(HarvestFamily.HARVEST_RUN_MANIFEST, request.traceId(), new HarvestEventEnvelope(
                 "harvest-run-manifest/v1",
-                "stage",
+                ROW_TYPE_STAGE,
+                TIME_LAYER_TEACHER,
+                LEAKAGE_METADATA_ONLY,
                 request.traceId(),
                 request.traceId(),
                 tickId(request),
@@ -80,9 +96,22 @@ public final class HarvestRecorder {
         if (input == null) {
             return;
         }
+        LinkedHashMap<String, Object> stagePayload = baseProvenance("dispatch-stage-input", false, "");
+        stagePayload.put("dispatchContext", input.dispatchContext());
+        stagePayload.put("referenceFrame", input.referenceFrame());
+        stagePayload.put("comparisonPack", input.comparisonPack());
+        stagePayload.put("geospatialContext", input.geospatialContext());
+        stagePayload.put("burstContext", input.burstContext());
+        stagePayload.put("constraints", input.constraints());
+        stagePayload.put("contextSelection", input.contextSelection());
+        stagePayload.put("upstreamSummary", input.upstreamSummary());
+        stagePayload.put("objectiveWeights", input.objectiveWeights());
+        stagePayload.put("upstreamRefs", input.upstreamRefs());
         write(HarvestFamily.DECISION_STAGE_INPUT, input.runId(), new HarvestEventEnvelope(
                 "bronze-stage-input/v1",
-                "stage",
+                ROW_TYPE_STAGE,
+                TIME_LAYER_OBSERVATION,
+                LEAKAGE_DECISION_SAFE,
                 input.traceId(),
                 input.runId(),
                 input.tickId(),
@@ -90,32 +119,29 @@ public final class HarvestRecorder {
                 "stage",
                 input.stageName().wireName(),
                 null,
+                decisionInstant(input),
                 null,
-                instant(input.dispatchContext().get("decisionTime")),
                 null,
-                Map.of(
-                        "dispatchContext", input.dispatchContext(),
-                        "referenceFrame", input.referenceFrame(),
-                        "comparisonPack", input.comparisonPack(),
-                        "geospatialContext", input.geospatialContext(),
-                        "burstContext", input.burstContext(),
-                        "constraints", input.constraints(),
-                        "contextSelection", input.contextSelection(),
-                        "upstreamSummary", input.upstreamSummary(),
-                        "objectiveWeights", input.objectiveWeights(),
-                        "upstreamRefs", input.upstreamRefs())));
+                stagePayload));
         int ordinal = 0;
         for (Map<String, Object> row : candidateRows(input.candidateSet())) {
             ordinal++;
             String entityId = String.valueOf(row.getOrDefault("id", ""));
             String candidateId = candidateId(input.stageName(), row);
-            LinkedHashMap<String, Object> payload = new LinkedHashMap<>(row);
+            LinkedHashMap<String, Object> payload = observationPayload(row, "stage-window");
             payload.put("candidateOrdinal", ordinal);
             payload.put("candidateSource", row.getOrDefault("candidateSource", row.getOrDefault("family", "stage-window")));
             payload.put("selected", false);
             payload.put("retained", true);
             payload.put("pruned", false);
-            write(HarvestFamily.DECISION_STAGE_INPUT, input.runId(), candidateEnvelope(input, entityId, candidateId, payload));
+            write(HarvestFamily.DECISION_STAGE_INPUT, input.runId(), candidateEnvelope(
+                    "bronze-candidate-row/v1",
+                    TIME_LAYER_OBSERVATION,
+                    LEAKAGE_DECISION_SAFE,
+                    input,
+                    entityId,
+                    candidateId,
+                    payload));
             writeGeospatialSideFamilies(input, entityId, candidateId, payload);
         }
     }
@@ -124,7 +150,7 @@ public final class HarvestRecorder {
         if (input == null || output == null) {
             return;
         }
-        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        LinkedHashMap<String, Object> payload = baseProvenance("teacher-stage-output", false, "");
         payload.put("brainType", String.valueOf(output.brainType()));
         payload.put("providerModel", output.providerModel());
         payload.put("selectedIds", output.selectedIds());
@@ -132,7 +158,9 @@ public final class HarvestRecorder {
         payload.put("assessments", output.assessments());
         write(HarvestFamily.DECISION_STAGE_OUTPUT, input.runId(), new HarvestEventEnvelope(
                 "bronze-stage-output/v1",
-                "stage",
+                ROW_TYPE_STAGE,
+                TIME_LAYER_TEACHER,
+                LEAKAGE_TEACHER_DECISION,
                 output.traceId(),
                 output.runId(),
                 output.tickId(),
@@ -141,7 +169,7 @@ public final class HarvestRecorder {
                 output.stageName().wireName(),
                 null,
                 null,
-                instant(input.dispatchContext().get("decisionTime")),
+                decisionInstant(input),
                 null,
                 payload));
         Map<String, Map<String, Object>> assessmentItems = assessmentItems(output.assessments());
@@ -151,7 +179,12 @@ public final class HarvestRecorder {
             String entityId = String.valueOf(row.getOrDefault("id", ""));
             String candidateId = candidateId(output.stageName(), row);
             Map<String, Object> item = assessmentItems.getOrDefault(entityId, Map.of());
-            LinkedHashMap<String, Object> candidatePayload = new LinkedHashMap<>(row);
+            LinkedHashMap<String, Object> candidatePayload = teacherPayloadWithSource(
+                    "teacher-stage-output",
+                    false,
+                    "",
+                    output.providerModel());
+            candidatePayload.putAll(row);
             candidatePayload.put("candidateOrdinal", ordinal);
             candidatePayload.put("candidateSource", row.getOrDefault("candidateSource", row.getOrDefault("family", "stage-window")));
             candidatePayload.put("selected", output.selectedIds().contains(entityId));
@@ -165,7 +198,14 @@ public final class HarvestRecorder {
             candidatePayload.put("regretEstimate", item.getOrDefault("regretToBestAlternative", 0.0));
             candidatePayload.put("routeVectorRefs", item.getOrDefault("routeVectorRefs", List.of(entityId)));
             candidatePayload.put("decisionQualityFlags", output.meta().decisionQualityFlags());
-            write(HarvestFamily.DECISION_STAGE_OUTPUT, input.runId(), candidateEnvelope(input, entityId, candidateId, candidatePayload));
+            write(HarvestFamily.DECISION_STAGE_OUTPUT, input.runId(), candidateEnvelope(
+                    "bronze-candidate-row/v1",
+                    TIME_LAYER_TEACHER,
+                    LEAKAGE_TEACHER_DECISION,
+                    input,
+                    entityId,
+                    candidateId,
+                    candidatePayload));
         }
     }
 
@@ -184,7 +224,12 @@ public final class HarvestRecorder {
             ordinal++;
             String entityId = String.valueOf(row.getOrDefault("id", ""));
             String candidateId = candidateId(output.stageName(), row);
-            LinkedHashMap<String, Object> payload = new LinkedHashMap<>(row);
+            LinkedHashMap<String, Object> payload = teacherPayloadWithSource(
+                    "teacher-stage-join",
+                    false,
+                    "",
+                    output.providerModel());
+            payload.putAll(row);
             boolean selected = selectedSet.contains(entityId);
             boolean downstreamChosen = actualSet.contains(entityId);
             payload.put("inputRef", "%s:%s".formatted(output.traceId(), output.stageName().wireName()));
@@ -199,7 +244,14 @@ public final class HarvestRecorder {
             payload.put("downstreamChosen", downstreamChosen);
             payload.put("authoritativeApplied", authoritativeApplied);
             payload.put("actualSelectedIds", actualSelectedIds == null ? List.of() : actualSelectedIds);
-            write(HarvestFamily.DECISION_STAGE_JOIN, input.runId(), candidateEnvelope(input, entityId, candidateId, payload));
+            write(HarvestFamily.DECISION_STAGE_JOIN, input.runId(), candidateEnvelope(
+                    "bronze-candidate-row/v1",
+                    TIME_LAYER_TEACHER,
+                    LEAKAGE_TEACHER_DECISION,
+                    input,
+                    entityId,
+                    candidateId,
+                    payload));
         }
     }
 
@@ -212,7 +264,7 @@ public final class HarvestRecorder {
         if (traceId == null || proposal == null || summary == null) {
             return;
         }
-        LinkedHashMap<String, Object> summaryPayload = new LinkedHashMap<>();
+        LinkedHashMap<String, Object> summaryPayload = observationPayload(Map.of(), "route-vector-summary");
         summaryPayload.put("proposalId", proposal.proposalId());
         summaryPayload.put("bundleId", proposal.bundleId());
         summaryPayload.put("driverId", proposal.driverId());
@@ -228,7 +280,9 @@ public final class HarvestRecorder {
         summaryPayload.put("legs", legs == null ? List.of() : legs);
         write(HarvestFamily.ROUTE_VECTOR_TRACE, traceId, new HarvestEventEnvelope(
                 "route-vector-trace/v1",
-                "stage",
+                ROW_TYPE_SUMMARY,
+                TIME_LAYER_OBSERVATION,
+                LEAKAGE_DECISION_SAFE,
                 traceId,
                 traceId,
                 null,
@@ -236,14 +290,14 @@ public final class HarvestRecorder {
                 "proposal",
                 proposal.proposalId(),
                 "proposal:" + proposal.proposalId(),
-                null,
                 decisionTime,
+                null,
                 null,
                 summaryPayload));
         List<RouteStop> safeStops = stops == null ? List.of() : List.copyOf(stops);
         for (int index = 0; index < safeStops.size(); index++) {
             RouteStop stop = safeStops.get(index);
-            LinkedHashMap<String, Object> stopPayload = new LinkedHashMap<>();
+            LinkedHashMap<String, Object> stopPayload = observationPayload(Map.of(), "route-stop-projection");
             stopPayload.put("proposalId", proposal.proposalId());
             stopPayload.put("stopIndex", index);
             stopPayload.put("stopType", stop.stopType());
@@ -262,7 +316,9 @@ public final class HarvestRecorder {
             }
             write(HarvestFamily.ROUTE_STOP_TRACE, traceId, new HarvestEventEnvelope(
                     "route-stop-trace/v1",
-                    "candidate",
+                    ROW_TYPE_CANDIDATE,
+                    TIME_LAYER_OBSERVATION,
+                    LEAKAGE_DECISION_SAFE,
                     traceId,
                     traceId,
                     null,
@@ -270,8 +326,8 @@ public final class HarvestRecorder {
                     "proposal-stop",
                     proposal.proposalId() + ":" + index,
                     "proposal:" + proposal.proposalId() + ":stop:" + index,
-                    null,
                     decisionTime,
+                    null,
                     null,
                     stopPayload));
         }
@@ -286,14 +342,23 @@ public final class HarvestRecorder {
         if (scoreResult == null) {
             return;
         }
-        LinkedHashMap<String, Object> payload = teacherPayload(stageName, entityId, scoreResult.workerMetadata(), scoreResult.applied(), scoreResult.fallbackUsed(), scoreResult.degradeReason());
+        LinkedHashMap<String, Object> payload = teacherPayload(
+                stageName,
+                entityId,
+                scoreResult.workerMetadata(),
+                scoreResult.applied(),
+                scoreResult.fallbackUsed(),
+                scoreResult.degradeReason());
         payload.put("teacherKind", teacherKind);
+        payload.put("teacherFamily", "tabular");
         payload.put("score", scoreResult.value());
         payload.put("uncertainty", scoreResult.uncertainty());
         payload.put("featureVector", featureVector);
         write(HarvestFamily.TABULAR_TEACHER_TRACE, traceId, new HarvestEventEnvelope(
                 "tabular-teacher-trace/v1",
-                "candidate",
+                ROW_TYPE_CANDIDATE,
+                TIME_LAYER_TEACHER,
+                LEAKAGE_TEACHER_DECISION,
                 traceId,
                 traceId,
                 null,
@@ -315,13 +380,22 @@ public final class HarvestRecorder {
         if (result == null) {
             return;
         }
-        LinkedHashMap<String, Object> payload = teacherPayload("route-proposal-pool", entityId, result.workerMetadata(), result.applied(), result.fallbackUsed(), result.degradeReason());
+        LinkedHashMap<String, Object> payload = teacherPayload(
+                "route-proposal-pool",
+                entityId,
+                result.workerMetadata(),
+                result.applied(),
+                result.fallbackUsed(),
+                result.degradeReason());
+        payload.put("teacherFamily", "routefinder");
         payload.put("teacherAction", action);
         payload.put("featureVector", featureVector);
         payload.put("routes", result.routes());
         write(HarvestFamily.ROUTEFINDER_TEACHER_TRACE, traceId, new HarvestEventEnvelope(
                 "routefinder-teacher-trace/v1",
-                "candidate",
+                ROW_TYPE_CANDIDATE,
+                TIME_LAYER_TEACHER,
+                LEAKAGE_TEACHER_DECISION,
                 traceId,
                 traceId,
                 null,
@@ -342,12 +416,21 @@ public final class HarvestRecorder {
         if (result == null) {
             return;
         }
-        LinkedHashMap<String, Object> payload = teacherPayload("bundle-pool", entityId, result.workerMetadata(), result.applied(), result.fallbackUsed(), result.degradeReason());
+        LinkedHashMap<String, Object> payload = teacherPayload(
+                "bundle-pool",
+                entityId,
+                result.workerMetadata(),
+                result.applied(),
+                result.fallbackUsed(),
+                result.degradeReason());
+        payload.put("teacherFamily", "greedrl");
         payload.put("featureVector", featureVector);
         payload.put("bundleProposals", result.proposals());
         write(HarvestFamily.GREEDRL_TEACHER_TRACE, traceId, new HarvestEventEnvelope(
                 "greedrl-teacher-trace/v1",
-                "candidate",
+                ROW_TYPE_CANDIDATE,
+                TIME_LAYER_TEACHER,
+                LEAKAGE_TEACHER_DECISION,
                 traceId,
                 traceId,
                 null,
@@ -369,7 +452,14 @@ public final class HarvestRecorder {
         if (result == null) {
             return;
         }
-        LinkedHashMap<String, Object> payload = teacherPayload("scenario-evaluation", entityId, result.workerMetadata(), result.applied(), result.fallbackUsed(), result.degradeReason());
+        LinkedHashMap<String, Object> payload = teacherPayload(
+                "scenario-evaluation",
+                entityId,
+                result.workerMetadata(),
+                result.applied(),
+                result.fallbackUsed(),
+                result.degradeReason());
+        payload.put("teacherFamily", "forecast");
         payload.put("forecastKind", forecastKind);
         payload.put("featureVector", featureVector);
         payload.put("probability", result.probability());
@@ -378,7 +468,9 @@ public final class HarvestRecorder {
         payload.put("quantiles", result.quantiles());
         write(HarvestFamily.FORECAST_TEACHER_TRACE, traceId, new HarvestEventEnvelope(
                 "forecast-teacher-trace/v1",
-                "candidate",
+                ROW_TYPE_CANDIDATE,
+                TIME_LAYER_TEACHER,
+                LEAKAGE_TEACHER_DECISION,
                 traceId,
                 traceId,
                 null,
@@ -400,7 +492,11 @@ public final class HarvestRecorder {
             return;
         }
         DispatchExecutionSummary summary = executorStage.dispatchExecutionSummary();
-        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        LinkedHashMap<String, Object> payload = teacherPayloadWithSource(
+                "dispatch-executor",
+                executionOutput != null && executionOutput.meta().fallbackUsed(),
+                executionOutput != null ? executionOutput.meta().fallbackReason() : "",
+                executionOutput == null ? "" : executionOutput.providerModel());
         payload.put("selectedProposalIds", selectedProposalIds == null ? List.of() : selectedProposalIds);
         payload.put("executionBrainSelectedIds", executionOutput == null ? List.of() : executionOutput.selectedIds());
         payload.put("assignmentIds", executorStage.assignments().stream().map(DispatchAssignment::assignmentId).toList());
@@ -411,7 +507,9 @@ public final class HarvestRecorder {
         payload.put("degradeReasons", summary.degradeReasons());
         write(HarvestFamily.DISPATCH_EXECUTION, request.traceId(), new HarvestEventEnvelope(
                 "dispatch-execution-bronze/v1",
-                "stage",
+                ROW_TYPE_STAGE,
+                TIME_LAYER_TEACHER,
+                LEAKAGE_TEACHER_DECISION,
                 request.traceId(),
                 request.traceId(),
                 tickId(request),
@@ -439,7 +537,7 @@ public final class HarvestRecorder {
                 .mapToDouble(assignment -> assignment.projectedCompletionEtaMinutes() * 60.0)
                 .average()
                 .orElse(0.0);
-        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        LinkedHashMap<String, Object> payload = baseProvenance("simulated-outcome", false, "");
         payload.put("assignmentIds", executorStage.assignments().stream().map(DispatchAssignment::assignmentId).toList());
         payload.put("actualPickupTravelTimeSeconds", avgPickupEtaSeconds);
         payload.put("actualMerchantWaitTimeSeconds", 0.0);
@@ -452,7 +550,9 @@ public final class HarvestRecorder {
         payload.put("degradeReasons", degradeReasons == null ? List.of() : degradeReasons);
         write(HarvestFamily.DISPATCH_OUTCOME, request.traceId(), new HarvestEventEnvelope(
                 "dispatch-outcome-bronze/v1",
-                "stage",
+                ROW_TYPE_OUTCOME,
+                TIME_LAYER_OUTCOME,
+                LEAKAGE_OUTCOME_ONLY,
                 request.traceId(),
                 request.traceId(),
                 tickId(request),
@@ -470,25 +570,39 @@ public final class HarvestRecorder {
                                              String entityId,
                                              String candidateId,
                                              Map<String, Object> row) {
-        write(HarvestFamily.BUNDLE_GEOMETRY_TRACE, input.runId(), candidateEnvelope(input, entityId, candidateId, Map.of(
-                "bundleCentroidLat", row.getOrDefault("bundleCentroidLat", 0.0),
-                "bundleCentroidLng", row.getOrDefault("bundleCentroidLng", 0.0),
-                "pickupClusterRadiusMeters", row.getOrDefault("pickupClusterRadiusMeters", 0.0),
-                "dropClusterRadiusMeters", row.getOrDefault("dropClusterRadiusMeters", 0.0),
-                "routeSpreadMeters", row.getOrDefault("routeSpreadMeters", 0.0),
-                "bundleCompactnessScore", row.getOrDefault("bundleCompactnessScore", 0.0),
-                "boundaryParticipation", row.getOrDefault("boundaryParticipation", 0.0),
-                "avgPairSupport", row.getOrDefault("avgPairSupport", 0.0))));
+        write(HarvestFamily.BUNDLE_GEOMETRY_TRACE, input.runId(), candidateEnvelope(
+                "bundle-geometry-trace/v1",
+                TIME_LAYER_OBSERVATION,
+                LEAKAGE_DECISION_SAFE,
+                input,
+                entityId,
+                candidateId,
+                observationPayload(Map.of(
+                        "bundleCentroidLat", row.getOrDefault("bundleCentroidLat", 0.0),
+                        "bundleCentroidLng", row.getOrDefault("bundleCentroidLng", 0.0),
+                        "pickupClusterRadiusMeters", row.getOrDefault("pickupClusterRadiusMeters", 0.0),
+                        "dropClusterRadiusMeters", row.getOrDefault("dropClusterRadiusMeters", 0.0),
+                        "routeSpreadMeters", row.getOrDefault("routeSpreadMeters", 0.0),
+                        "bundleCompactnessScore", row.getOrDefault("bundleCompactnessScore", 0.0),
+                        "boundaryParticipation", row.getOrDefault("boundaryParticipation", 0.0),
+                        "avgPairSupport", row.getOrDefault("avgPairSupport", 0.0)), "bundle-geometry")));
         if (row.containsKey("driverLat")) {
-            write(HarvestFamily.DRIVER_PICKUP_FIT_TRACE, input.runId(), candidateEnvelope(input, entityId, candidateId, Map.of(
-                    "driverLat", row.getOrDefault("driverLat", 0.0),
-                    "driverLng", row.getOrDefault("driverLng", 0.0),
-                    "firstPickupLat", row.getOrDefault("pickupLat", 0.0),
-                    "firstPickupLng", row.getOrDefault("pickupLng", 0.0),
-                    "driverToFirstPickupDistanceMeters", row.getOrDefault("driverToFirstPickupDistanceMeters", row.getOrDefault("effectiveDistanceMeters", 0.0)),
-                    "driverToFirstPickupEtaSeconds", row.getOrDefault("driverToFirstPickupEtaSeconds", 0.0),
-                    "deadheadDistanceMeters", row.getOrDefault("deadheadDistanceMeters", 0.0),
-                    "driverFitScore", row.getOrDefault("driverFitScore", row.getOrDefault("score", 0.0)))));
+            write(HarvestFamily.DRIVER_PICKUP_FIT_TRACE, input.runId(), candidateEnvelope(
+                    "driver-pickup-fit-trace/v1",
+                    TIME_LAYER_OBSERVATION,
+                    LEAKAGE_DECISION_SAFE,
+                    input,
+                    entityId,
+                    candidateId,
+                    observationPayload(Map.of(
+                            "driverLat", row.getOrDefault("driverLat", 0.0),
+                            "driverLng", row.getOrDefault("driverLng", 0.0),
+                            "firstPickupLat", row.getOrDefault("pickupLat", 0.0),
+                            "firstPickupLng", row.getOrDefault("pickupLng", 0.0),
+                            "driverToFirstPickupDistanceMeters", row.getOrDefault("driverToFirstPickupDistanceMeters", row.getOrDefault("effectiveDistanceMeters", 0.0)),
+                            "driverToFirstPickupEtaSeconds", row.getOrDefault("driverToFirstPickupEtaSeconds", 0.0),
+                            "deadheadDistanceMeters", row.getOrDefault("deadheadDistanceMeters", 0.0),
+                            "driverFitScore", row.getOrDefault("driverFitScore", row.getOrDefault("score", 0.0))), "driver-fit")));
         }
         Map<String, Object> geospatialContext = input.geospatialContext();
         Object selectedTiles = geospatialContext.get("selectedTiles");
@@ -499,10 +613,17 @@ public final class HarvestRecorder {
                     continue;
                 }
                 ordinal++;
-                LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+                LinkedHashMap<String, Object> payload = observationPayload(castMap(map), "geo-tile-selector");
                 payload.put("tileOrdinal", ordinal);
-                payload.putAll(castMap(map));
-                write(HarvestFamily.GEO_TILE_SELECTION_TRACE, input.runId(), candidateEnvelope(input, entityId, candidateId + ":tile:" + ordinal, payload));
+                payload.put("tileSource", payload.get("source"));
+                write(HarvestFamily.GEO_TILE_SELECTION_TRACE, input.runId(), candidateEnvelope(
+                        "geo-tile-selection-trace/v1",
+                        TIME_LAYER_OBSERVATION,
+                        LEAKAGE_DECISION_SAFE,
+                        input,
+                        entityId,
+                        candidateId + ":tile:" + ordinal,
+                        payload));
             }
         }
         Object tileSummaries = geospatialContext.get("tileContextSummaries");
@@ -513,31 +634,54 @@ public final class HarvestRecorder {
                     continue;
                 }
                 ordinal++;
-                write(HarvestFamily.TILE_FEATURE_TRACE, input.runId(), candidateEnvelope(input, entityId, candidateId + ":feature:" + ordinal, castMap(map)));
+                LinkedHashMap<String, Object> payload = observationPayload(castMap(map), "tile-feature-encoder");
+                payload.put("tileSource", payload.get("source"));
+                write(HarvestFamily.TILE_FEATURE_TRACE, input.runId(), candidateEnvelope(
+                        "tile-feature-trace/v1",
+                        TIME_LAYER_OBSERVATION,
+                        LEAKAGE_DECISION_SAFE,
+                        input,
+                        entityId,
+                        candidateId + ":feature:" + ordinal,
+                        payload));
             }
         }
         Map<String, Object> corridorSummary = castMap(geospatialContext.get("corridorSummary"));
         if (!corridorSummary.isEmpty()) {
-            LinkedHashMap<String, Object> payload = new LinkedHashMap<>(corridorSummary);
+            LinkedHashMap<String, Object> payload = observationPayload(corridorSummary, "geo-context-assembler");
             payload.put("zoneId", input.dispatchContext().getOrDefault("zoneId", "zone-unknown"));
             payload.put("timeBucket", input.dispatchContext().getOrDefault("hourBucket", "unknown"));
             payload.put("avgSpeedMps", corridorSummary.getOrDefault("avgExpectedSpeedMps", 0.0));
             payload.put("jamClass", input.dispatchContext().getOrDefault("trafficClass", "unknown"));
-            payload.put("sourceProvenance", Map.of(
-                    "trafficSource", input.dispatchContext().getOrDefault("trafficClass", "unknown"),
-                    "weatherSource", input.dispatchContext().getOrDefault("weatherClass", "unknown"),
-                    "kind", "estimated"));
-            write(HarvestFamily.TRAFFIC_CONTEXT_TRACE, input.runId(), candidateEnvelope(input, entityId, candidateId, payload));
+            payload.put("trafficSource", input.dispatchContext().getOrDefault("trafficClass", "unknown"));
+            payload.put("weatherSource", input.dispatchContext().getOrDefault("weatherClass", "unknown"));
+            write(HarvestFamily.TRAFFIC_CONTEXT_TRACE, input.runId(), candidateEnvelope(
+                    "traffic-context-trace/v1",
+                    TIME_LAYER_OBSERVATION,
+                    LEAKAGE_DECISION_SAFE,
+                    input,
+                    entityId,
+                    candidateId,
+                    payload));
         }
     }
 
-    private HarvestEventEnvelope candidateEnvelope(DecisionStageInputV1 input,
+    private HarvestEventEnvelope candidateEnvelope(String schemaVersion,
+                                                   String timeLayer,
+                                                   String antiLeakageClass,
+                                                   DecisionStageInputV1 input,
                                                    String entityId,
                                                    String candidateId,
                                                    Map<String, Object> payload) {
+        Instant stageInstant = decisionInstant(input);
+        Instant observationTime = TIME_LAYER_OBSERVATION.equals(timeLayer) ? stageInstant : null;
+        Instant teacherTime = TIME_LAYER_TEACHER.equals(timeLayer) ? stageInstant : null;
+        Instant outcomeTime = TIME_LAYER_OUTCOME.equals(timeLayer) ? stageInstant : null;
         return new HarvestEventEnvelope(
-                "bronze-candidate-row/v1",
-                "candidate",
+                schemaVersion,
+                ROW_TYPE_CANDIDATE,
+                timeLayer,
+                antiLeakageClass,
                 input.traceId(),
                 input.runId(),
                 input.tickId(),
@@ -545,9 +689,9 @@ public final class HarvestRecorder {
                 entityType(input.stageName()),
                 entityId,
                 candidateId,
-                null,
-                instant(input.dispatchContext().get("decisionTime")),
-                null,
+                observationTime,
+                teacherTime,
+                outcomeTime,
                 payload);
     }
 
@@ -557,16 +701,42 @@ public final class HarvestRecorder {
                                                          boolean applied,
                                                          boolean fallbackUsed,
                                                          String notAppliedReason) {
-        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        LinkedHashMap<String, Object> payload = teacherPayloadWithSource(
+                metadata == null ? "teacher-worker" : metadata.sourceModel(),
+                fallbackUsed,
+                notAppliedReason == null ? "" : notAppliedReason,
+                metadata == null ? "" : metadata.sourceModel());
         payload.put("traceId", entityId);
         payload.put("stageName", stageName);
         payload.put("entityId", entityId);
         payload.put("modelVersion", metadata == null ? "" : metadata.modelVersion());
         payload.put("artifactDigest", metadata == null ? "" : metadata.artifactDigest());
         payload.put("fingerprint", metadata == null ? "" : metadata.sourceModel() + "|" + metadata.modelVersion());
-        payload.put("fallbackUsed", fallbackUsed);
         payload.put("applied", applied);
         payload.put("notAppliedReason", notAppliedReason == null ? "" : notAppliedReason);
+        return payload;
+    }
+
+    private LinkedHashMap<String, Object> observationPayload(Map<String, Object> payload, String source) {
+        LinkedHashMap<String, Object> enriched = baseProvenance(source, false, "");
+        enriched.putAll(payload);
+        return enriched;
+    }
+
+    private LinkedHashMap<String, Object> teacherPayloadWithSource(String source,
+                                                                   boolean fallbackUsed,
+                                                                   String missingReason,
+                                                                   String modelSource) {
+        LinkedHashMap<String, Object> payload = baseProvenance(source, fallbackUsed, missingReason);
+        payload.put("teacherSource", modelSource == null || modelSource.isBlank() ? source : modelSource);
+        return payload;
+    }
+
+    private LinkedHashMap<String, Object> baseProvenance(String source, boolean fallbackUsed, String missingReason) {
+        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        payload.put("source", source);
+        payload.put("fallbackUsed", fallbackUsed);
+        payload.put("missingReason", missingReason == null ? "" : missingReason);
         return payload;
     }
 
@@ -627,6 +797,10 @@ public final class HarvestRecorder {
             case SAFETY_EXECUTE -> "assignment";
             case OBSERVATION_PACK -> "observation";
         };
+    }
+
+    private Instant decisionInstant(DecisionStageInputV1 input) {
+        return instant(input.dispatchContext().get("decisionTime"));
     }
 
     private Instant instant(Object value) {
