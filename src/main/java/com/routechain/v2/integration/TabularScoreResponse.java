@@ -8,6 +8,13 @@ public record TabularScoreResponse(
         String artifactDigest,
         long latencyMs,
         boolean fallbackUsed,
+        String device,
+        String dtype,
+        long gpuMemoryAllocatedMb,
+        int batchSize,
+        String compileMode,
+        boolean modelLoaded,
+        boolean warmupDone,
         TabularScorePayload payload) {
 
     public record TabularScorePayload(

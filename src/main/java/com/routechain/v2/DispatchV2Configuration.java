@@ -6,6 +6,7 @@ import com.routechain.v2.context.DispatchEtaContextService;
 import com.routechain.v2.context.EtaFeatureBuilder;
 import com.routechain.v2.context.EtaService;
 import com.routechain.v2.context.EtaUncertaintyEstimator;
+import com.routechain.v2.compute.AdaptiveComputeGate;
 import com.routechain.v2.context.TrafficProfileService;
 import com.routechain.v2.context.WeatherContextService;
 import com.routechain.v2.decision.ContextAssembler;
@@ -362,6 +363,11 @@ public class DispatchV2Configuration {
     }
 
     @Bean
+    AdaptiveComputeGate adaptiveComputeGate(RouteChainDispatchV2Properties properties) {
+        return new AdaptiveComputeGate(properties);
+    }
+
+    @Bean
     DispatchBundleStageService dispatchBundleStageService(RouteChainDispatchV2Properties properties,
                                                           BoundaryCandidateSelector boundaryCandidateSelector,
                                                           BoundaryExpansionEngine boundaryExpansionEngine,
@@ -371,7 +377,9 @@ public class DispatchV2Configuration {
                                                           BundleScorer bundleScorer,
                                                           BundleDominancePruner bundleDominancePruner,
                                                           GreedRlClient greedRlClient,
-                                                          HarvestRecorder harvestRecorder) {
+                                                          HarvestRecorder harvestRecorder,
+                                                          AdaptiveComputeGate adaptiveComputeGate,
+                                                          DecisionStageLogger decisionStageLogger) {
         return new DispatchBundleStageService(
                 properties,
                 boundaryCandidateSelector,
@@ -382,7 +390,9 @@ public class DispatchV2Configuration {
                 bundleScorer,
                 bundleDominancePruner,
                 greedRlClient,
-                harvestRecorder);
+                harvestRecorder,
+                adaptiveComputeGate,
+                decisionStageLogger);
     }
 
     @Bean
@@ -452,7 +462,8 @@ public class DispatchV2Configuration {
                                                               RouteFinderClient routeFinderClient,
                                                               RouteVectorEnricher routeVectorEnricher,
                                                               DecisionStageLogger decisionStageLogger,
-                                                              HarvestRecorder harvestRecorder) {
+                                                              HarvestRecorder harvestRecorder,
+                                                              AdaptiveComputeGate adaptiveComputeGate) {
         return new DispatchRouteProposalService(
                 properties,
                 routeProposalEngine,
@@ -463,7 +474,8 @@ public class DispatchV2Configuration {
                 routeFinderClient,
                 routeVectorEnricher,
                 decisionStageLogger,
-                harvestRecorder);
+                harvestRecorder,
+                adaptiveComputeGate);
     }
 
     @Bean
@@ -505,7 +517,9 @@ public class DispatchV2Configuration {
                                                     ScenarioGateEvaluator scenarioGateEvaluator,
                                                     ScenarioEvaluator scenarioEvaluator,
                                                     RobustUtilityAggregator robustUtilityAggregator,
-                                                    HarvestRecorder harvestRecorder) {
+                                                    HarvestRecorder harvestRecorder,
+                                                    AdaptiveComputeGate adaptiveComputeGate,
+                                                    DecisionStageLogger decisionStageLogger) {
         return new DispatchScenarioService(
                 properties,
                 forecastClient,
@@ -515,7 +529,9 @@ public class DispatchV2Configuration {
                 scenarioGateEvaluator,
                 scenarioEvaluator,
                 robustUtilityAggregator,
-                harvestRecorder);
+                harvestRecorder,
+                adaptiveComputeGate,
+                decisionStageLogger);
     }
 
     @Bean

@@ -51,7 +51,14 @@ public record DispatchOpsReadinessSnapshot(
             String sourceModel,
             String modelVersion,
             String artifactDigest,
-            String loadedModelFingerprint) {
+            String loadedModelFingerprint,
+            String device,
+            String dtype,
+            long gpuMemoryAllocatedMb,
+            int batchSize,
+            String compileMode,
+            boolean modelLoaded,
+            boolean warmupDone) {
 
         public Map<String, Object> toMap() {
             Map<String, Object> details = new LinkedHashMap<>();
@@ -63,6 +70,13 @@ public record DispatchOpsReadinessSnapshot(
             details.put("modelVersion", modelVersion);
             details.put("artifactDigest", artifactDigest);
             details.put("loadedModelFingerprint", loadedModelFingerprint);
+            details.put("device", device);
+            details.put("dtype", dtype);
+            details.put("gpuMemoryAllocatedMb", gpuMemoryAllocatedMb);
+            details.put("batchSize", batchSize);
+            details.put("compileMode", compileMode);
+            details.put("modelLoaded", modelLoaded);
+            details.put("warmupDone", warmupDone);
             return details;
         }
     }

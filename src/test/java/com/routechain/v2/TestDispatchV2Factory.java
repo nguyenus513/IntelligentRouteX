@@ -10,6 +10,7 @@ import com.routechain.v2.context.DispatchEtaContextService;
 import com.routechain.v2.context.EtaFeatureBuilder;
 import com.routechain.v2.context.EtaService;
 import com.routechain.v2.context.EtaUncertaintyEstimator;
+import com.routechain.v2.compute.AdaptiveComputeGate;
 import com.routechain.v2.context.TrafficProfileService;
 import com.routechain.v2.context.WeatherContextService;
 import com.routechain.v2.decision.ContextAssembler;
@@ -212,6 +213,7 @@ public final class TestDispatchV2Factory {
         HarvestRailWriter harvestRailWriter = configuration.harvestRailWriter(properties);
         HarvestRuntimeMetadataResolver harvestRuntimeMetadataResolver = configuration.harvestRuntimeMetadataResolver(properties);
         HarvestRecorder harvestRecorder = configuration.harvestRecorder(properties, harvestRailWriter, harvestRuntimeMetadataResolver);
+        AdaptiveComputeGate adaptiveComputeGate = configuration.adaptiveComputeGate(properties);
         PairSimilarityScorer pairSimilarityScorer = configuration.pairSimilarityScorer(
                 properties,
                 pairHardGateEvaluator,
@@ -246,7 +248,9 @@ public final class TestDispatchV2Factory {
                 bundleScorer,
                 bundleDominancePruner,
                 greedRlClient,
-                harvestRecorder);
+                harvestRecorder,
+                adaptiveComputeGate,
+                configuration.decisionStageLogger(properties));
         PickupAnchorSelector pickupAnchorSelector = configuration.pickupAnchorSelector(properties);
         DriverRouteFeatureBuilder driverRouteFeatureBuilder = configuration.driverRouteFeatureBuilder();
         CandidateDriverShortlister candidateDriverShortlister = configuration.candidateDriverShortlister(properties, driverRouteFeatureBuilder, tabularScoringClient, harvestRecorder);
@@ -275,7 +279,8 @@ public final class TestDispatchV2Factory {
                 routeFinderClient,
                 routeVectorEnricher,
                 decisionStageLogger,
-                harvestRecorder);
+                harvestRecorder,
+                adaptiveComputeGate);
         ScenarioGateEvaluator scenarioGateEvaluator = configuration.scenarioGateEvaluator(properties);
         ScenarioEvaluator scenarioEvaluator = configuration.scenarioEvaluator(properties);
         var demandShiftFeatureBuilder = configuration.demandShiftFeatureBuilder();
@@ -291,7 +296,9 @@ public final class TestDispatchV2Factory {
                 scenarioGateEvaluator,
                 scenarioEvaluator,
                 robustUtilityAggregator,
-                harvestRecorder);
+                harvestRecorder,
+                adaptiveComputeGate,
+                decisionStageLogger);
         SelectorCandidateBuilder selectorCandidateBuilder = configuration.selectorCandidateBuilder(properties);
         ConflictGraphBuilder conflictGraphBuilder = configuration.conflictGraphBuilder();
         GreedyRepairSelector greedyRepairSelector = configuration.greedyRepairSelector();

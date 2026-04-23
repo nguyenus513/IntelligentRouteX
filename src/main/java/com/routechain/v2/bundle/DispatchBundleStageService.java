@@ -4,7 +4,9 @@ import com.routechain.config.RouteChainDispatchV2Properties;
 import com.routechain.v2.DispatchStageLatency;
 import com.routechain.v2.EtaContext;
 import com.routechain.v2.HotStartReuseSummary;
+import com.routechain.v2.compute.AdaptiveComputeGate;
 import com.routechain.v2.cluster.DispatchPairClusterStage;
+import com.routechain.v2.decision.DecisionStageLogger;
 import com.routechain.v2.feedback.ReuseStateBuilder;
 import com.routechain.v2.integration.GreedRlBundleCandidate;
 import com.routechain.v2.integration.GreedRlBundleFeatureVector;
@@ -30,6 +32,34 @@ public final class DispatchBundleStageService {
     private final BundleDominancePruner bundleDominancePruner;
     private final GreedRlClient greedRlClient;
     private final HarvestRecorder harvestRecorder;
+    private final AdaptiveComputeGate adaptiveComputeGate;
+    private final DecisionStageLogger decisionStageLogger;
+
+    public DispatchBundleStageService(RouteChainDispatchV2Properties properties,
+                                      BoundaryCandidateSelector boundaryCandidateSelector,
+                                      BoundaryExpansionEngine boundaryExpansionEngine,
+                                      BundleSeedGenerator bundleSeedGenerator,
+                                      BundleFamilyEnumerator bundleFamilyEnumerator,
+                                      BundleValidator bundleValidator,
+                                      BundleScorer bundleScorer,
+                                      BundleDominancePruner bundleDominancePruner,
+                                      GreedRlClient greedRlClient,
+                                      HarvestRecorder harvestRecorder,
+                                      AdaptiveComputeGate adaptiveComputeGate,
+                                      DecisionStageLogger decisionStageLogger) {
+        this.properties = properties;
+        this.boundaryCandidateSelector = boundaryCandidateSelector;
+        this.boundaryExpansionEngine = boundaryExpansionEngine;
+        this.bundleSeedGenerator = bundleSeedGenerator;
+        this.bundleFamilyEnumerator = bundleFamilyEnumerator;
+        this.bundleValidator = bundleValidator;
+        this.bundleScorer = bundleScorer;
+        this.bundleDominancePruner = bundleDominancePruner;
+        this.greedRlClient = greedRlClient;
+        this.harvestRecorder = harvestRecorder;
+        this.adaptiveComputeGate = adaptiveComputeGate;
+        this.decisionStageLogger = decisionStageLogger;
+    }
 
     public DispatchBundleStageService(RouteChainDispatchV2Properties properties,
                                       BoundaryCandidateSelector boundaryCandidateSelector,
@@ -41,16 +71,18 @@ public final class DispatchBundleStageService {
                                       BundleDominancePruner bundleDominancePruner,
                                       GreedRlClient greedRlClient,
                                       HarvestRecorder harvestRecorder) {
-        this.properties = properties;
-        this.boundaryCandidateSelector = boundaryCandidateSelector;
-        this.boundaryExpansionEngine = boundaryExpansionEngine;
-        this.bundleSeedGenerator = bundleSeedGenerator;
-        this.bundleFamilyEnumerator = bundleFamilyEnumerator;
-        this.bundleValidator = bundleValidator;
-        this.bundleScorer = bundleScorer;
-        this.bundleDominancePruner = bundleDominancePruner;
-        this.greedRlClient = greedRlClient;
-        this.harvestRecorder = harvestRecorder;
+        this(properties,
+                boundaryCandidateSelector,
+                boundaryExpansionEngine,
+                bundleSeedGenerator,
+                bundleFamilyEnumerator,
+                bundleValidator,
+                bundleScorer,
+                bundleDominancePruner,
+                greedRlClient,
+                harvestRecorder,
+                new AdaptiveComputeGate(properties),
+                new DecisionStageLogger(properties));
     }
 
     public DispatchBundleStageService(RouteChainDispatchV2Properties properties,
@@ -71,7 +103,9 @@ public final class DispatchBundleStageService {
                 bundleScorer,
                 bundleDominancePruner,
                 greedRlClient,
-                null);
+                null,
+                new AdaptiveComputeGate(properties),
+                new DecisionStageLogger(properties));
     }
 
     public DispatchBundleStage evaluate(EtaContext etaContext, DispatchPairClusterStage pairClusterStage) {
@@ -156,7 +190,7 @@ public final class DispatchBundleStageService {
         MlStageMetadataAccumulator greedRlMetadata = new MlStageMetadataAccumulator("bundle-pool");
         for (BundleSeed seed : seeds) {
             List<BundleCandidate> generatedCandidates = new ArrayList<>(bundleFamilyEnumerator.enumerate(seed, context));
-            GreedRlBundleResult greedRlResult = proposeGreedRlBundles(seed);
+            GreedRlBundleResult greedRlResult = proposeGreedRlBundles(etaContext.traceId(), seed);
             greedRlMetadata.accept(greedRlResult);
             if (harvestRecorder != null) {
                 harvestRecorder.recordGreedRlTeacher(
@@ -216,9 +250,23 @@ public final class DispatchBundleStageService {
                 List.copyOf(degradeReasons));
     }
 
-    private GreedRlBundleResult proposeGreedRlBundles(BundleSeed seed) {
+    private GreedRlBundleResult proposeGreedRlBundles(String traceId, BundleSeed seed) {
         if (!properties.isMlEnabled() || !properties.getMl().getGreedrl().isEnabled()) {
             return GreedRlBundleResult.notApplied("greedrl-client-disabled");
+        }
+        if (adaptiveComputeGate.enabled()) {
+            AdaptiveComputeGate.GateDecision gateDecision = adaptiveComputeGate.decideGreedRl(
+                    new AdaptiveComputeGate.GreedRlInputs(
+                            seed.workingOrderIds().size(),
+                            seed.acceptedBoundaryOrderIds().size(),
+                            supportSpread(seed.supportScoreByOrder()),
+                            properties.getMl().getGreedrl().getMaxOrdersPerRequest(),
+                            greedRlClient.readyState().ready(),
+                            greedRlClient.readyState().workerMetadata()));
+            logAdaptiveDecision(traceId, seed, gateDecision);
+            if (!gateDecision.escalated()) {
+                return GreedRlBundleResult.notApplied(gateDecision.reason(), gateDecision.workerMetadata());
+            }
         }
         if (seed.workingOrderIds().size() > properties.getMl().getGreedrl().getMaxOrdersPerRequest()) {
             return GreedRlBundleResult.notApplied("greedrl-scope-too-large");
@@ -235,6 +283,31 @@ public final class DispatchBundleStageService {
                         properties.getBundle().getMaxSize(),
                         properties.getMl().getGreedrl().getMaxProposalsPerCluster()),
                 properties.getMl().getGreedrl().getBundleTimeout().toMillis());
+    }
+
+    private void logAdaptiveDecision(String traceId,
+                                     BundleSeed seed,
+                                     AdaptiveComputeGate.GateDecision gateDecision) {
+        decisionStageLogger.writeFamily("adaptive_compute_trace", traceId, "bundle-pool", Map.of(
+                "stageName", "bundle-pool",
+                "workerName", "ml-greedrl-worker",
+                "decision", gateDecision.decision().name(),
+                "escalated", gateDecision.escalated(),
+                "reason", gateDecision.reason(),
+                "deviceUsed", gateDecision.workerMetadata().device(),
+                "clusterId", seed.cluster().clusterId(),
+                "workingOrderCount", seed.workingOrderIds().size(),
+                "acceptedBoundaryOrderCount", seed.acceptedBoundaryOrderIds().size(),
+                "supportSpread", supportSpread(seed.supportScoreByOrder())));
+    }
+
+    private double supportSpread(Map<String, Double> supportScoreByOrder) {
+        if (supportScoreByOrder == null || supportScoreByOrder.isEmpty()) {
+            return 0.0;
+        }
+        double min = supportScoreByOrder.values().stream().mapToDouble(Double::doubleValue).min().orElse(0.0);
+        double max = supportScoreByOrder.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
+        return max - min;
     }
 
     private List<BundleCandidate> toBundleCandidates(BundleSeed seed,

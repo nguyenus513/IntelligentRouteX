@@ -5,9 +5,11 @@ import com.routechain.v2.DispatchStageLatency;
 import com.routechain.v2.DispatchV2Request;
 import com.routechain.v2.EtaContext;
 import com.routechain.v2.LiveStageMetadata;
+import com.routechain.v2.compute.AdaptiveComputeGate;
 import com.routechain.v2.bundle.DispatchBundleStage;
 import com.routechain.v2.cluster.DispatchPairClusterStage;
 import com.routechain.v2.context.FreshnessMetadata;
+import com.routechain.v2.decision.DecisionStageLogger;
 import com.routechain.v2.integration.DemandShiftFeatureVector;
 import com.routechain.v2.integration.ForecastClient;
 import com.routechain.v2.integration.ForecastResult;
@@ -36,6 +38,32 @@ public final class DispatchScenarioService {
     private final ScenarioEvaluator scenarioEvaluator;
     private final RobustUtilityAggregator robustUtilityAggregator;
     private final HarvestRecorder harvestRecorder;
+    private final AdaptiveComputeGate adaptiveComputeGate;
+    private final DecisionStageLogger decisionStageLogger;
+
+    public DispatchScenarioService(RouteChainDispatchV2Properties properties,
+                                   ForecastClient forecastClient,
+                                   DemandShiftFeatureBuilder demandShiftFeatureBuilder,
+                                   ZoneBurstFeatureBuilder zoneBurstFeatureBuilder,
+                                   PostDropShiftFeatureBuilder postDropShiftFeatureBuilder,
+                                   ScenarioGateEvaluator scenarioGateEvaluator,
+                                   ScenarioEvaluator scenarioEvaluator,
+                                   RobustUtilityAggregator robustUtilityAggregator,
+                                   HarvestRecorder harvestRecorder,
+                                   AdaptiveComputeGate adaptiveComputeGate,
+                                   DecisionStageLogger decisionStageLogger) {
+        this.properties = properties;
+        this.forecastClient = forecastClient;
+        this.demandShiftFeatureBuilder = demandShiftFeatureBuilder;
+        this.zoneBurstFeatureBuilder = zoneBurstFeatureBuilder;
+        this.postDropShiftFeatureBuilder = postDropShiftFeatureBuilder;
+        this.scenarioGateEvaluator = scenarioGateEvaluator;
+        this.scenarioEvaluator = scenarioEvaluator;
+        this.robustUtilityAggregator = robustUtilityAggregator;
+        this.harvestRecorder = harvestRecorder;
+        this.adaptiveComputeGate = adaptiveComputeGate;
+        this.decisionStageLogger = decisionStageLogger;
+    }
 
     public DispatchScenarioService(RouteChainDispatchV2Properties properties,
                                    ForecastClient forecastClient,
@@ -46,15 +74,17 @@ public final class DispatchScenarioService {
                                    ScenarioEvaluator scenarioEvaluator,
                                    RobustUtilityAggregator robustUtilityAggregator,
                                    HarvestRecorder harvestRecorder) {
-        this.properties = properties;
-        this.forecastClient = forecastClient;
-        this.demandShiftFeatureBuilder = demandShiftFeatureBuilder;
-        this.zoneBurstFeatureBuilder = zoneBurstFeatureBuilder;
-        this.postDropShiftFeatureBuilder = postDropShiftFeatureBuilder;
-        this.scenarioGateEvaluator = scenarioGateEvaluator;
-        this.scenarioEvaluator = scenarioEvaluator;
-        this.robustUtilityAggregator = robustUtilityAggregator;
-        this.harvestRecorder = harvestRecorder;
+        this(properties,
+                forecastClient,
+                demandShiftFeatureBuilder,
+                zoneBurstFeatureBuilder,
+                postDropShiftFeatureBuilder,
+                scenarioGateEvaluator,
+                scenarioEvaluator,
+                robustUtilityAggregator,
+                harvestRecorder,
+                new AdaptiveComputeGate(properties),
+                new DecisionStageLogger(properties));
     }
 
     public DispatchScenarioService(RouteChainDispatchV2Properties properties,
@@ -73,7 +103,9 @@ public final class DispatchScenarioService {
                 scenarioGateEvaluator,
                 scenarioEvaluator,
                 robustUtilityAggregator,
-                null);
+                null,
+                new AdaptiveComputeGate(properties),
+                new DecisionStageLogger(properties));
     }
 
     public DispatchScenarioStage evaluate(DispatchV2Request request,
@@ -157,6 +189,20 @@ public final class DispatchScenarioService {
                                                    DispatchRouteCandidateStage routeCandidateStage,
                                                    DispatchBundleStage bundleStage) {
         MlStageMetadataAccumulator metadataAccumulator = new MlStageMetadataAccumulator("scenario-evaluation");
+        if (adaptiveComputeGate.enabled()) {
+            AdaptiveComputeGate.GateDecision gateDecision = adaptiveComputeGate.decideForecast(
+                    new AdaptiveComputeGate.ForecastInputs(
+                            routeProposalStage.routeProposals().size(),
+                            topEtaGapMinutes(routeProposalStage.routeProposals()),
+                            etaContext.weatherBadSignal(),
+                            etaContext.trafficBadSignal(),
+                            forecastClient.readyState().ready(),
+                            forecastClient.readyState().workerMetadata()));
+            logAdaptiveDecision(request.traceId(), gateDecision, routeProposalStage.routeProposals());
+            if (!gateDecision.escalated()) {
+                return skippedForecastContext(freshnessMetadata, gateDecision.reason());
+            }
+        }
         DemandShiftFeatureVector demandShiftFeatures = demandShiftFeatureBuilder.build(request, etaContext, context, routeProposalStage, bundleStage);
         ZoneBurstFeatureVector zoneBurstFeatures = zoneBurstFeatureBuilder.build(request, etaContext, context, routeProposalStage);
         PostDropShiftFeatureVector postDropShiftFeatures = postDropShiftFeatureBuilder.build(request, etaContext, context, routeProposalStage, routeCandidateStage);
@@ -203,6 +249,50 @@ public final class DispatchScenarioService {
                 mergedFreshness,
                 metadataAccumulator.build().map(List::of).orElse(List.of()),
                 degradeReasons);
+    }
+
+    private ForecastScenarioContext skippedForecastContext(FreshnessMetadata freshnessMetadata, String reason) {
+        ForecastResult notApplied = ForecastResult.notApplied(reason);
+        FreshnessMetadata mergedFreshness = new FreshnessMetadata(
+                freshnessMetadata == null ? "freshness-metadata/v1" : freshnessMetadata.schemaVersion(),
+                freshnessMetadata == null ? 0L : freshnessMetadata.weatherAgeMs(),
+                freshnessMetadata == null ? 0L : freshnessMetadata.trafficAgeMs(),
+                0L,
+                freshnessMetadata != null && freshnessMetadata.weatherFresh(),
+                freshnessMetadata != null && freshnessMetadata.trafficFresh(),
+                false);
+        return new ForecastScenarioContext(
+                notApplied,
+                notApplied,
+                notApplied,
+                mergedFreshness,
+                List.of(),
+                List.of(reason));
+    }
+
+    private void logAdaptiveDecision(String traceId,
+                                     AdaptiveComputeGate.GateDecision gateDecision,
+                                     List<RouteProposal> proposals) {
+        decisionStageLogger.writeFamily("adaptive_compute_trace", traceId, "scenario-evaluation", Map.of(
+                "stageName", "scenario-evaluation",
+                "workerName", "ml-forecast-worker",
+                "decision", gateDecision.decision().name(),
+                "escalated", gateDecision.escalated(),
+                "reason", gateDecision.reason(),
+                "deviceUsed", gateDecision.workerMetadata().device(),
+                "proposalCount", proposals.size(),
+                "topEtaGapMinutes", topEtaGapMinutes(proposals)));
+    }
+
+    private double topEtaGapMinutes(List<RouteProposal> proposals) {
+        List<Double> sortedEtas = proposals.stream()
+                .map(RouteProposal::projectedCompletionEtaMinutes)
+                .sorted()
+                .toList();
+        if (sortedEtas.size() < 2) {
+            return -1.0;
+        }
+        return sortedEtas.get(1) - sortedEtas.getFirst();
     }
 
     private void acceptMetadata(MlStageMetadataAccumulator accumulator, ForecastResult forecastResult) {

@@ -7,6 +7,7 @@ import com.routechain.v2.DispatchV2Request;
 import com.routechain.v2.EtaContext;
 import com.routechain.v2.HotStartReuseSummary;
 import com.routechain.v2.MlStageMetadata;
+import com.routechain.v2.compute.AdaptiveComputeGate;
 import com.routechain.v2.bundle.BundleCandidate;
 import com.routechain.v2.bundle.DispatchBundleStage;
 import com.routechain.v2.cluster.DispatchPairClusterStage;
@@ -40,6 +41,31 @@ public final class DispatchRouteProposalService {
     private final RouteVectorEnricher routeVectorEnricher;
     private final DecisionStageLogger decisionStageLogger;
     private final HarvestRecorder harvestRecorder;
+    private final AdaptiveComputeGate adaptiveComputeGate;
+
+    public DispatchRouteProposalService(RouteChainDispatchV2Properties properties,
+                                        RouteProposalEngine routeProposalEngine,
+                                        RouteProposalValidator routeProposalValidator,
+                                        RouteValueScorer routeValueScorer,
+                                        RouteProposalPruner routeProposalPruner,
+                                        EtaLegCacheFactory etaLegCacheFactory,
+                                        RouteFinderClient routeFinderClient,
+                                        RouteVectorEnricher routeVectorEnricher,
+                                        DecisionStageLogger decisionStageLogger,
+                                        HarvestRecorder harvestRecorder,
+                                        AdaptiveComputeGate adaptiveComputeGate) {
+        this.properties = properties;
+        this.routeProposalEngine = routeProposalEngine;
+        this.routeProposalValidator = routeProposalValidator;
+        this.routeValueScorer = routeValueScorer;
+        this.routeProposalPruner = routeProposalPruner;
+        this.etaLegCacheFactory = etaLegCacheFactory;
+        this.routeFinderClient = routeFinderClient;
+        this.routeVectorEnricher = routeVectorEnricher;
+        this.decisionStageLogger = decisionStageLogger;
+        this.harvestRecorder = harvestRecorder;
+        this.adaptiveComputeGate = adaptiveComputeGate;
+    }
 
     public DispatchRouteProposalService(RouteChainDispatchV2Properties properties,
                                         RouteProposalEngine routeProposalEngine,
@@ -51,16 +77,17 @@ public final class DispatchRouteProposalService {
                                         RouteVectorEnricher routeVectorEnricher,
                                         DecisionStageLogger decisionStageLogger,
                                         HarvestRecorder harvestRecorder) {
-        this.properties = properties;
-        this.routeProposalEngine = routeProposalEngine;
-        this.routeProposalValidator = routeProposalValidator;
-        this.routeValueScorer = routeValueScorer;
-        this.routeProposalPruner = routeProposalPruner;
-        this.etaLegCacheFactory = etaLegCacheFactory;
-        this.routeFinderClient = routeFinderClient;
-        this.routeVectorEnricher = routeVectorEnricher;
-        this.decisionStageLogger = decisionStageLogger;
-        this.harvestRecorder = harvestRecorder;
+        this(properties,
+                routeProposalEngine,
+                routeProposalValidator,
+                routeValueScorer,
+                routeProposalPruner,
+                etaLegCacheFactory,
+                routeFinderClient,
+                routeVectorEnricher,
+                decisionStageLogger,
+                harvestRecorder,
+                new AdaptiveComputeGate(properties));
     }
 
     public DispatchRouteProposalService(RouteChainDispatchV2Properties properties,
@@ -81,7 +108,8 @@ public final class DispatchRouteProposalService {
                 routeFinderClient,
                 routeVectorEnricher,
                 decisionStageLogger,
-                null);
+                null,
+                new AdaptiveComputeGate(properties));
     }
 
     public DispatchRouteProposalStage evaluate(DispatchV2Request request,
@@ -114,7 +142,7 @@ public final class DispatchRouteProposalService {
                 routeCandidateStage.pickupAnchors(),
                 context,
                 etaLegCache);
-        RouteFinderGenerationOutcome routeFinderGeneration = generateRouteFinderProposals(request.traceId(), deterministicGenerated, context);
+        RouteFinderGenerationOutcome routeFinderGeneration = generateRouteFinderProposals(request.traceId(), etaContext, deterministicGenerated, context);
         List<RouteProposalCandidate> generated = new ArrayList<>(reusePreparation.reusedCandidates());
         generated.addAll(deterministicGenerated);
         generated.addAll(routeFinderGeneration.generatedCandidates());
@@ -259,6 +287,7 @@ public final class DispatchRouteProposalService {
     }
 
     private RouteFinderGenerationOutcome generateRouteFinderProposals(String traceId,
+                                                                      EtaContext etaContext,
                                                                       List<RouteProposalCandidate> deterministicGenerated,
                                                                       DispatchCandidateContext context) {
         if (!properties.isMlEnabled() || !properties.getMl().getRoutefinder().isEnabled()) {
@@ -272,10 +301,29 @@ public final class DispatchRouteProposalService {
         MlStageMetadataAccumulator mlStageMetadataAccumulator = new MlStageMetadataAccumulator("route-proposal-pool");
         List<RouteProposalCandidate> generatedCandidates = new ArrayList<>();
         List<String> degradeReasons = new ArrayList<>();
+        int tupleOrdinal = 0;
         for (List<RouteProposalCandidate> tupleCandidates : candidatesByTuple.values()) {
             RouteProposalCandidate seed = selectSeed(tupleCandidates);
             if (seed == null) {
                 continue;
+            }
+            if (adaptiveComputeGate.enabled()) {
+                AdaptiveComputeGate.GateDecision gateDecision = adaptiveComputeGate.decideRouteFinder(
+                        new AdaptiveComputeGate.RouteFinderInputs(
+                                tupleOrdinal,
+                                tupleCandidates.size(),
+                                seed.proposal().stopOrder().size(),
+                                topEtaGapMinutes(tupleCandidates),
+                                etaContext.weatherBadSignal(),
+                                etaContext.trafficBadSignal(),
+                                context.bundle(seed.proposal().bundleId()).boundaryCross(),
+                                routeFinderClient.readyState().ready(),
+                                routeFinderClient.readyState().workerMetadata()));
+                logAdaptiveDecision(traceId, seed, tupleCandidates, gateDecision, context);
+                tupleOrdinal++;
+                if (!gateDecision.escalated()) {
+                    continue;
+                }
             }
             RouteFinderFeatureVector featureVector = featureVector(traceId, seed, context);
             RouteFinderResult alternatives = routeFinderClient.generateAlternatives(
@@ -328,6 +376,36 @@ public final class DispatchRouteProposalService {
                 List.copyOf(generatedCandidates),
                 mlStageMetadataAccumulator.build().map(List::of).orElse(List.of()),
                 List.copyOf(degradeReasons.stream().distinct().toList()));
+    }
+
+    private void logAdaptiveDecision(String traceId,
+                                     RouteProposalCandidate seed,
+                                     List<RouteProposalCandidate> tupleCandidates,
+                                     AdaptiveComputeGate.GateDecision gateDecision,
+                                     DispatchCandidateContext context) {
+        decisionStageLogger.writeFamily("adaptive_compute_trace", traceId, "route-proposal-pool", java.util.Map.ofEntries(
+                java.util.Map.entry("stageName", "route-proposal-pool"),
+                java.util.Map.entry("workerName", "ml-routefinder-worker"),
+                java.util.Map.entry("decision", gateDecision.decision().name()),
+                java.util.Map.entry("escalated", gateDecision.escalated()),
+                java.util.Map.entry("reason", gateDecision.reason()),
+                java.util.Map.entry("deviceUsed", gateDecision.workerMetadata().device()),
+                java.util.Map.entry("proposalId", seed.proposal().proposalId()),
+                java.util.Map.entry("tupleCandidateCount", tupleCandidates.size()),
+                java.util.Map.entry("stopCount", seed.proposal().stopOrder().size()),
+                java.util.Map.entry("topEtaGapMinutes", topEtaGapMinutes(tupleCandidates)),
+                java.util.Map.entry("boundaryCross", context.bundle(seed.proposal().bundleId()).boundaryCross())));
+    }
+
+    private double topEtaGapMinutes(List<RouteProposalCandidate> tupleCandidates) {
+        List<Double> sortedEtas = tupleCandidates.stream()
+                .map(candidate -> candidate.proposal().projectedCompletionEtaMinutes())
+                .sorted()
+                .toList();
+        if (sortedEtas.size() < 2) {
+            return -1.0;
+        }
+        return sortedEtas.get(1) - sortedEtas.getFirst();
     }
 
     private RouteFinderFeatureVector featureVector(String traceId,

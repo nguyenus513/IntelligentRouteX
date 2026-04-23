@@ -135,7 +135,14 @@ public final class DispatchOpsReadinessService {
                 sourceModel,
                 modelVersion,
                 artifactDigest,
-                fingerprint);
+                fingerprint,
+                blankToEmpty(metadata.device()),
+                blankToEmpty(metadata.dtype()),
+                metadata.gpuMemoryAllocatedMb(),
+                metadata.batchSize(),
+                blankToEmpty(metadata.compileMode()),
+                metadata.modelLoaded(),
+                metadata.warmupDone());
     }
 
     private Map<String, WorkerManifest.WorkerManifestEntry> loadManifestEntries() {

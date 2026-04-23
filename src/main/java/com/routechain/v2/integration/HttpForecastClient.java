@@ -157,7 +157,14 @@ public final class HttpForecastClient implements ForecastClient {
                     versionResponse.model(),
                     versionResponse.modelVersion(),
                     versionResponse.artifactDigest(),
-                    0L));
+                    0L,
+                    blankToExpected(versionResponse.device(), ""),
+                    blankToExpected(versionResponse.dtype(), ""),
+                    versionResponse.gpuMemoryAllocatedMb(),
+                    versionResponse.batchSize(),
+                    blankToExpected(versionResponse.compileMode(), ""),
+                    versionResponse.modelLoaded(),
+                    versionResponse.warmupDone()));
         } catch (IOException | InterruptedException | RuntimeException exception) {
             if (exception instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -179,11 +186,19 @@ public final class HttpForecastClient implements ForecastClient {
     }
 
     private MlWorkerMetadata metadataFrom(ForecastResponse response) {
+        MlWorkerMetadata readyMetadata = readyState.workerMetadata();
         return new MlWorkerMetadata(
-                blankToExpected(response.sourceModel(), readyState.workerMetadata().sourceModel()),
-                blankToExpected(response.modelVersion(), readyState.workerMetadata().modelVersion()),
-                blankToExpected(response.artifactDigest(), readyState.workerMetadata().artifactDigest()),
-                response.latencyMs());
+                blankToExpected(response.sourceModel(), readyMetadata.sourceModel()),
+                blankToExpected(response.modelVersion(), readyMetadata.modelVersion()),
+                blankToExpected(response.artifactDigest(), readyMetadata.artifactDigest()),
+                response.latencyMs(),
+                blankToExpected(response.device(), readyMetadata.device()),
+                blankToExpected(response.dtype(), readyMetadata.dtype()),
+                response.gpuMemoryAllocatedMb() > 0L ? response.gpuMemoryAllocatedMb() : readyMetadata.gpuMemoryAllocatedMb(),
+                response.batchSize() > 0 ? response.batchSize() : readyMetadata.batchSize(),
+                blankToExpected(response.compileMode(), readyMetadata.compileMode()),
+                response.modelLoaded() || readyMetadata.modelLoaded(),
+                response.warmupDone() || readyMetadata.warmupDone());
     }
 
     private double probability(ForecastResponse.ForecastPayload payload) {

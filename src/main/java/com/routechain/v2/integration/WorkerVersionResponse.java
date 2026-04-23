@@ -21,5 +21,19 @@ public record WorkerVersionResponse(
         @JsonProperty("materializationMode")
         String materializationMode,
         @JsonProperty("loadedModelFingerprint")
-        String loadedModelFingerprint) {
+        String loadedModelFingerprint,
+        @JsonProperty("device")
+        String device,
+        @JsonProperty("dtype")
+        String dtype,
+        @JsonProperty("gpuMemoryAllocatedMb")
+        long gpuMemoryAllocatedMb,
+        @JsonProperty("batchSize")
+        int batchSize,
+        @JsonProperty("compileMode")
+        String compileMode,
+        @JsonProperty("modelLoaded")
+        boolean modelLoaded,
+        @JsonProperty("warmupDone")
+        boolean warmupDone) {
 }

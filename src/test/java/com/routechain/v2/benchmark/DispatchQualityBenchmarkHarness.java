@@ -1646,6 +1646,13 @@ public final class DispatchQualityBenchmarkHarness {
                 worker.loadedFromLocal(),
                 worker.expectedFingerprint(),
                 worker.fingerprintMatch(),
+                worker.device(),
+                worker.dtype(),
+                worker.gpuMemoryAllocatedMb(),
+                worker.batchSize(),
+                worker.compileMode(),
+                worker.modelLoaded(),
+                worker.warmupDone(),
                 applied,
                 blankToEmpty(notAppliedReason));
     }
@@ -1695,6 +1702,13 @@ public final class DispatchQualityBenchmarkHarness {
                 loadedFromLocal(manifestEntry, readyState),
                 manifestEntry == null ? "" : blankToEmpty(manifestEntry.loadedModelFingerprint()),
                 fingerprintMatch(manifestEntry, readyState),
+                blankToEmpty(metadata.device()),
+                blankToEmpty(metadata.dtype()),
+                metadata.gpuMemoryAllocatedMb(),
+                metadata.batchSize(),
+                blankToEmpty(metadata.compileMode()),
+                metadata.modelLoaded(),
+                metadata.warmupDone(),
                 false,
                 ready ? "" : blankToEmpty(readyReason));
     }

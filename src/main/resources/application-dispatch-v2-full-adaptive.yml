@@ -1,0 +1,61 @@
+spring:
+  config:
+    activate:
+      on-profile: dispatch-v2-full-adaptive
+
+routechain:
+  dispatch-v2:
+    enabled: true
+    ml-enabled: true
+    sidecar-required: false
+    selector-ortools-enabled: true
+    warm-start-enabled: true
+    hot-start-enabled: true
+    tomtom-enabled: true
+    open-meteo-enabled: true
+    weather:
+      enabled: true
+    traffic:
+      enabled: true
+    ml:
+      tabular:
+        enabled: true
+      routefinder:
+        enabled: true
+      greedrl:
+        enabled: true
+      forecast:
+        enabled: true
+    feedback:
+      storage-mode: FILE
+      base-dir: data/dispatch-v2-feedback
+    compute:
+      adaptive:
+        enabled: true
+        profile-name: dispatch-v2-full-adaptive
+        machine-profile: local
+        require-worker-device-audit: true
+        fail-open-when-worker-metadata-missing: false
+        routefinder-max-tuples-per-dispatch: 4
+        routefinder-eta-ambiguity-threshold-minutes: 1.5
+        routefinder-stop-count-threshold: 3
+        greedrl-min-working-orders: 4
+        greedrl-min-accepted-boundary-orders: 1
+        greedrl-support-spread-threshold: 0.12
+        forecast-enabled-in-hot-path-by-default: false
+        forecast-ambiguity-threshold-minutes: 1.8
+        forecast-min-proposal-count: 2
+    decision:
+      mode: llm
+      authoritative-stages:
+        - pair-bundle
+        - driver
+        - route-critique
+        - scenario
+        - final-selection
+      llm:
+        base-url: https://r8cp2m4.9router.com/v1
+        model: gpt-5.4
+    performance:
+      telemetry-enabled: true
+      budget-enforcement-enabled: false

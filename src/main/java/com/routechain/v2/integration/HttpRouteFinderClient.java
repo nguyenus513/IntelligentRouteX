@@ -78,11 +78,18 @@ public final class HttpRouteFinderClient implements RouteFinderClient {
             if (routeFinderResponse.payload() == null || routeFinderResponse.payload().routes() == null) {
                 return RouteFinderResult.notApplied("routefinder-malformed-payload", readyState.workerMetadata());
             }
-            MlWorkerMetadata workerMetadata = new MlWorkerMetadata(
-                    blankToExpected(routeFinderResponse.sourceModel(), readyState.workerMetadata().sourceModel()),
-                    blankToExpected(routeFinderResponse.modelVersion(), readyState.workerMetadata().modelVersion()),
-                    blankToExpected(routeFinderResponse.artifactDigest(), readyState.workerMetadata().artifactDigest()),
-                    routeFinderResponse.latencyMs());
+            MlWorkerMetadata workerMetadata = metadataFromResponse(
+                    routeFinderResponse.sourceModel(),
+                    routeFinderResponse.modelVersion(),
+                    routeFinderResponse.artifactDigest(),
+                    routeFinderResponse.latencyMs(),
+                    routeFinderResponse.device(),
+                    routeFinderResponse.dtype(),
+                    routeFinderResponse.gpuMemoryAllocatedMb(),
+                    routeFinderResponse.batchSize(),
+                    routeFinderResponse.compileMode(),
+                    routeFinderResponse.modelLoaded(),
+                    routeFinderResponse.warmupDone());
             if (routeFinderResponse.fallbackUsed()) {
                 return RouteFinderResult.notApplied("routefinder-worker-fallback", workerMetadata);
             }
@@ -161,7 +168,14 @@ public final class HttpRouteFinderClient implements RouteFinderClient {
                     versionResponse.model(),
                     versionResponse.modelVersion(),
                     versionResponse.artifactDigest(),
-                    0L));
+                    0L,
+                    blankToExpected(versionResponse.device(), ""),
+                    blankToExpected(versionResponse.dtype(), ""),
+                    versionResponse.gpuMemoryAllocatedMb(),
+                    versionResponse.batchSize(),
+                    blankToExpected(versionResponse.compileMode(), ""),
+                    versionResponse.modelLoaded(),
+                    versionResponse.warmupDone()));
         } catch (IOException | InterruptedException | RuntimeException exception) {
             if (exception instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -184,5 +198,31 @@ public final class HttpRouteFinderClient implements RouteFinderClient {
 
     private String blankToExpected(String candidate, String fallback) {
         return candidate == null || candidate.isBlank() ? fallback : candidate;
+    }
+
+    private MlWorkerMetadata metadataFromResponse(String sourceModel,
+                                                  String modelVersion,
+                                                  String artifactDigest,
+                                                  long latencyMs,
+                                                  String device,
+                                                  String dtype,
+                                                  long gpuMemoryAllocatedMb,
+                                                  int batchSize,
+                                                  String compileMode,
+                                                  boolean modelLoaded,
+                                                  boolean warmupDone) {
+        MlWorkerMetadata readyMetadata = readyState.workerMetadata();
+        return new MlWorkerMetadata(
+                blankToExpected(sourceModel, readyMetadata.sourceModel()),
+                blankToExpected(modelVersion, readyMetadata.modelVersion()),
+                blankToExpected(artifactDigest, readyMetadata.artifactDigest()),
+                latencyMs,
+                blankToExpected(device, readyMetadata.device()),
+                blankToExpected(dtype, readyMetadata.dtype()),
+                gpuMemoryAllocatedMb > 0L ? gpuMemoryAllocatedMb : readyMetadata.gpuMemoryAllocatedMb(),
+                batchSize > 0 ? batchSize : readyMetadata.batchSize(),
+                blankToExpected(compileMode, readyMetadata.compileMode()),
+                modelLoaded || readyMetadata.modelLoaded(),
+                warmupDone || readyMetadata.warmupDone());
     }
 }

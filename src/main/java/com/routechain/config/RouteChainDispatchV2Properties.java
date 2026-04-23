@@ -35,6 +35,7 @@ public class RouteChainDispatchV2Properties {
     private final Harvest harvest = new Harvest();
     private final WarmHotStart warmHotStart = new WarmHotStart();
     private final Performance performance = new Performance();
+    private final Compute compute = new Compute();
     private final Decision decision = new Decision();
 
     public static RouteChainDispatchV2Properties defaults() {
@@ -179,6 +180,10 @@ public class RouteChainDispatchV2Properties {
 
     public Performance getPerformance() {
         return performance;
+    }
+
+    public Compute getCompute() {
+        return compute;
     }
 
     public Decision getDecision() {
@@ -1221,6 +1226,188 @@ public class RouteChainDispatchV2Properties {
             budgets.put("global-selector", Duration.ofMillis(180));
             budgets.put("dispatch-executor", Duration.ofMillis(40));
             return budgets;
+        }
+    }
+
+    public static final class Compute {
+        private final Adaptive adaptive = new Adaptive();
+
+        public Adaptive getAdaptive() {
+            return adaptive;
+        }
+    }
+
+    public static final class Adaptive {
+        private boolean enabled = false;
+        private String profileName = "dispatch-v2-full-adaptive";
+        private String machineProfile = "local";
+        private boolean requireWorkerDeviceAudit = true;
+        private boolean failOpenWhenWorkerMetadataMissing = false;
+        private int routefinderMaxTuplesPerDispatch = 4;
+        private double routefinderEtaAmbiguityThresholdMinutes = 1.5;
+        private int routefinderStopCountThreshold = 3;
+        private boolean routefinderWeatherEscalationEnabled = true;
+        private boolean routefinderTrafficEscalationEnabled = true;
+        private boolean routefinderBoundaryCrossEscalationEnabled = true;
+        private int greedrlMinWorkingOrders = 4;
+        private int greedrlMinAcceptedBoundaryOrders = 1;
+        private double greedrlSupportSpreadThreshold = 0.12;
+        private boolean forecastEnabledInHotPathByDefault = false;
+        private double forecastAmbiguityThresholdMinutes = 1.8;
+        private int forecastMinProposalCount = 2;
+        private boolean forecastWeatherEscalationEnabled = true;
+        private boolean forecastTrafficEscalationEnabled = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getProfileName() {
+            return profileName;
+        }
+
+        public void setProfileName(String profileName) {
+            this.profileName = profileName;
+        }
+
+        public String getMachineProfile() {
+            return machineProfile;
+        }
+
+        public void setMachineProfile(String machineProfile) {
+            this.machineProfile = machineProfile;
+        }
+
+        public boolean isRequireWorkerDeviceAudit() {
+            return requireWorkerDeviceAudit;
+        }
+
+        public void setRequireWorkerDeviceAudit(boolean requireWorkerDeviceAudit) {
+            this.requireWorkerDeviceAudit = requireWorkerDeviceAudit;
+        }
+
+        public boolean isFailOpenWhenWorkerMetadataMissing() {
+            return failOpenWhenWorkerMetadataMissing;
+        }
+
+        public void setFailOpenWhenWorkerMetadataMissing(boolean failOpenWhenWorkerMetadataMissing) {
+            this.failOpenWhenWorkerMetadataMissing = failOpenWhenWorkerMetadataMissing;
+        }
+
+        public int getRoutefinderMaxTuplesPerDispatch() {
+            return routefinderMaxTuplesPerDispatch;
+        }
+
+        public void setRoutefinderMaxTuplesPerDispatch(int routefinderMaxTuplesPerDispatch) {
+            this.routefinderMaxTuplesPerDispatch = routefinderMaxTuplesPerDispatch;
+        }
+
+        public double getRoutefinderEtaAmbiguityThresholdMinutes() {
+            return routefinderEtaAmbiguityThresholdMinutes;
+        }
+
+        public void setRoutefinderEtaAmbiguityThresholdMinutes(double routefinderEtaAmbiguityThresholdMinutes) {
+            this.routefinderEtaAmbiguityThresholdMinutes = routefinderEtaAmbiguityThresholdMinutes;
+        }
+
+        public int getRoutefinderStopCountThreshold() {
+            return routefinderStopCountThreshold;
+        }
+
+        public void setRoutefinderStopCountThreshold(int routefinderStopCountThreshold) {
+            this.routefinderStopCountThreshold = routefinderStopCountThreshold;
+        }
+
+        public boolean isRoutefinderWeatherEscalationEnabled() {
+            return routefinderWeatherEscalationEnabled;
+        }
+
+        public void setRoutefinderWeatherEscalationEnabled(boolean routefinderWeatherEscalationEnabled) {
+            this.routefinderWeatherEscalationEnabled = routefinderWeatherEscalationEnabled;
+        }
+
+        public boolean isRoutefinderTrafficEscalationEnabled() {
+            return routefinderTrafficEscalationEnabled;
+        }
+
+        public void setRoutefinderTrafficEscalationEnabled(boolean routefinderTrafficEscalationEnabled) {
+            this.routefinderTrafficEscalationEnabled = routefinderTrafficEscalationEnabled;
+        }
+
+        public boolean isRoutefinderBoundaryCrossEscalationEnabled() {
+            return routefinderBoundaryCrossEscalationEnabled;
+        }
+
+        public void setRoutefinderBoundaryCrossEscalationEnabled(boolean routefinderBoundaryCrossEscalationEnabled) {
+            this.routefinderBoundaryCrossEscalationEnabled = routefinderBoundaryCrossEscalationEnabled;
+        }
+
+        public int getGreedrlMinWorkingOrders() {
+            return greedrlMinWorkingOrders;
+        }
+
+        public void setGreedrlMinWorkingOrders(int greedrlMinWorkingOrders) {
+            this.greedrlMinWorkingOrders = greedrlMinWorkingOrders;
+        }
+
+        public int getGreedrlMinAcceptedBoundaryOrders() {
+            return greedrlMinAcceptedBoundaryOrders;
+        }
+
+        public void setGreedrlMinAcceptedBoundaryOrders(int greedrlMinAcceptedBoundaryOrders) {
+            this.greedrlMinAcceptedBoundaryOrders = greedrlMinAcceptedBoundaryOrders;
+        }
+
+        public double getGreedrlSupportSpreadThreshold() {
+            return greedrlSupportSpreadThreshold;
+        }
+
+        public void setGreedrlSupportSpreadThreshold(double greedrlSupportSpreadThreshold) {
+            this.greedrlSupportSpreadThreshold = greedrlSupportSpreadThreshold;
+        }
+
+        public boolean isForecastEnabledInHotPathByDefault() {
+            return forecastEnabledInHotPathByDefault;
+        }
+
+        public void setForecastEnabledInHotPathByDefault(boolean forecastEnabledInHotPathByDefault) {
+            this.forecastEnabledInHotPathByDefault = forecastEnabledInHotPathByDefault;
+        }
+
+        public double getForecastAmbiguityThresholdMinutes() {
+            return forecastAmbiguityThresholdMinutes;
+        }
+
+        public void setForecastAmbiguityThresholdMinutes(double forecastAmbiguityThresholdMinutes) {
+            this.forecastAmbiguityThresholdMinutes = forecastAmbiguityThresholdMinutes;
+        }
+
+        public int getForecastMinProposalCount() {
+            return forecastMinProposalCount;
+        }
+
+        public void setForecastMinProposalCount(int forecastMinProposalCount) {
+            this.forecastMinProposalCount = forecastMinProposalCount;
+        }
+
+        public boolean isForecastWeatherEscalationEnabled() {
+            return forecastWeatherEscalationEnabled;
+        }
+
+        public void setForecastWeatherEscalationEnabled(boolean forecastWeatherEscalationEnabled) {
+            this.forecastWeatherEscalationEnabled = forecastWeatherEscalationEnabled;
+        }
+
+        public boolean isForecastTrafficEscalationEnabled() {
+            return forecastTrafficEscalationEnabled;
+        }
+
+        public void setForecastTrafficEscalationEnabled(boolean forecastTrafficEscalationEnabled) {
+            this.forecastTrafficEscalationEnabled = forecastTrafficEscalationEnabled;
         }
     }
 

@@ -96,11 +96,18 @@ public final class HttpTabularScoringClient implements TabularScoringClient {
                     scoreResponse.payload().score(),
                     scoreResponse.payload().uncertainty(),
                     scoreResponse.fallbackUsed(),
-                    new MlWorkerMetadata(
-                            blankToExpected(scoreResponse.sourceModel(), readyState.workerMetadata().sourceModel()),
-                            blankToExpected(scoreResponse.modelVersion(), readyState.workerMetadata().modelVersion()),
-                            blankToExpected(scoreResponse.artifactDigest(), readyState.workerMetadata().artifactDigest()),
-                            scoreResponse.latencyMs()));
+                    metadataFromResponse(
+                            scoreResponse.sourceModel(),
+                            scoreResponse.modelVersion(),
+                            scoreResponse.artifactDigest(),
+                            scoreResponse.latencyMs(),
+                            scoreResponse.device(),
+                            scoreResponse.dtype(),
+                            scoreResponse.gpuMemoryAllocatedMb(),
+                            scoreResponse.batchSize(),
+                            scoreResponse.compileMode(),
+                            scoreResponse.modelLoaded(),
+                            scoreResponse.warmupDone()));
         } catch (java.net.http.HttpTimeoutException exception) {
             return TabularScoreResult.notApplied("tabular-timeout", readyState.workerMetadata());
         } catch (InterruptedException exception) {
@@ -165,7 +172,14 @@ public final class HttpTabularScoringClient implements TabularScoringClient {
                     versionResponse.model(),
                     versionResponse.modelVersion(),
                     versionResponse.artifactDigest(),
-                    0L));
+                    0L,
+                    blankToExpected(versionResponse.device(), ""),
+                    blankToExpected(versionResponse.dtype(), ""),
+                    versionResponse.gpuMemoryAllocatedMb(),
+                    versionResponse.batchSize(),
+                    blankToExpected(versionResponse.compileMode(), ""),
+                    versionResponse.modelLoaded(),
+                    versionResponse.warmupDone()));
         } catch (IOException | InterruptedException | RuntimeException exception) {
             if (exception instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -198,5 +212,31 @@ public final class HttpTabularScoringClient implements TabularScoringClient {
 
     private String blankToExpected(String candidate, String fallback) {
         return candidate == null || candidate.isBlank() ? fallback : candidate;
+    }
+
+    private MlWorkerMetadata metadataFromResponse(String sourceModel,
+                                                  String modelVersion,
+                                                  String artifactDigest,
+                                                  long latencyMs,
+                                                  String device,
+                                                  String dtype,
+                                                  long gpuMemoryAllocatedMb,
+                                                  int batchSize,
+                                                  String compileMode,
+                                                  boolean modelLoaded,
+                                                  boolean warmupDone) {
+        MlWorkerMetadata readyMetadata = readyState.workerMetadata();
+        return new MlWorkerMetadata(
+                blankToExpected(sourceModel, readyMetadata.sourceModel()),
+                blankToExpected(modelVersion, readyMetadata.modelVersion()),
+                blankToExpected(artifactDigest, readyMetadata.artifactDigest()),
+                latencyMs,
+                blankToExpected(device, readyMetadata.device()),
+                blankToExpected(dtype, readyMetadata.dtype()),
+                gpuMemoryAllocatedMb > 0L ? gpuMemoryAllocatedMb : readyMetadata.gpuMemoryAllocatedMb(),
+                batchSize > 0 ? batchSize : readyMetadata.batchSize(),
+                blankToExpected(compileMode, readyMetadata.compileMode()),
+                modelLoaded || readyMetadata.modelLoaded(),
+                warmupDone || readyMetadata.warmupDone());
     }
 }
