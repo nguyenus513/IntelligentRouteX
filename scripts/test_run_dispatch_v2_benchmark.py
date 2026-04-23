@@ -28,6 +28,7 @@ class RunDispatchBenchmarkTest(unittest.TestCase):
         self.assertIn("prompt-family=v2", output)
         self.assertIn("authoritative-stages=[]", output)
         self.assertIn("authority=false", output)
+        self.assertIn("profile=default", output)
 
     def test_runner_collects_json_and_writes_summary(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -129,6 +130,7 @@ class RunDispatchBenchmarkTest(unittest.TestCase):
             authoritative_stages=(),
             execution_mode="controlled",
             authority=False,
+            profile="dispatch-v2-full-adaptive",
         )
         captured = {}
 
@@ -138,6 +140,7 @@ class RunDispatchBenchmarkTest(unittest.TestCase):
 
         benchmark_runner.run_cell(cell, Path("."), runner=fake_runner)
         self.assertEqual("v3", captured["env"]["DISPATCH_QUALITY_PROMPT_FAMILY"])
+        self.assertEqual("dispatch-v2-full-adaptive", captured["env"]["DISPATCH_QUALITY_PROFILE"])
 
     def test_runner_fails_when_completed_cell_writes_no_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

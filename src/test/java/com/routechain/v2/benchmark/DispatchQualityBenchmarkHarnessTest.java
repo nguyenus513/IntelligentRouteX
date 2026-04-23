@@ -218,6 +218,45 @@ class DispatchQualityBenchmarkHarnessTest {
     }
 
     @Test
+    void fullAdaptiveProfileEmitsAdaptiveComputeTraceArtifacts() {
+        String previous = System.getProperty("dispatchQuality.profile");
+        System.setProperty("dispatchQuality.profile", "dispatch-v2-full-adaptive");
+        try {
+            DispatchQualityBenchmarkRun run = harness.benchmark(new DispatchQualityBenchmarkHarness.BenchmarkRequest(
+                    List.of(DispatchPerfBenchmarkHarness.BaselineId.C),
+                    DispatchPerfBenchmarkHarness.WorkloadSize.S,
+                    DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
+                    DispatchBenchmarkDecisionMode.LLM_AUTHORITATIVE,
+                    "v2",
+                    DispatchQualityBenchmarkHarness.ExecutionMode.CONTROLLED,
+                    DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
+                    false,
+                    false,
+                    tempDir));
+
+            assertEquals(1, run.rawResults().size());
+            Path adaptiveTraceRoot = tempDir
+                    .resolve("feedback")
+                    .resolve("normal-clear")
+                    .resolve("s")
+                    .resolve("controlled")
+                    .resolve("llm-authoritative")
+                    .resolve("v2")
+                    .resolve("c")
+                    .resolve("decision-stage")
+                    .resolve("adaptive_compute_trace");
+            assertTrue(java.nio.file.Files.exists(adaptiveTraceRoot));
+            try (var traceFiles = java.nio.file.Files.list(adaptiveTraceRoot)) {
+                assertFalse(traceFiles.findAny().isEmpty());
+            }
+        } catch (java.io.IOException exception) {
+            throw new RuntimeException(exception);
+        } finally {
+            restoreProperty("dispatchQuality.profile", previous);
+        }
+    }
+
+    @Test
     void authorityLocalRealRunUsesWindowsSafeHeavyPolicyOnWindows() {
         String previous = System.getProperty("os.name");
         System.setProperty("os.name", "Windows 11");

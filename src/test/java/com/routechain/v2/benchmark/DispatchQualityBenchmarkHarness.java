@@ -828,6 +828,10 @@ public final class DispatchQualityBenchmarkHarness {
                                                           ExecutionMode executionMode,
                                                           Path feedbackDirectory) {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        applyBenchmarkProfile(properties, configuredValue(
+                "dispatchQuality.profile",
+                "DISPATCH_QUALITY_PROFILE",
+                ""));
         properties.getDecision().setMode(decisionMode.runtimeMode());
         properties.getDecision().setAuthoritativeStages(parseStages(configuredValue(
                 "routechain.dispatch-v2.decision.authoritative-stages",
@@ -908,6 +912,45 @@ public final class DispatchQualityBenchmarkHarness {
             properties.getMl().getForecast().setEnabled(true);
         }
         return properties;
+    }
+
+    private void applyBenchmarkProfile(RouteChainDispatchV2Properties properties, String profileName) {
+        if (!"dispatch-v2-full-adaptive".equalsIgnoreCase(blankToEmpty(profileName))) {
+            return;
+        }
+        properties.setEnabled(true);
+        properties.setMlEnabled(true);
+        properties.setSelectorOrtoolsEnabled(true);
+        properties.setWarmStartEnabled(true);
+        properties.setHotStartEnabled(true);
+        properties.setTomtomEnabled(true);
+        properties.setOpenMeteoEnabled(true);
+        properties.getWeather().setEnabled(true);
+        properties.getTraffic().setEnabled(true);
+        properties.getMl().getTabular().setEnabled(true);
+        properties.getMl().getRoutefinder().setEnabled(true);
+        properties.getMl().getGreedrl().setEnabled(true);
+        properties.getMl().getForecast().setEnabled(true);
+        properties.getCompute().getAdaptive().setEnabled(true);
+        properties.getCompute().getAdaptive().setProfileName("dispatch-v2-full-adaptive");
+        properties.getCompute().getAdaptive().setMachineProfile("local");
+        properties.getCompute().getAdaptive().setRequireWorkerDeviceAudit(true);
+        properties.getCompute().getAdaptive().setFailOpenWhenWorkerMetadataMissing(false);
+        properties.getCompute().getAdaptive().setRoutefinderMaxTuplesPerDispatch(4);
+        properties.getCompute().getAdaptive().setRoutefinderEtaAmbiguityThresholdMinutes(1.5);
+        properties.getCompute().getAdaptive().setRoutefinderStopCountThreshold(3);
+        properties.getCompute().getAdaptive().setRoutefinderWeatherEscalationEnabled(true);
+        properties.getCompute().getAdaptive().setRoutefinderTrafficEscalationEnabled(true);
+        properties.getCompute().getAdaptive().setRoutefinderBoundaryCrossEscalationEnabled(true);
+        properties.getCompute().getAdaptive().setGreedrlMinWorkingOrders(4);
+        properties.getCompute().getAdaptive().setGreedrlMinAcceptedBoundaryOrders(1);
+        properties.getCompute().getAdaptive().setGreedrlSupportSpreadThreshold(0.12);
+        properties.getCompute().getAdaptive().setForecastEnabledInHotPathByDefault(false);
+        properties.getCompute().getAdaptive().setForecastAmbiguityThresholdMinutes(1.8);
+        properties.getCompute().getAdaptive().setForecastMinProposalCount(2);
+        properties.getCompute().getAdaptive().setForecastWeatherEscalationEnabled(true);
+        properties.getCompute().getAdaptive().setForecastTrafficEscalationEnabled(true);
+        properties.getDecision().getLlm().setBaseUrl("https://r8cp2m4.9router.com/v1");
     }
 
     private Path feedbackDirectory(BenchmarkRequest request,
