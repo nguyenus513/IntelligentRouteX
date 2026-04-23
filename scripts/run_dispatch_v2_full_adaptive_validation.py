@@ -200,9 +200,15 @@ def collect_adaptive_rows(root: Path, root_type: str) -> Dict[Tuple[str, str, st
 def parse_instant(value: object) -> Optional[datetime]:
     if not value:
         return None
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(float(value), tz=timezone.utc)
     text = str(value).strip()
     if not text:
         return None
+    try:
+        return datetime.fromtimestamp(float(text), tz=timezone.utc)
+    except ValueError:
+        pass
     try:
         return datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
