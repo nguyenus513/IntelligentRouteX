@@ -23,6 +23,58 @@ RUNTIME_CACHE: dict[str, Any] = {"fingerprint": None}
 app = FastAPI(title="ml-greedrl-worker")
 
 
+def _env_text(*keys: str, default: str = "") -> str:
+    for key in keys:
+        value = os.getenv(key, "").strip()
+        if value:
+            return value
+    return default
+
+
+def _env_int(*keys: str, default: int = 0) -> int:
+    for key in keys:
+        value = os.getenv(key, "").strip()
+        if not value:
+            continue
+        try:
+            return max(0, int(value))
+        except ValueError:
+            continue
+    return default
+
+
+def _worker_device() -> str:
+    return _env_text("IRX_GREEDRL_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu")
+
+
+def _worker_dtype() -> str:
+    return _env_text("IRX_GREEDRL_WORKER_DTYPE", "IRX_ML_WORKER_DTYPE", default="fp32")
+
+
+def _worker_gpu_memory_allocated_mb() -> int:
+    return _env_int("IRX_GREEDRL_WORKER_GPU_MEMORY_ALLOCATED_MB", "IRX_ML_WORKER_GPU_MEMORY_ALLOCATED_MB", default=0)
+
+
+def _worker_batch_size() -> int:
+    return max(1, _env_int("IRX_GREEDRL_WORKER_BATCH_SIZE", "IRX_ML_WORKER_BATCH_SIZE", default=1))
+
+
+def _worker_compile_mode() -> str:
+    return _env_text("IRX_GREEDRL_WORKER_COMPILE_MODE", "IRX_ML_WORKER_COMPILE_MODE", default="eager")
+
+
+def _worker_version_audit(*, model_loaded: bool, warmup_done: bool) -> dict:
+    return {
+        "device": _worker_device(),
+        "dtype": _worker_dtype(),
+        "gpuMemoryAllocatedMb": _worker_gpu_memory_allocated_mb(),
+        "batchSize": _worker_batch_size(),
+        "compileMode": _worker_compile_mode(),
+        "modelLoaded": model_loaded,
+        "warmupDone": warmup_done,
+    }
+
+
 def _manifest_path() -> Path:
     override = os.getenv("IRX_MODEL_MANIFEST_PATH", "").strip()
     if override:
@@ -206,7 +258,9 @@ def _version_payload(manifest_entry: dict | None,
                      artifact_path: Path | None = None,
                      loaded_from_local: bool = False,
                      materialization_mode: str = "",
-                     loaded_model_fingerprint: str = "") -> dict:
+                     loaded_model_fingerprint: str = "",
+                     model_loaded: bool = False,
+                     warmup_done: bool = False) -> dict:
     if manifest_entry is None:
         return {
             "schemaVersion": "worker-version/v1",
@@ -220,6 +274,7 @@ def _version_payload(manifest_entry: dict | None,
             "localArtifactPath": "",
             "materializationMode": "",
             "loadedModelFingerprint": "",
+            **_worker_version_audit(model_loaded=False, warmup_done=False),
         }
     return {
         "schemaVersion": "worker-version/v1",
@@ -233,6 +288,7 @@ def _version_payload(manifest_entry: dict | None,
         "localArtifactPath": str(artifact_path) if artifact_path is not None else "",
         "materializationMode": materialization_mode,
         "loadedModelFingerprint": loaded_model_fingerprint,
+        **_worker_version_audit(model_loaded=model_loaded, warmup_done=warmup_done),
     }
 
 
@@ -430,7 +486,15 @@ def _readiness() -> tuple[bool, str, dict | None, dict | None, dict]:
         _ensure_runtime_ready(manifest_entry, runtime_manifest, artifact_path, loaded_model_fingerprint)
     except Exception:
         return False, "warmup-failed", manifest_entry, runtime_manifest, version_payload
-    return True, "", manifest_entry, runtime_manifest, version_payload
+    return True, "", manifest_entry, runtime_manifest, _version_payload(
+        manifest_entry,
+        artifact_path=artifact_path,
+        loaded_from_local=loaded_from_local,
+        materialization_mode=materialization_mode,
+        loaded_model_fingerprint=loaded_model_fingerprint,
+        model_loaded=True,
+        warmup_done=True,
+    )
 
 
 def _fallback_response(reason: str, payload: dict, manifest_entry: dict | None, started_at: float) -> dict:

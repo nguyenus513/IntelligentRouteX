@@ -221,6 +221,13 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
             self.assertEqual(str(runtime_manifest_path), version_payload["localArtifactPath"])
             self.assertEqual("LOCAL_PACKAGE_PROMOTION", version_payload["materializationMode"])
             self.assertEqual(fingerprint, version_payload["loadedModelFingerprint"])
+            self.assertEqual("cpu", version_payload["device"])
+            self.assertEqual("fp32", version_payload["dtype"])
+            self.assertEqual(0, version_payload["gpuMemoryAllocatedMb"])
+            self.assertEqual(1, version_payload["batchSize"])
+            self.assertEqual("eager", version_payload["compileMode"])
+            self.assertTrue(version_payload["modelLoaded"])
+            self.assertTrue(version_payload["warmupDone"])
 
     def _write_materialized_model(self, temp_root: Path) -> tuple[Path, Path, str]:
         model_root = temp_root / "services" / "models" / "materialized" / "greedrl"
