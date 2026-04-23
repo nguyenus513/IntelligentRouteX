@@ -1,0 +1,404 @@
+{
+  "schemaVersion": "dispatch-prompt-redesign-validation/v1",
+  "generatedAt": "2026-04-23T00:32:14.144768+00:00",
+  "validationCommit": "b2c69aa6",
+  "baselineRoots": [
+    "artifacts\\benchmark\\phase2-live3"
+  ],
+  "validationRoots": [
+    "artifacts\\benchmark\\prompt-redesign\\current\\live"
+  ],
+  "rerunExecuted": false,
+  "targetStages": [
+    "pair-bundle",
+    "route-generation",
+    "route-critique",
+    "scenario",
+    "final-selection"
+  ],
+  "baselineEvidenceCount": 50,
+  "validationEvidenceCount": 2,
+  "stageReports": [
+    {
+      "stageName": "pair-bundle",
+      "promptIdentity": {
+        "promptSpecVersion": "decision-stage-prompt-spec/v1",
+        "stagePromptChecksum": "e1865fafdc122706fcb918025248907b0b40b23d9c394f3b593e3a9dc905c588",
+        "packetTemplateChecksum": "7d4a8060a93fbf9cfadeeb94853a2911d4b492b47d1ccabb0741c3eac2457364",
+        "stagePromptName": "pair-bundle",
+        "packetTemplateVersion": "decision-stage-packet/v2"
+      },
+      "baselineEvidenceCount": 1,
+      "validationEvidenceCount": 1,
+      "baselineEvidence": [
+        {
+          "rootType": "baseline",
+          "rootPath": "artifacts\\benchmark\\phase2-live3",
+          "traceId": "quality-normal-clear-s-llm-shadow-c",
+          "stageName": "pair-bundle",
+          "scenarioPack": "normal-clear",
+          "workloadSize": "S",
+          "decisionMode": "llm-shadow",
+          "executionMode": "controlled",
+          "authorityPhase": "c",
+          "promptIdentityLocked": false,
+          "promptMetadata": {},
+          "contextCoverageStatus": "EVIDENCE_GAP",
+          "missingContextFlags": [
+            "prompt-metadata-missing"
+          ],
+          "fallbackStatus": "PASS",
+          "fallbackSummary": {
+            "fallbackUsed": false,
+            "fallbackReason": "",
+            "brainType": "LLM"
+          },
+          "assessmentRichnessStatus": "PASS_WITH_LIMITS",
+          "assessmentSummary": {
+            "itemCount": 2,
+            "richnessScore": 0.3077,
+            "selectedCount": 2,
+            "nonSelectedCount": 0,
+            "selectedNonSelectedEvidencePresent": false
+          },
+          "benchmarkSummary": {
+            "artifactPath": "artifacts\\benchmark\\phase2-live3\\dispatch-quality-normal-clear-s-llm-shadow-controlled-c-20260420-125235.json",
+            "baselineId": "C",
+            "scenarioPack": "normal-clear",
+            "workloadSize": "S",
+            "decisionMode": "llm-shadow",
+            "executionMode": "controlled",
+            "runAuthorityClass": "LOCAL_NON_AUTHORITY",
+            "authorityEligible": false,
+            "tokenUsageSummary": {
+              "schemaVersion": "dispatch-token-usage-summary/v1",
+              "requestCount": 7,
+              "inputTokens": 23645,
+              "outputTokens": 5933,
+              "totalTokens": 29578
+            },
+            "stageFallbackSummary": {
+              "schemaVersion": "dispatch-stage-fallback-summary/v1",
+              "totalStageOutputs": 9,
+              "totalFallbacks": 0,
+              "fallbackCountsByStage": {},
+              "latestFallbackReasonByStage": {}
+            }
+          },
+          "overallStageVerdict": "EVIDENCE_GAP"
+        }
+      ],
+      "validationEvidence": [
+        {
+          "rootType": "validation",
+          "rootPath": "artifacts\\benchmark\\prompt-redesign\\current\\live",
+          "traceId": "quality-normal-clear-s-llm-shadow-c",
+          "stageName": "pair-bundle",
+          "scenarioPack": "normal-clear",
+          "workloadSize": "S",
+          "decisionMode": "llm-shadow",
+          "executionMode": "controlled",
+          "authorityPhase": "c",
+          "promptIdentityLocked": true,
+          "promptMetadata": {
+            "promptSpecVersion": "decision-stage-prompt-spec/v1",
+            "stagePromptName": "pair-bundle",
+            "stagePromptChecksum": "e1865fafdc122706fcb918025248907b0b40b23d9c394f3b593e3a9dc905c588",
+            "packetTemplateVersion": "decision-stage-packet/v2",
+            "packetTemplateChecksum": "7d4a8060a93fbf9cfadeeb94853a2911d4b492b47d1ccabb0741c3eac2457364",
+            "candidateCountSeen": 12,
+            "comparisonPackCoverage": 1.0,
+            "geospatialCoverage": 1.0,
+            "missingContextFlags": [],
+            "visibilityProfile": "pair-bundle-visibility-v1",
+            "comparisonLens": "PAIR_SUPPORT_LENS",
+            "geospatialLens": "BUNDLE_GEOMETRY_LENS",
+            "fallbackReason": ""
+          },
+          "contextCoverageStatus": "PASS",
+          "missingContextFlags": [],
+          "fallbackStatus": "FAIL",
+          "fallbackSummary": {
+            "fallbackUsed": true,
+            "fallbackReason": "provider-http-error",
+            "brainType": "LEGACY"
+          },
+          "assessmentRichnessStatus": "PASS",
+          "assessmentSummary": {
+            "itemCount": 12,
+            "richnessScore": 1.0,
+            "selectedCount": 12,
+            "nonSelectedCount": 11,
+            "selectedNonSelectedEvidencePresent": true
+          },
+          "benchmarkSummary": {},
+          "overallStageVerdict": "FAIL"
+        }
+      ],
+      "overallStageVerdict": "FAIL"
+    },
+    {
+      "stageName": "route-generation",
+      "promptIdentity": {
+        "promptSpecVersion": "decision-stage-prompt-spec/v1",
+        "stagePromptChecksum": "19293ea7d58086450f5fb8933301f6bf8188710cf305a27a7dc23c40fd362292",
+        "packetTemplateChecksum": "7d4a8060a93fbf9cfadeeb94853a2911d4b492b47d1ccabb0741c3eac2457364",
+        "stagePromptName": "route-generation",
+        "packetTemplateVersion": "decision-stage-packet/v2"
+      },
+      "baselineEvidenceCount": 1,
+      "validationEvidenceCount": 1,
+      "baselineEvidence": [
+        {
+          "rootType": "baseline",
+          "rootPath": "artifacts\\benchmark\\phase2-live3",
+          "traceId": "quality-normal-clear-s-llm-shadow-c",
+          "stageName": "route-generation",
+          "scenarioPack": "normal-clear",
+          "workloadSize": "S",
+          "decisionMode": "llm-shadow",
+          "executionMode": "controlled",
+          "authorityPhase": "c",
+          "promptIdentityLocked": false,
+          "promptMetadata": {},
+          "contextCoverageStatus": "EVIDENCE_GAP",
+          "missingContextFlags": [
+            "prompt-metadata-missing"
+          ],
+          "fallbackStatus": "PASS",
+          "fallbackSummary": {
+            "fallbackUsed": false,
+            "fallbackReason": "",
+            "brainType": "LLM"
+          },
+          "assessmentRichnessStatus": "PASS_WITH_LIMITS",
+          "assessmentSummary": {
+            "itemCount": 4,
+            "richnessScore": 0.3077,
+            "selectedCount": 1,
+            "nonSelectedCount": 3,
+            "selectedNonSelectedEvidencePresent": true
+          },
+          "benchmarkSummary": {
+            "artifactPath": "artifacts\\benchmark\\phase2-live3\\dispatch-quality-normal-clear-s-llm-shadow-controlled-c-20260420-125235.json",
+            "baselineId": "C",
+            "scenarioPack": "normal-clear",
+            "workloadSize": "S",
+            "decisionMode": "llm-shadow",
+            "executionMode": "controlled",
+            "runAuthorityClass": "LOCAL_NON_AUTHORITY",
+            "authorityEligible": false,
+            "tokenUsageSummary": {
+              "schemaVersion": "dispatch-token-usage-summary/v1",
+              "requestCount": 7,
+              "inputTokens": 23645,
+              "outputTokens": 5933,
+              "totalTokens": 29578
+            },
+            "stageFallbackSummary": {
+              "schemaVersion": "dispatch-stage-fallback-summary/v1",
+              "totalStageOutputs": 9,
+              "totalFallbacks": 0,
+              "fallbackCountsByStage": {},
+              "latestFallbackReasonByStage": {}
+            }
+          },
+          "overallStageVerdict": "EVIDENCE_GAP"
+        }
+      ],
+      "validationEvidence": [
+        {
+          "rootType": "validation",
+          "rootPath": "artifacts\\benchmark\\prompt-redesign\\current\\live",
+          "traceId": "quality-normal-clear-s-llm-shadow-c",
+          "stageName": "route-generation",
+          "scenarioPack": "normal-clear",
+          "workloadSize": "S",
+          "decisionMode": "llm-shadow",
+          "executionMode": "controlled",
+          "authorityPhase": "c",
+          "promptIdentityLocked": true,
+          "promptMetadata": {
+            "promptSpecVersion": "decision-stage-prompt-spec/v1",
+            "stagePromptName": "route-generation",
+            "stagePromptChecksum": "19293ea7d58086450f5fb8933301f6bf8188710cf305a27a7dc23c40fd362292",
+            "packetTemplateVersion": "decision-stage-packet/v2",
+            "packetTemplateChecksum": "7d4a8060a93fbf9cfadeeb94853a2911d4b492b47d1ccabb0741c3eac2457364",
+            "candidateCountSeen": 4,
+            "comparisonPackCoverage": 1.0,
+            "geospatialCoverage": 1.0,
+            "missingContextFlags": [],
+            "visibilityProfile": "route-generation-visibility-v1",
+            "comparisonLens": "ROUTE_FEASIBILITY_LENS",
+            "geospatialLens": "ROUTE_CORRIDOR_LENS",
+            "fallbackReason": ""
+          },
+          "contextCoverageStatus": "PASS",
+          "missingContextFlags": [],
+          "fallbackStatus": "EVIDENCE_GAP",
+          "fallbackSummary": {
+            "fallbackUsed": null,
+            "fallbackReason": "",
+            "brainType": null
+          },
+          "assessmentRichnessStatus": "EVIDENCE_GAP",
+          "assessmentSummary": {
+            "itemCount": 0,
+            "richnessScore": null,
+            "selectedCount": 0,
+            "nonSelectedCount": 0,
+            "selectedNonSelectedEvidencePresent": false
+          },
+          "benchmarkSummary": {},
+          "overallStageVerdict": "EVIDENCE_GAP"
+        }
+      ],
+      "overallStageVerdict": "EVIDENCE_GAP"
+    },
+    {
+      "stageName": "route-critique",
+      "promptIdentity": {},
+      "baselineEvidenceCount": 1,
+      "validationEvidenceCount": 0,
+      "baselineEvidence": [
+        {
+          "rootType": "baseline",
+          "rootPath": "artifacts\\benchmark\\phase2-live3",
+          "traceId": "quality-traffic-shock-s-llm-shadow-c",
+          "stageName": "route-critique",
+          "scenarioPack": "traffic-shock",
+          "workloadSize": "S",
+          "decisionMode": "llm-shadow",
+          "executionMode": "controlled",
+          "authorityPhase": "c",
+          "promptIdentityLocked": false,
+          "promptMetadata": {},
+          "contextCoverageStatus": "EVIDENCE_GAP",
+          "missingContextFlags": [
+            "prompt-metadata-missing"
+          ],
+          "fallbackStatus": "PASS",
+          "fallbackSummary": {
+            "fallbackUsed": false,
+            "fallbackReason": "",
+            "brainType": "LLM"
+          },
+          "assessmentRichnessStatus": "PASS_WITH_LIMITS",
+          "assessmentSummary": {
+            "itemCount": 4,
+            "richnessScore": 0.3077,
+            "selectedCount": 1,
+            "nonSelectedCount": 3,
+            "selectedNonSelectedEvidencePresent": true
+          },
+          "benchmarkSummary": {
+            "artifactPath": "artifacts\\benchmark\\phase2-live3\\dispatch-quality-traffic-shock-s-llm-shadow-controlled-c-20260420-130447.json",
+            "baselineId": "C",
+            "scenarioPack": "traffic-shock",
+            "workloadSize": "S",
+            "decisionMode": "llm-shadow",
+            "executionMode": "controlled",
+            "runAuthorityClass": "LOCAL_NON_AUTHORITY",
+            "authorityEligible": false,
+            "tokenUsageSummary": {
+              "schemaVersion": "dispatch-token-usage-summary/v1",
+              "requestCount": 6,
+              "inputTokens": 20611,
+              "outputTokens": 3983,
+              "totalTokens": 24594
+            },
+            "stageFallbackSummary": {
+              "schemaVersion": "dispatch-stage-fallback-summary/v1",
+              "totalStageOutputs": 9,
+              "totalFallbacks": 1,
+              "fallbackCountsByStage": {
+                "ROUTE_GENERATION": 1
+              },
+              "latestFallbackReasonByStage": {
+                "ROUTE_GENERATION": "provider-http-error"
+              }
+            }
+          },
+          "overallStageVerdict": "EVIDENCE_GAP"
+        }
+      ],
+      "validationEvidence": [],
+      "overallStageVerdict": "EVIDENCE_GAP"
+    },
+    {
+      "stageName": "scenario",
+      "promptIdentity": {},
+      "baselineEvidenceCount": 0,
+      "validationEvidenceCount": 0,
+      "baselineEvidence": [],
+      "validationEvidence": [],
+      "overallStageVerdict": "EVIDENCE_GAP"
+    },
+    {
+      "stageName": "final-selection",
+      "promptIdentity": {},
+      "baselineEvidenceCount": 1,
+      "validationEvidenceCount": 0,
+      "baselineEvidence": [
+        {
+          "rootType": "baseline",
+          "rootPath": "artifacts\\benchmark\\phase2-live3",
+          "traceId": "quality-normal-clear-s-llm-shadow-c",
+          "stageName": "final-selection",
+          "scenarioPack": "normal-clear",
+          "workloadSize": "S",
+          "decisionMode": "llm-shadow",
+          "executionMode": "controlled",
+          "authorityPhase": "c",
+          "promptIdentityLocked": false,
+          "promptMetadata": {},
+          "contextCoverageStatus": "EVIDENCE_GAP",
+          "missingContextFlags": [
+            "prompt-metadata-missing"
+          ],
+          "fallbackStatus": "PASS",
+          "fallbackSummary": {
+            "fallbackUsed": false,
+            "fallbackReason": "",
+            "brainType": "LLM"
+          },
+          "assessmentRichnessStatus": "PASS_WITH_LIMITS",
+          "assessmentSummary": {
+            "itemCount": 3,
+            "richnessScore": 0.3077,
+            "selectedCount": 1,
+            "nonSelectedCount": 2,
+            "selectedNonSelectedEvidencePresent": true
+          },
+          "benchmarkSummary": {
+            "artifactPath": "artifacts\\benchmark\\phase2-live3\\dispatch-quality-normal-clear-s-llm-shadow-controlled-c-20260420-125235.json",
+            "baselineId": "C",
+            "scenarioPack": "normal-clear",
+            "workloadSize": "S",
+            "decisionMode": "llm-shadow",
+            "executionMode": "controlled",
+            "runAuthorityClass": "LOCAL_NON_AUTHORITY",
+            "authorityEligible": false,
+            "tokenUsageSummary": {
+              "schemaVersion": "dispatch-token-usage-summary/v1",
+              "requestCount": 7,
+              "inputTokens": 23645,
+              "outputTokens": 5933,
+              "totalTokens": 29578
+            },
+            "stageFallbackSummary": {
+              "schemaVersion": "dispatch-stage-fallback-summary/v1",
+              "totalStageOutputs": 9,
+              "totalFallbacks": 0,
+              "fallbackCountsByStage": {},
+              "latestFallbackReasonByStage": {}
+            }
+          },
+          "overallStageVerdict": "EVIDENCE_GAP"
+        }
+      ],
+      "validationEvidence": [],
+      "overallStageVerdict": "EVIDENCE_GAP"
+    }
+  ]
+}

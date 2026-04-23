@@ -24,6 +24,15 @@ This is not marked `PASS` yet because authority coverage is intentionally limite
 
 `209de162` remains a keeper on `main`. It improves observability and route trace completeness, but it does not close the remaining authority gate by itself.
 
+`b2c69aa6` is also a keeper on `main`. It changes the LLM lane from a shared prompt framework into a resource-backed multi-stage prompt system with:
+
+- 4 global prompt packs
+- 9 stage system prompts
+- 9 stage packet templates
+- stage-specific mission, visibility, budget, objective, and prompt metadata logging
+
+That architecture shift is implemented. Quality uplift still needs stage-level validation evidence.
+
 ## What Changed
 
 - `NineRouterResponsesClient` now:
@@ -37,10 +46,30 @@ This is not marked `PASS` yet because authority coverage is intentionally limite
 - benchmark runtime/test mapping now preserves:
   - `llm-shadow`
   - `llm-authoritative`
+- prompt rendering now uses:
+  - resource-backed prompt specs
+  - manifest-driven stage mappings
+  - stage-specific visibility, budget, and objective policies
+  - prompt metadata fields such as checksum and context coverage
 - dataset builder now:
   - discovers nested feedback roots under an aggregate benchmark directory
   - recovers trace linkage from filenames for execution, outcome, and route-vector families
   - validates only the filtered trace set instead of failing on unrelated benchmark cells
+
+## Prompt Redesign Validation
+
+Prompt redesign is now implemented at the runtime layer, but it is tracked separately from authority closure.
+
+Validation rail:
+
+- contract: [dispatch_v2_prompt_redesign_validation.md](/E:/Code%20_Project/IntelligentRouteX/docs/dispatch_v2_prompt_redesign_validation.md)
+- report artifact: [prompt_redesign_validation_report.md](/E:/Code%20_Project/IntelligentRouteX/artifacts/benchmark/prompt-redesign/prompt_redesign_validation_report.md)
+
+Interpretation:
+
+- implementation status: `DONE`
+- stage-level quality evidence: `IN_PROGRESS`
+- authority impact claim: `NOT_YET_CLOSED`
 
 ## Validation Completed
 
@@ -148,6 +177,7 @@ This confirms the builder works across:
   - `pair-bundle`
   - `final-selection`
 - `driver`, `route-critique`, `scenario`, and `route-generation` are not yet promoted to clean authoritative coverage in this report
+- prompt redesign quality uplift is not considered proven until the prompt redesign validation rail records stage-level `PASS` or `PASS_WITH_LIMITS` evidence for the target stages
 - route-vector traces are not emitted in every scenario/mode cell, so `route-vector-availability=required` intentionally filters out trace roots without those families
 - `llm-shadow` still exhibits route-generation fallback in some live cells; this does not block the minimum gate but it does block broader authority expansion
 - heavy quality harness execution on Windows is still execution-sensitive; timeout-prone runs must be classified before treating them as logic regressions
