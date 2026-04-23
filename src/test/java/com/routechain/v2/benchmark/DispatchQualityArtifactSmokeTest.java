@@ -3,10 +3,13 @@ package com.routechain.v2.benchmark;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.routechain.v2.perf.DispatchPerfBenchmarkHarness;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -15,6 +18,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DispatchQualityArtifactSmokeTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().findAndRegisterModules();
     private final DispatchQualityBenchmarkHarness harness = new DispatchQualityBenchmarkHarness();
+
+    @TempDir
+    Path tempDir;
 
     @Test
     void writesQualityBenchmarkArtifactsForRequestedCell() throws Exception {
@@ -76,6 +82,45 @@ class DispatchQualityArtifactSmokeTest {
             assertNotNull(artifacts.comparisonJsonPath());
             assertTrue(artifacts.comparisonJsonPath().toFile().isFile());
             assertTrue(artifacts.comparisonCsvPath().toFile().isFile());
+        }
+    }
+
+    @Test
+    void repeatedBenchmarkWritesProduceDistinctRawJsonArtifacts() throws Exception {
+        Path outputDir = Path.of(tempDir.toString(), "repeat-artifacts");
+        DispatchQualityBenchmarkRun firstRun = harness.benchmark(new DispatchQualityBenchmarkHarness.BenchmarkRequest(
+                List.of(DispatchPerfBenchmarkHarness.BaselineId.C),
+                DispatchPerfBenchmarkHarness.WorkloadSize.S,
+                DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
+                DispatchBenchmarkDecisionMode.LEGACY,
+                "v2",
+                DispatchQualityBenchmarkHarness.ExecutionMode.CONTROLLED,
+                DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
+                false,
+                false,
+                outputDir));
+        Thread.sleep(5L);
+        DispatchQualityBenchmarkRun secondRun = harness.benchmark(new DispatchQualityBenchmarkHarness.BenchmarkRequest(
+                List.of(DispatchPerfBenchmarkHarness.BaselineId.C),
+                DispatchPerfBenchmarkHarness.WorkloadSize.S,
+                DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
+                DispatchBenchmarkDecisionMode.LEGACY,
+                "v2",
+                DispatchQualityBenchmarkHarness.ExecutionMode.CONTROLLED,
+                DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
+                false,
+                false,
+                outputDir));
+
+        DispatchQualityArtifactWriter.BenchmarkArtifacts firstArtifacts = DispatchQualityArtifactWriter.writeBenchmarkRun(firstRun, outputDir);
+        DispatchQualityArtifactWriter.BenchmarkArtifacts secondArtifacts = DispatchQualityArtifactWriter.writeBenchmarkRun(secondRun, outputDir);
+
+        Set<Path> rawJsonPaths = new HashSet<>();
+        rawJsonPaths.addAll(firstArtifacts.rawJsonPaths());
+        rawJsonPaths.addAll(secondArtifacts.rawJsonPaths());
+        assertTrue(rawJsonPaths.size() >= 2);
+        try (var paths = Files.list(outputDir)) {
+            assertTrue(paths.filter(path -> path.getFileName().toString().endsWith(".json")).count() >= 2);
         }
     }
 

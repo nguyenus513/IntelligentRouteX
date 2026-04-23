@@ -168,6 +168,10 @@ class RunDispatchFullAdaptiveValidationTest(unittest.TestCase):
                     out_dir / f"dispatch-quality-{cell.scenario_pack}-s-llm-authoritative-v2-controlled-c-20260423-000001.json",
                     benchmark_payload(cell.scenario_pack),
                 )
+                (out_dir / f"dispatch-quality-{cell.scenario_pack}-s-llm-authoritative-v2-controlled-c-20260423-000001.md").write_text(
+                    "# result",
+                    encoding="utf-8",
+                )
                 if cell.root_type == "adaptive":
                     feedback_root = out_dir / "feedback" / cell.scenario_pack / "s" / "controlled" / "llm-authoritative" / "v2" / "c" / "decision-stage" / "adaptive_compute_trace"
                     write_json(
@@ -193,6 +197,75 @@ class RunDispatchFullAdaptiveValidationTest(unittest.TestCase):
             self.assertEqual(8, len(calls))
             self.assertEqual({"adaptive", "comparison"}, {call[0] for call in calls})
             self.assertTrue((output_dir / "full_adaptive_validation_report.md").is_file())
+
+    def test_rerun_mode_uses_only_fresh_artifacts_not_stale_root_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "out"
+            live_adaptive_root = output_dir / "live" / "full-adaptive"
+            stale_path = live_adaptive_root / "dispatch-quality-normal-clear-s-llm-authoritative-v2-controlled-c-20260423-000000.json"
+            write_json(stale_path, benchmark_payload("normal-clear"))
+
+            def fake_run_validation_cell(cell, out_dir, runner=None):
+                write_json(
+                    out_dir / f"dispatch-quality-{cell.scenario_pack}-s-llm-authoritative-v2-controlled-c-20260423-000001.json",
+                    benchmark_payload(cell.scenario_pack, latency_offset_ms=1),
+                )
+                (out_dir / f"dispatch-quality-{cell.scenario_pack}-s-llm-authoritative-v2-controlled-c-20260423-000001.md").write_text(
+                    "# result",
+                    encoding="utf-8",
+                )
+                if cell.root_type == "adaptive":
+                    feedback_root = out_dir / "feedback" / cell.scenario_pack / "s" / "controlled" / "llm-authoritative" / "v2" / "c" / "decision-stage" / "adaptive_compute_trace"
+                    write_json(
+                        feedback_root / f"trace-{cell.scenario_pack}.json",
+                        adaptive_trace_payload(f"trace-{cell.scenario_pack}", "route-proposal-pool", "ml-routefinder-worker", False, "routefinder-not-needed"),
+                    )
+                return 0
+
+            original = validation_runner.run_validation_cell
+            try:
+                validation_runner.run_validation_cell = fake_run_validation_cell
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    exit_code = validation_runner.main([
+                        "--output-dir", str(output_dir),
+                        "--mode", "paired",
+                        "--rerun-cells",
+                    ])
+            finally:
+                validation_runner.run_validation_cell = original
+
+            self.assertEqual(0, exit_code)
+            payload = json.loads(next(output_dir.glob("full_adaptive_validation-*.json")).read_text(encoding="utf-8"))
+            normal_clear_case = next(case for case in payload["cases"] if case["scenarioPack"] == "normal-clear")
+            artifact_path = normal_clear_case["adaptive"]["benchmark"]["artifactPath"]
+            self.assertTrue(artifact_path.endswith("20260423-000001.json"))
+            self.assertNotEqual(str(stale_path), artifact_path)
+            self.assertTrue(normal_clear_case["adaptive"]["benchmark"]["artifactLastModifiedAt"])
+
+    def test_rerun_mode_fails_when_cell_emits_no_fresh_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "out"
+
+            def fake_run_validation_cell(cell, out_dir, runner=None):
+                return 0
+
+            original = validation_runner.run_validation_cell
+            try:
+                validation_runner.run_validation_cell = fake_run_validation_cell
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    exit_code = validation_runner.main([
+                        "--output-dir", str(output_dir),
+                        "--mode", "adaptive-only",
+                        "--rerun-cells",
+                    ])
+            finally:
+                validation_runner.run_validation_cell = original
+
+            output = stdout.getvalue()
+            self.assertEqual(1, exit_code)
+            self.assertIn("completed without fresh benchmark JSON artifacts", output)
 
 
 if __name__ == "__main__":

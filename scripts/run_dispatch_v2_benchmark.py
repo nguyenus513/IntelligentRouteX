@@ -127,11 +127,25 @@ def artifact_delta(before: CellArtifacts, after: CellArtifacts) -> CellArtifacts
     )
 
 
-def ensure_cell_artifacts(cell: BenchmarkCell, delta: CellArtifacts) -> None:
+def artifact_paths_repr(paths: Sequence[Path]) -> str:
+    if not paths:
+        return "[]"
+    return "[" + ", ".join(str(path) for path in paths) + "]"
+
+
+def ensure_cell_artifacts(cell: BenchmarkCell, output_dir: Path, before: CellArtifacts, after: CellArtifacts, delta: CellArtifacts) -> None:
     if not delta.json_paths:
-        raise RuntimeError(f"{cell_label(cell)} completed without new JSON artifacts")
+        raise RuntimeError(
+            f"{cell_label(cell)} completed without new JSON artifacts "
+            f"(output-root={output_dir} before-json={len(before.json_paths)} "
+            f"after-json={len(after.json_paths)} new-json={artifact_paths_repr(delta.json_paths)})"
+        )
     if not delta.markdown_paths:
-        raise RuntimeError(f"{cell_label(cell)} completed without new Markdown artifacts")
+        raise RuntimeError(
+            f"{cell_label(cell)} completed without new Markdown artifacts "
+            f"(output-root={output_dir} before-md={len(before.markdown_paths)} "
+            f"after-md={len(after.markdown_paths)} new-md={artifact_paths_repr(delta.markdown_paths)})"
+        )
 
 
 def collect_results(output_dir: Path) -> List[dict]:
@@ -232,12 +246,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         after = artifact_snapshot(output_dir)
         try:
             delta = artifact_delta(before, after)
-            ensure_cell_artifacts(cell, delta)
+            ensure_cell_artifacts(cell, output_dir, before, after, delta)
             print(f"[CELL DISPATCH COMPLETED] {cell_label(cell)} returncode=0")
             summary_path = write_summary(collect_results(output_dir), output_dir)
             print(
                 f"[CELL ARTIFACT WRITTEN] {cell_label(cell)} "
                 f"json={len(delta.json_paths)} md={len(delta.markdown_paths)} csv={len(delta.csv_paths)}"
+            )
+            print(
+                f"[CELL ARTIFACT PATHS] {cell_label(cell)} "
+                f"output-root={output_dir} "
+                f"json={artifact_paths_repr(delta.json_paths)} "
+                f"md={artifact_paths_repr(delta.markdown_paths)} "
+                f"csv={artifact_paths_repr(delta.csv_paths)}"
             )
             print(f"[CELL SUMMARY UPDATED] {summary_path}")
         except Exception as error:

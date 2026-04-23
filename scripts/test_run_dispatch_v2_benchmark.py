@@ -117,6 +117,7 @@ class RunDispatchBenchmarkTest(unittest.TestCase):
             self.assertEqual(0, exit_code)
             self.assertEqual(6, calls["count"])
             self.assertIn("[CELL ARTIFACT WRITTEN]", output)
+            self.assertIn("[CELL ARTIFACT PATHS]", output)
             self.assertIn("[CELL SUMMARY UPDATED]", output)
             self.assertTrue((output_dir / "dispatch-quality-summary.md").is_file())
 

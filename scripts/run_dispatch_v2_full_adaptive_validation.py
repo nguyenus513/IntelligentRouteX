@@ -58,6 +58,27 @@ class AdaptiveTraceRow:
     payload: dict
 
 
+@dataclass(frozen=True)
+class ArtifactSet:
+    json_paths: Tuple[Path, ...]
+    markdown_paths: Tuple[Path, ...]
+    csv_paths: Tuple[Path, ...]
+
+
+@dataclass(frozen=True)
+class ValidationCellArtifacts:
+    cell: ValidationCell
+    output_root: Path
+    benchmark_artifacts: ArtifactSet
+    adaptive_trace_paths: Tuple[Path, ...]
+    collected_at: datetime
+
+
+@dataclass(frozen=True)
+class TraceSnapshot:
+    timestamps_by_path: Dict[Path, int]
+
+
 def benchmark_command() -> List[str]:
     if os.name == "nt" and shutil.which("py"):
         return ["py", "-3.13", str(REPO_ROOT / "scripts" / "run_dispatch_v2_benchmark.py")]
@@ -82,6 +103,58 @@ def git_commit() -> str:
 
 def json_read(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def artifact_snapshot(output_root: Path) -> ArtifactSet:
+    if not output_root.exists():
+        return ArtifactSet((), (), ())
+    return ArtifactSet(
+        tuple(sorted(output_root.glob("dispatch-quality*.json"))),
+        tuple(sorted(output_root.glob("dispatch-quality*.md"))),
+        tuple(sorted(output_root.glob("dispatch-quality*.csv"))),
+    )
+
+
+def trace_snapshot(output_root: Path) -> TraceSnapshot:
+    if not output_root.exists():
+        return TraceSnapshot({})
+    timestamps_by_path = {}
+    for path in sorted(output_root.rglob("*.json")):
+        if "adaptive_compute_trace" not in {part.lower() for part in path.parts}:
+            continue
+        timestamps_by_path[path] = path.stat().st_mtime_ns
+    return TraceSnapshot(timestamps_by_path)
+
+
+def artifact_delta(before: ArtifactSet, after: ArtifactSet) -> ArtifactSet:
+    return ArtifactSet(
+        tuple(path for path in after.json_paths if path not in before.json_paths),
+        tuple(path for path in after.markdown_paths if path not in before.markdown_paths),
+        tuple(path for path in after.csv_paths if path not in before.csv_paths),
+    )
+
+
+def trace_delta(before: TraceSnapshot, after: TraceSnapshot) -> Tuple[Path, ...]:
+    fresh_paths = []
+    for path, modified_at_ns in after.timestamps_by_path.items():
+        if path not in before.timestamps_by_path or modified_at_ns > before.timestamps_by_path[path]:
+            fresh_paths.append(path)
+    return tuple(fresh_paths)
+
+
+def artifact_paths_repr(paths: Sequence[Path]) -> str:
+    if not paths:
+        return "[]"
+    return "[" + ", ".join(str(path) for path in paths) + "]"
+
+
+def artifact_last_modified_at(path: str) -> str:
+    if not path:
+        return ""
+    artifact_path = Path(path)
+    if not artifact_path.exists():
+        return ""
+    return datetime.fromtimestamp(artifact_path.stat().st_mtime, tz=timezone.utc).isoformat()
 
 
 def case_cells(mode: str, decision_mode: str, prompt_family: str, profile: str) -> List[ValidationCell]:
@@ -131,11 +204,9 @@ def run_validation_cell(cell: ValidationCell, output_dir: Path, runner=subproces
     return int(completed.returncode)
 
 
-def collect_benchmark_results(root: Path, root_type: str) -> Dict[Tuple[str, str, str, str, str], dict]:
+def collect_benchmark_results_from_paths(paths: Sequence[Path], root_type: str, root_path: Path) -> Dict[Tuple[str, str, str, str, str], dict]:
     indexed: Dict[Tuple[str, str, str, str, str], dict] = {}
-    if not root.exists():
-        return indexed
-    for path in sorted(root.rglob("dispatch-quality*.json")):
+    for path in sorted(paths):
         payload = json_read(path)
         if "baselineId" not in payload:
             continue
@@ -147,10 +218,16 @@ def collect_benchmark_results(root: Path, root_type: str) -> Dict[Tuple[str, str
             str(payload.get("promptFamily", "v2")),
         )
         payload["_rootType"] = root_type
-        payload["_rootPath"] = str(root)
+        payload["_rootPath"] = str(root_path)
         payload["_artifactPath"] = str(path)
         indexed[key] = payload
     return indexed
+
+
+def collect_benchmark_results(root: Path, root_type: str) -> Dict[Tuple[str, str, str, str, str], dict]:
+    if not root.exists():
+        return {}
+    return collect_benchmark_results_from_paths(tuple(sorted(root.rglob("dispatch-quality*.json"))), root_type, root)
 
 
 def parse_adaptive_trace(path: Path, root_type: str, root_path: Path) -> Optional[AdaptiveTraceRow]:
@@ -190,6 +267,17 @@ def collect_adaptive_rows(root: Path, root_type: str) -> Dict[Tuple[str, str, st
         return indexed
     for path in sorted(root.rglob("*.json")):
         row = parse_adaptive_trace(path, root_type, root)
+        if row is None:
+            continue
+        key = (row.scenario_pack, row.size, row.execution_mode, row.decision_mode, row.prompt_family)
+        indexed.setdefault(key, []).append(row)
+    return indexed
+
+
+def collect_adaptive_rows_from_paths(paths: Sequence[Path], root_type: str, root_path: Path) -> Dict[Tuple[str, str, str, str, str], List[AdaptiveTraceRow]]:
+    indexed: Dict[Tuple[str, str, str, str, str], List[AdaptiveTraceRow]] = {}
+    for path in sorted(paths):
+        row = parse_adaptive_trace(path, root_type, root_path)
         if row is None:
             continue
         key = (row.scenario_pack, row.size, row.execution_mode, row.decision_mode, row.prompt_family)
@@ -299,9 +387,12 @@ def summarize_traces(rows: Iterable[AdaptiveTraceRow]) -> dict:
 def benchmark_summary(result: Optional[dict]) -> dict:
     if not result:
         return {}
+    artifact_path = str(result.get("_artifactPath", ""))
     metrics = result.get("metrics", {}) if isinstance(result.get("metrics"), dict) else {}
     return {
-        "artifactPath": result.get("_artifactPath", ""),
+        "artifactPath": artifact_path,
+        "artifactLastModifiedAt": artifact_last_modified_at(artifact_path),
+        "rootPath": result.get("_rootPath", ""),
         "mlAttachStatus": result.get("mlAttachStatus", ""),
         "timeoutPhase": result.get("timeoutPhase", ""),
         "notes": result.get("notes", []),
@@ -323,6 +414,8 @@ def determine_verdict(adaptive_summary: dict, comparison_summary: dict) -> Tuple
     reasons: List[str] = []
     if not adaptive_benchmark:
         return "EVIDENCE_GAP", ["adaptive-benchmark-missing"]
+    if not adaptive_benchmark.get("artifactPath"):
+        return "EVIDENCE_GAP", ["fresh-artifact-missing"]
     if not adaptive_trace or adaptive_trace.get("totalAdaptiveDecisions", 0) == 0:
         return "EVIDENCE_GAP", ["adaptive-trace-missing"]
     if adaptive_benchmark.get("mlAttachStatus") == "ML_ATTACH_FAIL":
@@ -435,6 +528,12 @@ def markdown_report(payload: dict) -> str:
             f"robustUtility=`{adaptive_benchmark.get('robustUtilityAverage', 'n/a')}` "
             f"mlAttachStatus=`{adaptive_benchmark.get('mlAttachStatus', 'n/a')}`"
         )
+        if adaptive_benchmark.get("artifactPath"):
+            lines.append(
+                f"- adaptive artifact: path=`{adaptive_benchmark.get('artifactPath')}` "
+                f"modifiedAt=`{adaptive_benchmark.get('artifactLastModifiedAt', '')}` "
+                f"root=`{adaptive_benchmark.get('rootPath', '')}`"
+            )
         lines.append(
             f"- adaptive trace: total=`{adaptive_trace.get('totalAdaptiveDecisions', 0)}` "
             f"skipped=`{adaptive_trace.get('skippedCount', 0)}` "
@@ -448,6 +547,12 @@ def markdown_report(payload: dict) -> str:
                 f"executed=`{comparison.get('executedAssignmentCount', 'n/a')}` "
                 f"robustUtility=`{comparison.get('robustUtilityAverage', 'n/a')}`"
             )
+            if comparison.get("artifactPath"):
+                lines.append(
+                    f"- comparison artifact: path=`{comparison.get('artifactPath')}` "
+                    f"modifiedAt=`{comparison.get('artifactLastModifiedAt', '')}` "
+                    f"root=`{comparison.get('rootPath', '')}`"
+                )
         for worker_name, summary in sorted(adaptive_trace.get("workers", {}).items()):
             lines.append(
                 f"- worker `{worker_name}` decisions=`{summary['totalDecisions']}` "
@@ -481,16 +586,37 @@ def collect_case_reports(
     comparison_roots: Sequence[Path],
     decision_mode: str,
     prompt_family: str,
+    rerun_artifacts: Optional[Sequence[ValidationCellArtifacts]] = None,
 ) -> List[dict]:
     adaptive_results: Dict[Tuple[str, str, str, str, str], dict] = {}
     adaptive_trace_index: Dict[Tuple[str, str, str, str, str], List[AdaptiveTraceRow]] = {}
     comparison_results: Dict[Tuple[str, str, str, str, str], dict] = {}
-    for root in adaptive_roots:
-        adaptive_results.update(collect_benchmark_results(root, "adaptive"))
-        for key, rows in collect_adaptive_rows(root, "adaptive").items():
-            adaptive_trace_index.setdefault(key, []).extend(rows)
-    for root in comparison_roots:
-        comparison_results.update(collect_benchmark_results(root, "comparison"))
+    if rerun_artifacts:
+        for artifact_group in rerun_artifacts:
+            if artifact_group.cell.root_type == "adaptive":
+                adaptive_results.update(collect_benchmark_results_from_paths(
+                    artifact_group.benchmark_artifacts.json_paths,
+                    "adaptive",
+                    artifact_group.output_root,
+                ))
+                for key, rows in collect_adaptive_rows_from_paths(
+                        artifact_group.adaptive_trace_paths,
+                        "adaptive",
+                        artifact_group.output_root).items():
+                    adaptive_trace_index.setdefault(key, []).extend(rows)
+            else:
+                comparison_results.update(collect_benchmark_results_from_paths(
+                    artifact_group.benchmark_artifacts.json_paths,
+                    "comparison",
+                    artifact_group.output_root,
+                ))
+    else:
+        for root in adaptive_roots:
+            adaptive_results.update(collect_benchmark_results(root, "adaptive"))
+            for key, rows in collect_adaptive_rows(root, "adaptive").items():
+                adaptive_trace_index.setdefault(key, []).extend(rows)
+        for root in comparison_roots:
+            comparison_results.update(collect_benchmark_results(root, "comparison"))
     return [
         build_case_report(scenario_pack, size, decision_mode, prompt_family, adaptive_results, comparison_results, adaptive_trace_index)
         for scenario_pack, size in TARGET_CASES
@@ -525,6 +651,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     rerun_executed = False
+    rerun_artifacts: List[ValidationCellArtifacts] = []
     if args.rerun_cells:
         rerun_executed = True
         for cell in cells:
@@ -536,13 +663,56 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if live_root not in comparison_roots:
                     comparison_roots.append(live_root)
             print(f"[CELL STARTED] root-type={cell.root_type} scenario-pack={cell.scenario_pack}")
+            before_artifacts = artifact_snapshot(live_root)
+            before_traces = trace_snapshot(live_root) if cell.root_type == "adaptive" else TraceSnapshot({})
             exit_code = run_validation_cell(cell, live_root)
             if exit_code != 0:
                 print(f"[CELL FAILED] root-type={cell.root_type} scenario-pack={cell.scenario_pack} exit={exit_code}")
                 return exit_code
+            after_artifacts = artifact_snapshot(live_root)
+            delta = artifact_delta(before_artifacts, after_artifacts)
+            if not delta.json_paths:
+                print(
+                    f"[CELL FAILED] root-type={cell.root_type} scenario-pack={cell.scenario_pack} "
+                    f"completed without fresh benchmark JSON artifacts "
+                    f"output-root={live_root} before-json={len(before_artifacts.json_paths)} "
+                    f"after-json={len(after_artifacts.json_paths)}"
+                )
+                return 1
+            if not delta.markdown_paths:
+                print(
+                    f"[CELL FAILED] root-type={cell.root_type} scenario-pack={cell.scenario_pack} "
+                    f"completed without fresh benchmark Markdown artifacts "
+                    f"output-root={live_root} before-md={len(before_artifacts.markdown_paths)} "
+                    f"after-md={len(after_artifacts.markdown_paths)}"
+                )
+                return 1
+            trace_paths = ()
+            if cell.root_type == "adaptive":
+                trace_paths = trace_delta(before_traces, trace_snapshot(live_root))
+            rerun_artifacts.append(ValidationCellArtifacts(
+                cell=cell,
+                output_root=live_root,
+                benchmark_artifacts=delta,
+                adaptive_trace_paths=trace_paths,
+                collected_at=datetime.now(timezone.utc),
+            ))
             print(f"[CELL COMPLETED] root-type={cell.root_type} scenario-pack={cell.scenario_pack}")
+            print(
+                f"[CELL ARTIFACT PATHS] root-type={cell.root_type} scenario-pack={cell.scenario_pack} "
+                f"benchmark-json={artifact_paths_repr(delta.json_paths)} "
+                f"benchmark-md={artifact_paths_repr(delta.markdown_paths)} "
+                f"trace-json={artifact_paths_repr(trace_paths)} "
+                f"report-input-root={live_root}"
+            )
 
-    cases = collect_case_reports(adaptive_roots, comparison_roots, args.decision_mode, args.prompt_family)
+    cases = collect_case_reports(
+        adaptive_roots,
+        comparison_roots,
+        args.decision_mode,
+        args.prompt_family,
+        rerun_artifacts=rerun_artifacts if rerun_executed else None,
+    )
     payload = {
         "schemaVersion": "dispatch-full-adaptive-validation/v1",
         "generatedAt": datetime.now(timezone.utc).isoformat(),

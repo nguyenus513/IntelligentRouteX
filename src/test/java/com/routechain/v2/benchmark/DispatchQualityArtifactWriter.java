@@ -13,7 +13,7 @@ import java.util.List;
 
 public final class DispatchQualityArtifactWriter {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().findAndRegisterModules();
-    private static final DateTimeFormatter FILE_TS = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+    private static final DateTimeFormatter FILE_TS = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS")
             .withZone(ZoneOffset.UTC);
 
     private DispatchQualityArtifactWriter() {
@@ -320,7 +320,7 @@ public final class DispatchQualityArtifactWriter {
     }
 
     private static String benchmarkStem(DispatchQualityBenchmarkResult result) {
-        return "dispatch-quality-%s-%s-%s-%s-%s-%s".formatted(
+        return "dispatch-quality-%s-%s-%s-%s-%s-%s-%s".formatted(
                 result.scenarioPack().toLowerCase(),
                 result.workloadSize().toLowerCase(),
                 result.decisionMode().toLowerCase(),
