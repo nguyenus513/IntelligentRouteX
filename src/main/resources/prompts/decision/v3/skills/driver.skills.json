@@ -1,0 +1,15 @@
+{
+  "skillSetVersion": "decision-stage-skill-set/v1",
+  "stageName": "driver",
+  "skills": [
+    {
+      "skillId": "deadhead_check",
+      "description": "Prefer low-deadhead drivers with better corridor entry fit.",
+      "requiredInputs": ["candidateWindow", "geospatialContext", "sessionRefs"],
+      "forbiddenAssumptions": ["do not finalize execution", "do not invent new drivers"],
+      "outputEmphasis": ["driver fit", "deadhead", "corridor entry"],
+      "recommendedReasonCodes": ["driver-fit-strong", "deadhead-high"],
+      "allowedToolIds": ["get_driver_details"]
+    }
+  ]
+}

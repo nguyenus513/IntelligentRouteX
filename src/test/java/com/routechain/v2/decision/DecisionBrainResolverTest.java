@@ -17,7 +17,7 @@ class DecisionBrainResolverTest {
                 properties,
                 new LegacyMlBrain(),
                 new LlmBrain(
-                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm()), properties.getDecision(), new DecisionStageLogger(properties)),
+                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm()), properties.getDecision(), new DecisionStageLogger(properties), new NoOpDecisionSessionStore()),
                         properties.getDecision().getLlm(),
                         new LegacyMlBrain(),
                         new DecisionStageLogger(properties),
@@ -41,7 +41,7 @@ class DecisionBrainResolverTest {
                 properties,
                 new LegacyMlBrain(),
                 new LlmBrain(
-                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm()), properties.getDecision(), new DecisionStageLogger(properties)),
+                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm()), properties.getDecision(), new DecisionStageLogger(properties), new NoOpDecisionSessionStore()),
                         properties.getDecision().getLlm(),
                         new LegacyMlBrain(),
                         new DecisionStageLogger(properties),
@@ -68,7 +68,7 @@ class DecisionBrainResolverTest {
                 properties,
                 new LegacyMlBrain(),
                 new LlmBrain(
-                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm()), properties.getDecision(), new DecisionStageLogger(properties)),
+                        new LlmStageScheduler(new NineRouterResponsesClient(properties.getDecision().getLlm()), properties.getDecision(), new DecisionStageLogger(properties), new NoOpDecisionSessionStore()),
                         properties.getDecision().getLlm(),
                         new LegacyMlBrain(),
                         new DecisionStageLogger(properties),

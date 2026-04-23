@@ -1,0 +1,15 @@
+{
+  "skillSetVersion": "decision-stage-skill-set/v1",
+  "stageName": "scenario",
+  "skills": [
+    {
+      "skillId": "overlay_robustness",
+      "description": "Score proposal resilience under traffic, weather, and burst overlays.",
+      "requiredInputs": ["candidateWindow", "comparisonPack", "geospatialContext", "sessionRefs"],
+      "forbiddenAssumptions": ["do not ignore overlays", "do not invent new proposals"],
+      "outputEmphasis": ["robustness", "burst sensitivity"],
+      "recommendedReasonCodes": ["scenario-robust", "burst-sensitive"],
+      "allowedToolIds": ["get_scenario_breakdown"]
+    }
+  ]
+}

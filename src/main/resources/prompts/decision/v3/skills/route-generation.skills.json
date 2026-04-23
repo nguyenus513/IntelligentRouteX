@@ -1,0 +1,15 @@
+{
+  "skillSetVersion": "decision-stage-skill-set/v1",
+  "stageName": "route-generation",
+  "skills": [
+    {
+      "skillId": "route_diversity_policy",
+      "description": "Generate feasible route options that are meaningfully different.",
+      "requiredInputs": ["candidateWindow", "referenceFrame", "geospatialContext", "sessionRefs"],
+      "forbiddenAssumptions": ["do not critique as final dominance", "do not change candidate universe"],
+      "outputEmphasis": ["feasibility", "diversity", "route refs"],
+      "recommendedReasonCodes": ["route-feasible", "route-diverse"],
+      "allowedToolIds": ["get_driver_details", "get_route_vector_summary"]
+    }
+  ]
+}

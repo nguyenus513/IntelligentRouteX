@@ -1,0 +1,15 @@
+{
+  "skillSetVersion": "decision-stage-skill-set/v1",
+  "stageName": "pair-bundle",
+  "skills": [
+    {
+      "skillId": "support_reading",
+      "description": "Read pair support, compactness, and bundle viability signals together.",
+      "requiredInputs": ["candidateWindow", "comparisonPack", "geospatialContext"],
+      "forbiddenAssumptions": ["do not infer drivers", "do not assume route feasibility"],
+      "outputEmphasis": ["compactness", "spread", "support"],
+      "recommendedReasonCodes": ["pair-support-strong", "bundle-spread-risk"],
+      "allowedToolIds": ["get_bundle_details"]
+    }
+  ]
+}

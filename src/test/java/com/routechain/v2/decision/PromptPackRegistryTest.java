@@ -1,6 +1,7 @@
 package com.routechain.v2.decision;
 
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.routechain.config.RouteChainDispatchV2Properties;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -36,6 +37,26 @@ class PromptPackRegistryTest {
 
         assertEquals(12, ((Number) ((Map<?, ?>) rendered.metadata().get("budgetApplied")).get("candidateLimit")).intValue());
         assertEquals(12, ((Number) rendered.metadata().get("candidateCountSeen")).intValue());
+    }
+
+    @Test
+    void rendersV3PromptWithSkillsAndSessionRefs() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        properties.getDecision().getLlm().setPromptFamily("v3");
+        PromptPackRegistry registry = new PromptPackRegistry(
+                JsonMapper.builder().findAndAddModules().build(),
+                properties.getDecision().getLlm(),
+                new FixedDecisionSessionStore());
+
+        PromptPackRegistry.RenderedPrompt rendered = registry.renderPrompt(stageInput(DecisionStageName.ROUTE_CRITIQUE));
+
+        assertTrue(rendered.systemPrompt().contains("SKILL SET VERSION"));
+        assertTrue(rendered.systemPrompt().contains("vector_compare"));
+        assertTrue(rendered.dynamicPrompt().contains("decision-stage-packet/v3"));
+        assertTrue(rendered.dynamicPrompt().contains("\"sessionRefs\""));
+        assertEquals("decision-stage-prompt-spec/v3", rendered.metadata().get("promptSpecVersion"));
+        assertEquals("decision-stage-skill-set/v1", rendered.metadata().get("skillSetVersion"));
+        assertEquals(4, ((Number) rendered.metadata().get("sessionRefCount")).intValue());
     }
 
     private DecisionStageInputV1 stageInput(DecisionStageName stageName) {
@@ -90,5 +111,17 @@ class PromptPackRegistryTest {
                 Map.of("previousStage", "observation-pack"),
                 Map.of("correctness", 0.35),
                 List.of("observation-pack"));
+    }
+
+    private static final class FixedDecisionSessionStore extends NoOpDecisionSessionStore {
+        @Override
+        public SessionContext resolveContext(DecisionStageInputV1 input) {
+            return new SessionContext(Map.of(
+                    "priorStageResultRefs", List.of(Map.of("stageName", "route-generation")),
+                    "routeVectorRefs", List.of("proposal-1"),
+                    "tileContextRefs", List.of("tile-1"),
+                    "selectedCandidateRefs", List.of("proposal-1"),
+                    "critiqueRefs", List.of("route-dominated")), 4);
+        }
     }
 }

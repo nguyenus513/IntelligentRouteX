@@ -1,0 +1,56 @@
+{
+  "promptSpecVersion": "decision-stage-prompt-spec/v3",
+  "packetTemplateVersion": "decision-stage-packet/v3",
+  "skillSetVersion": "decision-stage-skill-set/v1",
+  "requiredGlobalPacks": [
+    "brain_guardrails.md",
+    "decision_policy.md",
+    "output_contract.md",
+    "reason_code_ontology.md"
+  ],
+  "stages": {
+    "observation-pack": {
+      "systemPrompt": "stages/observation-pack.system.md",
+      "packetTemplate": "packets/observation-pack.user.json.tmpl"
+    },
+    "pair-bundle": {
+      "systemPrompt": "stages/pair-bundle.system.md",
+      "packetTemplate": "packets/pair-bundle.user.json.tmpl",
+      "skillSet": "skills/pair-bundle.skills.json"
+    },
+    "anchor": {
+      "systemPrompt": "stages/anchor.system.md",
+      "packetTemplate": "packets/anchor.user.json.tmpl",
+      "skillSet": "skills/anchor.skills.json"
+    },
+    "driver": {
+      "systemPrompt": "stages/driver.system.md",
+      "packetTemplate": "packets/driver.user.json.tmpl",
+      "skillSet": "skills/driver.skills.json"
+    },
+    "route-generation": {
+      "systemPrompt": "stages/route-generation.system.md",
+      "packetTemplate": "packets/route-generation.user.json.tmpl",
+      "skillSet": "skills/route-generation.skills.json"
+    },
+    "route-critique": {
+      "systemPrompt": "stages/route-critique.system.md",
+      "packetTemplate": "packets/route-critique.user.json.tmpl",
+      "skillSet": "skills/route-critique.skills.json"
+    },
+    "scenario": {
+      "systemPrompt": "stages/scenario.system.md",
+      "packetTemplate": "packets/scenario.user.json.tmpl",
+      "skillSet": "skills/scenario.skills.json"
+    },
+    "final-selection": {
+      "systemPrompt": "stages/final-selection.system.md",
+      "packetTemplate": "packets/final-selection.user.json.tmpl",
+      "skillSet": "skills/final-selection.skills.json"
+    },
+    "safety-execute": {
+      "systemPrompt": "stages/safety-execute.system.md",
+      "packetTemplate": "packets/safety-execute.user.json.tmpl"
+    }
+  }
+}

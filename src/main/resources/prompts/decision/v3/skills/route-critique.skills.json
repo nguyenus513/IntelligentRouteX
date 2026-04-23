@@ -1,0 +1,15 @@
+{
+  "skillSetVersion": "decision-stage-skill-set/v1",
+  "stageName": "route-critique",
+  "skills": [
+    {
+      "skillId": "vector_compare",
+      "description": "Compare route vectors using dominance, regret, and realism.",
+      "requiredInputs": ["candidateWindow", "comparisonPack", "geospatialContext", "sessionRefs"],
+      "forbiddenAssumptions": ["do not invent routes", "do not solve final selection"],
+      "outputEmphasis": ["dominance", "regret", "route-vector refs"],
+      "recommendedReasonCodes": ["route-dominated", "route-robust"],
+      "allowedToolIds": ["get_route_vector_summary"]
+    }
+  ]
+}

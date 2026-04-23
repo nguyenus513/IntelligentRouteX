@@ -11,11 +11,14 @@ import com.routechain.v2.context.WeatherContextService;
 import com.routechain.v2.decision.ContextAssembler;
 import com.routechain.v2.decision.ContextToolRegistry;
 import com.routechain.v2.decision.DecisionBrainResolver;
+import com.routechain.v2.decision.DecisionSessionStore;
 import com.routechain.v2.decision.DecisionStageLogger;
+import com.routechain.v2.decision.FileDecisionSessionStore;
 import com.routechain.v2.decision.LegacyMlBrain;
 import com.routechain.v2.decision.LlmBrain;
 import com.routechain.v2.decision.LlmStageScheduler;
 import com.routechain.v2.decision.NineRouterResponsesClient;
+import com.routechain.v2.decision.NoOpDecisionSessionStore;
 import com.routechain.v2.decision.StudentBrain;
 import com.routechain.v2.feedback.DecisionLogAssembler;
 import com.routechain.v2.feedback.DecisionLogService;
@@ -587,6 +590,15 @@ public class DispatchV2Configuration {
     }
 
     @Bean(destroyMethod = "close")
+    DecisionSessionStore decisionSessionStore(RouteChainDispatchV2Properties properties) {
+        if (!"v3".equalsIgnoreCase(properties.getDecision().getLlm().getPromptFamily())
+                || !properties.getDecision().getLlm().getSessionStore().isEnabled()) {
+            return new NoOpDecisionSessionStore();
+        }
+        return new FileDecisionSessionStore(properties);
+    }
+
+    @Bean(destroyMethod = "close")
     HarvestRailWriter harvestRailWriter(RouteChainDispatchV2Properties properties) {
         return new HarvestRailWriter(properties);
     }
@@ -624,15 +636,17 @@ public class DispatchV2Configuration {
     }
 
     @Bean
-    NineRouterResponsesClient nineRouterResponsesClient(RouteChainDispatchV2Properties properties) {
-        return new NineRouterResponsesClient(properties.getDecision().getLlm());
+    NineRouterResponsesClient nineRouterResponsesClient(RouteChainDispatchV2Properties properties,
+                                                        DecisionSessionStore decisionSessionStore) {
+        return new NineRouterResponsesClient(properties.getDecision().getLlm(), decisionSessionStore);
     }
 
     @Bean
     LlmStageScheduler llmStageScheduler(RouteChainDispatchV2Properties properties,
                                         NineRouterResponsesClient nineRouterResponsesClient,
-                                        DecisionStageLogger decisionStageLogger) {
-        return new LlmStageScheduler(nineRouterResponsesClient, properties.getDecision(), decisionStageLogger);
+                                        DecisionStageLogger decisionStageLogger,
+                                        DecisionSessionStore decisionSessionStore) {
+        return new LlmStageScheduler(nineRouterResponsesClient, properties.getDecision(), decisionStageLogger, decisionSessionStore);
     }
 
     @Bean

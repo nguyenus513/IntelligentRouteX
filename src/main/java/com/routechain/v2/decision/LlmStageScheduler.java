@@ -14,13 +14,16 @@ public final class LlmStageScheduler {
     private final RouteChainDispatchV2Properties.Decision decisionProperties;
     private final DecisionStageLogger decisionStageLogger;
     private final ComparisonPackBuilder comparisonPackBuilder;
+    private final DecisionSessionStore sessionStore;
 
     public LlmStageScheduler(NineRouterResponsesClient client,
                              RouteChainDispatchV2Properties.Decision decisionProperties,
-                             DecisionStageLogger decisionStageLogger) {
+                             DecisionStageLogger decisionStageLogger,
+                             DecisionSessionStore sessionStore) {
         this.client = client;
         this.decisionProperties = decisionProperties;
         this.decisionStageLogger = decisionStageLogger;
+        this.sessionStore = sessionStore;
         this.effortPolicy = new DecisionEffortPolicy(decisionProperties);
         this.comparisonPackBuilder = new ComparisonPackBuilder();
     }
@@ -35,6 +38,17 @@ public final class LlmStageScheduler {
 
     public DecisionStageOutputV1 evaluate(DecisionStageInputV1 input) {
         long startedAt = System.nanoTime();
+        DecisionSessionStore.SessionStartResult sessionStart = sessionStore.beginSession(input);
+        if (!sessionStart.manifest().isEmpty()) {
+            decisionStageLogger.writeFamily("decision_session_manifest", input.traceId(), input.stageName().wireName(), sessionStart.manifest());
+        }
+        DecisionSessionStore.SessionContext sessionContext = sessionStore.resolveContext(input);
+        decisionStageLogger.writeFamily("decision_session_ref_trace", input.traceId(), input.stageName().wireName(), Map.of(
+                "schemaVersion", "decision-session-ref-trace/v1",
+                "traceId", input.traceId(),
+                "stageName", input.stageName().wireName(),
+                "sessionRefCount", sessionContext.sessionRefCount(),
+                "sessionRefs", sessionContext.sessionRefs()));
         DecisionEffortPolicy.EffortDecision effortDecision = effortPolicy.select(input);
         List<PassTrace> passTraces = multiPassEnabled(input.stageName()) ? runMultiPass(input, effortDecision) : runSinglePass(input, effortDecision);
         PassTrace commitTrace = passTraces.getLast();
@@ -46,7 +60,7 @@ public final class LlmStageScheduler {
                 "selectionReason", effortDecision.selectionReason(),
                 "passes", passTraces.stream().map(PassTrace::toMap).toList()));
         NineRouterResponsesClient.LlmInvocationResult representative = commitTrace.result();
-        return new DecisionStageOutputV1(
+        DecisionStageOutputV1 output = new DecisionStageOutputV1(
                 "stage-output-v1",
                 input.traceId(),
                 input.runId(),
@@ -76,6 +90,14 @@ public final class LlmStageScheduler {
                         overlays(input),
                         Boolean.TRUE.equals(input.contextSelection().get("compressed")),
                         effortDecision.selectionReason()));
+        DecisionSessionStore.StageSessionRecord stageSessionRecord = sessionStore.recordStageResult(
+                input,
+                output,
+                passTraces.stream().map(PassTrace::summary).toList());
+        if (!stageSessionRecord.stageSummary().isEmpty()) {
+            decisionStageLogger.writeFamily("decision_session_stage_summary", input.traceId(), input.stageName().wireName(), stageSessionRecord.stageSummary());
+        }
+        return output;
     }
 
     private List<PassTrace> runSinglePass(DecisionStageInputV1 input,
@@ -84,6 +106,7 @@ public final class LlmStageScheduler {
         PromptPackRegistry.RenderedPrompt renderedPrompt = client.renderPrompt(commitInput);
         logPromptSpec(commitInput, "commit", renderedPrompt);
         NineRouterResponsesClient.LlmInvocationResult result = client.invoke(commitInput, effortDecision.requestedEffort(), renderedPrompt);
+        recordPass(commitInput, "commit", renderedPrompt, result);
         return List.of(new PassTrace("commit", "single-pass final commit", result));
     }
 
@@ -97,6 +120,7 @@ public final class LlmStageScheduler {
                 proposeInput,
                 effortDecision.requestedEffort(),
                 proposePrompt);
+        recordPass(proposeInput, "propose", proposePrompt, propose);
         traces.add(new PassTrace("propose", "produce a shortlist and provisional ranking", propose));
 
         DecisionStageInputV1 critiqueInput = passInput(input.withUpstreamSummary(withPassSummary(input.upstreamSummary(), traces)),
@@ -108,6 +132,7 @@ public final class LlmStageScheduler {
                 critiqueInput,
                 effortDecision.requestedEffort(),
                 critiquePrompt);
+        recordPass(critiqueInput, "critique", critiquePrompt, critique);
         traces.add(new PassTrace("critique", "identify dominated candidates, missing trade-offs, regret, and conflict risk", critique));
 
         DecisionStageInputV1 compareInput = input
@@ -120,6 +145,7 @@ public final class LlmStageScheduler {
                 comparePassInput,
                 effortDecision.requestedEffort(),
                 comparePrompt);
+        recordPass(comparePassInput, "compare", comparePrompt, compare);
         traces.add(new PassTrace("compare", "re-rank candidates using critique feedback and relative deltas", compare));
 
         DecisionStageInputV1 commitInput = input
@@ -132,6 +158,7 @@ public final class LlmStageScheduler {
                 commitPassInput,
                 effortDecision.requestedEffort(),
                 commitPrompt);
+        recordPass(commitPassInput, "commit", commitPrompt, commit);
         traces.add(new PassTrace("commit", "return the final authoritative stage_output_v1 decision", commit));
         return List.copyOf(traces);
     }
@@ -145,6 +172,22 @@ public final class LlmStageScheduler {
         payload.put("stageName", input.stageName().wireName());
         payload.put("passType", passType);
         decisionStageLogger.writeFamily("llm_prompt_spec_trace", input.traceId(), input.stageName().wireName() + "-" + passType, Map.copyOf(payload));
+    }
+
+    private void recordPass(DecisionStageInputV1 input,
+                            String passType,
+                            PromptPackRegistry.RenderedPrompt renderedPrompt,
+                            NineRouterResponsesClient.LlmInvocationResult result) {
+        sessionStore.recordPass(input, passType, renderedPrompt, result);
+        decisionStageLogger.writeFamily("llm_skill_activation_trace", input.traceId(), input.stageName().wireName() + "-" + passType, Map.of(
+                "schemaVersion", "llm-skill-activation-trace/v1",
+                "traceId", input.traceId(),
+                "stageName", input.stageName().wireName(),
+                "passType", passType,
+                "skillSetVersion", renderedPrompt.metadata().getOrDefault("skillSetVersion", ""),
+                "skillIdsActivated", renderedPrompt.metadata().getOrDefault("skillIdsActivated", List.of()),
+                "sessionRefCount", renderedPrompt.metadata().getOrDefault("sessionRefCount", 0),
+                "promptFamily", renderedPrompt.metadata().getOrDefault("promptFamily", "v2")));
     }
 
     private DecisionStageInputV1 passInput(DecisionStageInputV1 input, String passType, String passObjective) {

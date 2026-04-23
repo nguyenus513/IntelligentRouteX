@@ -1,0 +1,15 @@
+{
+  "skillSetVersion": "decision-stage-skill-set/v1",
+  "stageName": "final-selection",
+  "skills": [
+    {
+      "skillId": "global_selection_tradeoff",
+      "description": "Balance value, ETA, robustness, and conflict safety for final proposal choice.",
+      "requiredInputs": ["candidateWindow", "comparisonPack", "upstreamSummary", "sessionRefs"],
+      "forbiddenAssumptions": ["do not invent assignments", "do not use other traces"],
+      "outputEmphasis": ["global tradeoff", "confidence", "conflict safety"],
+      "recommendedReasonCodes": ["final-selection-strong", "conflict-risk"],
+      "allowedToolIds": ["get_conflict_summary", "get_route_vector_summary", "get_scenario_breakdown"]
+    }
+  ]
+}

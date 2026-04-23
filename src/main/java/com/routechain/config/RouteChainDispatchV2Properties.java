@@ -1359,18 +1359,21 @@ public class RouteChainDispatchV2Properties {
         private String baseUrl = "http://127.0.0.1:20128/v1";
         private String wireApi = "responses";
         private String model = "gpt-5.4";
+        private String promptFamily = "v2";
         private String apiKeyEnv = "OPENAI_API_KEY";
         private Duration timeoutMs = Duration.ofSeconds(45);
         private int maxRetries = 2;
         private boolean parallelToolCalls = false;
         private boolean strictStructuredOutputs = true;
         private boolean multiPassEnabled = true;
+        private boolean skillRegistryEnabled = true;
         private java.util.List<String> multiPassStages = new java.util.ArrayList<>(java.util.List.of(
                 "driver",
                 "route-generation",
                 "route-critique",
                 "scenario",
                 "final-selection"));
+        private final SessionStore sessionStore = new SessionStore();
 
         public String getProvider() {
             return provider;
@@ -1402,6 +1405,14 @@ public class RouteChainDispatchV2Properties {
 
         public void setModel(String model) {
             this.model = model;
+        }
+
+        public String getPromptFamily() {
+            return promptFamily;
+        }
+
+        public void setPromptFamily(String promptFamily) {
+            this.promptFamily = promptFamily;
         }
 
         public String getApiKeyEnv() {
@@ -1452,6 +1463,14 @@ public class RouteChainDispatchV2Properties {
             this.multiPassEnabled = multiPassEnabled;
         }
 
+        public boolean isSkillRegistryEnabled() {
+            return skillRegistryEnabled;
+        }
+
+        public void setSkillRegistryEnabled(boolean skillRegistryEnabled) {
+            this.skillRegistryEnabled = skillRegistryEnabled;
+        }
+
         public java.util.List<String> getMultiPassStages() {
             return multiPassStages;
         }
@@ -1460,6 +1479,40 @@ public class RouteChainDispatchV2Properties {
             this.multiPassStages = multiPassStages == null
                     ? new java.util.ArrayList<>()
                     : new java.util.ArrayList<>(multiPassStages);
+        }
+
+        public SessionStore getSessionStore() {
+            return sessionStore;
+        }
+    }
+
+    public static final class SessionStore {
+        private boolean enabled = true;
+        private String baseDir = "build/dispatch-v2-feedback/decision-session-store";
+        private Duration ttl = Duration.ofMinutes(10);
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getBaseDir() {
+            return baseDir;
+        }
+
+        public void setBaseDir(String baseDir) {
+            this.baseDir = baseDir;
+        }
+
+        public Duration getTtl() {
+            return ttl;
+        }
+
+        public void setTtl(Duration ttl) {
+            this.ttl = ttl;
         }
     }
 }

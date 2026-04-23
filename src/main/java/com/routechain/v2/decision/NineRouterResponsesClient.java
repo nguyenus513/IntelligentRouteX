@@ -31,16 +31,28 @@ public final class NineRouterResponsesClient {
     private volatile ModelResolution cachedModelResolution;
 
     public NineRouterResponsesClient(RouteChainDispatchV2Properties.Llm properties) {
-        this(properties, new DefaultResponsesTransport(), JsonMapper.builder().findAndAddModules().build());
+        this(properties, new NoOpDecisionSessionStore());
+    }
+
+    public NineRouterResponsesClient(RouteChainDispatchV2Properties.Llm properties,
+                                     DecisionSessionStore decisionSessionStore) {
+        this(properties, new DefaultResponsesTransport(), JsonMapper.builder().findAndAddModules().build(), decisionSessionStore);
     }
 
     NineRouterResponsesClient(RouteChainDispatchV2Properties.Llm properties,
                               ResponsesTransport transport,
                               ObjectMapper objectMapper) {
+        this(properties, transport, objectMapper, new NoOpDecisionSessionStore());
+    }
+
+    NineRouterResponsesClient(RouteChainDispatchV2Properties.Llm properties,
+                              ResponsesTransport transport,
+                              ObjectMapper objectMapper,
+                              DecisionSessionStore decisionSessionStore) {
         this.properties = properties;
         this.transport = transport;
         this.objectMapper = objectMapper;
-        this.promptPackRegistry = new PromptPackRegistry(objectMapper);
+        this.promptPackRegistry = new PromptPackRegistry(objectMapper, properties, decisionSessionStore);
     }
 
     public RuntimeConfiguration runtimeConfiguration() {
@@ -262,14 +274,15 @@ public final class NineRouterResponsesClient {
                     parsedOutput,
                     requestedEffort.wireValue(),
                     appliedEffort.wireValue(),
-                tokenUsage,
-                retryCount,
-                sha256(body),
-                modelResolution.resolvedModelId(),
-                modelResolution.configuredModelFamily(),
-                runtimeConfiguration.baseUrl(),
-                runtimeConfiguration.wireApi(),
-                modelResolution.discoverySource());
+                    tokenUsage,
+                    retryCount,
+                    sha256(body),
+                    body,
+                    modelResolution.resolvedModelId(),
+                    modelResolution.configuredModelFamily(),
+                    runtimeConfiguration.baseUrl(),
+                    runtimeConfiguration.wireApi(),
+                    modelResolution.discoverySource());
         } catch (IOException exception) {
             throw failure("provider-invalid-json", Map.of(
                     "configuredModelFamily", modelResolution.configuredModelFamily(),
@@ -562,6 +575,7 @@ public final class NineRouterResponsesClient {
             Map<String, Object> tokenUsage,
             int retryCount,
             String rawResponseHash,
+            String rawResponseBody,
             String providerModel,
             String configuredModelFamily,
             String providerBaseUrl,

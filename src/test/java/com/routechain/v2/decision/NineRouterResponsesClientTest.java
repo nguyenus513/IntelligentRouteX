@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -151,6 +152,51 @@ class NineRouterResponsesClientTest {
         assertEquals("decision-stage-prompt-spec/v1", rendered.metadata().get("promptSpecVersion"));
         assertEquals("final-selection", rendered.metadata().get("stagePromptName"));
         assertEquals("cx/gpt-5.4", result.providerModel());
+    }
+
+    @Test
+    void sendsV3PromptWithSessionRefsAndSkills() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        properties.getDecision().getLlm().setPromptFamily("v3");
+        DecisionSessionStore sessionStore = new NoOpDecisionSessionStore() {
+            @Override
+            public SessionContext resolveContext(DecisionStageInputV1 input) {
+                return new SessionContext(Map.of(
+                        "priorStageResultRefs", java.util.List.of(java.util.Map.of("stageName", "route-generation")),
+                        "routeVectorRefs", java.util.List.of("proposal-1"),
+                        "tileContextRefs", java.util.List.of("tile-1"),
+                        "selectedCandidateRefs", java.util.List.of("proposal-1"),
+                        "critiqueRefs", java.util.List.of("route-dominated")), 4);
+            }
+        };
+        NineRouterResponsesClient client = new NineRouterResponsesClient(
+                properties.getDecision().getLlm(),
+                new StubTransport(
+                        "{\"data\":[{\"id\":\"cx/gpt-5.4\",\"root\":\"gpt-5.4\"}]}",
+                        (baseUrl, apiKey, timeout, requestBody, objectMapper) -> {
+                            JsonNode input = requestBody.path("input");
+                            String systemText = input.get(0).path("content").get(0).path("text").asText();
+                            String userText = input.get(1).path("content").get(0).path("text").asText();
+                            assertTrue(systemText.contains("vector_compare"));
+                            assertTrue(userText.contains("\"sessionRefs\""));
+                            return new NineRouterResponsesClient.TransportResponse(
+                                    200,
+                                    "{\"output\":[{\"content\":[{\"text\":\"{\\\"selectedIds\\\":[\\\"proposal-1\\\"],\\\"assessments\\\":{\\\"summary\\\":\\\"ok\\\",\\\"reasonCodes\\\":[],\\\"items\\\":[{\\\"id\\\":\\\"proposal-1\\\",\\\"score\\\":0.88,\\\"rank\\\":1,\\\"selected\\\":true,\\\"confidence\\\":0.84,\\\"reasonCodes\\\":[],\\\"dominanceReasonCodes\\\":[],\\\"regretToBestAlternative\\\":0.0,\\\"driverFitSummary\\\":\\\"ok\\\",\\\"routeVectorRefs\\\":[],\\\"geospatialFlags\\\":[],\\\"burstSensitivityFlags\\\":[],\\\"rationale\\\":\\\"ok\\\"}]}}\"}]}]}");
+                        }),
+                JsonMapper.builder().findAndAddModules().build(),
+                sessionStore);
+
+        PromptPackRegistry.RenderedPrompt rendered = client.renderPrompt(stageInput(DecisionStageName.ROUTE_CRITIQUE));
+        NineRouterResponsesClient.LlmInvocationResult result = client.invoke(
+                stageInput(DecisionStageName.ROUTE_CRITIQUE),
+                DecisionEffort.HIGH,
+                rendered);
+
+        assertEquals("decision-stage-prompt-spec/v3", rendered.metadata().get("promptSpecVersion"));
+        assertEquals("decision-stage-skill-set/v1", rendered.metadata().get("skillSetVersion"));
+        assertEquals("cx/gpt-5.4", result.providerModel());
+        assertTrue(result.rawResponseBody().contains("\"output\""));
     }
 
     private DecisionStageInputV1 stageInput(DecisionStageName stageName) {

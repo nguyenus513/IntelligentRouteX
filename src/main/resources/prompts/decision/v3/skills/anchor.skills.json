@@ -1,0 +1,15 @@
+{
+  "skillSetVersion": "decision-stage-skill-set/v1",
+  "stageName": "anchor",
+  "skills": [
+    {
+      "skillId": "anchor_stability_check",
+      "description": "Pick anchors that reduce spread and preserve route stability.",
+      "requiredInputs": ["candidateWindow", "geospatialContext", "upstreamSummary"],
+      "forbiddenAssumptions": ["do not invent drivers", "do not solve final ranking"],
+      "outputEmphasis": ["anchor stability", "spread reduction"],
+      "recommendedReasonCodes": ["anchor-stable", "anchor-spread-risk"],
+      "allowedToolIds": ["get_bundle_details"]
+    }
+  ]
+}

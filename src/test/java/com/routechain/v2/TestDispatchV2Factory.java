@@ -15,6 +15,7 @@ import com.routechain.v2.context.WeatherContextService;
 import com.routechain.v2.decision.ContextAssembler;
 import com.routechain.v2.decision.ContextToolRegistry;
 import com.routechain.v2.decision.DecisionBrainResolver;
+import com.routechain.v2.decision.DecisionSessionStore;
 import com.routechain.v2.decision.DecisionStageLogger;
 import com.routechain.v2.decision.LegacyMlBrain;
 import com.routechain.v2.decision.LlmBrain;
@@ -334,8 +335,9 @@ public final class TestDispatchV2Factory {
         ContextAssembler contextAssembler = configuration.contextAssembler(properties, contextToolRegistry);
         LegacyMlBrain legacyMlBrain = configuration.legacyMlBrain();
         StudentBrain studentBrain = configuration.studentBrain(legacyMlBrain);
-        NineRouterResponsesClient nineRouterResponsesClient = configuration.nineRouterResponsesClient(properties);
-        LlmStageScheduler llmStageScheduler = configuration.llmStageScheduler(properties, nineRouterResponsesClient, decisionStageLogger);
+        DecisionSessionStore decisionSessionStore = configuration.decisionSessionStore(properties);
+        NineRouterResponsesClient nineRouterResponsesClient = configuration.nineRouterResponsesClient(properties, decisionSessionStore);
+        LlmStageScheduler llmStageScheduler = configuration.llmStageScheduler(properties, nineRouterResponsesClient, decisionStageLogger, decisionSessionStore);
         LlmBrain llmBrain = configuration.llmBrain(llmStageScheduler, properties, legacyMlBrain, decisionStageLogger, contextToolRegistry);
         DecisionBrainResolver decisionBrainResolver = configuration.decisionBrainResolver(properties, legacyMlBrain, llmBrain, studentBrain);
         DispatchV2Core core = configuration.dispatchV2Core(
