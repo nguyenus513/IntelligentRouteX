@@ -19,6 +19,7 @@ TARGET_CASES = (
     ("traffic-shock", "S"),
     ("forecast-heavy", "S"),
 )
+TARGET_STAGE_CHOICES = ("bundle-pool", "route-proposal-pool", "scenario-evaluation")
 VERDICTS = ("PASS", "PASS_WITH_LIMITS", "REGRESSION_RISK", "EVIDENCE_GAP")
 
 
@@ -160,7 +161,23 @@ def artifact_last_modified_at(path: str) -> str:
     return datetime.fromtimestamp(artifact_path.stat().st_mtime, tz=timezone.utc).isoformat()
 
 
-def case_cells(mode: str, decision_mode: str, prompt_family: str, profile: str) -> List[ValidationCell]:
+def selected_target_cases(case_ids: Sequence[str]) -> List[Tuple[str, str]]:
+    if not case_ids:
+        return list(TARGET_CASES)
+    indexed = {f"{scenario_pack}/{size}": (scenario_pack, size) for scenario_pack, size in TARGET_CASES}
+    selected: List[Tuple[str, str]] = []
+    for case_id in case_ids:
+        if case_id not in indexed:
+            raise ValueError(f"Unsupported target case '{case_id}'. Allowed: {', '.join(indexed)}")
+        selected.append(indexed[case_id])
+    return selected
+
+
+def case_cells(mode: str,
+               decision_mode: str,
+               prompt_family: str,
+               profile: str,
+               target_cases: Sequence[Tuple[str, str]]) -> List[ValidationCell]:
     cells = [
         ValidationCell(
             scenario_pack=scenario_pack,
@@ -172,7 +189,7 @@ def case_cells(mode: str, decision_mode: str, prompt_family: str, profile: str) 
             profile=profile,
             root_type="adaptive",
         )
-        for scenario_pack, size in TARGET_CASES
+        for scenario_pack, size in target_cases
     ]
     if mode == "paired":
         cells.extend(
@@ -186,7 +203,7 @@ def case_cells(mode: str, decision_mode: str, prompt_family: str, profile: str) 
                 profile="",
                 root_type="comparison",
             )
-            for scenario_pack, size in TARGET_CASES
+            for scenario_pack, size in target_cases
         )
     return cells
 
@@ -321,6 +338,19 @@ def collect_adaptive_rows_from_paths(paths: Sequence[Path], root_type: str, root
         key = (row.scenario_pack, row.size, row.execution_mode, row.decision_mode, row.prompt_family)
         indexed.setdefault(key, []).append(row)
     return indexed
+
+
+def filter_adaptive_rows(rows: Iterable[AdaptiveTraceRow],
+                         target_cases: Sequence[Tuple[str, str]],
+                         target_stages: Sequence[str]) -> List[AdaptiveTraceRow]:
+    allowed_cases = {(scenario_pack, size) for scenario_pack, size in target_cases}
+    allowed_stages = set(target_stages)
+    filtered = [
+        row for row in rows
+        if (row.scenario_pack, row.size) in allowed_cases
+        and (not allowed_stages or row.stage_name in allowed_stages)
+    ]
+    return filtered
 
 
 def parse_instant(value: object) -> Optional[datetime]:
@@ -463,7 +493,9 @@ def benchmark_summary(result: Optional[dict]) -> dict:
     }
 
 
-def determine_verdict(adaptive_summary: dict, comparison_summary: dict) -> Tuple[str, List[str]]:
+def determine_verdict(adaptive_summary: dict,
+                      comparison_summary: dict,
+                      target_stages: Sequence[str]) -> Tuple[str, List[str]]:
     adaptive_benchmark = adaptive_summary.get("benchmark", {})
     adaptive_trace = adaptive_summary.get("adaptiveTrace", {})
     reasons: List[str] = []
@@ -492,6 +524,13 @@ def determine_verdict(adaptive_summary: dict, comparison_summary: dict) -> Tuple
         return "REGRESSION_RISK", ["selected-proposals-empty"]
     if int(adaptive_benchmark.get("executedAssignmentCount") or 0) <= 0:
         reasons.append("executed-assignments-empty")
+    if target_stages:
+        if adaptive_trace.get("totalAdaptiveDecisions", 0) <= 0:
+            return "EVIDENCE_GAP", ["target-stage-trace-missing"]
+        if adaptive_trace.get("skippedCount", 0) > 0 or adaptive_trace.get("escalatedCount", 0) > 0:
+            reasons.append("target-stage-policy-observed")
+            return "PASS", reasons
+        return "PASS_WITH_LIMITS", reasons or ["target-stage-observed-without-policy-decision"]
     if comparison_summary:
         adaptive_latency = adaptive_benchmark.get("latencyMs")
         comparison_latency = comparison_summary.get("latencyMs")
@@ -524,6 +563,7 @@ def build_case_report(
     adaptive_results: Dict[Tuple[str, str, str, str, str], dict],
     comparison_results: Dict[Tuple[str, str, str, str, str], dict],
     adaptive_traces: Dict[Tuple[str, str, str, str, str], List[AdaptiveTraceRow]],
+    target_stages: Sequence[str],
 ) -> dict:
     key = (scenario_pack, size, "controlled", decision_mode, prompt_family)
     adaptive_result = adaptive_results.get(key)
@@ -534,7 +574,7 @@ def build_case_report(
         "adaptiveTrace": summarize_traces(adaptive_rows),
     }
     comparison_summary = benchmark_summary(comparison_result)
-    verdict, reasons = determine_verdict(adaptive_summary, comparison_summary)
+    verdict, reasons = determine_verdict(adaptive_summary, comparison_summary, target_stages)
     return {
         "caseId": f"{scenario_pack}/{size}/controlled/{decision_mode}/{prompt_family}",
         "scenarioPack": scenario_pack,
@@ -544,14 +584,21 @@ def build_case_report(
         "promptFamily": prompt_family,
         "adaptive": adaptive_summary,
         "comparison": comparison_summary,
+        "targetStages": list(target_stages),
         "verdict": verdict,
         "verdictReasons": reasons,
     }
 
 
+def report_stem(target_stages: Sequence[str]) -> str:
+    if not target_stages:
+        return "full_adaptive_validation"
+    return "targeted_adaptive_closure-" + "__".join(stage.replace("/", "-") for stage in target_stages)
+
+
 def markdown_report(payload: dict) -> str:
     lines = [
-        "# Full Adaptive Validation Report",
+        "# Targeted Adaptive Closure Report" if payload.get("targetStages") else "# Full Adaptive Validation Report",
         "",
         f"- generatedAt: `{payload['generatedAt']}`",
         f"- validationCommit: `{payload['validationCommit']}`",
@@ -561,6 +608,8 @@ def markdown_report(payload: dict) -> str:
         f"- adaptiveProfile: `{payload['adaptiveProfile']}`",
         f"- adaptiveRoots: `{', '.join(payload['adaptiveRoots']) or 'none'}`",
         f"- comparisonRoots: `{', '.join(payload['comparisonRoots']) or 'none'}`",
+        f"- targetStages: `{payload.get('targetStages', [])}`",
+        f"- targetCases: `{payload.get('targetCases', [])}`",
         f"- rerunExecuted: `{payload['rerunExecuted']}`",
         "",
         "## Case Verdicts",
@@ -643,8 +692,9 @@ def markdown_report(payload: dict) -> str:
 def write_report(payload: dict, output_dir: Path) -> Tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    json_path = output_dir / f"full_adaptive_validation-{timestamp}.json"
-    markdown_path = output_dir / "full_adaptive_validation_report.md"
+    stem = report_stem(payload.get("targetStages", []))
+    json_path = output_dir / f"{stem}-{timestamp}.json"
+    markdown_path = output_dir / f"{stem}_report.md"
     json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     markdown_path.write_text(markdown_report(payload), encoding="utf-8")
     return json_path, markdown_path
@@ -655,12 +705,14 @@ def collect_case_reports(
     comparison_roots: Sequence[Path],
     decision_mode: str,
     prompt_family: str,
+    target_cases: Sequence[Tuple[str, str]],
+    target_stages: Sequence[str],
     rerun_artifacts: Optional[Sequence[ValidationCellArtifacts]] = None,
 ) -> List[dict]:
     adaptive_results: Dict[Tuple[str, str, str, str, str], dict] = {}
     adaptive_trace_index: Dict[Tuple[str, str, str, str, str], List[AdaptiveTraceRow]] = {}
     comparison_results: Dict[Tuple[str, str, str, str, str], dict] = {}
-    if rerun_artifacts:
+    if rerun_artifacts and not target_stages:
         for artifact_group in rerun_artifacts:
             if artifact_group.cell.root_type == "adaptive":
                 adaptive_results.update(collect_benchmark_results_from_paths(
@@ -672,7 +724,9 @@ def collect_case_reports(
                         artifact_group.adaptive_trace_paths,
                         "adaptive",
                         artifact_group.output_root).items():
-                    adaptive_trace_index.setdefault(key, []).extend(rows)
+                    adaptive_trace_index.setdefault(
+                        key,
+                        []).extend(filter_adaptive_rows(rows, target_cases, target_stages))
             else:
                 comparison_results.update(collect_benchmark_results_from_paths(
                     artifact_group.benchmark_artifacts.json_paths,
@@ -683,12 +737,43 @@ def collect_case_reports(
         for root in adaptive_roots:
             adaptive_results.update(collect_benchmark_results(root, "adaptive"))
             for key, rows in collect_adaptive_rows(root, "adaptive").items():
-                adaptive_trace_index.setdefault(key, []).extend(rows)
+                adaptive_trace_index.setdefault(
+                    key,
+                    []).extend(filter_adaptive_rows(rows, target_cases, target_stages))
         for root in comparison_roots:
             comparison_results.update(collect_benchmark_results(root, "comparison"))
+        if rerun_artifacts and target_stages:
+            for artifact_group in rerun_artifacts:
+                if artifact_group.cell.root_type == "adaptive":
+                    adaptive_results.update(collect_benchmark_results_from_paths(
+                        artifact_group.benchmark_artifacts.json_paths,
+                        "adaptive",
+                        artifact_group.output_root,
+                    ))
+                    for key, rows in collect_adaptive_rows_from_paths(
+                            artifact_group.adaptive_trace_paths,
+                            "adaptive",
+                            artifact_group.output_root).items():
+                        adaptive_trace_index.setdefault(
+                            key,
+                            []).extend(filter_adaptive_rows(rows, target_cases, target_stages))
+                else:
+                    comparison_results.update(collect_benchmark_results_from_paths(
+                        artifact_group.benchmark_artifacts.json_paths,
+                        "comparison",
+                        artifact_group.output_root,
+                    ))
     return [
-        build_case_report(scenario_pack, size, decision_mode, prompt_family, adaptive_results, comparison_results, adaptive_trace_index)
-        for scenario_pack, size in TARGET_CASES
+        build_case_report(
+            scenario_pack,
+            size,
+            decision_mode,
+            prompt_family,
+            adaptive_results,
+            comparison_results,
+            adaptive_trace_index,
+            target_stages)
+        for scenario_pack, size in target_cases
     ]
 
 
@@ -701,6 +786,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--decision-mode", choices=("legacy", "llm-shadow", "llm-authoritative"), default="llm-authoritative")
     parser.add_argument("--prompt-family", choices=("v2", "v3"), default="v2")
     parser.add_argument("--profile", default="dispatch-v2-full-adaptive")
+    parser.add_argument("--target-case", action="append", default=[], help="Optional case filter: normal-clear/S, heavy-rain/S, traffic-shock/S, forecast-heavy/S")
+    parser.add_argument("--target-stage", action="append", default=[], choices=TARGET_STAGE_CHOICES)
     parser.add_argument("--rerun-cells", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -708,7 +795,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     output_dir = Path(args.output_dir)
     adaptive_roots = [Path(path) for path in args.adaptive_root]
     comparison_roots = [Path(path) for path in args.comparison_root]
-    cells = case_cells(args.mode, args.decision_mode, args.prompt_family, args.profile)
+    target_cases = selected_target_cases(args.target_case)
+    target_stages = tuple(dict.fromkeys(stage for stage in args.target_stage if stage))
+    cells = case_cells(args.mode, args.decision_mode, args.prompt_family, args.profile, target_cases)
     print(f"[FULL ADAPTIVE VALIDATION] case-count={len(cells)}")
     for cell in cells:
         print(
@@ -716,6 +805,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             f"decision-mode={cell.decision_mode} prompt-family={cell.prompt_family} "
             f"execution-mode={cell.execution_mode} profile={cell.profile or 'default'}"
         )
+    if target_stages:
+        print(f"- target-stages={list(target_stages)}")
+    if args.target_case:
+        print(f"- target-cases={list(args.target_case)}")
     if args.dry_run:
         return 0
 
@@ -724,7 +817,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.rerun_cells:
         rerun_executed = True
         for cell in cells:
-            live_root = output_dir / "live" / ("full-adaptive" if cell.root_type == "adaptive" else "pre-adaptive")
+            if target_stages:
+                stage_root = "__".join(target_stages)
+                root_name = "full-adaptive" if cell.root_type == "adaptive" else "pre-adaptive"
+                live_root = output_dir / "fresh" / stage_root / root_name
+            else:
+                live_root = output_dir / "live" / ("full-adaptive" if cell.root_type == "adaptive" else "pre-adaptive")
             if cell.root_type == "adaptive":
                 if live_root not in adaptive_roots:
                     adaptive_roots.append(live_root)
@@ -780,6 +878,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         comparison_roots,
         args.decision_mode,
         args.prompt_family,
+        target_cases,
+        target_stages,
         rerun_artifacts=rerun_artifacts if rerun_executed else None,
     )
     payload = {
@@ -792,6 +892,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "adaptiveProfile": args.profile,
         "adaptiveRoots": [str(path) for path in adaptive_roots],
         "comparisonRoots": [str(path) for path in comparison_roots],
+        "targetStages": list(target_stages),
+        "targetCases": [f"{scenario_pack}/{size}" for scenario_pack, size in target_cases],
         "rerunExecuted": rerun_executed,
         "cases": cases,
         "verdicts": list(VERDICTS),

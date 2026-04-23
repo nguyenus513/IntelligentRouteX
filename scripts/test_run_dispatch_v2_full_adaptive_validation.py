@@ -93,6 +93,22 @@ class RunDispatchFullAdaptiveValidationTest(unittest.TestCase):
         self.assertIn("root-type=adaptive scenario-pack=normal-clear", output)
         self.assertIn("root-type=comparison scenario-pack=forecast-heavy", output)
 
+    def test_dry_run_prints_target_stage_and_case_filters(self) -> None:
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            exit_code = validation_runner.main([
+                "--dry-run",
+                "--mode", "adaptive-only",
+                "--target-stage", "bundle-pool",
+                "--target-case", "normal-clear/S",
+            ])
+
+        output = stdout.getvalue()
+        self.assertEqual(0, exit_code)
+        self.assertIn("target-stages=['bundle-pool']", output)
+        self.assertIn("target-cases=['normal-clear/S']", output)
+        self.assertIn("case-count=1", output)
+
     def test_collects_adaptive_and_comparison_evidence_into_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
@@ -343,6 +359,146 @@ class RunDispatchFullAdaptiveValidationTest(unittest.TestCase):
             normal_clear_case = next(case for case in payload["cases"] if case["scenarioPack"] == "normal-clear")
             self.assertEqual("PASS_WITH_LIMITS", normal_clear_case["verdict"])
             self.assertEqual(["adaptive-skip-not-observed"], normal_clear_case["verdictReasons"])
+
+    def test_target_stage_filter_ignores_stale_other_stage_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            adaptive_root = temp_root / "adaptive"
+            output_dir = temp_root / "out"
+
+            for scenario_pack, _ in validation_runner.TARGET_CASES:
+                write_json(
+                    adaptive_root / f"dispatch-quality-{scenario_pack}-s-llm-authoritative-v2-controlled-c-20260423-000001.json",
+                    benchmark_payload(scenario_pack),
+                )
+                feedback_root = adaptive_root / "feedback" / scenario_pack / "s" / "controlled" / "llm-authoritative" / "v2" / "c" / "decision-stage" / "adaptive_compute_trace"
+                write_json(
+                    feedback_root / f"trace-{scenario_pack}-bundle.json",
+                    adaptive_trace_payload(f"trace-{scenario_pack}", "bundle-pool", "ml-greedrl-worker", False, "greedrl-complexity-below-threshold"),
+                )
+                stale_route = adaptive_trace_payload(f"trace-{scenario_pack}", "route-proposal-pool", "ml-routefinder-worker", False, "worker-device-audit-missing")
+                stale_route["workerAuditPresent"] = False
+                stale_route["workerAuditMissingFields"] = ["device"]
+                write_json(feedback_root / f"trace-{scenario_pack}-route.json", stale_route)
+
+            exit_code = validation_runner.main([
+                "--adaptive-root", str(adaptive_root),
+                "--output-dir", str(output_dir),
+                "--mode", "adaptive-only",
+                "--target-stage", "bundle-pool",
+            ])
+
+            self.assertEqual(0, exit_code)
+            payload = json.loads(next(output_dir.glob("targeted_adaptive_closure-*.json")).read_text(encoding="utf-8"))
+            self.assertEqual(["bundle-pool"], payload["targetStages"])
+            self.assertTrue(all(case["verdict"] == "PASS" for case in payload["cases"]))
+
+    def test_targeted_rerun_uses_fresh_stage_root_and_targeted_report_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "out"
+            calls: List[Tuple[str, str, str]] = []
+
+            def fake_run_validation_cell(cell, out_dir, runner=None):
+                calls.append((cell.root_type, cell.scenario_pack, str(out_dir)))
+                write_json(
+                    out_dir / f"dispatch-quality-{cell.scenario_pack}-s-llm-authoritative-v2-controlled-c-20260423-000001.json",
+                    benchmark_payload(cell.scenario_pack),
+                )
+                (out_dir / f"dispatch-quality-{cell.scenario_pack}-s-llm-authoritative-v2-controlled-c-20260423-000001.md").write_text(
+                    "# result",
+                    encoding="utf-8",
+                )
+                if cell.root_type == "adaptive":
+                    feedback_root = out_dir / "feedback" / cell.scenario_pack / "s" / "controlled" / "llm-authoritative" / "v2" / "c" / "decision-stage" / "adaptive_compute_trace"
+                    write_json(
+                        feedback_root / f"trace-{cell.scenario_pack}.json",
+                        adaptive_trace_payload(f"trace-{cell.scenario_pack}", "bundle-pool", "ml-greedrl-worker", False, "greedrl-complexity-below-threshold"),
+                    )
+                return 0
+
+            original = validation_runner.run_validation_cell
+            try:
+                validation_runner.run_validation_cell = fake_run_validation_cell
+                exit_code = validation_runner.main([
+                    "--output-dir", str(output_dir),
+                    "--mode", "adaptive-only",
+                    "--rerun-cells",
+                    "--target-stage", "bundle-pool",
+                    "--target-case", "normal-clear/S",
+                ])
+            finally:
+                validation_runner.run_validation_cell = original
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(1, len(calls))
+            self.assertIn(str(output_dir / "fresh" / "bundle-pool" / "full-adaptive"), calls[0][2])
+            self.assertTrue(next(output_dir.glob("targeted_adaptive_closure-bundle-pool-*.json")).is_file())
+            self.assertTrue((output_dir / "targeted_adaptive_closure-bundle-pool_report.md").is_file())
+
+    def test_targeted_rerun_uses_fresh_root_stage_trace_when_latest_delta_misses_target_stage(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "out"
+            fresh_root = output_dir / "fresh" / "bundle-pool" / "full-adaptive"
+
+            write_json(
+                fresh_root / "dispatch-quality-normal-clear-s-llm-authoritative-v2-controlled-c-20260423-000001.json",
+                benchmark_payload("normal-clear"),
+            )
+            (fresh_root / "dispatch-quality-normal-clear-s-llm-authoritative-v2-controlled-c-20260423-000001.md").write_text(
+                "# result",
+                encoding="utf-8",
+            )
+            feedback_root = fresh_root / "feedback" / "normal-clear" / "s" / "controlled" / "llm-authoritative" / "v2" / "c" / "decision-stage" / "adaptive_compute_trace"
+            write_json(
+                feedback_root / "quality-normal-clear-s-llm-authoritative-v2-c-bundle-pool.json",
+                adaptive_trace_payload(
+                    "trace-normal-clear",
+                    "bundle-pool",
+                    "ml-greedrl-worker",
+                    False,
+                    "greedrl-complexity-below-threshold",
+                ),
+            )
+
+            def fake_run_validation_cell(cell, out_dir, runner=None):
+                write_json(
+                    out_dir / "dispatch-quality-normal-clear-s-llm-authoritative-v2-controlled-c-20260423-000002.json",
+                    benchmark_payload("normal-clear", latency_offset_ms=1),
+                )
+                (out_dir / "dispatch-quality-normal-clear-s-llm-authoritative-v2-controlled-c-20260423-000002.md").write_text(
+                    "# result",
+                    encoding="utf-8",
+                )
+                write_json(
+                    feedback_root / "quality-normal-clear-s-llm-authoritative-v2-c-scenario-evaluation.json",
+                    adaptive_trace_payload(
+                        "trace-normal-clear",
+                        "scenario-evaluation",
+                        "ml-forecast-worker",
+                        False,
+                        "scenario-not-demanding",
+                    ),
+                )
+                return 0
+
+            original = validation_runner.run_validation_cell
+            try:
+                validation_runner.run_validation_cell = fake_run_validation_cell
+                exit_code = validation_runner.main([
+                    "--output-dir", str(output_dir),
+                    "--mode", "adaptive-only",
+                    "--rerun-cells",
+                    "--target-stage", "bundle-pool",
+                    "--target-case", "normal-clear/S",
+                ])
+            finally:
+                validation_runner.run_validation_cell = original
+
+            self.assertEqual(0, exit_code)
+            payload = json.loads(next(output_dir.glob("targeted_adaptive_closure-bundle-pool-*.json")).read_text(encoding="utf-8"))
+            self.assertEqual("PASS", payload["cases"][0]["verdict"])
+            self.assertIn("target-stage-policy-observed", payload["cases"][0]["verdictReasons"])
+            self.assertEqual(1, payload["cases"][0]["adaptive"]["adaptiveTrace"]["totalAdaptiveDecisions"])
 
     def test_rerun_mode_fails_when_cell_emits_no_fresh_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

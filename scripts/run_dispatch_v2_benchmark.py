@@ -77,7 +77,7 @@ def gradle_build_dir(output_dir: Path, cell: BenchmarkCell) -> Path:
         cell.profile or "default",
     ]
     safe_parts = [part.replace("/", "-").replace("\\", "-").replace(":", "-") for part in parts]
-    return output_dir.resolve(".gradle-build").joinpath(*safe_parts)
+    return output_dir.absolute().joinpath(".gradle-build", *safe_parts)
 
 
 def planned_cells(args: argparse.Namespace) -> List[BenchmarkCell]:
