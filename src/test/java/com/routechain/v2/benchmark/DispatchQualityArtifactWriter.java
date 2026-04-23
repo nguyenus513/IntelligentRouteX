@@ -90,6 +90,7 @@ public final class DispatchQualityArtifactWriter {
         builder.append("- scenario: `").append(result.scenarioPack()).append(" / ").append(result.scenarioName()).append("`\n");
         builder.append("- workload: `").append(result.workloadSize()).append("`\n");
         builder.append("- decision mode: `").append(result.decisionMode()).append("`\n");
+        builder.append("- prompt family: `").append(result.promptFamily()).append("`\n");
         builder.append("- runtime classification: `").append(result.runtimeClassification()).append("`\n");
         builder.append("- authoritative stages: `").append(result.authoritativeStages()).append("`\n");
         builder.append("- execution mode: `").append(result.executionMode()).append("`\n");
@@ -323,6 +324,7 @@ public final class DispatchQualityArtifactWriter {
                 result.scenarioPack().toLowerCase(),
                 result.workloadSize().toLowerCase(),
                 result.decisionMode().toLowerCase(),
+                result.promptFamily().toLowerCase(),
                 result.executionMode().toLowerCase(),
                 result.baselineId().toLowerCase(),
                 FILE_TS.format(result.benchmarkTimestamp()));

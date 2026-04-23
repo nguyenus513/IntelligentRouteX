@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import os
 import shutil
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -21,6 +21,7 @@ TARGET_STAGES = (
     "scenario",
     "final-selection",
 )
+PROMPT_FAMILIES = ("v2", "v3")
 STAGE_DEFAULTS = {
     "pair-bundle": {"scenario_pack": "normal-clear", "size": "S", "baseline": "C", "decision_mode": "llm-shadow", "execution_mode": "controlled"},
     "route-generation": {"scenario_pack": "heavy-rain", "size": "S", "baseline": "C", "decision_mode": "llm-shadow", "execution_mode": "controlled"},
@@ -44,11 +45,14 @@ EXPECTED_ASSESSMENT_FIELDS = (
     "rationale",
 )
 PROMPT_METADATA_FIELDS = (
+    "promptFamily",
     "promptSpecVersion",
     "stagePromptName",
     "stagePromptChecksum",
     "packetTemplateVersion",
     "packetTemplateChecksum",
+    "skillSetVersion",
+    "skillIdsActivated",
     "candidateCountSeen",
     "comparisonPackCoverage",
     "geospatialCoverage",
@@ -57,12 +61,19 @@ PROMPT_METADATA_FIELDS = (
     "comparisonLens",
     "geospatialLens",
     "fallbackReason",
+    "sessionStoreEnabled",
+    "sessionNamespace",
+    "sessionReadRefs",
+    "sessionWriteRefs",
+    "sessionRefCount",
 )
+COMPARISON_VERDICTS = ("IDENTITY_ONLY", "RICHER_ASSESSMENT", "NO_CLEAR_GAIN", "REGRESSION_RISK", "EVIDENCE_GAP")
 
 
 @dataclass(frozen=True)
 class ValidationCell:
     stage: str
+    prompt_family: str
     scenario_pack: str
     size: str
     baseline: str
@@ -78,17 +89,22 @@ class StageFeedback:
     size: str
     execution_mode: str
     decision_mode: str
+    prompt_family: str
     authority_phase: str
     trace_id: str
     stage: str
-    families: dict[str, dict]
+    families: Dict[str, dict]
 
 
-def stage_cli_choices() -> list[str]:
+def stage_cli_choices() -> List[str]:
     return list(TARGET_STAGES)
 
 
-def benchmark_command() -> list[str]:
+def prompt_family_choices() -> List[str]:
+    return [*PROMPT_FAMILIES, "both"]
+
+
+def benchmark_command() -> List[str]:
     if os.name == "nt" and shutil.which("py"):
         return ["py", "-3.13", str(REPO_ROOT / "scripts" / "run_dispatch_v2_benchmark.py")]
     return ["python", str(REPO_ROOT / "scripts" / "run_dispatch_v2_benchmark.py")]
@@ -125,7 +141,11 @@ def remove_prefix(value: str, prefix: str) -> str:
     return value[len(prefix):] if prefix and value.startswith(prefix) else value
 
 
-def parse_stage_feedback(path: Path, root_type: str, root_path: Path) -> StageFeedback | None:
+def family_roots(prompt_family: str) -> List[str]:
+    return list(PROMPT_FAMILIES) if prompt_family == "both" else [prompt_family]
+
+
+def parse_stage_feedback(path: Path, root_type: str, root_path: Path) -> Optional[StageFeedback]:
     parts = path.parts
     try:
         feedback_index = parts.index("feedback")
@@ -135,6 +155,12 @@ def parse_stage_feedback(path: Path, root_type: str, root_path: Path) -> StageFe
     if decision_stage_index - feedback_index < 6:
         return None
     payload = json_read(path)
+    prompt_family_index = feedback_index + 5
+    prompt_family = "v2"
+    authority_phase_index = prompt_family_index
+    if len(parts) > prompt_family_index and parts[prompt_family_index] in PROMPT_FAMILIES:
+        prompt_family = parts[prompt_family_index]
+        authority_phase_index += 1
     trace_id = str(payload.get("traceId", "")).strip()
     stage = normalize_stage_name(payload.get("stageName") or remove_prefix(path.stem, trace_id + "-"))
     if not trace_id or not stage:
@@ -146,15 +172,16 @@ def parse_stage_feedback(path: Path, root_type: str, root_path: Path) -> StageFe
         size=parts[feedback_index + 2].upper(),
         execution_mode=parts[feedback_index + 3],
         decision_mode=parts[feedback_index + 4],
-        authority_phase=parts[feedback_index + 5],
+        prompt_family=prompt_family,
+        authority_phase=parts[authority_phase_index],
         trace_id=trace_id,
         stage=stage,
         families={parts[decision_stage_index + 1]: payload},
     )
 
 
-def merge_feedback_rows(rows: Iterable[StageFeedback]) -> dict[tuple[str, str, str, str, str, str, str, str], StageFeedback]:
-    merged: dict[tuple[str, str, str, str, str, str, str, str], StageFeedback] = {}
+def merge_feedback_rows(rows: Iterable[StageFeedback]) -> Dict[Tuple[str, str, str, str, str, str, str, str, str], StageFeedback]:
+    merged: Dict[Tuple[str, str, str, str, str, str, str, str, str], StageFeedback] = {}
     for row in rows:
         key = (
             row.root_type,
@@ -163,8 +190,9 @@ def merge_feedback_rows(rows: Iterable[StageFeedback]) -> dict[tuple[str, str, s
             row.size,
             row.execution_mode,
             row.decision_mode,
+            row.prompt_family,
             row.authority_phase,
-            row.stage,
+            row.trace_id,
         )
         existing = merged.get(key)
         if existing is None:
@@ -179,6 +207,7 @@ def merge_feedback_rows(rows: Iterable[StageFeedback]) -> dict[tuple[str, str, s
                 size=existing.size,
                 execution_mode=existing.execution_mode,
                 decision_mode=existing.decision_mode,
+                prompt_family=existing.prompt_family,
                 authority_phase=existing.authority_phase,
                 trace_id=existing.trace_id,
                 stage=existing.stage,
@@ -187,7 +216,7 @@ def merge_feedback_rows(rows: Iterable[StageFeedback]) -> dict[tuple[str, str, s
     return merged
 
 
-def collect_feedback_rows(root: Path, root_type: str) -> list[StageFeedback]:
+def collect_feedback_rows(root: Path, root_type: str) -> List[StageFeedback]:
     feedback_root = root / "feedback"
     if not feedback_root.exists():
         return []
@@ -195,10 +224,10 @@ def collect_feedback_rows(root: Path, root_type: str) -> list[StageFeedback]:
     return list(merge_feedback_rows(rows).values())
 
 
-def collect_benchmark_results(root: Path, root_type: str) -> list[dict]:
+def collect_benchmark_results(root: Path, root_type: str) -> List[dict]:
     if not root.exists():
         return []
-    results: list[dict] = []
+    results: List[dict] = []
     for path in sorted(root.rglob("dispatch-quality*.json")):
         payload = json_read(path)
         if "baselineId" not in payload:
@@ -206,23 +235,24 @@ def collect_benchmark_results(root: Path, root_type: str) -> list[dict]:
         payload["_rootType"] = root_type
         payload["_rootPath"] = str(root)
         payload["_artifactPath"] = str(path)
+        payload.setdefault("promptFamily", "v2")
         results.append(payload)
     return results
 
 
-def flatten_assessment_items(assessments: object) -> list[dict]:
+def flatten_assessment_items(assessments: object) -> List[dict]:
     if not isinstance(assessments, dict):
         return []
     if isinstance(assessments.get("items"), list):
         return [item for item in assessments["items"] if isinstance(item, dict)]
-    items: list[dict] = []
+    items: List[dict] = []
     for value in assessments.values():
         if isinstance(value, dict) and isinstance(value.get("items"), list):
             items.extend(item for item in value["items"] if isinstance(item, dict))
     return items
 
 
-def count_selected_and_non_selected(items: list[dict], join_payload: dict | None) -> tuple[int, int, bool]:
+def count_selected_and_non_selected(items: List[dict], join_payload: Optional[dict]) -> Tuple[int, int, bool]:
     selected_count = sum(1 for item in items if bool(item.get("selected")))
     non_selected_count = sum(1 for item in items if "selected" in item and not bool(item.get("selected")))
     if selected_count > 0 and non_selected_count > 0:
@@ -243,16 +273,18 @@ def stage_join_payload(feedback: StageFeedback) -> dict:
     return feedback.families.get("decision_stage_join", {})
 
 
-def prompt_payload(feedback: StageFeedback) -> dict:
-    if "llm_prompt_spec_trace" in feedback.families:
-        return feedback.families["llm_prompt_spec_trace"]
-    if "llm_request_meta" in feedback.families:
-        return feedback.families["llm_request_meta"]
-    return {}
+def merged_prompt_payload(feedback: StageFeedback) -> dict:
+    merged: Dict[str, object] = {}
+    for family in ("llm_prompt_spec_trace", "llm_skill_activation_trace", "decision_session_ref_trace", "decision_session_stage_summary"):
+        payload = feedback.families.get(family, {})
+        if isinstance(payload, dict):
+            merged.update(payload)
+    merged.setdefault("promptFamily", feedback.prompt_family)
+    return merged
 
 
 def prompt_metadata_summary(feedback: StageFeedback) -> dict:
-    prompt = prompt_payload(feedback)
+    prompt = merged_prompt_payload(feedback)
     return {field: prompt.get(field) for field in PROMPT_METADATA_FIELDS if field in prompt}
 
 
@@ -265,7 +297,7 @@ def prompt_identity_locked(metadata: dict) -> bool:
     )
 
 
-def context_verdict(metadata: dict) -> tuple[str, list[str]]:
+def context_verdict(metadata: dict) -> Tuple[str, List[str]]:
     if not metadata:
         return "EVIDENCE_GAP", ["prompt-metadata-missing"]
     flags = [str(flag) for flag in metadata.get("missingContextFlags", [])] if isinstance(metadata.get("missingContextFlags"), list) else []
@@ -285,7 +317,7 @@ def context_verdict(metadata: dict) -> tuple[str, list[str]]:
     return "PASS", flags
 
 
-def assessment_richness(items: list[dict]) -> float | None:
+def assessment_richness(items: List[dict]) -> Optional[float]:
     if not items:
         return None
     total = 0.0
@@ -295,7 +327,7 @@ def assessment_richness(items: list[dict]) -> float | None:
     return total / len(items)
 
 
-def assessment_verdict(items: list[dict], join_payload: dict | None) -> tuple[str, dict]:
+def assessment_verdict(items: List[dict], join_payload: Optional[dict]) -> Tuple[str, dict]:
     richness = assessment_richness(items)
     selected_count, non_selected_count, has_balance = count_selected_and_non_selected(items, join_payload)
     if richness is None:
@@ -316,7 +348,7 @@ def assessment_verdict(items: list[dict], join_payload: dict | None) -> tuple[st
     }
 
 
-def fallback_verdict(output_payload: dict, prompt_meta: dict) -> tuple[str, dict]:
+def fallback_verdict(output_payload: dict, prompt_meta: dict) -> Tuple[str, dict]:
     meta = output_payload.get("meta") if isinstance(output_payload.get("meta"), dict) else {}
     fallback_used = bool(meta.get("fallbackUsed")) or bool(prompt_meta.get("fallbackReason"))
     fallback_reason = meta.get("fallbackReason") or prompt_meta.get("fallbackReason") or ""
@@ -340,7 +372,7 @@ def overall_stage_verdict(prompt_locked: bool, context_status: str, fallback_sta
     return "PASS"
 
 
-def build_stage_evidence(feedback: StageFeedback, benchmark_result: dict | None) -> dict:
+def build_stage_evidence(feedback: StageFeedback, benchmark_result: Optional[dict]) -> dict:
     prompt_meta = prompt_metadata_summary(feedback)
     output_payload = stage_output_payload(feedback)
     join_payload = stage_join_payload(feedback)
@@ -359,6 +391,7 @@ def build_stage_evidence(feedback: StageFeedback, benchmark_result: dict | None)
             "workloadSize": benchmark_result.get("workloadSize"),
             "decisionMode": benchmark_result.get("decisionMode"),
             "executionMode": benchmark_result.get("executionMode"),
+            "promptFamily": benchmark_result.get("promptFamily", feedback.prompt_family),
             "runAuthorityClass": benchmark_result.get("runAuthorityClass"),
             "authorityEligible": benchmark_result.get("authorityEligible"),
             "tokenUsageSummary": benchmark_result.get("tokenUsageSummary", {}),
@@ -369,6 +402,7 @@ def build_stage_evidence(feedback: StageFeedback, benchmark_result: dict | None)
         "rootPath": feedback.root_path,
         "traceId": feedback.trace_id,
         "stageName": feedback.stage,
+        "promptFamily": feedback.prompt_family,
         "scenarioPack": feedback.scenario_pack,
         "workloadSize": feedback.size,
         "decisionMode": feedback.decision_mode,
@@ -387,35 +421,7 @@ def build_stage_evidence(feedback: StageFeedback, benchmark_result: dict | None)
     }
 
 
-def build_stage_report(stage: str, baseline_evidence: list[dict], validation_evidence: list[dict]) -> dict:
-    if validation_evidence:
-        keys = {
-            (
-                entry.get("scenarioPack"),
-                entry.get("workloadSize"),
-                entry.get("decisionMode"),
-                entry.get("executionMode"),
-            )
-            for entry in validation_evidence
-        }
-        baseline_evidence = [
-            entry for entry in baseline_evidence
-            if (
-                entry.get("scenarioPack"),
-                entry.get("workloadSize"),
-                entry.get("decisionMode"),
-                entry.get("executionMode"),
-            ) in keys
-        ]
-    else:
-        stage_default = STAGE_DEFAULTS[stage]
-        baseline_evidence = [
-            entry for entry in baseline_evidence
-            if entry.get("scenarioPack") == stage_default["scenario_pack"]
-            and entry.get("workloadSize") == stage_default["size"]
-            and entry.get("decisionMode") == stage_default["decision_mode"]
-            and entry.get("executionMode") == stage_default["execution_mode"]
-        ]
+def summarize_family(stage: str, family: str, baseline_evidence: List[dict], validation_evidence: List[dict]) -> dict:
     prompt_identity = {}
     for evidence in validation_evidence:
         metadata = evidence.get("promptMetadata", {})
@@ -426,6 +432,7 @@ def build_stage_report(stage: str, baseline_evidence: list[dict], validation_evi
                 "packetTemplateChecksum": metadata.get("packetTemplateChecksum"),
                 "stagePromptName": metadata.get("stagePromptName"),
                 "packetTemplateVersion": metadata.get("packetTemplateVersion"),
+                "skillSetVersion": metadata.get("skillSetVersion", ""),
             }
             break
     statuses = [entry.get("overallStageVerdict", "EVIDENCE_GAP") for entry in validation_evidence]
@@ -439,13 +446,60 @@ def build_stage_report(stage: str, baseline_evidence: list[dict], validation_evi
         overall = "PASS"
     else:
         overall = "EVIDENCE_GAP"
+    richness_values = [entry.get("assessmentSummary", {}).get("richnessScore") for entry in validation_evidence]
+    richness_values = [float(value) for value in richness_values if value is not None]
+    session_ref_counts = [int(entry.get("promptMetadata", {}).get("sessionRefCount", 0) or 0) for entry in validation_evidence]
     return {
         "stageName": stage,
+        "promptFamily": family,
         "promptIdentity": prompt_identity,
         "baselineEvidenceCount": len(baseline_evidence),
         "validationEvidenceCount": len(validation_evidence),
         "baselineEvidence": baseline_evidence,
         "validationEvidence": validation_evidence,
+        "overallVerdict": overall,
+        "maxRichnessScore": max(richness_values) if richness_values else None,
+        "fallbackUsed": any(bool(entry.get("fallbackSummary", {}).get("fallbackUsed")) for entry in validation_evidence),
+        "promptIdentityLocked": any(bool(entry.get("promptIdentityLocked")) for entry in validation_evidence),
+        "sessionRefCountMax": max(session_ref_counts) if session_ref_counts else 0,
+    }
+
+
+def compare_families(v2_report: Optional[dict], v3_report: Optional[dict]) -> dict:
+    if v2_report is None or v3_report is None:
+        return {"verdict": "EVIDENCE_GAP", "reasons": ["missing-family-evidence"]}
+    if not v2_report["validationEvidence"] or not v3_report["validationEvidence"]:
+        return {"verdict": "EVIDENCE_GAP", "reasons": ["missing-validation-evidence"]}
+    if not v3_report["promptIdentityLocked"]:
+        return {"verdict": "EVIDENCE_GAP", "reasons": ["v3-prompt-identity-unlocked"]}
+    if v3_report["overallVerdict"] == "FAIL" and v2_report["overallVerdict"] != "FAIL":
+        return {"verdict": "REGRESSION_RISK", "reasons": ["v3-stage-verdict-regressed"]}
+    if v3_report["fallbackUsed"] and not v2_report["fallbackUsed"]:
+        return {"verdict": "REGRESSION_RISK", "reasons": ["v3-fallback-increase"]}
+    v2_richness = v2_report.get("maxRichnessScore")
+    v3_richness = v3_report.get("maxRichnessScore")
+    if v2_richness is not None and v3_richness is not None and v3_richness >= v2_richness + 0.10:
+        return {"verdict": "RICHER_ASSESSMENT", "reasons": ["v3-richness-score-higher"]}
+    if v3_report.get("sessionRefCountMax", 0) > 0 and v2_richness == v3_richness:
+        return {"verdict": "IDENTITY_ONLY", "reasons": ["v3-session-evidence-present-without-richness-gain"]}
+    return {"verdict": "NO_CLEAR_GAIN", "reasons": ["paired-comparison-no-clear-uplift"]}
+
+
+def build_stage_report(stage: str, baseline_evidence: List[dict], validation_evidence: List[dict]) -> dict:
+    family_reports: Dict[str, dict] = {}
+    for family in PROMPT_FAMILIES:
+        family_reports[family] = summarize_family(
+            stage,
+            family,
+            [entry for entry in baseline_evidence if entry.get("promptFamily", "v2") == family],
+            [entry for entry in validation_evidence if entry.get("promptFamily", "v2") == family],
+        )
+    paired = compare_families(family_reports.get("v2"), family_reports.get("v3"))
+    overall = family_reports["v3"]["overallVerdict"] if family_reports["v3"]["validationEvidence"] else family_reports["v2"]["overallVerdict"]
+    return {
+        "stageName": stage,
+        "familyReports": family_reports,
+        "pairedComparison": paired,
         "overallStageVerdict": overall,
     }
 
@@ -459,56 +513,57 @@ def markdown_report(payload: dict) -> str:
         f"- baselineRoots: `{', '.join(payload['baselineRoots']) or 'none'}`",
         f"- validationRoots: `{', '.join(payload['validationRoots']) or 'none'}`",
         f"- rerunExecuted: `{payload['rerunExecuted']}`",
+        f"- promptFamilyMode: `{payload['promptFamilyMode']}`",
         "",
-        "This report validates stage-level prompt redesign evidence. It is not an authority-expansion report.",
+        "This report validates prompt identity, stage-scoped context coverage, and paired v2/v3 evidence. It does not claim authority uplift.",
         "",
         "## Stage Verdicts",
         "",
-        "| stage | verdict | baseline | validation | prompt checksum | packet checksum |",
-        "|---|---|---:|---:|---|---|",
+        "| stage | v2 verdict | v3 verdict | paired comparison | v2 checksum | v3 checksum |",
+        "|---|---|---|---|---|---|",
     ]
     for stage in payload["stageReports"]:
-        prompt = stage.get("promptIdentity", {})
+        v2 = stage["familyReports"]["v2"]
+        v3 = stage["familyReports"]["v3"]
         lines.append(
-            f"| `{stage['stageName']}` | `{stage['overallStageVerdict']}` | "
-            f"{stage['baselineEvidenceCount']} | {stage['validationEvidenceCount']} | "
-            f"`{prompt.get('stagePromptChecksum', 'missing')}` | "
-            f"`{prompt.get('packetTemplateChecksum', 'missing')}` |"
+            f"| `{stage['stageName']}` | `{v2['overallVerdict']}` | `{v3['overallVerdict']}` | "
+            f"`{stage['pairedComparison']['verdict']}` | "
+            f"`{v2['promptIdentity'].get('stagePromptChecksum', 'missing')}` | "
+            f"`{v3['promptIdentity'].get('stagePromptChecksum', 'missing')}` |"
         )
     lines.extend(["", "## Notes", ""])
     for stage in payload["stageReports"]:
         lines.append(f"### `{stage['stageName']}`")
-        if not stage["validationEvidence"]:
-            lines.append("- validation evidence: missing")
-            lines.append("- result: `EVIDENCE_GAP`")
-            lines.append("")
-            continue
-        for evidence in stage["validationEvidence"]:
+        lines.append(f"- paired comparison: `{stage['pairedComparison']['verdict']}` reasons=`{stage['pairedComparison']['reasons']}`")
+        for family in PROMPT_FAMILIES:
+            family_report = stage["familyReports"][family]
             lines.append(
-                f"- `{evidence['scenarioPack']}/{evidence['workloadSize']}/{evidence['decisionMode']}` "
-                f"context=`{evidence['contextCoverageStatus']}` "
-                f"fallback=`{evidence['fallbackStatus']}` "
-                f"assessment=`{evidence['assessmentRichnessStatus']}` "
-                f"overall=`{evidence['overallStageVerdict']}`"
+                f"- `{family}` verdict=`{family_report['overallVerdict']}` "
+                f"validationEvidence=`{family_report['validationEvidenceCount']}` "
+                f"baselineEvidence=`{family_report['baselineEvidenceCount']}` "
+                f"maxRichness=`{family_report['maxRichnessScore']}` "
+                f"sessionRefCountMax=`{family_report['sessionRefCountMax']}`"
             )
-            lines.append(
-                f"  candidateCountSeen={evidence.get('promptMetadata', {}).get('candidateCountSeen', 'missing')} "
-                f"comparisonCoverage={evidence.get('promptMetadata', {}).get('comparisonPackCoverage', 'missing')} "
-                f"geospatialCoverage={evidence.get('promptMetadata', {}).get('geospatialCoverage', 'missing')}"
-            )
-            lines.append(
-                f"  fallbackReason=`{evidence.get('fallbackSummary', {}).get('fallbackReason', '')}` "
-                f"richnessScore=`{evidence.get('assessmentSummary', {}).get('richnessScore', 'missing')}` "
-                f"selected/nonSelected=`{evidence.get('assessmentSummary', {}).get('selectedCount', 0)}/"
-                f"{evidence.get('assessmentSummary', {}).get('nonSelectedCount', 0)}`"
-            )
-        if stage["baselineEvidence"]:
-            lines.append(f"- baseline evidence count: `{stage['baselineEvidenceCount']}`")
+            if not family_report["validationEvidence"]:
+                continue
+            for evidence in family_report["validationEvidence"]:
+                lines.append(
+                    f"  {evidence['scenarioPack']}/{evidence['workloadSize']}/{evidence['decisionMode']} "
+                    f"context=`{evidence['contextCoverageStatus']}` fallback=`{evidence['fallbackStatus']}` "
+                    f"assessment=`{evidence['assessmentRichnessStatus']}` overall=`{evidence['overallStageVerdict']}`"
+                )
+                lines.append(
+                    f"  candidateCountSeen={evidence.get('promptMetadata', {}).get('candidateCountSeen', 'missing')} "
+                    f"comparisonCoverage={evidence.get('promptMetadata', {}).get('comparisonPackCoverage', 'missing')} "
+                    f"geospatialCoverage={evidence.get('promptMetadata', {}).get('geospatialCoverage', 'missing')} "
+                    f"skillSetVersion={evidence.get('promptMetadata', {}).get('skillSetVersion', '')} "
+                    f"sessionRefCount={evidence.get('promptMetadata', {}).get('sessionRefCount', 0)}"
+                )
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
-def write_report(payload: dict, output_dir: Path) -> tuple[Path, Path]:
+def write_report(payload: dict, output_dir: Path) -> Tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     json_path = output_dir / f"prompt-redesign-validation-{timestamp}.json"
@@ -518,8 +573,9 @@ def write_report(payload: dict, output_dir: Path) -> tuple[Path, Path]:
     return json_path, markdown_path
 
 
-def planned_cells(stages: Sequence[str]) -> list[ValidationCell]:
-    return [ValidationCell(stage=stage, **STAGE_DEFAULTS[stage]) for stage in stages]
+def planned_cells(stages: Sequence[str], prompt_family_mode: str) -> List[ValidationCell]:
+    families = family_roots(prompt_family_mode)
+    return [ValidationCell(stage=stage, prompt_family=family, **STAGE_DEFAULTS[stage]) for stage in stages for family in families]
 
 
 def run_validation_cell(cell: ValidationCell, output_dir: Path, runner=subprocess.run) -> int:
@@ -528,6 +584,7 @@ def run_validation_cell(cell: ValidationCell, output_dir: Path, runner=subproces
         "--size", cell.size,
         "--scenario-pack", cell.scenario_pack,
         "--decision-mode", cell.decision_mode,
+        "--prompt-family", cell.prompt_family,
         "--execution-mode", cell.execution_mode,
         "--output-dir", str(output_dir),
     ]
@@ -536,20 +593,36 @@ def run_validation_cell(cell: ValidationCell, output_dir: Path, runner=subproces
 
 
 def collect_stage_reports(baseline_roots: Sequence[Path], validation_roots: Sequence[Path], stages: Sequence[str]) -> dict:
-    benchmark_index: dict[tuple[str, str, str, str, str], dict] = {}
-    feedback_rows: list[StageFeedback] = []
+    benchmark_index: Dict[Tuple[str, str, str, str, str, str, str], dict] = {}
+    feedback_rows: List[StageFeedback] = []
     for root_type, roots in (("baseline", baseline_roots), ("validation", validation_roots)):
         for root in roots:
             for result in collect_benchmark_results(root, root_type):
-                benchmark_index[(result["_rootType"], result["_rootPath"], str(result.get("scenarioPack", "")), str(result.get("workloadSize", "")), str(result.get("decisionMode", "")))] = result
+                benchmark_index[(
+                    result["_rootType"],
+                    result["_rootPath"],
+                    str(result.get("scenarioPack", "")),
+                    str(result.get("workloadSize", "")),
+                    str(result.get("decisionMode", "")),
+                    str(result.get("executionMode", "")),
+                    str(result.get("promptFamily", "v2")),
+                )] = result
             feedback_rows.extend(collect_feedback_rows(root, root_type))
 
-    baseline_stage_reports: dict[str, list[dict]] = {stage: [] for stage in stages}
-    validation_stage_reports: dict[str, list[dict]] = {stage: [] for stage in stages}
+    baseline_stage_reports: Dict[str, List[dict]] = {stage: [] for stage in stages}
+    validation_stage_reports: Dict[str, List[dict]] = {stage: [] for stage in stages}
     for feedback in feedback_rows:
         if feedback.stage not in stages:
             continue
-        benchmark_result = benchmark_index.get((feedback.root_type, feedback.root_path, feedback.scenario_pack, feedback.size, feedback.decision_mode))
+        benchmark_result = benchmark_index.get((
+            feedback.root_type,
+            feedback.root_path,
+            feedback.scenario_pack,
+            feedback.size,
+            feedback.decision_mode,
+            feedback.execution_mode,
+            feedback.prompt_family,
+        ))
         evidence = build_stage_evidence(feedback, benchmark_result)
         target = baseline_stage_reports if feedback.root_type == "baseline" else validation_stage_reports
         target[feedback.stage].append(evidence)
@@ -562,12 +635,13 @@ def collect_stage_reports(baseline_roots: Sequence[Path], validation_roots: Sequ
     }
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Run Dispatch V2 prompt redesign stage validation.")
     parser.add_argument("--baseline-root", action="append", default=[])
     parser.add_argument("--validation-root", action="append", default=[])
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--stage", action="append", choices=stage_cli_choices(), default=[])
+    parser.add_argument("--prompt-family", choices=prompt_family_choices(), default="both")
     parser.add_argument("--rerun-cells", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -576,11 +650,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     output_dir = Path(args.output_dir)
     baseline_roots = [Path(path) for path in (args.baseline_root or [str(DEFAULT_BASELINE_ROOT)])]
     validation_roots = [Path(path) for path in args.validation_root]
-    cells = planned_cells(stages)
+    cells = planned_cells(stages, args.prompt_family)
     print(f"[PROMPT VALIDATION] stage-count={len(cells)}")
     for cell in cells:
         print(
-            f"- stage={cell.stage} scenario-pack={cell.scenario_pack} size={cell.size} "
+            f"- stage={cell.stage} prompt-family={cell.prompt_family} scenario-pack={cell.scenario_pack} size={cell.size} "
             f"decision-mode={cell.decision_mode} baseline={cell.baseline} execution-mode={cell.execution_mode}"
         )
     if args.dry_run:
@@ -588,29 +662,32 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     rerun_executed = False
     if args.rerun_cells:
-        live_root = output_dir / "live"
-        validation_roots.append(live_root)
         rerun_executed = True
         for cell in cells:
-            print(f"[CELL STARTED] stage={cell.stage}")
+            live_root = output_dir / "live" / cell.prompt_family
+            if live_root not in validation_roots:
+                validation_roots.append(live_root)
+            print(f"[CELL STARTED] stage={cell.stage} prompt-family={cell.prompt_family}")
             exit_code = run_validation_cell(cell, live_root)
             if exit_code != 0:
-                print(f"[CELL FAILED] stage={cell.stage} exit={exit_code}")
+                print(f"[CELL FAILED] stage={cell.stage} prompt-family={cell.prompt_family} exit={exit_code}")
                 return exit_code
-            print(f"[CELL COMPLETED] stage={cell.stage}")
+            print(f"[CELL COMPLETED] stage={cell.stage} prompt-family={cell.prompt_family}")
 
     summary = collect_stage_reports(baseline_roots, validation_roots, stages)
     payload = {
-        "schemaVersion": "dispatch-prompt-redesign-validation/v1",
+        "schemaVersion": "dispatch-prompt-redesign-validation/v2",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "validationCommit": git_commit(),
         "baselineRoots": [str(path) for path in baseline_roots],
         "validationRoots": [str(path) for path in validation_roots],
         "rerunExecuted": rerun_executed,
+        "promptFamilyMode": args.prompt_family,
         "targetStages": list(stages),
         "baselineEvidenceCount": summary["baselineEvidenceCount"],
         "validationEvidenceCount": summary["validationEvidenceCount"],
         "stageReports": summary["stageReports"],
+        "comparisonVerdicts": list(COMPARISON_VERDICTS),
     }
     json_path, markdown_path = write_report(payload, output_dir)
     print(f"[REPORT JSON] {json_path}")

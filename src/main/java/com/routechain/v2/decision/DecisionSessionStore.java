@@ -18,6 +18,10 @@ public interface DecisionSessionStore extends AutoCloseable {
                                          DecisionStageOutputV1 output,
                                          List<Map<String, Object>> passSummaries);
 
+    default boolean sessionStoreEnabled() {
+        return false;
+    }
+
     @Override
     default void close() {
     }
@@ -29,7 +33,9 @@ public interface DecisionSessionStore extends AutoCloseable {
 
     record SessionContext(
             Map<String, Object> sessionRefs,
-            int sessionRefCount) {
+            int sessionRefCount,
+            String sessionNamespace,
+            List<String> sessionReadRefs) {
 
         static SessionContext empty() {
             return new SessionContext(Map.of(
@@ -37,12 +43,14 @@ public interface DecisionSessionStore extends AutoCloseable {
                     "routeVectorRefs", List.of(),
                     "tileContextRefs", List.of(),
                     "selectedCandidateRefs", List.of(),
-                    "critiqueRefs", List.of()), 0);
+                    "critiqueRefs", List.of()), 0, "", List.of());
         }
     }
 
     record StageSessionRecord(
             Map<String, Object> stageSummary,
-            Map<String, Object> stageRefs) {
+            Map<String, Object> stageRefs,
+            String sessionNamespace,
+            List<String> sessionWriteRefs) {
     }
 }

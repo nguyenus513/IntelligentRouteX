@@ -163,6 +163,7 @@ public final class DispatchQualityBenchmarkHarness {
                     gitCommit(),
                     DispatchPerfMachineProfile.capture(request.machineLabel()),
                     request.decisionMode().wireName(),
+                    request.promptFamily(),
                     runtimeClassification(request.decisionMode(), execution.authoritativeStages()),
                     execution.authoritativeStages(),
                     request.executionMode().wireName(),
@@ -234,6 +235,7 @@ public final class DispatchQualityBenchmarkHarness {
                 gitCommit(),
                 DispatchPerfMachineProfile.capture(request.machineLabel()),
                 request.decisionMode().wireName(),
+                request.promptFamily(),
                 runtimeClassification(request.decisionMode(), request.decisionMode().authoritativeStages()),
                 request.decisionMode().authoritativeStages(),
                 request.executionMode().wireName(),
@@ -287,6 +289,7 @@ public final class DispatchQualityBenchmarkHarness {
                 gitCommit(),
                 DispatchPerfMachineProfile.capture(request.machineLabel()),
                 request.decisionMode().wireName(),
+                request.promptFamily(),
                 runtimeClassification(request.decisionMode(), request.decisionMode().authoritativeStages()),
                 request.decisionMode().authoritativeStages(),
                 request.executionMode().wireName(),
@@ -334,6 +337,7 @@ public final class DispatchQualityBenchmarkHarness {
         RouteChainDispatchV2Properties properties = baseProperties(
                 baselineId,
                 request.decisionMode(),
+                request.promptFamily(),
                 request.executionMode(),
                 feedbackDirectory(request, baselineId, executionPolicy));
         scenario.configureProperties(properties, baselineId);
@@ -365,6 +369,7 @@ public final class DispatchQualityBenchmarkHarness {
         RouteChainDispatchV2Properties properties = baseProperties(
                 DispatchPerfBenchmarkHarness.BaselineId.C,
                 DispatchBenchmarkDecisionMode.LEGACY,
+                "v2",
                 request.executionMode(),
                 feedbackDirectory(request, control));
         scenario.configureProperties(properties, DispatchPerfBenchmarkHarness.BaselineId.C);
@@ -819,6 +824,7 @@ public final class DispatchQualityBenchmarkHarness {
 
     private RouteChainDispatchV2Properties baseProperties(DispatchPerfBenchmarkHarness.BaselineId baselineId,
                                                           DispatchBenchmarkDecisionMode decisionMode,
+                                                          String promptFamily,
                                                           ExecutionMode executionMode,
                                                           Path feedbackDirectory) {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
@@ -835,6 +841,10 @@ public final class DispatchQualityBenchmarkHarness {
                 "routechain.dispatch-v2.decision.llm.model",
                 "ROUTECHAIN_DECISION_LLM_MODEL",
                 properties.getDecision().getLlm().getModel()));
+        properties.getDecision().getLlm().setPromptFamily(configuredValue(
+                "routechain.dispatch-v2.decision.llm.prompt-family",
+                "DISPATCH_QUALITY_PROMPT_FAMILY",
+                promptFamily));
         properties.getMl().setModelManifestPath(configuredValue(
                 "dispatchV2.ml.modelManifestPath",
                 "IRX_MODEL_MANIFEST_PATH",
@@ -912,6 +922,7 @@ public final class DispatchQualityBenchmarkHarness {
                 .resolve(request.workloadSize().name().toLowerCase(Locale.ROOT))
                 .resolve(request.executionMode().wireName())
                 .resolve(request.decisionMode().wireName())
+                .resolve(request.promptFamily().toLowerCase(Locale.ROOT))
                 .resolve(baselineId.name().toLowerCase(Locale.ROOT));
     }
 
@@ -925,19 +936,21 @@ public final class DispatchQualityBenchmarkHarness {
     }
 
     private String traceFamilyId(BenchmarkRequest request, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
-        return "quality-%s-%s-%s-%s".formatted(
+        return "quality-%s-%s-%s-%s-%s".formatted(
                 request.scenarioPack().wireName(),
                 request.workloadSize().name().toLowerCase(Locale.ROOT),
                 request.decisionMode().wireName(),
+                request.promptFamily().toLowerCase(Locale.ROOT),
                 baselineId.name().toLowerCase(Locale.ROOT));
     }
 
     private String cellKey(BenchmarkRequest request, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
-        return "%s-%s-%s-%s-%s".formatted(
+        return "%s-%s-%s-%s-%s-%s".formatted(
                 request.scenarioPack().wireName(),
                 request.workloadSize().name().toLowerCase(Locale.ROOT),
                 request.executionMode().wireName(),
                 request.decisionMode().wireName(),
+                request.promptFamily().toLowerCase(Locale.ROOT),
                 baselineId.name().toLowerCase(Locale.ROOT));
     }
 
@@ -1829,6 +1842,7 @@ public final class DispatchQualityBenchmarkHarness {
             DispatchPerfBenchmarkHarness.WorkloadSize workloadSize,
             ScenarioPack scenarioPack,
             DispatchBenchmarkDecisionMode decisionMode,
+            String promptFamily,
             ExecutionMode executionMode,
             String machineLabel,
             boolean authorityRun,

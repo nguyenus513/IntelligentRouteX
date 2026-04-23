@@ -57,6 +57,8 @@ class PromptPackRegistryTest {
         assertEquals("decision-stage-prompt-spec/v3", rendered.metadata().get("promptSpecVersion"));
         assertEquals("decision-stage-skill-set/v1", rendered.metadata().get("skillSetVersion"));
         assertEquals(4, ((Number) rendered.metadata().get("sessionRefCount")).intValue());
+        assertEquals(Boolean.TRUE, rendered.metadata().get("sessionStoreEnabled"));
+        assertEquals("run-1/2026-04-20T00_00_00Z/trace-1", rendered.metadata().get("sessionNamespace"));
     }
 
     private DecisionStageInputV1 stageInput(DecisionStageName stageName) {
@@ -115,13 +117,21 @@ class PromptPackRegistryTest {
 
     private static final class FixedDecisionSessionStore extends NoOpDecisionSessionStore {
         @Override
+        public boolean sessionStoreEnabled() {
+            return true;
+        }
+
+        @Override
         public SessionContext resolveContext(DecisionStageInputV1 input) {
             return new SessionContext(Map.of(
                     "priorStageResultRefs", List.of(Map.of("stageName", "route-generation")),
                     "routeVectorRefs", List.of("proposal-1"),
                     "tileContextRefs", List.of("tile-1"),
                     "selectedCandidateRefs", List.of("proposal-1"),
-                    "critiqueRefs", List.of("route-dominated")), 4);
+                    "critiqueRefs", List.of("route-dominated")),
+                    4,
+                    "run-1/2026-04-20T00_00_00Z/trace-1",
+                    List.of("stage:route-generation", "route-vector:proposal-1", "tile-context:tile-1", "critique:route-dominated"));
         }
     }
 }

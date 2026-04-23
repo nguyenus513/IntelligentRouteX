@@ -63,11 +63,17 @@ Prompt redesign is now implemented at the runtime layer, but it is tracked separ
 Validation rail:
 
 - contract: [dispatch_v2_prompt_redesign_validation.md](/E:/Code%20_Project/IntelligentRouteX/docs/dispatch_v2_prompt_redesign_validation.md)
+- v3 semantics: [dispatch_v2_prompt_family_v3.md](/E:/Code%20_Project/IntelligentRouteX/docs/dispatch_v2_prompt_family_v3.md)
 - report artifact: [prompt_redesign_validation_report.md](/E:/Code%20_Project/IntelligentRouteX/artifacts/benchmark/prompt-redesign/prompt_redesign_validation_report.md)
+
+Prompt-family v3 session-safety rail:
+
+- report artifact: [session_safety_report.md](/E:/Code%20_Project/IntelligentRouteX/artifacts/validation/prompt-family-v3/session-safety/session_safety_report.md)
 
 Interpretation:
 
 - implementation status: `DONE`
+- v3 session isolation evidence: `IN_PROGRESS`
 - stage-level quality evidence: `IN_PROGRESS`
 - authority impact claim: `NOT_YET_CLOSED`
 

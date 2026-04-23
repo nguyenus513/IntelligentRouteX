@@ -47,7 +47,9 @@ final class StagePacketBuilderV3 {
                 visibilityPolicy.comparisonPackCoverage(input.stageName(), comparisonPack),
                 visibilityPolicy.geospatialCoverage(input.stageName(), geospatialContext),
                 visibilityPolicy.missingContextFlags(input, comparisonPack, geospatialContext, candidateWindow),
-                sessionContext.sessionRefCount());
+                sessionContext.sessionRefCount(),
+                sessionContext.sessionNamespace(),
+                sessionContext.sessionReadRefs());
     }
 
     record StagePacketBuildResult(
@@ -56,6 +58,8 @@ final class StagePacketBuilderV3 {
             double comparisonPackCoverage,
             double geospatialCoverage,
             List<String> missingContextFlags,
-            int sessionRefCount) {
+            int sessionRefCount,
+            String sessionNamespace,
+            List<String> sessionReadRefs) {
     }
 }

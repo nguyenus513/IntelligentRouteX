@@ -25,6 +25,6 @@ public class NoOpDecisionSessionStore implements DecisionSessionStore {
     public StageSessionRecord recordStageResult(DecisionStageInputV1 input,
                                                 DecisionStageOutputV1 output,
                                                 List<Map<String, Object>> passSummaries) {
-        return new StageSessionRecord(Map.of(), Map.of());
+        return new StageSessionRecord(Map.of(), Map.of(), "", List.of());
     }
 }

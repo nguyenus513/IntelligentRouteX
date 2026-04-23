@@ -4,7 +4,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import List, Optional, Sequence, Tuple
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -21,6 +21,7 @@ SCENARIO_PACKS = (
 )
 EXECUTION_MODES = ("controlled", "local-real")
 DECISION_MODES = ("legacy", "llm-shadow", "llm-authoritative")
+PROMPT_FAMILIES = ("v2", "v3")
 
 
 @dataclass(frozen=True)
@@ -29,19 +30,20 @@ class BenchmarkCell:
     size: str
     scenario_pack: str
     decision_mode: str
-    authoritative_stages: tuple[str, ...]
+    prompt_family: str
+    authoritative_stages: Tuple[str, ...]
     execution_mode: str
     authority: bool
 
 
 @dataclass(frozen=True)
 class CellArtifacts:
-    json_paths: tuple[Path, ...]
-    markdown_paths: tuple[Path, ...]
-    csv_paths: tuple[Path, ...]
+    json_paths: Tuple[Path, ...]
+    markdown_paths: Tuple[Path, ...]
+    csv_paths: Tuple[Path, ...]
 
 
-def expand_selector(value: str, allowed: Sequence[str]) -> list[str]:
+def expand_selector(value: str, allowed: Sequence[str]) -> List[str]:
     if value == "all":
         return list(allowed)
     if value not in allowed:
@@ -49,30 +51,33 @@ def expand_selector(value: str, allowed: Sequence[str]) -> list[str]:
     return [value]
 
 
-def gradle_command() -> list[str]:
+def gradle_command() -> List[str]:
     return [str(REPO_ROOT / "gradlew.bat")] if os.name == "nt" else [str(REPO_ROOT / "gradlew")]
 
 
 def cell_label(cell: BenchmarkCell) -> str:
     return (
         f"{cell.baselines}/{cell.size}/{cell.scenario_pack}/{cell.decision_mode}/"
+        f"prompt-family={cell.prompt_family}/"
         f"stages={','.join(cell.authoritative_stages) if cell.authoritative_stages else 'default'}/"
         f"{cell.execution_mode}/authority={str(cell.authority).lower()}"
     )
 
 
-def planned_cells(args: argparse.Namespace) -> list[BenchmarkCell]:
+def planned_cells(args: argparse.Namespace) -> List[BenchmarkCell]:
     baseline_selector = "A,B,C" if args.baseline == "all" else args.baseline
     sizes = expand_selector(args.size, SIZES)
     scenario_packs = expand_selector(args.scenario_pack, SCENARIO_PACKS)
     decision_modes = expand_selector(args.decision_mode, DECISION_MODES)
+    prompt_families = expand_selector(args.prompt_family, PROMPT_FAMILIES)
     execution_modes = expand_selector(args.execution_mode, EXECUTION_MODES)
     authoritative_stages = tuple(stage.strip() for stage in args.authoritative_stage if stage.strip())
     return [
-        BenchmarkCell(baseline_selector, size, scenario_pack, decision_mode, authoritative_stages, execution_mode, args.authority)
+        BenchmarkCell(baseline_selector, size, scenario_pack, decision_mode, prompt_family, authoritative_stages, execution_mode, args.authority)
         for size in sizes
         for scenario_pack in scenario_packs
         for decision_mode in decision_modes
+        for prompt_family in prompt_families
         for execution_mode in execution_modes
     ]
 
@@ -91,6 +96,7 @@ def run_cell(cell: BenchmarkCell, output_dir: Path, runner=subprocess.run, run_d
         "DISPATCH_QUALITY_SIZE": cell.size,
         "DISPATCH_QUALITY_SCENARIO_PACK": cell.scenario_pack,
         "DISPATCH_QUALITY_DECISION_MODE": cell.decision_mode,
+        "DISPATCH_QUALITY_PROMPT_FAMILY": cell.prompt_family,
         "DISPATCH_QUALITY_AUTHORITATIVE_STAGES": ",".join(cell.authoritative_stages),
         "DISPATCH_QUALITY_EXECUTION_MODE": cell.execution_mode,
         "DISPATCH_QUALITY_AUTHORITY": "true" if cell.authority else "false",
@@ -124,10 +130,10 @@ def ensure_cell_artifacts(cell: BenchmarkCell, delta: CellArtifacts) -> None:
         raise RuntimeError(f"{cell_label(cell)} completed without new Markdown artifacts")
 
 
-def collect_results(output_dir: Path) -> list[dict]:
+def collect_results(output_dir: Path) -> List[dict]:
     if not output_dir.exists():
         return []
-    results: list[dict] = []
+    results: List[dict] = []
     for path in sorted(output_dir.glob("dispatch-quality*.json")):
         with path.open("r", encoding="utf-8") as handle:
             results.append(json.load(handle))
@@ -145,6 +151,7 @@ def write_summary(results: Sequence[dict], output_dir: Path) -> Path:
                 f"## `{result.get('scenarioPack')} / {result.get('baselineId')} / {result.get('workloadSize')}`",
                 "",
                 f"- decision mode: `{result.get('decisionMode', 'legacy')}`",
+                f"- prompt family: `{result.get('promptFamily', 'v2')}`",
                 f"- authoritative stages: `{result.get('authoritativeStages', [])}`",
                 f"- execution mode: `{result.get('executionMode')}`",
                 f"- authority class: `{result.get('runAuthorityClass', 'LOCAL_NON_AUTHORITY')}`",
@@ -162,6 +169,7 @@ def write_summary(results: Sequence[dict], output_dir: Path) -> Path:
                 f"## `comparison / {result.get('scenarioPack')} / {result.get('workloadSize')}`",
                 "",
                 f"- decision mode: `{result.get('decisionMode', 'legacy')}`",
+                f"- prompt family: `{result.get('promptFamily', 'v2')}`",
                 f"- authoritative stages: `{result.get('authoritativeStages', [])}`",
                 f"- execution mode: `{result.get('executionMode')}`",
                 f"- authority class: `{result.get('runAuthorityClass', 'LOCAL_NON_AUTHORITY')}`",
@@ -173,12 +181,13 @@ def write_summary(results: Sequence[dict], output_dir: Path) -> Path:
     return summary_path
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Run Dispatch V2 quality benchmark smoke scenarios.")
     parser.add_argument("--baseline", default="all", help="A|B|C|all")
     parser.add_argument("--size", default="all", help="S|M|L|XL|all")
     parser.add_argument("--scenario-pack", default="all", help="scenario pack or all")
     parser.add_argument("--decision-mode", default="legacy", help="legacy|llm-shadow|llm-authoritative|all")
+    parser.add_argument("--prompt-family", default="v2", help="v2|v3|all")
     parser.add_argument("--authoritative-stage", action="append", default=[], help="Optional repeated authoritative stage override.")
     parser.add_argument("--execution-mode", default="controlled", help="controlled|local-real")
     parser.add_argument("--authority", action="store_true", help="Mark the run as authority-eligible when semantics allow it.")
@@ -198,13 +207,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     for cell in cells:
         print(
             f"- baselines={cell.baselines} size={cell.size} scenario-pack={cell.scenario_pack} "
-            f"decision-mode={cell.decision_mode} authoritative-stages={list(cell.authoritative_stages)} "
+            f"decision-mode={cell.decision_mode} prompt-family={cell.prompt_family} "
+            f"authoritative-stages={list(cell.authoritative_stages)} "
             f"execution-mode={cell.execution_mode} authority={str(cell.authority).lower()}"
         )
     if args.dry_run:
         return 0
 
-    failures: list[str] = []
+    failures: List[str] = []
     for cell in cells:
         print(f"[CELL STARTED] {cell_label(cell)}")
         before = artifact_snapshot(output_dir)

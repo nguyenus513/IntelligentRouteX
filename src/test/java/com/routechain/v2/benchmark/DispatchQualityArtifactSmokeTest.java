@@ -22,15 +22,17 @@ class DispatchQualityArtifactSmokeTest {
         String sizeWire = value("dispatchQuality.size", "DISPATCH_QUALITY_SIZE", "S");
         String scenarioPackWire = value("dispatchQuality.scenarioPack", "DISPATCH_QUALITY_SCENARIO_PACK", "normal-clear");
         String decisionModeWire = value("dispatchQuality.decisionMode", "DISPATCH_QUALITY_DECISION_MODE", "legacy");
+        String promptFamilyWire = value("dispatchQuality.promptFamily", "DISPATCH_QUALITY_PROMPT_FAMILY", "v2");
         String executionModeWire = value("dispatchQuality.executionMode", "DISPATCH_QUALITY_EXECUTION_MODE", "CONTROLLED");
         boolean authority = Boolean.parseBoolean(value("dispatchQuality.authority", "DISPATCH_QUALITY_AUTHORITY", "false"));
         String outputDirWire = value("dispatchQuality.outputDir", "DISPATCH_QUALITY_OUTPUT_DIR", "build/dispatch-quality-smoke");
         System.out.printf(
-                "[CELL STARTED] baselines=%s size=%s scenario-pack=%s decision-mode=%s execution-mode=%s authority=%s%n",
+                "[CELL STARTED] baselines=%s size=%s scenario-pack=%s decision-mode=%s prompt-family=%s execution-mode=%s authority=%s%n",
                 baselinesWire,
                 sizeWire,
                 scenarioPackWire,
                 decisionModeWire,
+                promptFamilyWire,
                 executionModeWire,
                 authority);
         List<DispatchPerfBenchmarkHarness.BaselineId> baselines = parseBaselines(value("dispatchQuality.baselines", "DISPATCH_QUALITY_BASELINES", "A,B,C"));
@@ -39,6 +41,7 @@ class DispatchQualityArtifactSmokeTest {
                 DispatchPerfBenchmarkHarness.WorkloadSize.valueOf(sizeWire),
                 DispatchQualityBenchmarkHarness.ScenarioPack.fromWire(scenarioPackWire),
                 DispatchBenchmarkDecisionMode.fromWire(decisionModeWire),
+                promptFamilyWire,
                 DispatchQualityBenchmarkHarness.ExecutionMode.valueOf(executionModeWire.toUpperCase().replace('-', '_')),
                 value("dispatchQuality.machineLabel", "DISPATCH_QUALITY_MACHINE_LABEL", DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL),
                 authority,
@@ -68,6 +71,7 @@ class DispatchQualityArtifactSmokeTest {
         assertNotNull(firstResult.executionPolicy());
         assertNotNull(firstResult.artifactWriteCompletedAt());
         assertNotNull(firstResult.timeoutPhase());
+        assertTrue(promptFamilyWire.equals(firstResult.promptFamily()));
         if (run.comparisonReport() != null) {
             assertNotNull(artifacts.comparisonJsonPath());
             assertTrue(artifacts.comparisonJsonPath().toFile().isFile());

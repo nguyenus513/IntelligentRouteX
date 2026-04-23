@@ -152,8 +152,13 @@ public final class PromptPackRegistry {
         metadata.put("visibilityProfile", "generic-fallback");
         metadata.put("allowedInputs", List.of("dispatchContext", "candidateSet", "referenceFrame", "comparisonPack", "geospatialContext", "burstContext", "upstreamSummary"));
         metadata.put("multiPassEnabled", false);
+        metadata.put("sessionStoreEnabled", false);
         metadata.put("sessionRefCount", 0);
+        metadata.put("sessionNamespace", "");
+        metadata.put("sessionReadRefs", List.of());
+        metadata.put("sessionWriteRefs", List.of());
         metadata.put("fallbackReason", fallbackReason);
+        metadata.put("promptFamily", "v2");
         return new RenderedPrompt(
                 systemPrompt,
                 dynamicPrompt,
@@ -200,7 +205,11 @@ public final class PromptPackRegistry {
                 packetResult.comparisonPackCoverage(),
                 packetResult.geospatialCoverage(),
                 packetResult.missingContextFlags(),
-                0);
+                0,
+                false,
+                "",
+                List.of(),
+                List.of());
         return new RenderedPrompt(systemPrompt, dynamicPrompt, spec, packetResult.packet(), Map.copyOf(metadata));
     }
 
@@ -218,7 +227,11 @@ public final class PromptPackRegistry {
                 packetResult.comparisonPackCoverage(),
                 packetResult.geospatialCoverage(),
                 packetResult.missingContextFlags(),
-                packetResult.sessionRefCount());
+                packetResult.sessionRefCount(),
+                sessionStore.sessionStoreEnabled(),
+                packetResult.sessionNamespace(),
+                packetResult.sessionReadRefs(),
+                List.of());
         metadata.put("skillSetVersion", skillSet.skillSetVersion());
         metadata.put("skillIdsActivated", skillSet.skillIds());
         metadata.put("promptFamily", "v3");
@@ -233,7 +246,11 @@ public final class PromptPackRegistry {
                                                        double comparisonPackCoverage,
                                                        double geospatialCoverage,
                                                        List<String> missingContextFlags,
-                                                       int sessionRefCount) {
+                                                       int sessionRefCount,
+                                                       boolean sessionStoreEnabled,
+                                                       String sessionNamespace,
+                                                       List<String> sessionReadRefs,
+                                                       List<String> sessionWriteRefs) {
         LinkedHashMap<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("promptSpecVersion", spec.promptSpecVersion());
         metadata.put("stagePromptName", spec.stagePromptName());
@@ -251,7 +268,11 @@ public final class PromptPackRegistry {
         metadata.put("visibilityProfile", spec.visibilityProfile());
         metadata.put("allowedInputs", spec.allowedInputs());
         metadata.put("multiPassEnabled", spec.multiPassEnabled());
+        metadata.put("sessionStoreEnabled", sessionStoreEnabled);
         metadata.put("sessionRefCount", sessionRefCount);
+        metadata.put("sessionNamespace", sessionNamespace);
+        metadata.put("sessionReadRefs", sessionReadRefs);
+        metadata.put("sessionWriteRefs", sessionWriteRefs);
         metadata.put("fallbackReason", "");
         metadata.put("promptFamily", useV3() ? "v3" : "v2");
         return metadata;

@@ -47,7 +47,11 @@ public final class LlmStageScheduler {
                 "schemaVersion", "decision-session-ref-trace/v1",
                 "traceId", input.traceId(),
                 "stageName", input.stageName().wireName(),
+                "promptFamily", decisionProperties.getLlm().getPromptFamily(),
+                "sessionStoreEnabled", sessionStore.sessionStoreEnabled(),
+                "sessionNamespace", sessionContext.sessionNamespace(),
                 "sessionRefCount", sessionContext.sessionRefCount(),
+                "sessionReadRefs", sessionContext.sessionReadRefs(),
                 "sessionRefs", sessionContext.sessionRefs()));
         DecisionEffortPolicy.EffortDecision effortDecision = effortPolicy.select(input);
         List<PassTrace> passTraces = multiPassEnabled(input.stageName()) ? runMultiPass(input, effortDecision) : runSinglePass(input, effortDecision);
@@ -179,15 +183,20 @@ public final class LlmStageScheduler {
                             PromptPackRegistry.RenderedPrompt renderedPrompt,
                             NineRouterResponsesClient.LlmInvocationResult result) {
         sessionStore.recordPass(input, passType, renderedPrompt, result);
-        decisionStageLogger.writeFamily("llm_skill_activation_trace", input.traceId(), input.stageName().wireName() + "-" + passType, Map.of(
-                "schemaVersion", "llm-skill-activation-trace/v1",
-                "traceId", input.traceId(),
-                "stageName", input.stageName().wireName(),
-                "passType", passType,
-                "skillSetVersion", renderedPrompt.metadata().getOrDefault("skillSetVersion", ""),
-                "skillIdsActivated", renderedPrompt.metadata().getOrDefault("skillIdsActivated", List.of()),
-                "sessionRefCount", renderedPrompt.metadata().getOrDefault("sessionRefCount", 0),
-                "promptFamily", renderedPrompt.metadata().getOrDefault("promptFamily", "v2")));
+        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+        payload.put("schemaVersion", "llm-skill-activation-trace/v1");
+        payload.put("traceId", input.traceId());
+        payload.put("stageName", input.stageName().wireName());
+        payload.put("passType", passType);
+        payload.put("skillSetVersion", renderedPrompt.metadata().getOrDefault("skillSetVersion", ""));
+        payload.put("skillIdsActivated", renderedPrompt.metadata().getOrDefault("skillIdsActivated", List.of()));
+        payload.put("sessionStoreEnabled", renderedPrompt.metadata().getOrDefault("sessionStoreEnabled", false));
+        payload.put("sessionNamespace", renderedPrompt.metadata().getOrDefault("sessionNamespace", ""));
+        payload.put("sessionReadRefs", renderedPrompt.metadata().getOrDefault("sessionReadRefs", List.of()));
+        payload.put("sessionWriteRefs", renderedPrompt.metadata().getOrDefault("sessionWriteRefs", List.of()));
+        payload.put("sessionRefCount", renderedPrompt.metadata().getOrDefault("sessionRefCount", 0));
+        payload.put("promptFamily", renderedPrompt.metadata().getOrDefault("promptFamily", "v2"));
+        decisionStageLogger.writeFamily("llm_skill_activation_trace", input.traceId(), input.stageName().wireName() + "-" + passType, Map.copyOf(payload));
     }
 
     private DecisionStageInputV1 passInput(DecisionStageInputV1 input, String passType, String passObjective) {

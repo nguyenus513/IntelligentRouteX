@@ -26,6 +26,11 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
     }
 
     @Override
+    public boolean sessionStoreEnabled() {
+        return true;
+    }
+
+    @Override
     public SessionStartResult beginSession(DecisionStageInputV1 input) {
         cleanupExpired();
         Path root = traceRoot(input);
@@ -37,6 +42,7 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
         manifest.put("tickId", input.tickId());
         manifest.put("startedAt", Instant.now());
         manifest.put("promptFamily", "v3");
+        manifest.put("sessionNamespace", sessionNamespace(input));
         boolean created = !Files.exists(manifestPath);
         try {
             Files.createDirectories(root);
@@ -61,6 +67,7 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
         List<String> tileContextRefs = new ArrayList<>();
         List<String> selectedCandidateRefs = new ArrayList<>();
         List<String> critiqueRefs = new ArrayList<>();
+        List<String> readRefs = new ArrayList<>();
         for (String upstreamRef : input.upstreamRefs()) {
             Path stageRoot = traceRoot(input).resolve(sanitize(upstreamRef));
             Path summaryPath = stageRoot.resolve("stage_summary.json");
@@ -69,6 +76,7 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
             if (!Files.exists(summaryPath) && !Files.exists(refsPath) && !Files.exists(resultPath)) {
                 continue;
             }
+            readRefs.add("stage:" + upstreamRef);
             LinkedHashMap<String, Object> stageRef = new LinkedHashMap<>();
             stageRef.put("stageName", upstreamRef);
             stageRef.put("summaryPath", summaryPath.toString());
@@ -88,6 +96,10 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
             }
             priorStageRefs.add(Map.copyOf(stageRef));
         }
+        routeVectorRefs.forEach(ref -> readRefs.add("route-vector:" + ref));
+        tileContextRefs.forEach(ref -> readRefs.add("tile-context:" + ref));
+        selectedCandidateRefs.forEach(ref -> readRefs.add("selected-candidate:" + ref));
+        critiqueRefs.forEach(ref -> readRefs.add("critique:" + ref));
         Map<String, Object> sessionRefs = Map.of(
                 "priorStageResultRefs", List.copyOf(priorStageRefs),
                 "routeVectorRefs", List.copyOf(routeVectorRefs.stream().distinct().toList()),
@@ -99,7 +111,11 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
                 + tileContextRefs.size()
                 + selectedCandidateRefs.size()
                 + critiqueRefs.size();
-        return new SessionContext(sessionRefs, sessionRefCount);
+        return new SessionContext(
+                sessionRefs,
+                sessionRefCount,
+                sessionNamespace(input),
+                List.copyOf(readRefs.stream().distinct().toList()));
     }
 
     @Override
@@ -150,6 +166,7 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
         stageSummary.put("passCount", passSummaries == null ? 0 : passSummaries.size());
         stageSummary.put("fallbackUsed", output.meta().fallbackUsed());
         stageSummary.put("fallbackReason", output.meta().fallbackReason() == null ? "" : output.meta().fallbackReason());
+        stageSummary.put("sessionNamespace", sessionNamespace(input));
 
         LinkedHashMap<String, Object> stageRefs = new LinkedHashMap<>();
         stageRefs.put("schemaVersion", "decision-session-stage-refs/v1");
@@ -159,6 +176,8 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
         stageRefs.put("routeVectorRefs", routeVectorRefs(output.assessments()));
         stageRefs.put("tileContextRefs", tileContextRefs(input.geospatialContext()));
         stageRefs.put("critiqueRefs", critiqueRefs(output.assessments()));
+        List<String> writeRefs = sessionWriteRefs(stageRefs);
+        stageSummary.put("sessionWriteRefs", writeRefs);
 
         writeJson(stageRoot.resolve("stage_summary.json"), stageSummary);
         writeJson(stageRoot.resolve("stage_refs.json"), stageRefs);
@@ -168,7 +187,7 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
                 "stageName", input.stageName().wireName(),
                 "output", output,
                 "passSummaries", passSummaries == null ? List.of() : passSummaries));
-        return new StageSessionRecord(Map.copyOf(stageSummary), Map.copyOf(stageRefs));
+        return new StageSessionRecord(Map.copyOf(stageSummary), Map.copyOf(stageRefs), sessionNamespace(input), writeRefs);
     }
 
     private Path traceRoot(DecisionStageInputV1 input) {
@@ -180,6 +199,10 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
 
     private Path stageRoot(DecisionStageInputV1 input) {
         return traceRoot(input).resolve(sanitize(input.stageName().wireName()));
+    }
+
+    private String sessionNamespace(DecisionStageInputV1 input) {
+        return sanitize(input.runId()) + "/" + sanitize(input.tickId()) + "/" + sanitize(input.traceId());
     }
 
     private void writeJson(Path path, Object payload) {
@@ -235,6 +258,15 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
                 .flatMap(item -> textList(item.get("dominanceReasonCodes")).stream())
                 .distinct()
                 .toList();
+    }
+
+    private List<String> sessionWriteRefs(Map<String, Object> stageRefs) {
+        List<String> refs = new ArrayList<>();
+        textList(stageRefs.get("selectedCandidateRefs")).forEach(ref -> refs.add("selected-candidate:" + ref));
+        textList(stageRefs.get("routeVectorRefs")).forEach(ref -> refs.add("route-vector:" + ref));
+        textList(stageRefs.get("tileContextRefs")).forEach(ref -> refs.add("tile-context:" + ref));
+        textList(stageRefs.get("critiqueRefs")).forEach(ref -> refs.add("critique:" + ref));
+        return List.copyOf(refs.stream().distinct().toList());
     }
 
     @SuppressWarnings("unchecked")

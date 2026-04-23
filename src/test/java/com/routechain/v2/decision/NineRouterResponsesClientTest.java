@@ -167,7 +167,10 @@ class NineRouterResponsesClientTest {
                         "routeVectorRefs", java.util.List.of("proposal-1"),
                         "tileContextRefs", java.util.List.of("tile-1"),
                         "selectedCandidateRefs", java.util.List.of("proposal-1"),
-                        "critiqueRefs", java.util.List.of("route-dominated")), 4);
+                        "critiqueRefs", java.util.List.of("route-dominated")),
+                        4,
+                        "run-1/2026-04-20T00_00_00Z/trace-1",
+                        java.util.List.of("stage:route-generation", "route-vector:proposal-1"));
             }
         };
         NineRouterResponsesClient client = new NineRouterResponsesClient(

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "dispatch-prompt-family-v3-session-safety/v1",
+  "generatedAt": "2026-04-23T02:49:08.946295+00:00",
+  "validationCommit": "30a2745d",
+  "rerunExecuted": true,
+  "junitReportPath": "E:\\Code _Project\\IntelligentRouteX\\build\\test-results\\test\\TEST-com.routechain.v2.decision.DecisionSessionStoreSafetyTest.xml",
+  "overallVerdict": "PASS",
+  "cases": [
+    {
+      "name": "differentTickCannotReadSessionData()",
+      "classname": "com.routechain.v2.decision.DecisionSessionStoreSafetyTest",
+      "timeSeconds": 0.391,
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "differentRunCannotReadSessionData()",
+      "classname": "com.routechain.v2.decision.DecisionSessionStoreSafetyTest",
+      "timeSeconds": 0.023,
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "expiredSessionsAreCleanedUpBeforeNewSessionStarts()",
+      "classname": "com.routechain.v2.decision.DecisionSessionStoreSafetyTest",
+      "timeSeconds": 0.035,
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "v2PathUsesNoOpStoreAndExposesNoSessionState()",
+      "classname": "com.routechain.v2.decision.DecisionSessionStoreSafetyTest",
+      "timeSeconds": 0.005,
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "differentTraceCannotReadSessionData()",
+      "classname": "com.routechain.v2.decision.DecisionSessionStoreSafetyTest",
+      "timeSeconds": 0.024,
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "sameTraceCanReadUpstreamStageRefs()",
+      "classname": "com.routechain.v2.decision.DecisionSessionStoreSafetyTest",
+      "timeSeconds": 0.066,
+      "status": "PASS",
+      "detail": ""
+    }
+  ]
+}

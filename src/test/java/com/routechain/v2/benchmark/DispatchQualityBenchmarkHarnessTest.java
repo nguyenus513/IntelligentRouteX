@@ -28,6 +28,7 @@ class DispatchQualityBenchmarkHarnessTest {
                 DispatchPerfBenchmarkHarness.WorkloadSize.S,
                 DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
                 DispatchBenchmarkDecisionMode.LEGACY,
+                "v2",
                 DispatchQualityBenchmarkHarness.ExecutionMode.CONTROLLED,
                 DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
                 false,
@@ -39,6 +40,7 @@ class DispatchQualityBenchmarkHarnessTest {
         assertTrue(run.rawResults().stream().allMatch(result -> result.decisionStages().size() == 12));
         assertTrue(run.rawResults().stream().allMatch(result -> !result.deferred()));
         assertTrue(run.rawResults().stream().allMatch(result -> result.decisionMode().equals("legacy")));
+        assertTrue(run.rawResults().stream().allMatch(result -> result.promptFamily().equals("v2")));
         assertTrue(run.rawResults().stream().allMatch(result -> result.executionPolicy() != null));
         assertTrue(run.rawResults().stream().allMatch(result -> result.timeoutPhase() == DispatchQualityTimeoutPhase.NONE));
         assertTrue(run.rawResults().stream().allMatch(result -> result.cellStartedAt() != null));
@@ -55,6 +57,7 @@ class DispatchQualityBenchmarkHarnessTest {
                 DispatchPerfBenchmarkHarness.WorkloadSize.S,
                 DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
                 DispatchBenchmarkDecisionMode.LEGACY,
+                "v2",
                 DispatchQualityBenchmarkHarness.ExecutionMode.CONTROLLED,
                 DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
                 false,
@@ -100,6 +103,7 @@ class DispatchQualityBenchmarkHarnessTest {
                 DispatchPerfBenchmarkHarness.WorkloadSize.S,
                 DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
                 DispatchBenchmarkDecisionMode.LEGACY,
+                "v2",
                 DispatchQualityBenchmarkHarness.ExecutionMode.LOCAL_REAL,
                 DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
                 true,
@@ -124,6 +128,7 @@ class DispatchQualityBenchmarkHarnessTest {
                     DispatchPerfBenchmarkHarness.WorkloadSize.S,
                     DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
                     DispatchBenchmarkDecisionMode.LEGACY,
+                    "v2",
                     DispatchQualityBenchmarkHarness.ExecutionMode.LOCAL_REAL,
                     DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
                     true,
@@ -150,6 +155,7 @@ class DispatchQualityBenchmarkHarnessTest {
                 DispatchPerfBenchmarkHarness.WorkloadSize.S,
                 DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
                 DispatchBenchmarkDecisionMode.LEGACY,
+                "v2",
                 DispatchQualityBenchmarkHarness.ExecutionMode.LOCAL_REAL,
                 DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
                 false,
@@ -174,6 +180,7 @@ class DispatchQualityBenchmarkHarnessTest {
                     DispatchPerfBenchmarkHarness.WorkloadSize.S,
                     DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
                     DispatchBenchmarkDecisionMode.LEGACY,
+                    "v2",
                     DispatchQualityBenchmarkHarness.ExecutionMode.LOCAL_REAL,
                     DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
                     false,
@@ -195,6 +202,7 @@ class DispatchQualityBenchmarkHarnessTest {
                 DispatchPerfBenchmarkHarness.WorkloadSize.S,
                 DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
                 DispatchBenchmarkDecisionMode.LLM_SHADOW,
+                "v2",
                 DispatchQualityBenchmarkHarness.ExecutionMode.CONTROLLED,
                 DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
                 false,
@@ -219,6 +227,7 @@ class DispatchQualityBenchmarkHarnessTest {
                     DispatchPerfBenchmarkHarness.WorkloadSize.S,
                     DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
                     DispatchBenchmarkDecisionMode.LEGACY,
+                    "v2",
                     DispatchQualityBenchmarkHarness.ExecutionMode.LOCAL_REAL,
                     DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
                     true,
