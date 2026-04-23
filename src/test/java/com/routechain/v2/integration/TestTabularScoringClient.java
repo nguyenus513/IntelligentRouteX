@@ -30,7 +30,7 @@ public final class TestTabularScoringClient implements TabularScoringClient {
     }
 
     public static TestTabularScoringClient applied(double delta) {
-        MlWorkerMetadata metadata = new MlWorkerMetadata("tabular-test", "v1", "sha256:test", 5L);
+        MlWorkerMetadata metadata = new MlWorkerMetadata("tabular-test", "v1", "sha256:test", 5L, "cpu", "fp32", 0L, 16, "eager", true, true);
         TabularScoreResult result = TabularScoreResult.applied(delta, 0.1, false, metadata);
         return new TestTabularScoringClient(
                 WorkerReadyState.ready(metadata),
@@ -41,7 +41,7 @@ public final class TestTabularScoringClient implements TabularScoringClient {
     }
 
     public static TestTabularScoringClient notApplied(String reason) {
-        MlWorkerMetadata metadata = new MlWorkerMetadata("tabular-test", "v1", "sha256:test", 5L);
+        MlWorkerMetadata metadata = new MlWorkerMetadata("tabular-test", "v1", "sha256:test", 5L, "cpu", "fp32", 0L, 16, "eager", true, true);
         TabularScoreResult result = TabularScoreResult.notApplied(reason, metadata);
         return new TestTabularScoringClient(
                 WorkerReadyState.ready(metadata),

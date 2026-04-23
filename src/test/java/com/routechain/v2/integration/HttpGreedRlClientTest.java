@@ -46,6 +46,11 @@ class HttpGreedRlClientTest {
                     Duration.ofMillis(100),
                     manifestPath);
 
+            assertEquals("cuda:0", client.readyState().workerMetadata().device());
+            assertEquals("fp16", client.readyState().workerMetadata().dtype());
+            assertTrue(client.readyState().workerMetadata().modelLoaded());
+            assertTrue(client.readyState().workerMetadata().warmupDone());
+
             GreedRlBundleResult bundleResult = client.proposeBundles(bundleFeatureVector(), 100L);
             GreedRlSequenceResult sequenceResult = client.proposeSequence(sequenceFeatureVector(), 100L);
 

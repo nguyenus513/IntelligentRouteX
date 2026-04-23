@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import time
 import sys
 import tempfile
 import unittest
@@ -55,6 +56,9 @@ def benchmark_payload(scenario_pack: str, prompt_family: str = "v2", latency_off
                 "compileMode": "default",
                 "modelLoaded": True,
                 "warmupDone": True,
+                "workerAuditPresent": True,
+                "workerAuditSource": "ready-state",
+                "workerAuditMissingFields": [],
                 "applied": True,
                 "notAppliedReason": "",
             }
@@ -71,6 +75,9 @@ def adaptive_trace_payload(trace_id: str, stage_name: str, worker_name: str, esc
         "escalated": escalated,
         "reason": reason,
         "deviceUsed": "cuda" if escalated else "cpu",
+        "workerAuditPresent": True,
+        "workerAuditSource": "ready-state",
+        "workerAuditMissingFields": [],
     }
 
 
@@ -157,6 +164,49 @@ class RunDispatchFullAdaptiveValidationTest(unittest.TestCase):
             payload = json.loads(next(output_dir.glob("full_adaptive_validation-*.json")).read_text(encoding="utf-8"))
             self.assertTrue(all(case["verdict"] == "EVIDENCE_GAP" for case in payload["cases"]))
 
+    def test_downgrades_verdict_when_worker_audit_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            adaptive_root = temp_root / "adaptive"
+            output_dir = temp_root / "out"
+
+            payload = benchmark_payload("normal-clear")
+            payload["workerStatusSnapshot"][0]["workerAuditPresent"] = False
+            payload["workerStatusSnapshot"][0]["workerAuditMissingFields"] = ["device"]
+            payload["workerStatusSnapshot"][0]["device"] = ""
+            write_json(
+                adaptive_root / "dispatch-quality-normal-clear-s-llm-authoritative-v2-controlled-c-20260423-000001.json",
+                payload,
+            )
+            feedback_root = adaptive_root / "feedback" / "normal-clear" / "s" / "controlled" / "llm-authoritative" / "v2" / "c" / "decision-stage" / "adaptive_compute_trace"
+            trace = adaptive_trace_payload("trace-normal-clear", "scenario-evaluation", "ml-forecast-worker", False, "worker-device-audit-missing")
+            trace["workerAuditPresent"] = False
+            trace["workerAuditMissingFields"] = ["device"]
+            write_json(feedback_root / "trace-normal-clear.json", trace)
+
+            for scenario_pack, _ in validation_runner.TARGET_CASES[1:]:
+                write_json(
+                    adaptive_root / f"dispatch-quality-{scenario_pack}-s-llm-authoritative-v2-controlled-c-20260423-000001.json",
+                    benchmark_payload(scenario_pack),
+                )
+                feedback_root = adaptive_root / "feedback" / scenario_pack / "s" / "controlled" / "llm-authoritative" / "v2" / "c" / "decision-stage" / "adaptive_compute_trace"
+                write_json(
+                    feedback_root / f"trace-{scenario_pack}.json",
+                    adaptive_trace_payload(f"trace-{scenario_pack}", "scenario-evaluation", "ml-forecast-worker", False, "forecast-hot-path-skip"),
+                )
+
+            exit_code = validation_runner.main([
+                "--adaptive-root", str(adaptive_root),
+                "--output-dir", str(output_dir),
+                "--mode", "adaptive-only",
+            ])
+
+            self.assertEqual(0, exit_code)
+            payload = json.loads(next(output_dir.glob("full_adaptive_validation-*.json")).read_text(encoding="utf-8"))
+            normal_clear_case = next(case for case in payload["cases"] if case["scenarioPack"] == "normal-clear")
+            self.assertEqual("PASS_WITH_LIMITS", normal_clear_case["verdict"])
+            self.assertIn("worker-audit-missing:ml-routefinder-worker", normal_clear_case["verdictReasons"])
+
     def test_rerun_cells_calls_benchmark_runner_for_adaptive_and_comparison_roots(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "out"
@@ -242,6 +292,57 @@ class RunDispatchFullAdaptiveValidationTest(unittest.TestCase):
             self.assertTrue(artifact_path.endswith("20260423-000001.json"))
             self.assertNotEqual(str(stale_path), artifact_path)
             self.assertTrue(normal_clear_case["adaptive"]["benchmark"]["artifactLastModifiedAt"])
+
+    def test_root_collection_prefers_latest_benchmark_and_trace_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            adaptive_root = temp_root / "adaptive"
+            output_dir = temp_root / "out"
+
+            stale_benchmark = benchmark_payload("normal-clear")
+            stale_benchmark["workerStatusSnapshot"][0]["workerAuditPresent"] = False
+            write_json(
+                adaptive_root / "dispatch-quality-normal-clear-s-llm-authoritative-v2-controlled-c-20260423-000001.json",
+                stale_benchmark,
+            )
+            stale_trace_root = adaptive_root / "feedback" / "normal-clear" / "s" / "controlled" / "llm-authoritative" / "v2" / "c" / "decision-stage" / "adaptive_compute_trace"
+            stale_trace = adaptive_trace_payload("trace-normal-clear", "scenario-evaluation", "ml-forecast-worker", False, "worker-device-audit-missing")
+            stale_trace["workerAuditPresent"] = False
+            stale_trace["workerAuditMissingFields"] = ["device"]
+            write_json(stale_trace_root / "trace-normal-clear-old.json", stale_trace)
+
+            time.sleep(0.02)
+
+            fresh_benchmark = benchmark_payload("normal-clear")
+            write_json(
+                adaptive_root / "dispatch-quality-normal-clear-s-llm-authoritative-v2-controlled-c-20260423-999999.json",
+                fresh_benchmark,
+            )
+            fresh_trace = adaptive_trace_payload("trace-normal-clear", "scenario-evaluation", "ml-forecast-worker", True, "")
+            write_json(stale_trace_root / "trace-normal-clear-new.json", fresh_trace)
+
+            for scenario_pack, _ in validation_runner.TARGET_CASES[1:]:
+                write_json(
+                    adaptive_root / f"dispatch-quality-{scenario_pack}-s-llm-authoritative-v2-controlled-c-20260423-000001.json",
+                    benchmark_payload(scenario_pack),
+                )
+                feedback_root = adaptive_root / "feedback" / scenario_pack / "s" / "controlled" / "llm-authoritative" / "v2" / "c" / "decision-stage" / "adaptive_compute_trace"
+                write_json(
+                    feedback_root / f"trace-{scenario_pack}.json",
+                    adaptive_trace_payload(f"trace-{scenario_pack}", "scenario-evaluation", "ml-forecast-worker", True, ""),
+                )
+
+            exit_code = validation_runner.main([
+                "--adaptive-root", str(adaptive_root),
+                "--output-dir", str(output_dir),
+                "--mode", "adaptive-only",
+            ])
+
+            self.assertEqual(0, exit_code)
+            payload = json.loads(next(output_dir.glob("full_adaptive_validation-*.json")).read_text(encoding="utf-8"))
+            normal_clear_case = next(case for case in payload["cases"] if case["scenarioPack"] == "normal-clear")
+            self.assertEqual("PASS_WITH_LIMITS", normal_clear_case["verdict"])
+            self.assertEqual(["adaptive-skip-not-observed"], normal_clear_case["verdictReasons"])
 
     def test_rerun_mode_fails_when_cell_emits_no_fresh_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

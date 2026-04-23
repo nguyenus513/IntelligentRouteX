@@ -21,6 +21,7 @@ import com.routechain.v2.integration.HttpRouteFinderClient;
 import com.routechain.v2.integration.HttpTabularScoringClient;
 import com.routechain.v2.integration.HttpTomTomTrafficRefineClient;
 import com.routechain.v2.integration.MlWorkerMetadata;
+import com.routechain.v2.integration.MlWorkerAuditSupport;
 import com.routechain.v2.integration.ModelManifestLoader;
 import com.routechain.v2.integration.NoOpForecastClient;
 import com.routechain.v2.integration.NoOpGreedRlClient;
@@ -1696,6 +1697,9 @@ public final class DispatchQualityBenchmarkHarness {
                 worker.compileMode(),
                 worker.modelLoaded(),
                 worker.warmupDone(),
+                worker.workerAuditPresent(),
+                worker.workerAuditSource(),
+                worker.workerAuditMissingFields(),
                 applied,
                 blankToEmpty(notAppliedReason));
     }
@@ -1752,6 +1756,9 @@ public final class DispatchQualityBenchmarkHarness {
                 blankToEmpty(metadata.compileMode()),
                 metadata.modelLoaded(),
                 metadata.warmupDone(),
+                MlWorkerAuditSupport.auditPresent(metadata),
+                MlWorkerAuditSupport.auditSource(metadata),
+                MlWorkerAuditSupport.missingFields(metadata),
                 false,
                 ready ? "" : blankToEmpty(readyReason));
     }

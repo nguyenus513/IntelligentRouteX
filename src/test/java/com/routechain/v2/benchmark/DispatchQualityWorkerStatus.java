@@ -1,5 +1,7 @@
 package com.routechain.v2.benchmark;
 
+import java.util.List;
+
 public record DispatchQualityWorkerStatus(
         String workerName,
         boolean enabled,
@@ -20,6 +22,9 @@ public record DispatchQualityWorkerStatus(
         String compileMode,
         boolean modelLoaded,
         boolean warmupDone,
+        boolean workerAuditPresent,
+        String workerAuditSource,
+        List<String> workerAuditMissingFields,
         boolean applied,
         String notAppliedReason) {
 
@@ -57,6 +62,9 @@ public record DispatchQualityWorkerStatus(
                 "",
                 false,
                 false,
+                false,
+                "missing",
+                List.of("device", "dtype", "batchSize", "compileMode", "modelLoaded", "warmupDone"),
                 applied,
                 notAppliedReason);
     }

@@ -139,7 +139,14 @@ final class HttpTabularTestSupport {
                   "loadedFromLocal": %s,
                   "localArtifactPath": "%s",
                   "materializationMode": "%s",
-                  "loadedModelFingerprint": "%s"
+                  "loadedModelFingerprint": "%s",
+                  "device": "cpu",
+                  "dtype": "fp32",
+                  "gpuMemoryAllocatedMb": 0,
+                  "batchSize": 16,
+                  "compileMode": "eager",
+                  "modelLoaded": true,
+                  "warmupDone": true
                 }
                 """.formatted(
                 modelVersion,

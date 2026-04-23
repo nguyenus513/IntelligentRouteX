@@ -34,6 +34,7 @@ Each adaptive case should recover:
 - benchmark result JSON for the case
 - `adaptive_compute_trace` rows under `decision-stage`
 - worker device audit fields from `workerStatusSnapshot`
+- worker audit provenance fields: `workerAuditPresent`, `workerAuditSource`, `workerAuditMissingFields`
 - selected proposal count
 - executed assignment count
 - robust utility summary
@@ -64,8 +65,8 @@ Case verdicts use:
 
 Interpretation:
 
-- `PASS`: adaptive trace exists, dispatch stayed usable, and skip/escalate evidence is visible without a clear comparison regression.
-- `PASS_WITH_LIMITS`: adaptive evidence exists, but latency gain or skip behavior is not yet convincing.
+- `PASS`: adaptive trace exists, dispatch stayed usable, and skip/escalate evidence is visible without worker audit gaps.
+- `PASS_WITH_LIMITS`: adaptive evidence exists, but latency gain or skip behavior is not yet convincing, or worker audit propagation is still incomplete.
 - `REGRESSION_RISK`: quality or execution clearly regressed, attach failed, or the run timed out.
 - `EVIDENCE_GAP`: adaptive benchmark or adaptive trace evidence is missing.
 

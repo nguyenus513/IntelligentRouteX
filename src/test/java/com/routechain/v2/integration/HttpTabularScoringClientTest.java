@@ -51,6 +51,11 @@ class HttpTabularScoringClientTest {
                     Duration.ofMillis(100),
                     manifestPath);
 
+            assertEquals("cpu", client.readyState().workerMetadata().device());
+            assertEquals("fp32", client.readyState().workerMetadata().dtype());
+            assertTrue(client.readyState().workerMetadata().modelLoaded());
+            assertTrue(client.readyState().workerMetadata().warmupDone());
+
             List<TabularScoreResult> results = List.of(
                     client.scoreEtaResidual(new EtaFeatureVector("eta-feature-vector/v1", 5.0, 1.0, 1.0, 2.0, 12), 100L),
                     client.scorePair(new PairFeatureVector("pair-feature-vector/v1", "o1", "o2", 1.0, 2.0, 3L, 10.0, true, 1.1, 0.9, false), 100L),

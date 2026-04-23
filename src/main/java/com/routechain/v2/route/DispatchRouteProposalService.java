@@ -16,6 +16,7 @@ import com.routechain.v2.cluster.EtaLegCacheFactory;
 import com.routechain.v2.feedback.ReuseStateBuilder;
 import com.routechain.v2.feedback.RouteProposalTupleReuseEntry;
 import com.routechain.v2.integration.MlStageMetadataAccumulator;
+import com.routechain.v2.integration.MlWorkerAuditSupport;
 import com.routechain.v2.integration.RouteFinderClient;
 import com.routechain.v2.integration.RouteFinderFeatureVector;
 import com.routechain.v2.integration.RouteFinderResult;
@@ -390,6 +391,10 @@ public final class DispatchRouteProposalService {
                 java.util.Map.entry("escalated", gateDecision.escalated()),
                 java.util.Map.entry("reason", gateDecision.reason()),
                 java.util.Map.entry("deviceUsed", gateDecision.workerMetadata().device()),
+                java.util.Map.entry("workerAuditPresent", MlWorkerAuditSupport.auditPresent(gateDecision.workerMetadata())),
+                java.util.Map.entry("workerAuditSource", MlWorkerAuditSupport.auditSource(gateDecision.workerMetadata())),
+                java.util.Map.entry("workerAuditMissingFields", MlWorkerAuditSupport.missingFields(gateDecision.workerMetadata())),
+                java.util.Map.entry("workerReady", routeFinderClient.readyState().ready()),
                 java.util.Map.entry("proposalId", seed.proposal().proposalId()),
                 java.util.Map.entry("tupleCandidateCount", tupleCandidates.size()),
                 java.util.Map.entry("stopCount", seed.proposal().stopOrder().size()),

@@ -66,6 +66,20 @@ def cell_label(cell: BenchmarkCell) -> str:
     )
 
 
+def gradle_build_dir(output_dir: Path, cell: BenchmarkCell) -> Path:
+    parts = [
+        cell.scenario_pack,
+        cell.size.lower(),
+        cell.decision_mode,
+        cell.prompt_family,
+        cell.execution_mode,
+        "authority" if cell.authority else "non-authority",
+        cell.profile or "default",
+    ]
+    safe_parts = [part.replace("/", "-").replace("\\", "-").replace(":", "-") for part in parts]
+    return output_dir.resolve(".gradle-build").joinpath(*safe_parts)
+
+
 def planned_cells(args: argparse.Namespace) -> List[BenchmarkCell]:
     baseline_selector = "A,B,C" if args.baseline == "all" else args.baseline
     sizes = expand_selector(args.size, SIZES)
@@ -85,9 +99,11 @@ def planned_cells(args: argparse.Namespace) -> List[BenchmarkCell]:
 
 
 def run_cell(cell: BenchmarkCell, output_dir: Path, runner=subprocess.run, run_deferred_xl: bool = False):
+    build_dir = gradle_build_dir(output_dir, cell)
     command = gradle_command() + [
         "--no-daemon",
         "--rerun-tasks",
+        f"-PbuildDir={build_dir}",
         "test",
         "--tests",
         "com.routechain.v2.benchmark.DispatchQualityArtifactSmokeTest",

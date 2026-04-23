@@ -136,10 +136,12 @@ class RunDispatchBenchmarkTest(unittest.TestCase):
         captured = {}
 
         def fake_runner(command, cwd=None, text=None, check=None, env=None):
+            captured["command"] = command
             captured["env"] = env
             return type("Completed", (), {"returncode": 0})()
 
         benchmark_runner.run_cell(cell, Path("."), runner=fake_runner)
+        self.assertTrue(any(str(arg).startswith("-PbuildDir=") for arg in captured["command"]))
         self.assertEqual("v3", captured["env"]["DISPATCH_QUALITY_PROMPT_FAMILY"])
         self.assertEqual("dispatch-v2-full-adaptive", captured["env"]["DISPATCH_QUALITY_PROFILE"])
 

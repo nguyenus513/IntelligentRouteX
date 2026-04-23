@@ -164,7 +164,14 @@ final class HttpForecastTestSupport {
                   "loadedFromLocal": %s,
                   "localArtifactPath": "%s",
                   "materializationMode": "%s",
-                  "loadedModelFingerprint": "%s"
+                  "loadedModelFingerprint": "%s",
+                  "device": "cuda:0",
+                  "dtype": "fp16",
+                  "gpuMemoryAllocatedMb": 4096,
+                  "batchSize": 8,
+                  "compileMode": "inductor",
+                  "modelLoaded": true,
+                  "warmupDone": true
                 }
                 """.formatted(
                 modelVersion,

@@ -23,7 +23,7 @@ public final class TestForecastClient implements ForecastClient {
     }
 
     public static TestForecastClient applied() {
-        MlWorkerMetadata metadata = new MlWorkerMetadata("chronos-2", "v1", "sha256:chronos", 11L);
+        MlWorkerMetadata metadata = new MlWorkerMetadata("chronos-2", "v1", "sha256:chronos", 11L, "cuda:0", "fp16", 4096L, 8, "inductor", true, true);
         return new TestForecastClient(
                 WorkerReadyState.ready(metadata),
                 (feature, timeout) -> ForecastResult.applied(30, 0.71, Map.of("q10", -0.18, "q50", -0.09, "q90", 0.02), 0.84, 90000L, metadata),
@@ -32,7 +32,7 @@ public final class TestForecastClient implements ForecastClient {
     }
 
     public static TestForecastClient notApplied(String reason) {
-        MlWorkerMetadata metadata = new MlWorkerMetadata("chronos-2", "v1", "sha256:chronos", 11L);
+        MlWorkerMetadata metadata = new MlWorkerMetadata("chronos-2", "v1", "sha256:chronos", 11L, "cuda:0", "fp16", 4096L, 8, "inductor", true, true);
         return new TestForecastClient(
                 WorkerReadyState.ready(metadata),
                 (feature, timeout) -> ForecastResult.notApplied(reason, metadata),

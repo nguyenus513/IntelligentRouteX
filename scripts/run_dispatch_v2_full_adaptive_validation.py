@@ -55,6 +55,9 @@ class AdaptiveTraceRow:
     escalated: bool
     reason: str
     device_used: str
+    worker_audit_present: bool
+    worker_audit_source: str
+    worker_audit_missing_fields: Tuple[str, ...]
     payload: dict
 
 
@@ -206,6 +209,7 @@ def run_validation_cell(cell: ValidationCell, output_dir: Path, runner=subproces
 
 def collect_benchmark_results_from_paths(paths: Sequence[Path], root_type: str, root_path: Path) -> Dict[Tuple[str, str, str, str, str], dict]:
     indexed: Dict[Tuple[str, str, str, str, str], dict] = {}
+    latest_mtime_ns: Dict[Tuple[str, str, str, str, str], int] = {}
     for path in sorted(paths):
         payload = json_read(path)
         if "baselineId" not in payload:
@@ -220,7 +224,10 @@ def collect_benchmark_results_from_paths(paths: Sequence[Path], root_type: str, 
         payload["_rootType"] = root_type
         payload["_rootPath"] = str(root_path)
         payload["_artifactPath"] = str(path)
-        indexed[key] = payload
+        modified_at_ns = path.stat().st_mtime_ns
+        if key not in indexed or modified_at_ns >= latest_mtime_ns.get(key, -1):
+            indexed[key] = payload
+            latest_mtime_ns[key] = modified_at_ns
     return indexed
 
 
@@ -257,6 +264,9 @@ def parse_adaptive_trace(path: Path, root_type: str, root_path: Path) -> Optiona
         escalated=bool(payload.get("escalated")),
         reason=str(payload.get("reason", "")).strip(),
         device_used=str(payload.get("deviceUsed", "")).strip(),
+        worker_audit_present=bool(payload.get("workerAuditPresent")),
+        worker_audit_source=str(payload.get("workerAuditSource", "")).strip(),
+        worker_audit_missing_fields=tuple(payload.get("workerAuditMissingFields", []) or []),
         payload=payload,
     )
 
@@ -265,10 +275,24 @@ def collect_adaptive_rows(root: Path, root_type: str) -> Dict[Tuple[str, str, st
     indexed: Dict[Tuple[str, str, str, str, str], List[AdaptiveTraceRow]] = {}
     if not root.exists():
         return indexed
+    latest_rows: Dict[Tuple[str, str, str, str, str, str, str], Tuple[int, AdaptiveTraceRow]] = {}
     for path in sorted(root.rglob("*.json")):
         row = parse_adaptive_trace(path, root_type, root)
         if row is None:
             continue
+        row_key = (
+            row.scenario_pack,
+            row.size,
+            row.execution_mode,
+            row.decision_mode,
+            row.prompt_family,
+            row.stage_name,
+            row.worker_name,
+        )
+        modified_at_ns = path.stat().st_mtime_ns
+        if row_key not in latest_rows or modified_at_ns >= latest_rows[row_key][0]:
+            latest_rows[row_key] = (modified_at_ns, row)
+    for _, row in latest_rows.values():
         key = (row.scenario_pack, row.size, row.execution_mode, row.decision_mode, row.prompt_family)
         indexed.setdefault(key, []).append(row)
     return indexed
@@ -276,10 +300,24 @@ def collect_adaptive_rows(root: Path, root_type: str) -> Dict[Tuple[str, str, st
 
 def collect_adaptive_rows_from_paths(paths: Sequence[Path], root_type: str, root_path: Path) -> Dict[Tuple[str, str, str, str, str], List[AdaptiveTraceRow]]:
     indexed: Dict[Tuple[str, str, str, str, str], List[AdaptiveTraceRow]] = {}
+    latest_rows: Dict[Tuple[str, str, str, str, str, str, str], Tuple[int, AdaptiveTraceRow]] = {}
     for path in sorted(paths):
         row = parse_adaptive_trace(path, root_type, root_path)
         if row is None:
             continue
+        row_key = (
+            row.scenario_pack,
+            row.size,
+            row.execution_mode,
+            row.decision_mode,
+            row.prompt_family,
+            row.stage_name,
+            row.worker_name,
+        )
+        modified_at_ns = path.stat().st_mtime_ns
+        if row_key not in latest_rows or modified_at_ns >= latest_rows[row_key][0]:
+            latest_rows[row_key] = (modified_at_ns, row)
+    for _, row in latest_rows.values():
         key = (row.scenario_pack, row.size, row.execution_mode, row.decision_mode, row.prompt_family)
         indexed.setdefault(key, []).append(row)
     return indexed
@@ -331,6 +369,9 @@ def worker_device_audit(result: Optional[dict]) -> List[dict]:
             "compileMode": worker.get("compileMode", ""),
             "modelLoaded": worker.get("modelLoaded"),
             "warmupDone": worker.get("warmupDone"),
+            "workerAuditPresent": worker.get("workerAuditPresent"),
+            "workerAuditSource": worker.get("workerAuditSource", ""),
+            "workerAuditMissingFields": worker.get("workerAuditMissingFields", []),
             "applied": worker.get("applied"),
             "notAppliedReason": worker.get("notAppliedReason", ""),
         }
@@ -354,6 +395,9 @@ def summarize_traces(rows: Iterable[AdaptiveTraceRow]) -> dict:
             "skippedCount": 0,
             "reasons": {},
             "devicesUsed": set(),
+            "auditSources": set(),
+            "auditMissingFields": set(),
+            "auditPresentCount": 0,
         })
         worker_entry["totalDecisions"] += 1
         worker_entry["escalatedCount"] += 1 if row.escalated else 0
@@ -361,20 +405,31 @@ def summarize_traces(rows: Iterable[AdaptiveTraceRow]) -> dict:
         worker_entry["reasons"][row.reason or "unspecified"] = worker_entry["reasons"].get(row.reason or "unspecified", 0) + 1
         if row.device_used:
             worker_entry["devicesUsed"].add(row.device_used)
+        if row.worker_audit_source:
+            worker_entry["auditSources"].add(row.worker_audit_source)
+        if row.worker_audit_present:
+            worker_entry["auditPresentCount"] += 1
+        worker_entry["auditMissingFields"].update(row.worker_audit_missing_fields)
 
         stage_entry = stage_summary.setdefault(row.stage_name or "unknown-stage", {
             "totalDecisions": 0,
             "escalatedCount": 0,
             "skippedCount": 0,
             "reasons": {},
+            "auditMissingFields": set(),
         })
         stage_entry["totalDecisions"] += 1
         stage_entry["escalatedCount"] += 1 if row.escalated else 0
         stage_entry["skippedCount"] += 0 if row.escalated else 1
         stage_entry["reasons"][row.reason or "unspecified"] = stage_entry["reasons"].get(row.reason or "unspecified", 0) + 1
+        stage_entry["auditMissingFields"].update(row.worker_audit_missing_fields)
 
     for entry in worker_summary.values():
         entry["devicesUsed"] = sorted(entry["devicesUsed"])
+        entry["auditSources"] = sorted(entry["auditSources"])
+        entry["auditMissingFields"] = sorted(entry["auditMissingFields"])
+    for entry in stage_summary.values():
+        entry["auditMissingFields"] = sorted(entry["auditMissingFields"])
     return {
         "totalAdaptiveDecisions": total_rows,
         "escalatedCount": escalated_rows,
@@ -422,6 +477,17 @@ def determine_verdict(adaptive_summary: dict, comparison_summary: dict) -> Tuple
         return "REGRESSION_RISK", ["ml-attach-failed"]
     if adaptive_benchmark.get("timeoutPhase") not in (None, "", "NONE"):
         return "REGRESSION_RISK", [f"timeout:{adaptive_benchmark.get('timeoutPhase')}"]
+    ready_workers_missing_audit = [
+        worker["workerName"]
+        for worker in adaptive_benchmark.get("workerDeviceAudit", [])
+        if worker.get("enabled") and worker.get("ready") and not worker.get("workerAuditPresent")
+    ]
+    if ready_workers_missing_audit:
+        return "PASS_WITH_LIMITS", [f"worker-audit-missing:{','.join(sorted(ready_workers_missing_audit))}"]
+    if any(
+            "worker-device-audit-missing" in summary.get("reasons", {})
+            for summary in adaptive_trace.get("workers", {}).values()):
+        return "PASS_WITH_LIMITS", ["worker-device-audit-missing-observed"]
     if int(adaptive_benchmark.get("selectedProposalCount") or 0) <= 0:
         return "REGRESSION_RISK", ["selected-proposals-empty"]
     if int(adaptive_benchmark.get("executedAssignmentCount") or 0) <= 0:
@@ -557,7 +623,8 @@ def markdown_report(payload: dict) -> str:
             lines.append(
                 f"- worker `{worker_name}` decisions=`{summary['totalDecisions']}` "
                 f"escalated=`{summary['escalatedCount']}` skipped=`{summary['skippedCount']}` "
-                f"devices=`{summary['devicesUsed']}` reasons=`{summary['reasons']}`"
+                f"devices=`{summary['devicesUsed']}` auditSources=`{summary['auditSources']}` "
+                f"auditMissingFields=`{summary['auditMissingFields']}` reasons=`{summary['reasons']}`"
             )
         if adaptive_benchmark.get("workerDeviceAudit"):
             for worker in adaptive_benchmark["workerDeviceAudit"]:
@@ -565,7 +632,9 @@ def markdown_report(payload: dict) -> str:
                     f"- device audit `{worker['workerName']}` enabled=`{worker['enabled']}` ready=`{worker['ready']}` "
                     f"device=`{worker['device']}` dtype=`{worker['dtype']}` "
                     f"gpuMemoryAllocatedMb=`{worker['gpuMemoryAllocatedMb']}` batchSize=`{worker['batchSize']}` "
-                    f"compileMode=`{worker['compileMode']}` applied=`{worker['applied']}`"
+                    f"compileMode=`{worker['compileMode']}` workerAuditPresent=`{worker['workerAuditPresent']}` "
+                    f"workerAuditSource=`{worker['workerAuditSource']}` "
+                    f"workerAuditMissingFields=`{worker['workerAuditMissingFields']}` applied=`{worker['applied']}`"
                 )
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"

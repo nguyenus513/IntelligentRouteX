@@ -179,7 +179,14 @@ final class HttpGreedRlTestSupport {
                   "loadedFromLocal": %s,
                   "localArtifactPath": "%s",
                   "materializationMode": "%s",
-                  "loadedModelFingerprint": "%s"
+                  "loadedModelFingerprint": "%s",
+                  "device": "cuda:0",
+                  "dtype": "fp16",
+                  "gpuMemoryAllocatedMb": 5120,
+                  "batchSize": 6,
+                  "compileMode": "inductor",
+                  "modelLoaded": true,
+                  "warmupDone": true
                 }
                 """.formatted(
                 modelVersion,

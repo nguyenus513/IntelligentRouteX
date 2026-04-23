@@ -78,6 +78,7 @@ class DispatchQualityArtifactSmokeTest {
         assertNotNull(firstResult.artifactWriteCompletedAt());
         assertNotNull(firstResult.timeoutPhase());
         assertTrue(promptFamilyWire.equals(firstResult.promptFamily()));
+        assertTrue(firstResult.workerStatusSnapshot().stream().allMatch(worker -> worker.workerAuditSource() != null));
         if (run.comparisonReport() != null) {
             assertNotNull(artifacts.comparisonJsonPath());
             assertTrue(artifacts.comparisonJsonPath().toFile().isFile());

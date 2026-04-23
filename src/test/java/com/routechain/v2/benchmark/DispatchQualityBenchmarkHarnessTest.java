@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -235,6 +236,10 @@ class DispatchQualityBenchmarkHarnessTest {
                     tempDir));
 
             assertEquals(1, run.rawResults().size());
+            DispatchQualityBenchmarkResult result = run.rawResults().getFirst();
+            assertTrue(result.workerStatusSnapshot().stream()
+                    .filter(DispatchQualityWorkerStatus::enabled)
+                    .allMatch(DispatchQualityWorkerStatus::workerAuditPresent));
             Path adaptiveTraceRoot = tempDir
                     .resolve("feedback")
                     .resolve("normal-clear")
@@ -247,7 +252,11 @@ class DispatchQualityBenchmarkHarnessTest {
                     .resolve("adaptive_compute_trace");
             assertTrue(java.nio.file.Files.exists(adaptiveTraceRoot));
             try (var traceFiles = java.nio.file.Files.list(adaptiveTraceRoot)) {
-                assertFalse(traceFiles.findAny().isEmpty());
+                Path tracePath = traceFiles.findFirst().orElseThrow();
+                Map<?, ?> payload = new com.fasterxml.jackson.databind.ObjectMapper().readValue(tracePath.toFile(), Map.class);
+                assertEquals(Boolean.TRUE, payload.get("workerAuditPresent"));
+                assertEquals("ready-state", payload.get("workerAuditSource"));
+                assertTrue(((List<?>) payload.get("workerAuditMissingFields")).isEmpty());
             }
         } catch (java.io.IOException exception) {
             throw new RuntimeException(exception);

@@ -25,7 +25,7 @@ public record MlWorkerMetadata(
     }
 
     public boolean hasDeviceAudit() {
-        return device != null && !device.isBlank();
+        return MlWorkerAuditSupport.auditPresent(this);
     }
 
     public MlWorkerMetadata withLatency(long latencyMs) {

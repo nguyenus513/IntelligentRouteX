@@ -184,7 +184,14 @@ final class HttpRouteFinderTestSupport {
                   "loadedFromLocal": %s,
                   "localArtifactPath": "%s",
                   "materializationMode": "%s",
-                  "loadedModelFingerprint": "%s"
+                  "loadedModelFingerprint": "%s",
+                  "device": "cuda:0",
+                  "dtype": "fp16",
+                  "gpuMemoryAllocatedMb": 6144,
+                  "batchSize": 4,
+                  "compileMode": "inductor",
+                  "modelLoaded": true,
+                  "warmupDone": true
                 }
                 """.formatted(
                 modelVersion,

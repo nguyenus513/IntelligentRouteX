@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HttpForecastClientTest {
@@ -43,6 +44,11 @@ class HttpForecastClientTest {
                     Duration.ofMillis(50),
                     Duration.ofMillis(100),
                     manifestPath);
+
+            assertEquals("cuda:0", client.readyState().workerMetadata().device());
+            assertEquals("fp16", client.readyState().workerMetadata().dtype());
+            assertTrue(client.readyState().workerMetadata().modelLoaded());
+            assertTrue(client.readyState().workerMetadata().warmupDone());
 
             ForecastResult demand = client.forecastDemandShift(demandShiftFeatureVector(), 100L);
             ForecastResult burst = client.forecastZoneBurst(zoneBurstFeatureVector(), 100L);

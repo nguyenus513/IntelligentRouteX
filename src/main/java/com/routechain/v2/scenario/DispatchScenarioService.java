@@ -14,6 +14,7 @@ import com.routechain.v2.integration.DemandShiftFeatureVector;
 import com.routechain.v2.integration.ForecastClient;
 import com.routechain.v2.integration.ForecastResult;
 import com.routechain.v2.integration.MlStageMetadataAccumulator;
+import com.routechain.v2.integration.MlWorkerAuditSupport;
 import com.routechain.v2.integration.PostDropShiftFeatureVector;
 import com.routechain.v2.integration.ZoneBurstFeatureVector;
 import com.routechain.v2.harvest.HarvestRecorder;
@@ -273,15 +274,19 @@ public final class DispatchScenarioService {
     private void logAdaptiveDecision(String traceId,
                                      AdaptiveComputeGate.GateDecision gateDecision,
                                      List<RouteProposal> proposals) {
-        decisionStageLogger.writeFamily("adaptive_compute_trace", traceId, "scenario-evaluation", Map.of(
-                "stageName", "scenario-evaluation",
-                "workerName", "ml-forecast-worker",
-                "decision", gateDecision.decision().name(),
-                "escalated", gateDecision.escalated(),
-                "reason", gateDecision.reason(),
-                "deviceUsed", gateDecision.workerMetadata().device(),
-                "proposalCount", proposals.size(),
-                "topEtaGapMinutes", topEtaGapMinutes(proposals)));
+        decisionStageLogger.writeFamily("adaptive_compute_trace", traceId, "scenario-evaluation", Map.ofEntries(
+                Map.entry("stageName", "scenario-evaluation"),
+                Map.entry("workerName", "ml-forecast-worker"),
+                Map.entry("decision", gateDecision.decision().name()),
+                Map.entry("escalated", gateDecision.escalated()),
+                Map.entry("reason", gateDecision.reason()),
+                Map.entry("deviceUsed", gateDecision.workerMetadata().device()),
+                Map.entry("workerAuditPresent", MlWorkerAuditSupport.auditPresent(gateDecision.workerMetadata())),
+                Map.entry("workerAuditSource", MlWorkerAuditSupport.auditSource(gateDecision.workerMetadata())),
+                Map.entry("workerAuditMissingFields", MlWorkerAuditSupport.missingFields(gateDecision.workerMetadata())),
+                Map.entry("workerReady", forecastClient.readyState().ready()),
+                Map.entry("proposalCount", proposals.size()),
+                Map.entry("topEtaGapMinutes", topEtaGapMinutes(proposals))));
     }
 
     private double topEtaGapMinutes(List<RouteProposal> proposals) {

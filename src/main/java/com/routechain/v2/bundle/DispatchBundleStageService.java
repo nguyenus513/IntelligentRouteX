@@ -13,6 +13,7 @@ import com.routechain.v2.integration.GreedRlBundleFeatureVector;
 import com.routechain.v2.integration.GreedRlBundleResult;
 import com.routechain.v2.integration.GreedRlClient;
 import com.routechain.v2.integration.MlStageMetadataAccumulator;
+import com.routechain.v2.integration.MlWorkerAuditSupport;
 import com.routechain.v2.harvest.HarvestRecorder;
 
 import java.util.ArrayList;
@@ -288,17 +289,21 @@ public final class DispatchBundleStageService {
     private void logAdaptiveDecision(String traceId,
                                      BundleSeed seed,
                                      AdaptiveComputeGate.GateDecision gateDecision) {
-        decisionStageLogger.writeFamily("adaptive_compute_trace", traceId, "bundle-pool", Map.of(
-                "stageName", "bundle-pool",
-                "workerName", "ml-greedrl-worker",
-                "decision", gateDecision.decision().name(),
-                "escalated", gateDecision.escalated(),
-                "reason", gateDecision.reason(),
-                "deviceUsed", gateDecision.workerMetadata().device(),
-                "clusterId", seed.cluster().clusterId(),
-                "workingOrderCount", seed.workingOrderIds().size(),
-                "acceptedBoundaryOrderCount", seed.acceptedBoundaryOrderIds().size(),
-                "supportSpread", supportSpread(seed.supportScoreByOrder())));
+        decisionStageLogger.writeFamily("adaptive_compute_trace", traceId, "bundle-pool", Map.ofEntries(
+                Map.entry("stageName", "bundle-pool"),
+                Map.entry("workerName", "ml-greedrl-worker"),
+                Map.entry("decision", gateDecision.decision().name()),
+                Map.entry("escalated", gateDecision.escalated()),
+                Map.entry("reason", gateDecision.reason()),
+                Map.entry("deviceUsed", gateDecision.workerMetadata().device()),
+                Map.entry("workerAuditPresent", MlWorkerAuditSupport.auditPresent(gateDecision.workerMetadata())),
+                Map.entry("workerAuditSource", MlWorkerAuditSupport.auditSource(gateDecision.workerMetadata())),
+                Map.entry("workerAuditMissingFields", MlWorkerAuditSupport.missingFields(gateDecision.workerMetadata())),
+                Map.entry("workerReady", greedRlClient.readyState().ready()),
+                Map.entry("clusterId", seed.cluster().clusterId()),
+                Map.entry("workingOrderCount", seed.workingOrderIds().size()),
+                Map.entry("acceptedBoundaryOrderCount", seed.acceptedBoundaryOrderIds().size()),
+                Map.entry("supportSpread", supportSpread(seed.supportScoreByOrder()))));
     }
 
     private double supportSpread(Map<String, Double> supportScoreByOrder) {

@@ -20,7 +20,7 @@ public final class TestGreedRlClient implements GreedRlClient {
     }
 
     public static TestGreedRlClient applied() {
-        MlWorkerMetadata metadata = new MlWorkerMetadata("greedrl-local", "v1", "sha256:greedrl", 9L);
+        MlWorkerMetadata metadata = new MlWorkerMetadata("greedrl-local", "v1", "sha256:greedrl", 9L, "cuda:0", "fp16", 5120L, 6, "inductor", true, true);
         return new TestGreedRlClient(
                 WorkerReadyState.ready(metadata),
                 (feature, timeout) -> GreedRlBundleResult.applied(List.of(
@@ -37,7 +37,7 @@ public final class TestGreedRlClient implements GreedRlClient {
     }
 
     public static TestGreedRlClient notApplied(String reason) {
-        MlWorkerMetadata metadata = new MlWorkerMetadata("greedrl-local", "v1", "sha256:greedrl", 9L);
+        MlWorkerMetadata metadata = new MlWorkerMetadata("greedrl-local", "v1", "sha256:greedrl", 9L, "cuda:0", "fp16", 5120L, 6, "inductor", true, true);
         return new TestGreedRlClient(
                 WorkerReadyState.ready(metadata),
                 (feature, timeout) -> GreedRlBundleResult.notApplied(reason, metadata),

@@ -20,7 +20,7 @@ public final class TestRouteFinderClient implements RouteFinderClient {
     }
 
     public static TestRouteFinderClient applied() {
-        MlWorkerMetadata metadata = new MlWorkerMetadata("routefinder-local", "v1", "sha256:routefinder", 7L);
+        MlWorkerMetadata metadata = new MlWorkerMetadata("routefinder-local", "v1", "sha256:routefinder", 7L, "cuda:0", "fp16", 6144L, 4, "inductor", true, true);
         return new TestRouteFinderClient(
                 WorkerReadyState.ready(metadata),
                 (feature, timeout) -> RouteFinderResult.applied(List.of(refinedRoute(feature)), false, metadata),
@@ -28,7 +28,7 @@ public final class TestRouteFinderClient implements RouteFinderClient {
     }
 
     public static TestRouteFinderClient notApplied(String reason) {
-        MlWorkerMetadata metadata = new MlWorkerMetadata("routefinder-local", "v1", "sha256:routefinder", 7L);
+        MlWorkerMetadata metadata = new MlWorkerMetadata("routefinder-local", "v1", "sha256:routefinder", 7L, "cuda:0", "fp16", 6144L, 4, "inductor", true, true);
         return new TestRouteFinderClient(
                 WorkerReadyState.ready(metadata),
                 (feature, timeout) -> RouteFinderResult.notApplied(reason, metadata),

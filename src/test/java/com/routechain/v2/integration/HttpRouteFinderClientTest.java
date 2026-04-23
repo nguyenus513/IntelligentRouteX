@@ -45,6 +45,11 @@ class HttpRouteFinderClientTest {
                     Duration.ofMillis(100),
                     manifestPath);
 
+            assertEquals("cuda:0", client.readyState().workerMetadata().device());
+            assertEquals("fp16", client.readyState().workerMetadata().dtype());
+            assertTrue(client.readyState().workerMetadata().modelLoaded());
+            assertTrue(client.readyState().workerMetadata().warmupDone());
+
             RouteFinderFeatureVector featureVector = featureVector();
             List<RouteFinderResult> results = List.of(
                     client.generateAlternatives(featureVector, 100L),
