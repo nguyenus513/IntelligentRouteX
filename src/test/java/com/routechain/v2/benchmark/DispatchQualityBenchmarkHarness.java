@@ -951,7 +951,7 @@ public final class DispatchQualityBenchmarkHarness {
         properties.getCompute().getAdaptive().setForecastMinProposalCount(2);
         properties.getCompute().getAdaptive().setForecastWeatherEscalationEnabled(true);
         properties.getCompute().getAdaptive().setForecastTrafficEscalationEnabled(true);
-        properties.getDecision().getLlm().setBaseUrl("https://r8cp2m4.9router.com/v1");
+        properties.getDecision().getLlm().setBaseUrl("http://127.0.0.1:20128/v1");
     }
 
     private Path feedbackDirectory(BenchmarkRequest request,

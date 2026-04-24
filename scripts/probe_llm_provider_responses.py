@@ -15,7 +15,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "validation" / "llm-provider"
-DEFAULT_BASE_URL = "https://r8cp2m4.9router.com/v1"
+DEFAULT_BASE_URL = "http://127.0.0.1:20128/v1"
 DEFAULT_MODELS = ("cx/gpt-5.5", "cx/gpt-5.4")
 DEFAULT_API_KEY_ENV = "OPENAI_API_KEY"
 
