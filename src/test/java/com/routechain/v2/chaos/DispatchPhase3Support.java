@@ -358,6 +358,19 @@ final class DispatchPhase3Support {
         long bundledAssignments = result.assignments().stream()
                 .filter(assignment -> assignment.orderIds().size() > 1)
                 .count();
+        int selectedSingleOrderCount = selectedBundleSizeCount(result, 1);
+        int selectedBundleSize2Count = selectedBundleSizeCount(result, 2);
+        int selectedBundleSize3Count = selectedBundleSizeCount(result, 3);
+        int selectedBundleSize4Count = selectedBundleSizeCount(result, 4);
+        int selectedBundleSize5Count = selectedBundleSizeCount(result, 5);
+        int coveredOrderCount = result.assignments().stream()
+                .flatMap(assignment -> assignment.orderIds().stream())
+                .collect(java.util.stream.Collectors.toSet())
+                .size();
+        int maxSelectedBundleSize = result.assignments().stream()
+                .mapToInt(assignment -> assignment.orderIds().size())
+                .max()
+                .orElse(0);
         double averageBundleSize = result.assignments().stream()
                 .filter(assignment -> assignment.orderIds().size() > 1)
                 .mapToInt(assignment -> assignment.orderIds().size())
@@ -387,6 +400,13 @@ final class DispatchPhase3Support {
                 executedAssignmentCount <= result.globalSelectionResult().selectedCount(),
                 executedAssignmentCount == 0 ? 0.0 : bundledAssignments / (double) executedAssignmentCount,
                 averageBundleSize,
+                selectedSingleOrderCount,
+                selectedBundleSize2Count,
+                selectedBundleSize3Count,
+                selectedBundleSize4Count,
+                selectedBundleSize5Count,
+                coveredOrderCount,
+                maxSelectedBundleSize,
                 routeFallbackRate(result),
                 averagePickupEta,
                 averageCompletionEta,
@@ -403,9 +423,15 @@ final class DispatchPhase3Support {
                 fallbackRate(result.liveStageMetadata().stream().map(LiveStageMetadata::fallbackUsed).toList()));
     }
 
+    private static int selectedBundleSizeCount(DispatchV2Result result, int bundleSize) {
+        return (int) result.assignments().stream()
+                .filter(assignment -> assignment.orderIds().size() == bundleSize)
+                .count();
+    }
+
     static DispatchQualityMetrics aggregateMetrics(List<DispatchQualityMetrics> samples) {
         if (samples.isEmpty()) {
-            return new DispatchQualityMetrics("dispatch-quality-metrics/v1", 0, 0, true, true, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+            return new DispatchQualityMetrics("dispatch-quality-metrics/v1", 0, 0, true, true, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
         }
         return new DispatchQualityMetrics(
                 "dispatch-quality-metrics/v1",
@@ -415,6 +441,13 @@ final class DispatchPhase3Support {
                 samples.stream().allMatch(DispatchQualityMetrics::executionValid),
                 samples.stream().mapToDouble(DispatchQualityMetrics::bundleRate).average().orElse(0.0),
                 samples.stream().mapToDouble(DispatchQualityMetrics::averageBundleSize).average().orElse(0.0),
+                (int) Math.round(samples.stream().mapToInt(DispatchQualityMetrics::selectedSingleOrderCount).average().orElse(0.0)),
+                (int) Math.round(samples.stream().mapToInt(DispatchQualityMetrics::selectedBundleSize2Count).average().orElse(0.0)),
+                (int) Math.round(samples.stream().mapToInt(DispatchQualityMetrics::selectedBundleSize3Count).average().orElse(0.0)),
+                (int) Math.round(samples.stream().mapToInt(DispatchQualityMetrics::selectedBundleSize4Count).average().orElse(0.0)),
+                (int) Math.round(samples.stream().mapToInt(DispatchQualityMetrics::selectedBundleSize5Count).average().orElse(0.0)),
+                (int) Math.round(samples.stream().mapToInt(DispatchQualityMetrics::coveredOrderCount).average().orElse(0.0)),
+                (int) Math.round(samples.stream().mapToInt(DispatchQualityMetrics::maxSelectedBundleSize).average().orElse(0.0)),
                 samples.stream().mapToDouble(DispatchQualityMetrics::routeFallbackRate).average().orElse(0.0),
                 samples.stream().mapToDouble(DispatchQualityMetrics::averageProjectedPickupEtaMinutes).average().orElse(0.0),
                 samples.stream().mapToDouble(DispatchQualityMetrics::averageProjectedCompletionEtaMinutes).average().orElse(0.0),

@@ -227,6 +227,13 @@ def build_visual_cell(cell: VisualCell) -> dict:
         "selectedProposalCount": len(selected_routes),
         "selectedDriverCount": selected_driver_count,
         "executedAssignmentCount": metrics.get("executedAssignmentCount", cell.benchmark_row.get("executedAssignmentCount")),
+        "selectedSingleOrderCount": metrics.get("selectedSingleOrderCount", cell.benchmark_row.get("selectedSingleOrderCount")),
+        "selectedBundleSize2Count": metrics.get("selectedBundleSize2Count", cell.benchmark_row.get("selectedBundleSize2Count")),
+        "selectedBundleSize3Count": metrics.get("selectedBundleSize3Count", cell.benchmark_row.get("selectedBundleSize3Count")),
+        "selectedBundleSize4Count": metrics.get("selectedBundleSize4Count", cell.benchmark_row.get("selectedBundleSize4Count")),
+        "selectedBundleSize5Count": metrics.get("selectedBundleSize5Count", cell.benchmark_row.get("selectedBundleSize5Count")),
+        "coveredOrderCount": metrics.get("coveredOrderCount", cell.benchmark_row.get("coveredOrderCount")),
+        "maxSelectedBundleSize": metrics.get("maxSelectedBundleSize", cell.benchmark_row.get("maxSelectedBundleSize")),
         "executedAssignmentIds": executed_ids,
         "routeProposalCount": route_metrics.get("proposalCount", cell.benchmark_row.get("routeProposalCount")),
         "geometryCoverage": route_metrics.get("geometryCoverage", cell.benchmark_row.get("routeGeometryCoverage")),
@@ -473,6 +480,9 @@ def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_driver
             f"<div><span>Shown orders</span><b>{min(max_orders, len(cell.get('orders', [])))}</b></div>"
             f"<div><span>Shown drivers</span><b>{min(max_drivers, cell.get('selectedDriverCount', len(cell.get('drivers', []))))}</b></div>"
             f"<div><span>Selected drivers</span><b>{cell.get('selectedDriverCount', cell.get('selectedProposalCount'))}</b></div>"
+            f"<div><span>Covered orders</span><b>{cell.get('coveredOrderCount')}</b></div>"
+            f"<div><span>Bundle sizes 1/2/3/4/5</span><b>{cell.get('selectedSingleOrderCount')}/{cell.get('selectedBundleSize2Count')}/{cell.get('selectedBundleSize3Count')}/{cell.get('selectedBundleSize4Count')}/{cell.get('selectedBundleSize5Count')}</b></div>"
+            f"<div><span>Max bundle size</span><b>{cell.get('maxSelectedBundleSize')}</b></div>"
             f"<div><span>Route proposals</span><b>{cell.get('routeProposalCount')}</b></div>"
             f"<div><span>Budget mode</span><b>{html.escape(str(budget.get('budgetMode', 'n/a')))}</b></div>"
             f"<div><span>Route pool ms</span><b>{html.escape(str(latencies.get('route-proposal-pool', 'n/a')))}</b></div>"

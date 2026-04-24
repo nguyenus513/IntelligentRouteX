@@ -375,6 +375,13 @@ def cell_report_row(result: CellRunResult) -> Dict[str, object]:
         "timedOut": result.timed_out,
         "totalLatencyMs": elapsed_ms(payload),
         "executedAssignmentCount": metrics.get("executedAssignmentCount"),
+        "selectedSingleOrderCount": metrics.get("selectedSingleOrderCount"),
+        "selectedBundleSize2Count": metrics.get("selectedBundleSize2Count"),
+        "selectedBundleSize3Count": metrics.get("selectedBundleSize3Count"),
+        "selectedBundleSize4Count": metrics.get("selectedBundleSize4Count"),
+        "selectedBundleSize5Count": metrics.get("selectedBundleSize5Count"),
+        "coveredOrderCount": metrics.get("coveredOrderCount"),
+        "maxSelectedBundleSize": metrics.get("maxSelectedBundleSize"),
         "conflictFreeAssignments": metrics.get("conflictFreeAssignments"),
         "executionValid": metrics.get("executionValid"),
         "robustUtilityAverage": metrics.get("robustUtilityAverage"),
@@ -442,21 +449,29 @@ def render_markdown(payload: Dict[str, object]) -> str:
         "",
         "## Cells",
         "",
-        "| scenario | size | profile | verdict | latency ms | executed | robust utility | route proposals | fallbacks | llm requests |",
-        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| scenario | size | profile | verdict | latency ms | executed | covered orders | bundle sizes 1/2/3/4/5 | robust utility | route proposals | fallbacks | llm requests |",
+        "| --- | --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: |",
     ]
     if isinstance(rows, list):
         for row in rows:
             if not isinstance(row, dict):
                 continue
             lines.append(
-                "| {scenario} | {size} | {profile} | {verdict} | {latency} | {executed} | {utility} | {routes} | {fallbacks} | {llm} |".format(
+                "| {scenario} | {size} | {profile} | {verdict} | {latency} | {executed} | {covered} | {sizes} | {utility} | {routes} | {fallbacks} | {llm} |".format(
                     scenario=row.get("scenarioPack", ""),
                     size=row.get("size", ""),
                     profile=row.get("profile", ""),
                     verdict=row.get("verdict", ""),
                     latency=row.get("totalLatencyMs") if row.get("totalLatencyMs") is not None else "",
                     executed=row.get("executedAssignmentCount") if row.get("executedAssignmentCount") is not None else "",
+                    covered=row.get("coveredOrderCount") if row.get("coveredOrderCount") is not None else "",
+                    sizes="{}/{}/{}/{}/{}".format(
+                        row.get("selectedSingleOrderCount", ""),
+                        row.get("selectedBundleSize2Count", ""),
+                        row.get("selectedBundleSize3Count", ""),
+                        row.get("selectedBundleSize4Count", ""),
+                        row.get("selectedBundleSize5Count", ""),
+                    ),
                     utility=row.get("robustUtilityAverage") if row.get("robustUtilityAverage") is not None else "",
                     routes=row.get("routeProposalCount") if row.get("routeProposalCount") is not None else "",
                     fallbacks=row.get("stageFallbackCount", 0),

@@ -123,6 +123,14 @@ public final class DispatchQualityArtifactWriter {
         builder.append("- conflict free: `").append(metrics.conflictFreeAssignments()).append("`\n");
         builder.append("- execution valid: `").append(metrics.executionValid()).append("`\n");
         builder.append("- bundle rate: `").append(metrics.bundleRate()).append("`\n");
+        builder.append("- selected bundle sizes: `1=").append(metrics.selectedSingleOrderCount())
+                .append(", 2=").append(metrics.selectedBundleSize2Count())
+                .append(", 3=").append(metrics.selectedBundleSize3Count())
+                .append(", 4=").append(metrics.selectedBundleSize4Count())
+                .append(", 5=").append(metrics.selectedBundleSize5Count())
+                .append("`\n");
+        builder.append("- covered orders: `").append(metrics.coveredOrderCount()).append("`\n");
+        builder.append("- max selected bundle size: `").append(metrics.maxSelectedBundleSize()).append("`\n");
         builder.append("- robust utility avg: `").append(metrics.robustUtilityAverage()).append("`\n");
         builder.append("- route cost quality: `").append(metrics.routeCostQuality()).append("`\n");
         builder.append("- driver entry quality: `").append(metrics.driverEntryQuality()).append("`\n");
@@ -238,7 +246,7 @@ public final class DispatchQualityArtifactWriter {
 
     private static String csvForComparison(DispatchQualityComparisonReport report) {
         StringBuilder builder = new StringBuilder();
-        builder.append("baseline,scenarioPack,scenarioName,workloadSize,decisionMode,runtimeClassification,executionMode,selectedProposalCount,executedAssignmentCount,conflictFreeAssignments,executionValid,bundleRate,averageBundleSize,routeFallbackRate,averageProjectedPickupEtaMinutes,averageProjectedCompletionEtaMinutes,landingValueAverage,robustUtilityAverage,selectorObjectiveValue,routeCostQuality,driverEntryQuality,burstRobustness,dispatchRegretAverage,courierUtilizationEstimate,degradeRate,workerFallbackRate,liveSourceFallbackRate,llmExactMatchRate,tokenTotal,stageFallbacks,geometryCoverage,averageRouteDistanceMeters,averageRouteTravelTimeSeconds,averageRouteCost,averageCongestionScore,averageMajorRoadRatio,averageStraightnessScore,averageTurnCount,routeDominanceRate,averageRouteRegret,averagePathEfficiency,averageEtaDominanceScore,contextEfficiency,stageCoherence,fallbackRecoveryQuality,adaptationQuality,decisionConsistencyVariance\n");
+        builder.append("baseline,scenarioPack,scenarioName,workloadSize,decisionMode,runtimeClassification,executionMode,selectedProposalCount,executedAssignmentCount,conflictFreeAssignments,executionValid,bundleRate,averageBundleSize,selectedSingleOrderCount,selectedBundleSize2Count,selectedBundleSize3Count,selectedBundleSize4Count,selectedBundleSize5Count,coveredOrderCount,maxSelectedBundleSize,routeFallbackRate,averageProjectedPickupEtaMinutes,averageProjectedCompletionEtaMinutes,landingValueAverage,robustUtilityAverage,selectorObjectiveValue,routeCostQuality,driverEntryQuality,burstRobustness,dispatchRegretAverage,courierUtilizationEstimate,degradeRate,workerFallbackRate,liveSourceFallbackRate,llmExactMatchRate,tokenTotal,stageFallbacks,geometryCoverage,averageRouteDistanceMeters,averageRouteTravelTimeSeconds,averageRouteCost,averageCongestionScore,averageMajorRoadRatio,averageStraightnessScore,averageTurnCount,routeDominanceRate,averageRouteRegret,averagePathEfficiency,averageEtaDominanceScore,contextEfficiency,stageCoherence,fallbackRecoveryQuality,adaptationQuality,decisionConsistencyVariance\n");
         for (DispatchQualityBenchmarkResult result : report.baselineResults()) {
             DispatchQualityMetrics metrics = result.metrics();
             builder.append(csv(result.baselineId())).append(',')
@@ -254,6 +262,13 @@ public final class DispatchQualityArtifactWriter {
                     .append(metrics.executionValid()).append(',')
                     .append(metrics.bundleRate()).append(',')
                     .append(metrics.averageBundleSize()).append(',')
+                    .append(metrics.selectedSingleOrderCount()).append(',')
+                    .append(metrics.selectedBundleSize2Count()).append(',')
+                    .append(metrics.selectedBundleSize3Count()).append(',')
+                    .append(metrics.selectedBundleSize4Count()).append(',')
+                    .append(metrics.selectedBundleSize5Count()).append(',')
+                    .append(metrics.coveredOrderCount()).append(',')
+                    .append(metrics.maxSelectedBundleSize()).append(',')
                     .append(metrics.routeFallbackRate()).append(',')
                     .append(metrics.averageProjectedPickupEtaMinutes()).append(',')
                     .append(metrics.averageProjectedCompletionEtaMinutes()).append(',')

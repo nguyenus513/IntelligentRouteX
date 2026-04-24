@@ -607,6 +607,19 @@ public final class DispatchQualityBenchmarkHarness {
         long bundledAssignments = result.assignments().stream()
                 .filter(assignment -> assignment.orderIds().size() > 1)
                 .count();
+        int selectedSingleOrderCount = selectedBundleSizeCount(result, 1);
+        int selectedBundleSize2Count = selectedBundleSizeCount(result, 2);
+        int selectedBundleSize3Count = selectedBundleSizeCount(result, 3);
+        int selectedBundleSize4Count = selectedBundleSizeCount(result, 4);
+        int selectedBundleSize5Count = selectedBundleSizeCount(result, 5);
+        int coveredOrderCount = result.assignments().stream()
+                .flatMap(assignment -> assignment.orderIds().stream())
+                .collect(java.util.stream.Collectors.toSet())
+                .size();
+        int maxSelectedBundleSize = result.assignments().stream()
+                .mapToInt(assignment -> assignment.orderIds().size())
+                .max()
+                .orElse(0);
         double averageBundleSize = result.assignments().stream()
                 .filter(assignment -> assignment.orderIds().size() > 1)
                 .mapToInt(assignment -> assignment.orderIds().size())
@@ -639,6 +652,13 @@ public final class DispatchQualityBenchmarkHarness {
                 executionValid,
                 executedAssignmentCount == 0 ? 0.0 : bundledAssignments / (double) executedAssignmentCount,
                 averageBundleSize,
+                selectedSingleOrderCount,
+                selectedBundleSize2Count,
+                selectedBundleSize3Count,
+                selectedBundleSize4Count,
+                selectedBundleSize5Count,
+                coveredOrderCount,
+                maxSelectedBundleSize,
                 routeFallbackRate(result),
                 averagePickupEta,
                 averageCompletionEta,
@@ -653,6 +673,12 @@ public final class DispatchQualityBenchmarkHarness {
                 distinctDegrades(result).isEmpty() ? 0.0 : 1.0,
                 fallbackRate(result.mlStageMetadata().stream().map(MlStageMetadata::fallbackUsed).toList()),
                 fallbackRate(result.liveStageMetadata().stream().map(LiveStageMetadata::fallbackUsed).toList()));
+    }
+
+    private int selectedBundleSizeCount(DispatchV2Result result, int bundleSize) {
+        return (int) result.assignments().stream()
+                .filter(assignment -> assignment.orderIds().size() == bundleSize)
+                .count();
     }
 
     private double routeFallbackRate(DispatchV2Result result) {
@@ -734,6 +760,13 @@ public final class DispatchQualityBenchmarkHarness {
                 true,
                 0.0,
                 0.0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
                 0.0,
                 0.0,
                 0.0,
