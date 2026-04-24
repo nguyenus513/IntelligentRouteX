@@ -36,7 +36,9 @@ public final class ContextSelector {
         boolean scarceSupply = doubleValue(safeDispatchContext.get("supplyDemandRatio")) > 0.0
                 && doubleValue(safeDispatchContext.get("supplyDemandRatio")) < 0.9;
         boolean denseHotspot = effectiveCount >= decisionProperties.getContextSelection().getDenseCandidateThreshold();
-        boolean compressed = effectiveCount <= decisionProperties.getContextSelection().getCompactCandidateThreshold()
+        boolean forceCompact = decisionProperties.getLlm().getForceCompactStages().stream()
+                .anyMatch(stageName.wireName()::equals);
+        boolean compressed = forceCompact || effectiveCount <= decisionProperties.getContextSelection().getCompactCandidateThreshold()
                 && !trafficBad
                 && !weatherBad
                 && !denseHotspot;
@@ -72,7 +74,9 @@ public final class ContextSelector {
         }
 
         List<String> qualityFlags = new ArrayList<>();
-        if (compressed) {
+        if (forceCompact) {
+            qualityFlags.add("context-forced-compact");
+        } else if (compressed) {
             qualityFlags.add("context-compact");
         } else {
             qualityFlags.add("context-expanded");
@@ -85,7 +89,9 @@ public final class ContextSelector {
         }
 
         String profileName;
-        if (denseHotspot || trafficBad || weatherBad) {
+        if (forceCompact) {
+            profileName = "compact-staging";
+        } else if (denseHotspot || trafficBad || weatherBad) {
             profileName = "stress-detailed";
         } else if (compressed) {
             profileName = "compact";
@@ -100,6 +106,7 @@ public final class ContextSelector {
         selectedContext.put("lateHour", lateHour);
         selectedContext.put("scarceSupply", scarceSupply);
         selectedContext.put("denseHotspot", denseHotspot);
+        selectedContext.put("forceCompact", forceCompact);
         selectedContext.put("toolFetchPlan", List.copyOf(toolFetchPlan));
         selectedContext.put("upstreamRefCount", upstreamRefs == null ? 0 : upstreamRefs.size());
         selectedContext.put("dispatchDecisionMode", safeDispatchContext.getOrDefault("decisionMode", ""));

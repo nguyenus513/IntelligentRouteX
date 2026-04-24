@@ -54,7 +54,9 @@ public final class LlmStageScheduler {
                 "sessionReadRefs", sessionContext.sessionReadRefs(),
                 "sessionRefs", sessionContext.sessionRefs()));
         DecisionEffortPolicy.EffortDecision effortDecision = effortPolicy.select(input);
-        List<PassTrace> passTraces = multiPassEnabled(input.stageName()) ? runMultiPass(input, effortDecision) : runSinglePass(input, effortDecision);
+        effortDecision = applyEffortOverride(input.stageName(), effortDecision);
+        PassPlan passPlan = passPlan(input.stageName());
+        List<PassTrace> passTraces = passPlan.maxPasses() > 1 ? runMultiPass(input, effortDecision, passPlan) : runSinglePass(input, effortDecision);
         PassTrace commitTrace = passTraces.getLast();
         decisionStageLogger.writeFamily("llm_reasoning_cycle_trace", input.traceId(), input.stageName().wireName(), Map.of(
                 "schemaVersion", "llm-reasoning-cycle-trace/v1",
@@ -62,8 +64,14 @@ public final class LlmStageScheduler {
                 "stageName", input.stageName().wireName(),
                 "requestedEffort", effortDecision.requestedEffort().wireValue(),
                 "selectionReason", effortDecision.selectionReason(),
+                "configuredMaxPasses", passPlan.maxPasses(),
+                "actualPassCount", passTraces.size(),
+                "passPlanName", passPlan.name(),
+                "contextBudgetMode", contextBudgetMode(input),
                 "passes", passTraces.stream().map(PassTrace::toMap).toList()));
         NineRouterResponsesClient.LlmInvocationResult representative = commitTrace.result();
+        Map<String, Object> assessments = extractAssessments(representative.parsedOutput());
+        GuardedSelection guardedSelection = guardSelection(input, extractSelectedIds(representative.parsedOutput()), assessments);
         DecisionStageOutputV1 output = new DecisionStageOutputV1(
                 "stage-output-v1",
                 input.traceId(),
@@ -72,16 +80,16 @@ public final class LlmStageScheduler {
                 input.stageName(),
                 DecisionBrainType.LLM,
                 representative.providerModel(),
-                extractAssessments(representative.parsedOutput()),
-                extractSelectedIds(representative.parsedOutput()),
+                assessments,
+                guardedSelection.selectedIds(),
                 new DecisionStageMetaV1(
                         "decision-stage-meta/v1",
                         elapsedMs(startedAt),
                         confidence(representative.parsedOutput()),
-                        false,
-                        null,
+                        guardedSelection.guardTriggered(),
+                        guardedSelection.guardTriggered() ? "llm-authority-selection-shrink-guard-triggered" : null,
                         true,
-                        "llm",
+                        guardedSelection.guardTriggered() ? "llm-guarded" : "llm",
                         effortDecision.requestedEffort().wireValue(),
                         representative.appliedEffort(),
                         mergeTokenUsage(passTraces),
@@ -89,7 +97,7 @@ public final class LlmStageScheduler {
                         representative.rawResponseHash(),
                         "llm",
                         authoritativeStages(input),
-                        mergeQualityFlags(input, effortDecision, passTraces, representative),
+                        mergeQualityFlags(input, effortDecision, passTraces, representative, passPlan, guardedSelection),
                         String.valueOf(input.contextSelection().getOrDefault("profileName", "balanced")),
                         overlays(input),
                         Boolean.TRUE.equals(input.contextSelection().get("compressed")),
@@ -115,7 +123,8 @@ public final class LlmStageScheduler {
     }
 
     private List<PassTrace> runMultiPass(DecisionStageInputV1 input,
-                                         DecisionEffortPolicy.EffortDecision effortDecision) {
+                                         DecisionEffortPolicy.EffortDecision effortDecision,
+                                         PassPlan passPlan) {
         List<PassTrace> traces = new ArrayList<>();
         DecisionStageInputV1 proposeInput = passInput(input, "propose", "produce a shortlist and provisional ranking");
         PromptPackRegistry.RenderedPrompt proposePrompt = client.renderPrompt(proposeInput);
@@ -126,6 +135,9 @@ public final class LlmStageScheduler {
                 proposePrompt);
         recordPass(proposeInput, "propose", proposePrompt, propose);
         traces.add(new PassTrace("propose", "produce a shortlist and provisional ranking", propose));
+        if (traces.size() >= passPlan.maxPasses() - 1) {
+            return appendCommitPass(input, effortDecision, traces, propose.parsedOutput(), propose.parsedOutput());
+        }
 
         DecisionStageInputV1 critiqueInput = passInput(input.withUpstreamSummary(withPassSummary(input.upstreamSummary(), traces)),
                 "critique",
@@ -138,6 +150,9 @@ public final class LlmStageScheduler {
                 critiquePrompt);
         recordPass(critiqueInput, "critique", critiquePrompt, critique);
         traces.add(new PassTrace("critique", "identify dominated candidates, missing trade-offs, regret, and conflict risk", critique));
+        if (traces.size() >= passPlan.maxPasses() - 1) {
+            return appendCommitPass(input, effortDecision, traces, propose.parsedOutput(), critique.parsedOutput());
+        }
 
         DecisionStageInputV1 compareInput = input
                 .withComparisonPack(comparisonPackBuilder.augmentForPasses(input.comparisonPack(), propose.parsedOutput(), critique.parsedOutput()))
@@ -151,9 +166,16 @@ public final class LlmStageScheduler {
                 comparePrompt);
         recordPass(comparePassInput, "compare", comparePrompt, compare);
         traces.add(new PassTrace("compare", "re-rank candidates using critique feedback and relative deltas", compare));
+        return appendCommitPass(input, effortDecision, traces, compare.parsedOutput(), critique.parsedOutput());
+    }
 
+    private List<PassTrace> appendCommitPass(DecisionStageInputV1 input,
+                                             DecisionEffortPolicy.EffortDecision effortDecision,
+                                             List<PassTrace> traces,
+                                             Map<String, Object> primaryPassOutput,
+                                             Map<String, Object> critiquePassOutput) {
         DecisionStageInputV1 commitInput = input
-                .withComparisonPack(comparisonPackBuilder.augmentForPasses(input.comparisonPack(), compare.parsedOutput(), critique.parsedOutput()))
+                .withComparisonPack(comparisonPackBuilder.augmentForPasses(input.comparisonPack(), primaryPassOutput, critiquePassOutput))
                 .withUpstreamSummary(withPassSummary(input.upstreamSummary(), traces));
         DecisionStageInputV1 commitPassInput = passInput(commitInput, "commit", "return the final authoritative stage_output_v1 decision");
         PromptPackRegistry.RenderedPrompt commitPrompt = client.renderPrompt(commitPassInput);
@@ -215,6 +237,126 @@ public final class LlmStageScheduler {
     private boolean multiPassEnabled(DecisionStageName stageName) {
         return decisionProperties.getLlm().isMultiPassEnabled()
                 && decisionProperties.getLlm().getMultiPassStages().stream().anyMatch(stageName.wireName()::equals);
+    }
+
+    private PassPlan passPlan(DecisionStageName stageName) {
+        if (!multiPassEnabled(stageName)) {
+            return new PassPlan("single-pass", 1);
+        }
+        int configuredMax = decisionProperties.getLlm().getMaxPassesByStage()
+                .getOrDefault(stageName.wireName(), 4);
+        int maxPasses = Math.max(1, Math.min(4, configuredMax));
+        return new PassPlan(maxPasses == 1 ? "single-pass" : "staging-capped", maxPasses);
+    }
+
+    private DecisionEffortPolicy.EffortDecision applyEffortOverride(DecisionStageName stageName,
+                                                                    DecisionEffortPolicy.EffortDecision effortDecision) {
+        String override = decisionProperties.getLlm().getEffortOverridesByStage().get(stageName.wireName());
+        if (override == null || override.isBlank()) {
+            return effortDecision;
+        }
+        DecisionEffort overridden = parseEffort(override, effortDecision.requestedEffort());
+        if (overridden == effortDecision.requestedEffort()) {
+            return effortDecision;
+        }
+        List<String> flags = new ArrayList<>(effortDecision.qualityFlags());
+        flags.add("effort-override-" + stageName.wireName() + "-" + overridden.wireValue());
+        return new DecisionEffortPolicy.EffortDecision(
+                overridden,
+                "stage-effort-override-" + stageName.wireName() + "-" + overridden.wireValue(),
+                flags);
+    }
+
+    private DecisionEffort parseEffort(String raw, DecisionEffort fallback) {
+        for (DecisionEffort value : DecisionEffort.values()) {
+            if (value.wireValue().equalsIgnoreCase(raw.trim()) || value.name().equalsIgnoreCase(raw.trim())) {
+                return value;
+            }
+        }
+        return fallback;
+    }
+
+    private String contextBudgetMode(DecisionStageInputV1 input) {
+        int maxInputTokens = decisionProperties.getLlm().getMaxInputTokensByStage()
+                .getOrDefault(input.stageName().wireName(), 0);
+        boolean compressed = Boolean.TRUE.equals(input.contextSelection().get("compressed"));
+        if (maxInputTokens > 0 && compressed) {
+            return "compact-token-budget-" + maxInputTokens;
+        }
+        if (maxInputTokens > 0) {
+            return "token-budget-" + maxInputTokens;
+        }
+        return compressed ? "compact" : "default";
+    }
+
+    private GuardedSelection guardSelection(DecisionStageInputV1 input,
+                                            List<String> selectedIds,
+                                            Map<String, Object> assessments) {
+        if (!authorityShrinkGuardStage(input.stageName())) {
+            return new GuardedSelection(selectedIds, false, 0, selectedIds.size(), selectedIds.size(), 1.0);
+        }
+        List<String> upstreamIds = candidateIds(input);
+        int preCount = upstreamIds.size();
+        int postCount = selectedIds.size();
+        if (preCount <= 1 || postCount == 0) {
+            return new GuardedSelection(selectedIds, false, preCount, postCount, postCount, retainRatio(preCount, postCount));
+        }
+        double retainRatio = retainRatio(preCount, postCount);
+        double minRatio = decisionProperties.getLlm().getAuthorityMinSelectionRetainRatio();
+        if (retainRatio >= minRatio || hasHardRiskReason(assessments)) {
+            return new GuardedSelection(selectedIds, false, preCount, postCount, postCount, retainRatio);
+        }
+        int floor = Math.min(preCount, Math.max(3, (int) Math.ceil(preCount * minRatio)));
+        return new GuardedSelection(upstreamIds.stream().limit(floor).toList(), true, preCount, postCount, floor, retainRatio);
+    }
+
+    private boolean authorityShrinkGuardStage(DecisionStageName stageName) {
+        return stageName == DecisionStageName.ROUTE_CRITIQUE || stageName == DecisionStageName.FINAL_SELECTION;
+    }
+
+    private List<String> candidateIds(DecisionStageInputV1 input) {
+        Object topIds = input.candidateSet().get("topIds");
+        if (topIds instanceof List<?> list && !list.isEmpty()) {
+            return list.stream().map(String::valueOf).toList();
+        }
+        Object window = input.candidateSet().get("window");
+        if (window instanceof List<?> rows) {
+            return rows.stream()
+                    .filter(Map.class::isInstance)
+                    .map(Map.class::cast)
+                    .map(row -> row.get("id"))
+                    .filter(java.util.Objects::nonNull)
+                    .map(String::valueOf)
+                    .toList();
+        }
+        return List.of();
+    }
+
+    private double retainRatio(int preCount, int postCount) {
+        return preCount <= 0 ? 1.0 : postCount / (double) preCount;
+    }
+
+    private boolean hasHardRiskReason(Map<String, Object> assessments) {
+        LinkedHashSet<String> reasons = new LinkedHashSet<>();
+        collectReasonCodes(assessments.get("reasonCodes"), reasons);
+        Object items = assessments.get("items");
+        if (items instanceof List<?> itemList) {
+            for (Object item : itemList) {
+                if (item instanceof Map<?, ?> itemMap) {
+                    collectReasonCodes(itemMap.get("reasonCodes"), reasons);
+                    collectReasonCodes(itemMap.get("dominanceReasonCodes"), reasons);
+                }
+            }
+        }
+        return decisionProperties.getLlm().getAuthorityHardRiskReasonCodes().stream().anyMatch(reasons::contains);
+    }
+
+    private void collectReasonCodes(Object raw, LinkedHashSet<String> reasons) {
+        if (raw instanceof List<?> list) {
+            list.stream().map(String::valueOf).forEach(reasons::add);
+        } else if (raw instanceof String text && !text.isBlank()) {
+            reasons.add(text);
+        }
     }
 
     private List<String> extractSelectedIds(Map<String, Object> parsedOutput) {
@@ -301,7 +443,9 @@ public final class LlmStageScheduler {
     private List<String> mergeQualityFlags(DecisionStageInputV1 input,
                                            DecisionEffortPolicy.EffortDecision effortDecision,
                                            List<PassTrace> passTraces,
-                                           NineRouterResponsesClient.LlmInvocationResult representative) {
+                                           NineRouterResponsesClient.LlmInvocationResult representative,
+                                           PassPlan passPlan,
+                                           GuardedSelection guardedSelection) {
         LinkedHashSet<String> flags = new LinkedHashSet<>();
         Object selectionFlags = input.contextSelection().get("qualityFlags");
         if (selectionFlags instanceof List<?> list) {
@@ -310,6 +454,15 @@ public final class LlmStageScheduler {
         flags.addAll(effortDecision.qualityFlags());
         flags.add(multiPassEnabled(input.stageName()) ? "multi-pass-active" : "single-pass-active");
         flags.add("llm-pass-count-" + passTraces.size());
+        flags.add("llm-pass-plan-" + passPlan.name());
+        flags.add("llm-configured-max-passes-" + passPlan.maxPasses());
+        flags.add("llm-context-budget-" + contextBudgetMode(input));
+        if (guardedSelection.guardTriggered()) {
+            flags.add("llm-authority-selection-shrink-guard-triggered");
+            flags.add("llm-selection-pre-count-" + guardedSelection.preCount());
+            flags.add("llm-selection-post-count-" + guardedSelection.postCount());
+            flags.add("llm-selection-guarded-count-" + guardedSelection.guardedCount());
+        }
         if (!representative.requestedEffort().equals(representative.appliedEffort())) {
             flags.add("effort-downgraded");
         }
@@ -318,6 +471,21 @@ public final class LlmStageScheduler {
             flags.add("model-resolution-fallback-used");
         }
         return List.copyOf(flags);
+    }
+
+    private record PassPlan(String name, int maxPasses) {
+    }
+
+    private record GuardedSelection(
+            List<String> selectedIds,
+            boolean guardTriggered,
+            int preCount,
+            int postCount,
+            int guardedCount,
+            double retainRatio) {
+        private GuardedSelection {
+            selectedIds = selectedIds == null ? List.of() : List.copyOf(selectedIds);
+        }
     }
 
     private record PassTrace(

@@ -1548,8 +1548,8 @@ public class RouteChainDispatchV2Properties {
         private String model = "cx/gpt-5.5";
         private String promptFamily = "v2";
         private String apiKeyEnv = "OPENAI_API_KEY";
-        private Duration timeoutMs = Duration.ofSeconds(45);
-        private int maxRetries = 2;
+        private Duration timeoutMs = Duration.ofSeconds(20);
+        private int maxRetries = 0;
         private int modelDiscoveryRetryCount = 1;
         private boolean modelDiscoveryRequired = false;
         private Duration modelDiscoveryCacheTtl = Duration.ofMinutes(10);
@@ -1558,6 +1558,23 @@ public class RouteChainDispatchV2Properties {
         private boolean strictStructuredOutputs = true;
         private boolean multiPassEnabled = true;
         private boolean skillRegistryEnabled = true;
+        private java.util.Map<String, Integer> maxPassesByStage = new java.util.LinkedHashMap<>(java.util.Map.of(
+                "route-critique", 1,
+                "final-selection", 1));
+        private java.util.Map<String, String> effortOverridesByStage = new java.util.LinkedHashMap<>(java.util.Map.of(
+                "route-critique", "low",
+                "final-selection", "low"));
+        private java.util.Map<String, Integer> maxInputTokensByStage = new java.util.LinkedHashMap<>(java.util.Map.of(
+                "route-critique", 24000,
+                "final-selection", 14000));
+        private java.util.List<String> forceCompactStages = new java.util.ArrayList<>(java.util.List.of(
+                "route-critique",
+                "final-selection"));
+        private double authorityMinSelectionRetainRatio = 0.75;
+        private java.util.List<String> authorityHardRiskReasonCodes = new java.util.ArrayList<>(java.util.List.of(
+                "conflict-risk",
+                "hard-constraint-risk",
+                "route-invalid-risk"));
         private java.util.List<String> multiPassStages = new java.util.ArrayList<>(java.util.List.of(
                 "driver",
                 "route-generation",
@@ -1694,6 +1711,64 @@ public class RouteChainDispatchV2Properties {
 
         public void setSkillRegistryEnabled(boolean skillRegistryEnabled) {
             this.skillRegistryEnabled = skillRegistryEnabled;
+        }
+
+        public java.util.Map<String, Integer> getMaxPassesByStage() {
+            return maxPassesByStage;
+        }
+
+        public void setMaxPassesByStage(java.util.Map<String, Integer> maxPassesByStage) {
+            this.maxPassesByStage = maxPassesByStage == null
+                    ? new java.util.LinkedHashMap<>()
+                    : new java.util.LinkedHashMap<>(maxPassesByStage);
+        }
+
+        public java.util.Map<String, String> getEffortOverridesByStage() {
+            return effortOverridesByStage;
+        }
+
+        public void setEffortOverridesByStage(java.util.Map<String, String> effortOverridesByStage) {
+            this.effortOverridesByStage = effortOverridesByStage == null
+                    ? new java.util.LinkedHashMap<>()
+                    : new java.util.LinkedHashMap<>(effortOverridesByStage);
+        }
+
+        public java.util.Map<String, Integer> getMaxInputTokensByStage() {
+            return maxInputTokensByStage;
+        }
+
+        public void setMaxInputTokensByStage(java.util.Map<String, Integer> maxInputTokensByStage) {
+            this.maxInputTokensByStage = maxInputTokensByStage == null
+                    ? new java.util.LinkedHashMap<>()
+                    : new java.util.LinkedHashMap<>(maxInputTokensByStage);
+        }
+
+        public java.util.List<String> getForceCompactStages() {
+            return forceCompactStages;
+        }
+
+        public void setForceCompactStages(java.util.List<String> forceCompactStages) {
+            this.forceCompactStages = forceCompactStages == null
+                    ? new java.util.ArrayList<>()
+                    : new java.util.ArrayList<>(forceCompactStages);
+        }
+
+        public double getAuthorityMinSelectionRetainRatio() {
+            return authorityMinSelectionRetainRatio;
+        }
+
+        public void setAuthorityMinSelectionRetainRatio(double authorityMinSelectionRetainRatio) {
+            this.authorityMinSelectionRetainRatio = authorityMinSelectionRetainRatio;
+        }
+
+        public java.util.List<String> getAuthorityHardRiskReasonCodes() {
+            return authorityHardRiskReasonCodes;
+        }
+
+        public void setAuthorityHardRiskReasonCodes(java.util.List<String> authorityHardRiskReasonCodes) {
+            this.authorityHardRiskReasonCodes = authorityHardRiskReasonCodes == null
+                    ? new java.util.ArrayList<>()
+                    : new java.util.ArrayList<>(authorityHardRiskReasonCodes);
         }
 
         public java.util.List<String> getMultiPassStages() {

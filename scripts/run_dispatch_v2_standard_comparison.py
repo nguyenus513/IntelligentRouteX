@@ -91,7 +91,7 @@ PROFILE_SPECS: Dict[str, ProfileSpec] = {
         decision_mode="llm-shadow",
         profile="dispatch-v2-full-adaptive",
         requires_llm=True,
-        timeout_seconds=300,
+        timeout_seconds=180,
     ),
     "llm-authoritative-gated": ProfileSpec(
         "llm-authoritative-gated",
@@ -100,7 +100,7 @@ PROFILE_SPECS: Dict[str, ProfileSpec] = {
         profile="dispatch-v2-full-adaptive",
         authoritative_stages=("route-critique", "final-selection"),
         requires_llm=True,
-        timeout_seconds=360,
+        timeout_seconds=240,
     ),
 }
 
