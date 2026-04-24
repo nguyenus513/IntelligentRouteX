@@ -9,6 +9,7 @@ import com.routechain.v2.route.DriverCandidate;
 import com.routechain.v2.route.PickupAnchor;
 import com.routechain.v2.route.RouteProposal;
 import com.routechain.v2.route.RouteProposalSource;
+import com.routechain.v2.route.RouteShapeQuality;
 import com.routechain.v2.scenario.DispatchScenarioStage;
 import com.routechain.v2.scenario.RobustUtility;
 
@@ -111,6 +112,7 @@ public final class SelectorCandidateBuilder {
         if (proposal.geometryAvailable()) {
             reasons.add("selector-route-vector-tie-break-available");
         }
+        reasons.addAll(RouteShapeQuality.reasons(proposal));
         return List.copyOf(reasons);
     }
 
@@ -149,6 +151,7 @@ public final class SelectorCandidateBuilder {
                 && context.acceptedBoundarySupport(proposal.bundleId()) < WEAK_BOUNDARY_SUPPORT_THRESHOLD) {
             score -= 0.03;
         }
+        score -= RouteShapeQuality.penalty(proposal);
         return score;
     }
 

@@ -82,6 +82,7 @@ public final class RouteValueScorer {
                 .anyMatch(order -> order.urgent() && proposal.projectedPickupEtaMinutes() <= 12.0) ? 0.05 : 0.0;
         double boundaryPenalty = bundle.boundaryCross() ? Math.max(0.0, 0.08 - context.acceptedBoundarySupport(bundle.bundleId()) * 0.08) : 0.0;
         double fallbackPenalty = proposal.source() == RouteProposalSource.FALLBACK_SIMPLE ? 0.05 : 0.0;
+        double shapePenalty = RouteShapeQuality.penalty(proposal);
         double score = Math.max(0.0, Math.min(1.0,
                 driverContribution
                         + bundleContribution
@@ -91,8 +92,10 @@ public final class RouteValueScorer {
                         + supportContribution
                         + urgencyLift
                         - boundaryPenalty
-                        - fallbackPenalty));
+                        - fallbackPenalty
+                        - shapePenalty));
         List<String> reasons = new ArrayList<>(proposal.reasons());
+        reasons.addAll(RouteShapeQuality.reasons(proposal));
         if (urgencyLift > 0.0) {
             reasons.add("urgent-route-lift");
         }

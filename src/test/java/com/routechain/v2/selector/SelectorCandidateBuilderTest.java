@@ -4,6 +4,7 @@ import com.routechain.config.RouteChainDispatchV2Properties;
 import com.routechain.v2.bundle.BundleCandidate;
 import com.routechain.v2.route.DispatchCandidateContext;
 import com.routechain.v2.route.DriverCandidate;
+import com.routechain.v2.route.RouteShapeQuality;
 import com.routechain.v2.route.RouteTestFixtures;
 import com.routechain.v2.scenario.RobustUtility;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,11 @@ class SelectorCandidateBuilderTest {
                 + (0.10 * driverCandidate.rerankScore())
                 + (0.10 * bundleCandidate.score())
                 - (bundleCandidate.boundaryCross() && context.acceptedBoundarySupport(candidate.bundleId()) < 0.60 ? 0.03 : 0.0)
-                - (candidate.source().name().equals("FALLBACK_SIMPLE") ? properties.getSelector().getFallbackPenalty() : 0.0);
+                - (candidate.source().name().equals("FALLBACK_SIMPLE") ? properties.getSelector().getFallbackPenalty() : 0.0)
+                - RouteShapeQuality.penalty(routeProposalStage.routeProposals().stream()
+                .filter(proposal -> proposal.proposalId().equals(candidate.proposalId()))
+                .findFirst()
+                .orElseThrow());
 
         assertEquals(bundleCandidate.orderIds(), candidate.orderIds());
         assertEquals(bundleCandidate.clusterId(), candidate.clusterId());
