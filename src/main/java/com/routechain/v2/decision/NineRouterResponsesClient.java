@@ -100,7 +100,10 @@ public final class NineRouterResponsesClient {
                         objectMapper);
                 if (response.statusCode() >= 400) {
                     String failureReason = classifyHttpFailure(response.statusCode(), response.body());
-                    Optional<ModelResolution> fallbackResolution = fallbackResolutionAfterProviderRejection(modelResolution, failureReason);
+                    Optional<ModelResolution> fallbackResolution = fallbackResolutionAfterProviderRejection(
+                            modelResolution,
+                            failureReason,
+                            retryCount >= properties.getMaxRetries());
                     if (fallbackResolution.isPresent()) {
                         modelResolution = fallbackResolution.get();
                         retryCount++;
@@ -422,13 +425,16 @@ public final class NineRouterResponsesClient {
             return "provider-rejected-effort";
         }
         if (statusCode == 401 || statusCode == 403) {
-            return "provider-auth-config-error";
+            return "provider-auth-error";
         }
         if ((statusCode == 400 || statusCode == 404 || statusCode == 422)
                 && normalizedBody.contains("model")) {
             return "provider-model-unresolved";
         }
-        if (statusCode == 408 || statusCode == 429) {
+        if (statusCode == 429) {
+            return "provider-rate-limited";
+        }
+        if (statusCode == 408) {
             return "provider-timeout";
         }
         if (statusCode >= 500) {
@@ -444,6 +450,7 @@ public final class NineRouterResponsesClient {
         return "provider-timeout".equals(failureReason)
                 || "provider-http-error".equals(failureReason)
                 || "provider-http-5xx".equals(failureReason)
+                || "provider-rate-limited".equals(failureReason)
                 || "provider-empty-response".equals(failureReason)
                 || "provider-invalid-json".equals(failureReason)
                 || "provider-rejected-effort".equals(failureReason);
@@ -575,8 +582,11 @@ public final class NineRouterResponsesClient {
     }
 
     private Optional<ModelResolution> fallbackResolutionAfterProviderRejection(ModelResolution current,
-                                                                               String failureReason) {
-        if (!"provider-model-unresolved".equals(failureReason) || current == null || current.availableModelIds().isEmpty()) {
+                                                                               String failureReason,
+                                                                               boolean currentModelRetriesExhausted) {
+        boolean modelRejected = "provider-model-unresolved".equals(failureReason);
+        boolean providerUnstable = "provider-http-5xx".equals(failureReason) && currentModelRetriesExhausted;
+        if ((!modelRejected && !providerUnstable) || current == null || current.availableModelIds().isEmpty()) {
             return Optional.empty();
         }
         int currentIndex = current.availableModelIds().indexOf(current.resolvedModelId());

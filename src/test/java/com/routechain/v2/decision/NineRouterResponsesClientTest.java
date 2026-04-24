@@ -22,7 +22,7 @@ class NineRouterResponsesClientTest {
     void defaultsToGpt55() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
 
-        assertEquals("gpt-5.5", properties.getDecision().getLlm().getModel());
+        assertEquals("cx/gpt-5.5", properties.getDecision().getLlm().getModel());
     }
 
     @Test
@@ -106,7 +106,7 @@ class NineRouterResponsesClientTest {
     void fallsBackToConfiguredModelWhenDiscovery5xxIsNotRequired() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         properties.getDecision().getLlm().setApiKeyEnv("PATH");
-        properties.getDecision().getLlm().setModel("gpt-5.5");
+        properties.getDecision().getLlm().setModel("cx/gpt-5.5");
         AtomicInteger getCalls = new AtomicInteger();
         NineRouterResponsesClient client = new NineRouterResponsesClient(
                 properties.getDecision().getLlm(),
@@ -116,7 +116,7 @@ class NineRouterResponsesClientTest {
                             return new NineRouterResponsesClient.TransportResponse(503, "{\"error\":\"unavailable\"}");
                         },
                         (baseUrl, apiKey, timeout, requestBody, objectMapper) -> {
-                            assertEquals("gpt-5.5", requestBody.path("model").asText());
+                            assertEquals("cx/gpt-5.5", requestBody.path("model").asText());
                             return okResponse();
                         }),
                 JsonMapper.builder().findAndAddModules().build());
@@ -124,7 +124,7 @@ class NineRouterResponsesClientTest {
         NineRouterResponsesClient.LlmInvocationResult result = client.invoke(stageInput(DecisionStageName.PAIR_BUNDLE), DecisionEffort.MEDIUM);
 
         assertEquals(2, getCalls.get());
-        assertEquals("gpt-5.5", result.providerModel());
+        assertEquals("cx/gpt-5.5", result.providerModel());
         assertEquals("configured-direct", result.modelDiscoverySource());
         assertTrue(result.modelResolutionFallbackUsed());
     }
@@ -133,7 +133,7 @@ class NineRouterResponsesClientTest {
     void fallsBackToFallbackModelWhenConfiguredModelIsRejectedByProvider() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         properties.getDecision().getLlm().setApiKeyEnv("PATH");
-        properties.getDecision().getLlm().setModel("gpt-5.5");
+        properties.getDecision().getLlm().setModel("cx/gpt-5.5");
         AtomicInteger postCalls = new AtomicInteger();
         NineRouterResponsesClient client = new NineRouterResponsesClient(
                 properties.getDecision().getLlm(),
@@ -142,10 +142,10 @@ class NineRouterResponsesClientTest {
                         (baseUrl, apiKey, timeout, requestBody, objectMapper) -> {
                             int attempt = postCalls.incrementAndGet();
                             if (attempt == 1) {
-                                assertEquals("gpt-5.5", requestBody.path("model").asText());
+                                assertEquals("cx/gpt-5.5", requestBody.path("model").asText());
                                 return new NineRouterResponsesClient.TransportResponse(404, "{\"error\":\"model not found\"}");
                             }
-                            assertEquals("gpt-5.4", requestBody.path("model").asText());
+                            assertEquals("cx/gpt-5.4", requestBody.path("model").asText());
                             return okResponse();
                         }),
                 JsonMapper.builder().findAndAddModules().build());
@@ -153,7 +153,37 @@ class NineRouterResponsesClientTest {
         NineRouterResponsesClient.LlmInvocationResult result = client.invoke(stageInput(DecisionStageName.PAIR_BUNDLE), DecisionEffort.MEDIUM);
 
         assertEquals(2, postCalls.get());
-        assertEquals("gpt-5.4", result.providerModel());
+        assertEquals("cx/gpt-5.4", result.providerModel());
+        assertEquals("configured-fallback", result.modelDiscoverySource());
+        assertTrue(result.modelResolutionFallbackUsed());
+    }
+
+    @Test
+    void fallsBackToFallbackModelAfterResponses5xxRetriesAreExhausted() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        properties.getDecision().getLlm().setModel("cx/gpt-5.5");
+        properties.getDecision().getLlm().setMaxRetries(1);
+        AtomicInteger postCalls = new AtomicInteger();
+        NineRouterResponsesClient client = new NineRouterResponsesClient(
+                properties.getDecision().getLlm(),
+                new StatusTransport(
+                        () -> new NineRouterResponsesClient.TransportResponse(503, "{\"error\":\"unavailable\"}"),
+                        (baseUrl, apiKey, timeout, requestBody, objectMapper) -> {
+                            int attempt = postCalls.incrementAndGet();
+                            if (attempt <= 2) {
+                                assertEquals("cx/gpt-5.5", requestBody.path("model").asText());
+                                return new NineRouterResponsesClient.TransportResponse(503, "{\"error\":\"upstream unavailable\"}");
+                            }
+                            assertEquals("cx/gpt-5.4", requestBody.path("model").asText());
+                            return okResponse();
+                        }),
+                JsonMapper.builder().findAndAddModules().build());
+
+        NineRouterResponsesClient.LlmInvocationResult result = client.invoke(stageInput(DecisionStageName.PAIR_BUNDLE), DecisionEffort.MEDIUM);
+
+        assertEquals(3, postCalls.get());
+        assertEquals("cx/gpt-5.4", result.providerModel());
         assertEquals("configured-fallback", result.modelDiscoverySource());
         assertTrue(result.modelResolutionFallbackUsed());
     }

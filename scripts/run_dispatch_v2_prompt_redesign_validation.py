@@ -14,6 +14,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BASELINE_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "phase2-live3"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "benchmark" / "prompt-redesign"
+DEFAULT_PROVIDER_VALIDATION_DIR = REPO_ROOT / "artifacts" / "validation" / "llm-provider"
 TARGET_STAGES = (
     "pair-bundle",
     "route-generation",
@@ -108,6 +109,49 @@ def benchmark_command() -> List[str]:
     if os.name == "nt" and shutil.which("py"):
         return ["py", "-3.13", str(REPO_ROOT / "scripts" / "run_dispatch_v2_benchmark.py")]
     return ["python", str(REPO_ROOT / "scripts" / "run_dispatch_v2_benchmark.py")]
+
+
+def provider_probe_command() -> List[str]:
+    if os.name == "nt" and shutil.which("py"):
+        return ["py", "-3.13", str(REPO_ROOT / "scripts" / "probe_llm_provider_responses.py")]
+    return ["python", str(REPO_ROOT / "scripts" / "probe_llm_provider_responses.py")]
+
+
+def truthy(value: object) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def run_provider_responses_preflight(output_dir: Path, runner=subprocess.run) -> dict:
+    if truthy(os.environ.get("LLM_PROVIDER_RESPONSES_READY")):
+        return {
+            "schemaVersion": "llm-provider-responses-preflight/v1",
+            "ready": True,
+            "source": "env",
+            "selectedModel": os.environ.get("ROUTECHAIN_DECISION_LLM_MODEL", ""),
+            "results": [],
+            "exitCode": 0,
+        }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    before = set(output_dir.glob("responses_probe-*.json"))
+    completed = runner(provider_probe_command() + ["--output-dir", str(output_dir)], cwd=REPO_ROOT, text=True, check=False)
+    after = set(output_dir.glob("responses_probe-*.json"))
+    created = sorted(after - before, key=lambda path: path.stat().st_mtime)
+    latest = created[-1] if created else max(after, key=lambda path: path.stat().st_mtime, default=None)
+    if latest is None:
+        return {
+            "schemaVersion": "llm-provider-responses-preflight/v1",
+            "ready": False,
+            "source": "probe-missing-artifact",
+            "selectedModel": None,
+            "results": [],
+            "exitCode": int(completed.returncode),
+            "failureReason": "provider-responses-probe-artifact-missing",
+        }
+    payload = json_read(latest)
+    payload["source"] = "probe"
+    payload["artifactPath"] = str(latest)
+    payload["exitCode"] = int(completed.returncode)
+    return payload
 
 
 def git_commit() -> str:
@@ -514,6 +558,15 @@ def markdown_report(payload: dict) -> str:
         f"- validationRoots: `{', '.join(payload['validationRoots']) or 'none'}`",
         f"- rerunExecuted: `{payload['rerunExecuted']}`",
         f"- promptFamilyMode: `{payload['promptFamilyMode']}`",
+    ]
+    preflight = payload.get("providerResponsesPreflight") if isinstance(payload.get("providerResponsesPreflight"), dict) else None
+    if preflight is not None:
+        lines.extend([
+            f"- providerResponsesReady: `{preflight.get('ready', False)}`",
+            f"- providerResponsesSource: `{preflight.get('source', '')}`",
+            f"- providerResponsesSelectedModel: `{preflight.get('selectedModel') or 'none'}`",
+        ])
+    lines.extend([
         "",
         "This report validates prompt identity, stage-scoped context coverage, and paired v2/v3 evidence. It does not claim authority uplift.",
         "",
@@ -521,7 +574,7 @@ def markdown_report(payload: dict) -> str:
         "",
         "| stage | v2 verdict | v3 verdict | paired comparison | v2 checksum | v3 checksum |",
         "|---|---|---|---|---|---|",
-    ]
+    ])
     for stage in payload["stageReports"]:
         v2 = stage["familyReports"]["v2"]
         v3 = stage["familyReports"]["v3"]
@@ -592,6 +645,38 @@ def run_validation_cell(cell: ValidationCell, output_dir: Path, runner=subproces
     return int(completed.returncode)
 
 
+def preflight_gap_stage_reports(stages: Sequence[str], prompt_family_mode: str) -> List[dict]:
+    families = family_roots(prompt_family_mode)
+    reports = []
+    for stage in stages:
+        family_reports = {}
+        for family in PROMPT_FAMILIES:
+            family_reports[family] = {
+                "stageName": stage,
+                "promptFamily": family,
+                "promptIdentity": {},
+                "baselineEvidenceCount": 0,
+                "validationEvidenceCount": 0,
+                "baselineEvidence": [],
+                "validationEvidence": [],
+                "overallVerdict": "EVIDENCE_GAP",
+                "maxRichnessScore": None,
+                "fallbackUsed": False,
+                "promptIdentityLocked": False,
+                "sessionRefCountMax": 0,
+            }
+        reason = "provider-responses-not-ready"
+        reports.append({
+            "stageName": stage,
+            "familyReports": family_reports,
+            "pairedComparison": {"verdict": "EVIDENCE_GAP", "reasons": [reason]},
+            "overallStageVerdict": "EVIDENCE_GAP",
+            "evidenceGapReason": reason,
+            "targetPromptFamilies": families,
+        })
+    return reports
+
+
 def collect_stage_reports(baseline_roots: Sequence[Path], validation_roots: Sequence[Path], stages: Sequence[str]) -> dict:
     benchmark_index: Dict[Tuple[str, str, str, str, str, str, str], dict] = {}
     feedback_rows: List[StageFeedback] = []
@@ -643,6 +728,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--stage", action="append", choices=stage_cli_choices(), default=[])
     parser.add_argument("--prompt-family", choices=prompt_family_choices(), default="both")
     parser.add_argument("--rerun-cells", action="store_true")
+    parser.add_argument("--skip-provider-responses-preflight", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
@@ -659,6 +745,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
     if args.dry_run:
         return 0
+
+    provider_preflight = None
+    if args.rerun_cells and not args.skip_provider_responses_preflight:
+        provider_preflight = run_provider_responses_preflight(DEFAULT_PROVIDER_VALIDATION_DIR)
+        if not bool(provider_preflight.get("ready")):
+            payload = {
+                "schemaVersion": "dispatch-prompt-redesign-validation/v2",
+                "generatedAt": datetime.now(timezone.utc).isoformat(),
+                "validationCommit": git_commit(),
+                "baselineRoots": [str(path) for path in baseline_roots],
+                "validationRoots": [str(path) for path in validation_roots],
+                "rerunExecuted": False,
+                "promptFamilyMode": args.prompt_family,
+                "targetStages": list(stages),
+                "baselineEvidenceCount": 0,
+                "validationEvidenceCount": 0,
+                "stageReports": preflight_gap_stage_reports(stages, args.prompt_family),
+                "comparisonVerdicts": list(COMPARISON_VERDICTS),
+                "providerResponsesPreflight": provider_preflight,
+            }
+            json_path, markdown_path = write_report(payload, output_dir)
+            print("[PROVIDER RESPONSES NOT READY] prompt validation skipped")
+            print(f"[REPORT JSON] {json_path}")
+            print(f"[REPORT MARKDOWN] {markdown_path}")
+            return 1
 
     rerun_executed = False
     if args.rerun_cells:
@@ -688,6 +799,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "validationEvidenceCount": summary["validationEvidenceCount"],
         "stageReports": summary["stageReports"],
         "comparisonVerdicts": list(COMPARISON_VERDICTS),
+        "providerResponsesPreflight": provider_preflight,
     }
     json_path, markdown_path = write_report(payload, output_dir)
     print(f"[REPORT JSON] {json_path}")

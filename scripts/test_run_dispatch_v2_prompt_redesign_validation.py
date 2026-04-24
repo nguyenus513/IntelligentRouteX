@@ -183,6 +183,50 @@ class PromptRedesignValidationTest(unittest.TestCase):
             self.assertEqual(1, family_reports["v2"]["validationEvidenceCount"])
             self.assertEqual(1, family_reports["v3"]["validationEvidenceCount"])
 
+    def test_provider_preflight_gap_skips_rerun_and_writes_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "out"
+            calls = []
+
+            def fake_preflight(output_dir_arg):
+                return {
+                    "schemaVersion": "llm-provider-responses-probe/v1",
+                    "ready": False,
+                    "source": "probe",
+                    "selectedModel": None,
+                    "results": [{"model": "cx/gpt-5.5", "failureClass": "provider-http-5xx"}],
+                }
+
+            def fake_run_validation_cell(cell, out_dir, runner=None):
+                calls.append((cell.stage, cell.prompt_family))
+                return 0
+
+            original_preflight = validation_runner.run_provider_responses_preflight
+            original_run_validation_cell = validation_runner.run_validation_cell
+            try:
+                validation_runner.run_provider_responses_preflight = fake_preflight
+                validation_runner.run_validation_cell = fake_run_validation_cell
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    exit_code = validation_runner.main([
+                        "--output-dir", str(output_dir),
+                        "--stage", "pair-bundle",
+                        "--prompt-family", "both",
+                        "--rerun-cells",
+                    ])
+            finally:
+                validation_runner.run_provider_responses_preflight = original_preflight
+                validation_runner.run_validation_cell = original_run_validation_cell
+
+            self.assertEqual(1, exit_code)
+            self.assertEqual([], calls)
+            reports = sorted(output_dir.glob("prompt-redesign-validation-*.json"))
+            self.assertEqual(1, len(reports))
+            payload = json.loads(reports[0].read_text(encoding="utf-8"))
+            self.assertFalse(payload["providerResponsesPreflight"]["ready"])
+            self.assertEqual("provider-responses-not-ready", payload["stageReports"][0]["evidenceGapReason"])
+            self.assertIn("[PROVIDER RESPONSES NOT READY]", stdout.getvalue())
+
     def test_rerun_cells_calls_benchmark_runner_for_each_family(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "out"
@@ -239,6 +283,7 @@ class PromptRedesignValidationTest(unittest.TestCase):
                         "--stage", "pair-bundle",
                         "--prompt-family", "both",
                         "--rerun-cells",
+                        "--skip-provider-responses-preflight",
                     ])
             finally:
                 validation_runner.run_validation_cell = original_run_validation_cell

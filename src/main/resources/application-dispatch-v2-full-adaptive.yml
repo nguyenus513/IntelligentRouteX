@@ -55,7 +55,7 @@ routechain:
         - final-selection
       llm:
         base-url: https://r8cp2m4.9router.com/v1
-        model: gpt-5.4
+        model: cx/gpt-5.5
     performance:
       telemetry-enabled: true
       budget-enforcement-enabled: false

@@ -108,7 +108,7 @@ class RouteChainDispatchV2PropertiesTest {
         assertEquals("9router", properties.getDecision().getLlm().getProvider());
         assertEquals("http://127.0.0.1:20128/v1", properties.getDecision().getLlm().getBaseUrl());
         assertEquals("responses", properties.getDecision().getLlm().getWireApi());
-        assertEquals("gpt-5.4", properties.getDecision().getLlm().getModel());
+        assertEquals("cx/gpt-5.5", properties.getDecision().getLlm().getModel());
         assertEquals("OPENAI_API_KEY", properties.getDecision().getLlm().getApiKeyEnv());
         assertEquals(Duration.ofSeconds(45), properties.getDecision().getLlm().getTimeoutMs());
         assertEquals(2, properties.getDecision().getLlm().getMaxRetries());
