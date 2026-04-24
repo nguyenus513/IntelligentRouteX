@@ -1545,11 +1545,15 @@ public class RouteChainDispatchV2Properties {
         private String provider = "9router";
         private String baseUrl = "http://127.0.0.1:20128/v1";
         private String wireApi = "responses";
-        private String model = "gpt-5.4";
+        private String model = "gpt-5.5";
         private String promptFamily = "v2";
         private String apiKeyEnv = "OPENAI_API_KEY";
         private Duration timeoutMs = Duration.ofSeconds(45);
         private int maxRetries = 2;
+        private int modelDiscoveryRetryCount = 1;
+        private boolean modelDiscoveryRequired = false;
+        private Duration modelDiscoveryCacheTtl = Duration.ofMinutes(10);
+        private java.util.List<String> fallbackModels = new java.util.ArrayList<>(java.util.List.of("gpt-5.4"));
         private boolean parallelToolCalls = false;
         private boolean strictStructuredOutputs = true;
         private boolean multiPassEnabled = true;
@@ -1624,6 +1628,40 @@ public class RouteChainDispatchV2Properties {
 
         public void setMaxRetries(int maxRetries) {
             this.maxRetries = maxRetries;
+        }
+
+        public int getModelDiscoveryRetryCount() {
+            return modelDiscoveryRetryCount;
+        }
+
+        public void setModelDiscoveryRetryCount(int modelDiscoveryRetryCount) {
+            this.modelDiscoveryRetryCount = modelDiscoveryRetryCount;
+        }
+
+        public boolean isModelDiscoveryRequired() {
+            return modelDiscoveryRequired;
+        }
+
+        public void setModelDiscoveryRequired(boolean modelDiscoveryRequired) {
+            this.modelDiscoveryRequired = modelDiscoveryRequired;
+        }
+
+        public Duration getModelDiscoveryCacheTtl() {
+            return modelDiscoveryCacheTtl;
+        }
+
+        public void setModelDiscoveryCacheTtl(Duration modelDiscoveryCacheTtl) {
+            this.modelDiscoveryCacheTtl = modelDiscoveryCacheTtl;
+        }
+
+        public java.util.List<String> getFallbackModels() {
+            return fallbackModels;
+        }
+
+        public void setFallbackModels(java.util.List<String> fallbackModels) {
+            this.fallbackModels = fallbackModels == null
+                    ? new java.util.ArrayList<>()
+                    : new java.util.ArrayList<>(fallbackModels);
         }
 
         public boolean isParallelToolCalls() {

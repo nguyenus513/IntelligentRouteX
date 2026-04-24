@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -86,7 +87,7 @@ public final class NineRouterResponsesClient {
         DecisionEffort appliedEffort = requestedEffort == null ? DecisionEffort.MEDIUM : requestedEffort;
         Duration requestTimeout = requestTimeout(input.stageName(), requestedEffort);
         int retryCount = 0;
-        int maxAttempts = Math.max(1, properties.getMaxRetries() + 1);
+        int maxAttempts = Math.max(1, properties.getMaxRetries() + 1 + modelResolution.availableModelIds().size());
         String lastFailureReason = "provider-empty-response";
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             JsonNode requestBody = buildRequestBody(renderedPrompt, input.stageName(), appliedEffort, modelResolution.resolvedModelId());
@@ -99,6 +100,13 @@ public final class NineRouterResponsesClient {
                         objectMapper);
                 if (response.statusCode() >= 400) {
                     String failureReason = classifyHttpFailure(response.statusCode(), response.body());
+                    Optional<ModelResolution> fallbackResolution = fallbackResolutionAfterProviderRejection(modelResolution, failureReason);
+                    if (fallbackResolution.isPresent()) {
+                        modelResolution = fallbackResolution.get();
+                        retryCount++;
+                        lastFailureReason = failureReason;
+                        continue;
+                    }
                     if ("provider-rejected-effort".equals(failureReason)
                             && requestedEffort == DecisionEffort.XHIGH
                             && appliedEffort == DecisionEffort.XHIGH) {
@@ -282,7 +290,8 @@ public final class NineRouterResponsesClient {
                     modelResolution.configuredModelFamily(),
                     runtimeConfiguration.baseUrl(),
                     runtimeConfiguration.wireApi(),
-                    modelResolution.discoverySource());
+                    modelResolution.discoverySource(),
+                    modelResolution.fallbackUsed());
         } catch (IOException exception) {
             throw failure("provider-invalid-json", Map.of(
                     "configuredModelFamily", modelResolution.configuredModelFamily(),
@@ -412,6 +421,9 @@ public final class NineRouterResponsesClient {
                 && normalizedBody.contains("effort")) {
             return "provider-rejected-effort";
         }
+        if (statusCode == 401 || statusCode == 403) {
+            return "provider-auth-config-error";
+        }
         if ((statusCode == 400 || statusCode == 404 || statusCode == 422)
                 && normalizedBody.contains("model")) {
             return "provider-model-unresolved";
@@ -420,7 +432,10 @@ public final class NineRouterResponsesClient {
             return "provider-timeout";
         }
         if (statusCode >= 500) {
-            return "provider-http-error";
+            return "provider-http-5xx";
+        }
+        if (statusCode >= 400) {
+            return "provider-http-4xx";
         }
         return "provider-http-error";
     }
@@ -428,6 +443,7 @@ public final class NineRouterResponsesClient {
     private boolean retryable(String failureReason) {
         return "provider-timeout".equals(failureReason)
                 || "provider-http-error".equals(failureReason)
+                || "provider-http-5xx".equals(failureReason)
                 || "provider-empty-response".equals(failureReason)
                 || "provider-invalid-json".equals(failureReason)
                 || "provider-rejected-effort".equals(failureReason);
@@ -437,42 +453,165 @@ public final class NineRouterResponsesClient {
         ModelResolution cached = cachedModelResolution;
         if (cached != null
                 && cached.baseUrl().equals(baseUrl)
-                && cached.configuredModelFamily().equals(configuredModelFamily)) {
+                && cached.configuredModelFamily().equals(configuredModelFamily)
+                && !cached.isExpired(Instant.now())) {
             return cached;
         }
         synchronized (this) {
             cached = cachedModelResolution;
             if (cached != null
                     && cached.baseUrl().equals(baseUrl)
-                    && cached.configuredModelFamily().equals(configuredModelFamily)) {
+                    && cached.configuredModelFamily().equals(configuredModelFamily)
+                    && !cached.isExpired(Instant.now())) {
                 return cached;
             }
-            TransportResponse response = transport.get(baseUrl, apiKey, properties.getTimeoutMs(), objectMapper, "/models");
-            if (response.statusCode() >= 400) {
-                throw failure("provider-model-discovery-failed", Map.of(
-                        "configuredModelFamily", configuredModelFamily,
-                        "providerBaseUrl", baseUrl,
-                        "providerWireApi", properties.getWireApi(),
-                        "modelDiscoverySource", "/v1/models",
-                        "statusCode", response.statusCode()));
-            }
-            List<ModelCandidate> candidates = parseModelCandidates(response.body(), configuredModelFamily, baseUrl);
-            String resolvedModelId = selectResolvedModelId(configuredModelFamily, candidates)
-                    .orElseThrow(() -> failure("provider-model-unresolved", Map.of(
+            ModelResolution resolved = discoverModel(baseUrl, apiKey, configuredModelFamily)
+                    .orElseGet(() -> directModelResolution(baseUrl, configuredModelFamily, "configured-direct"));
+            cachedModelResolution = resolved;
+            return resolved;
+        }
+    }
+
+    private Optional<ModelResolution> discoverModel(String baseUrl, String apiKey, String configuredModelFamily) {
+        int maxAttempts = Math.max(1, properties.getModelDiscoveryRetryCount() + 1);
+        NineRouterClientException lastRetryableFailure = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                TransportResponse response = transport.get(baseUrl, apiKey, properties.getTimeoutMs(), objectMapper, "/models");
+                if (response.statusCode() >= 400) {
+                    String failureReason = classifyModelDiscoveryHttpFailure(response.statusCode());
+                    NineRouterClientException failure = failure(failureReason, Map.of(
                             "configuredModelFamily", configuredModelFamily,
                             "providerBaseUrl", baseUrl,
                             "providerWireApi", properties.getWireApi(),
                             "modelDiscoverySource", "/v1/models",
-                            "availableModelIds", candidates.stream().map(ModelCandidate::id).toList())));
-            ModelResolution resolved = new ModelResolution(
-                    configuredModelFamily,
-                    resolvedModelId,
-                    baseUrl,
-                    "/v1/models",
-                    candidates.stream().map(ModelCandidate::id).toList());
-            cachedModelResolution = resolved;
-            return resolved;
+                            "statusCode", response.statusCode()));
+                    if (properties.isModelDiscoveryRequired() || !retryableModelDiscoveryFailure(failureReason)) {
+                        throw failure;
+                    }
+                    lastRetryableFailure = failure;
+                    continue;
+                }
+                List<ModelCandidate> candidates = parseModelCandidates(response.body(), configuredModelFamily, baseUrl);
+                Optional<String> resolvedModelId = selectResolvedModelId(configuredModelFamily, candidates);
+                if (resolvedModelId.isPresent()) {
+                    return Optional.of(new ModelResolution(
+                            configuredModelFamily,
+                            resolvedModelId.get(),
+                            baseUrl,
+                            "/v1/models",
+                            candidates.stream().map(ModelCandidate::id).toList(),
+                            false,
+                            expiresAt()));
+                }
+                if (properties.isModelDiscoveryRequired()) {
+                    throw failure("provider-model-unresolved", Map.of(
+                            "configuredModelFamily", configuredModelFamily,
+                            "providerBaseUrl", baseUrl,
+                            "providerWireApi", properties.getWireApi(),
+                            "modelDiscoverySource", "/v1/models",
+                            "availableModelIds", candidates.stream().map(ModelCandidate::id).toList()));
+                }
+                return Optional.empty();
+            } catch (NineRouterClientException exception) {
+                if (properties.isModelDiscoveryRequired() || !retryableModelDiscoveryFailure(exception.failureReason())) {
+                    throw exception;
+                }
+                lastRetryableFailure = exception;
+            }
         }
+        if (properties.isModelDiscoveryRequired() && lastRetryableFailure != null) {
+            throw lastRetryableFailure;
+        }
+        return Optional.empty();
+    }
+
+    private String classifyModelDiscoveryHttpFailure(int statusCode) {
+        if (statusCode == 401 || statusCode == 403) {
+            return "provider-auth-config-error";
+        }
+        if (statusCode == 404) {
+            return "provider-model-discovery-unavailable";
+        }
+        if (statusCode == 408 || statusCode == 429) {
+            return "provider-timeout";
+        }
+        if (statusCode >= 500) {
+            return "provider-http-5xx";
+        }
+        if (statusCode >= 400) {
+            return "provider-http-4xx";
+        }
+        return "provider-model-discovery-failed";
+    }
+
+    private boolean retryableModelDiscoveryFailure(String failureReason) {
+        return "provider-timeout".equals(failureReason)
+                || "provider-http-5xx".equals(failureReason)
+                || "provider-model-discovery-failed".equals(failureReason)
+                || "provider-model-discovery-unavailable".equals(failureReason);
+    }
+
+    private ModelResolution directModelResolution(String baseUrl, String configuredModelFamily, String discoverySource) {
+        String resolvedModelId = configuredModelFamily;
+        if (resolvedModelId == null || resolvedModelId.isBlank()) {
+            resolvedModelId = properties.getFallbackModels().stream()
+                    .filter(model -> model != null && !model.isBlank())
+                    .findFirst()
+                    .orElseThrow(() -> failure("provider-model-unresolved", Map.of(
+                            "configuredModelFamily", "",
+                            "providerBaseUrl", baseUrl,
+                            "providerWireApi", properties.getWireApi(),
+                            "modelDiscoverySource", discoverySource)));
+        }
+        return new ModelResolution(
+                configuredModelFamily,
+                resolvedModelId.trim(),
+                baseUrl,
+                discoverySource,
+                fallbackModelIds(configuredModelFamily),
+                true,
+                expiresAt());
+    }
+
+    private Optional<ModelResolution> fallbackResolutionAfterProviderRejection(ModelResolution current,
+                                                                               String failureReason) {
+        if (!"provider-model-unresolved".equals(failureReason) || current == null || current.availableModelIds().isEmpty()) {
+            return Optional.empty();
+        }
+        int currentIndex = current.availableModelIds().indexOf(current.resolvedModelId());
+        if (currentIndex < 0 || currentIndex + 1 >= current.availableModelIds().size()) {
+            return Optional.empty();
+        }
+        return Optional.of(new ModelResolution(
+                current.configuredModelFamily(),
+                current.availableModelIds().get(currentIndex + 1),
+                current.baseUrl(),
+                "configured-fallback",
+                current.availableModelIds(),
+                true,
+                current.expiresAt()));
+    }
+
+    private List<String> fallbackModelIds(String configuredModelFamily) {
+        List<String> models = new ArrayList<>();
+        if (configuredModelFamily != null && !configuredModelFamily.isBlank()) {
+            models.add(configuredModelFamily.trim());
+        }
+        for (String fallbackModel : properties.getFallbackModels()) {
+            if (fallbackModel != null && !fallbackModel.isBlank() && !models.contains(fallbackModel.trim())) {
+                models.add(fallbackModel.trim());
+            }
+        }
+        return List.copyOf(models);
+    }
+
+    private Instant expiresAt() {
+        Duration ttl = properties.getModelDiscoveryCacheTtl();
+        if (ttl == null || ttl.isNegative() || ttl.isZero()) {
+            return Instant.now();
+        }
+        return Instant.now().plus(ttl);
     }
 
     private List<ModelCandidate> parseModelCandidates(String body,
@@ -580,7 +719,8 @@ public final class NineRouterResponsesClient {
             String configuredModelFamily,
             String providerBaseUrl,
             String providerWireApi,
-            String modelDiscoverySource) {
+            String modelDiscoverySource,
+            boolean modelResolutionFallbackUsed) {
     }
 
     public record RuntimeConfiguration(
@@ -595,7 +735,12 @@ public final class NineRouterResponsesClient {
             String resolvedModelId,
             String baseUrl,
             String discoverySource,
-            List<String> availableModelIds) {
+            List<String> availableModelIds,
+            boolean fallbackUsed,
+            Instant expiresAt) {
+        boolean isExpired(Instant now) {
+            return expiresAt != null && !expiresAt.isAfter(now);
+        }
     }
 
     record ModelCandidate(String id, String root) {

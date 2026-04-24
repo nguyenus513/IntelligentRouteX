@@ -313,6 +313,10 @@ public final class LlmStageScheduler {
         if (!representative.requestedEffort().equals(representative.appliedEffort())) {
             flags.add("effort-downgraded");
         }
+        flags.add("model-discovery-source-" + representative.modelDiscoverySource().replace("/", ""));
+        if (representative.modelResolutionFallbackUsed()) {
+            flags.add("model-resolution-fallback-used");
+        }
         return List.copyOf(flags);
     }
 

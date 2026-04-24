@@ -19,9 +19,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 class NineRouterResponsesClientTest {
 
     @Test
+    void defaultsToGpt55() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+
+        assertEquals("gpt-5.5", properties.getDecision().getLlm().getModel());
+    }
+
+    @Test
     void resolvesNamespacedModelIdFromFamilyAndDowngradesEffort() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        properties.getDecision().getLlm().setModel("gpt-5.4");
         AtomicInteger postCalls = new AtomicInteger();
         NineRouterResponsesClient client = new NineRouterResponsesClient(
                 properties.getDecision().getLlm(),
@@ -77,6 +85,8 @@ class NineRouterResponsesClientTest {
     void failsFastWhenConfiguredFamilyCannotBeResolved() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        properties.getDecision().getLlm().setModel("gpt-5.4");
+        properties.getDecision().getLlm().setModelDiscoveryRequired(true);
         NineRouterResponsesClient client = new NineRouterResponsesClient(
                 properties.getDecision().getLlm(),
                 new StubTransport(
@@ -93,9 +103,103 @@ class NineRouterResponsesClientTest {
     }
 
     @Test
+    void fallsBackToConfiguredModelWhenDiscovery5xxIsNotRequired() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        properties.getDecision().getLlm().setModel("gpt-5.5");
+        AtomicInteger getCalls = new AtomicInteger();
+        NineRouterResponsesClient client = new NineRouterResponsesClient(
+                properties.getDecision().getLlm(),
+                new StatusTransport(
+                        () -> {
+                            getCalls.incrementAndGet();
+                            return new NineRouterResponsesClient.TransportResponse(503, "{\"error\":\"unavailable\"}");
+                        },
+                        (baseUrl, apiKey, timeout, requestBody, objectMapper) -> {
+                            assertEquals("gpt-5.5", requestBody.path("model").asText());
+                            return okResponse();
+                        }),
+                JsonMapper.builder().findAndAddModules().build());
+
+        NineRouterResponsesClient.LlmInvocationResult result = client.invoke(stageInput(DecisionStageName.PAIR_BUNDLE), DecisionEffort.MEDIUM);
+
+        assertEquals(2, getCalls.get());
+        assertEquals("gpt-5.5", result.providerModel());
+        assertEquals("configured-direct", result.modelDiscoverySource());
+        assertTrue(result.modelResolutionFallbackUsed());
+    }
+
+    @Test
+    void fallsBackToFallbackModelWhenConfiguredModelIsRejectedByProvider() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        properties.getDecision().getLlm().setModel("gpt-5.5");
+        AtomicInteger postCalls = new AtomicInteger();
+        NineRouterResponsesClient client = new NineRouterResponsesClient(
+                properties.getDecision().getLlm(),
+                new StatusTransport(
+                        () -> new NineRouterResponsesClient.TransportResponse(503, "{\"error\":\"unavailable\"}"),
+                        (baseUrl, apiKey, timeout, requestBody, objectMapper) -> {
+                            int attempt = postCalls.incrementAndGet();
+                            if (attempt == 1) {
+                                assertEquals("gpt-5.5", requestBody.path("model").asText());
+                                return new NineRouterResponsesClient.TransportResponse(404, "{\"error\":\"model not found\"}");
+                            }
+                            assertEquals("gpt-5.4", requestBody.path("model").asText());
+                            return okResponse();
+                        }),
+                JsonMapper.builder().findAndAddModules().build());
+
+        NineRouterResponsesClient.LlmInvocationResult result = client.invoke(stageInput(DecisionStageName.PAIR_BUNDLE), DecisionEffort.MEDIUM);
+
+        assertEquals(2, postCalls.get());
+        assertEquals("gpt-5.4", result.providerModel());
+        assertEquals("configured-fallback", result.modelDiscoverySource());
+        assertTrue(result.modelResolutionFallbackUsed());
+    }
+
+    @Test
+    void doesNotFallbackWhenDiscoveryAuthFails() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        NineRouterResponsesClient client = new NineRouterResponsesClient(
+                properties.getDecision().getLlm(),
+                new StatusTransport(
+                        () -> new NineRouterResponsesClient.TransportResponse(401, "{\"error\":\"bad key\"}"),
+                        (baseUrl, apiKey, timeout, requestBody, objectMapper) -> okResponse()),
+                JsonMapper.builder().findAndAddModules().build());
+
+        NineRouterResponsesClient.NineRouterClientException exception = assertThrows(
+                NineRouterResponsesClient.NineRouterClientException.class,
+                () -> client.invoke(stageInput(DecisionStageName.PAIR_BUNDLE), DecisionEffort.MEDIUM));
+
+        assertEquals("provider-auth-config-error", exception.failureReason());
+    }
+
+    @Test
+    void requiredDiscoveryStillFailsOn5xx() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        properties.getDecision().getLlm().setModelDiscoveryRequired(true);
+        NineRouterResponsesClient client = new NineRouterResponsesClient(
+                properties.getDecision().getLlm(),
+                new StatusTransport(
+                        () -> new NineRouterResponsesClient.TransportResponse(503, "{\"error\":\"unavailable\"}"),
+                        (baseUrl, apiKey, timeout, requestBody, objectMapper) -> okResponse()),
+                JsonMapper.builder().findAndAddModules().build());
+
+        NineRouterResponsesClient.NineRouterClientException exception = assertThrows(
+                NineRouterResponsesClient.NineRouterClientException.class,
+                () -> client.invoke(stageInput(DecisionStageName.PAIR_BUNDLE), DecisionEffort.MEDIUM));
+
+        assertEquals("provider-http-5xx", exception.failureReason());
+    }
+
+    @Test
     void extendsTimeoutForXhighStages() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        properties.getDecision().getLlm().setModel("gpt-5.4");
         Duration configuredTimeout = properties.getDecision().getLlm().getTimeoutMs();
         AtomicInteger postCalls = new AtomicInteger();
         NineRouterResponsesClient client = new NineRouterResponsesClient(
@@ -122,6 +226,7 @@ class NineRouterResponsesClientTest {
     void sendsStageSpecificRenderedPromptResourcesInRequestBody() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        properties.getDecision().getLlm().setModel("gpt-5.4");
         NineRouterResponsesClient client = new NineRouterResponsesClient(
                 properties.getDecision().getLlm(),
                 new StubTransport(
@@ -158,6 +263,7 @@ class NineRouterResponsesClientTest {
     void sendsV3PromptWithSessionRefsAndSkills() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         properties.getDecision().getLlm().setApiKeyEnv("PATH");
+        properties.getDecision().getLlm().setModel("gpt-5.4");
         properties.getDecision().getLlm().setPromptFamily("v3");
         DecisionSessionStore sessionStore = new NoOpDecisionSessionStore() {
             @Override
@@ -222,6 +328,12 @@ class NineRouterResponsesClientTest {
                 java.util.List.of());
     }
 
+    private NineRouterResponsesClient.TransportResponse okResponse() {
+        return new NineRouterResponsesClient.TransportResponse(
+                200,
+                "{\"output\":[{\"content\":[{\"text\":\"{\\\"selectedIds\\\":[\\\"proposal-1\\\"],\\\"assessments\\\":{\\\"summary\\\":\\\"ok\\\",\\\"reasonCodes\\\":[],\\\"items\\\":[{\\\"id\\\":\\\"proposal-1\\\",\\\"score\\\":0.8,\\\"rank\\\":1,\\\"selected\\\":true,\\\"confidence\\\":0.8,\\\"reasonCodes\\\":[],\\\"dominanceReasonCodes\\\":[],\\\"regretToBestAlternative\\\":0.0,\\\"driverFitSummary\\\":\\\"ok\\\",\\\"routeVectorRefs\\\":[],\\\"geospatialFlags\\\":[],\\\"burstSensitivityFlags\\\":[],\\\"rationale\\\":\\\"ok\\\"}]}}\"}]}]}");
+    }
+
     private record StubTransport(
             String modelsBody,
             PostHandler postHandler) implements NineRouterResponsesClient.ResponsesTransport {
@@ -244,6 +356,35 @@ class NineRouterResponsesClientTest {
                                                                 ObjectMapper objectMapper) {
             return postHandler.handle(baseUrl, apiKey, timeout, requestBody, objectMapper);
         }
+    }
+
+    private record StatusTransport(
+            GetHandler getHandler,
+            PostHandler postHandler) implements NineRouterResponsesClient.ResponsesTransport {
+
+        @Override
+        public NineRouterResponsesClient.TransportResponse get(String baseUrl,
+                                                               String apiKey,
+                                                               Duration timeout,
+                                                               ObjectMapper objectMapper,
+                                                               String relativePath) {
+            assertEquals("/models", relativePath);
+            return getHandler.handle();
+        }
+
+        @Override
+        public NineRouterResponsesClient.TransportResponse post(String baseUrl,
+                                                                String apiKey,
+                                                                Duration timeout,
+                                                                JsonNode requestBody,
+                                                                ObjectMapper objectMapper) {
+            return postHandler.handle(baseUrl, apiKey, timeout, requestBody, objectMapper);
+        }
+    }
+
+    @FunctionalInterface
+    private interface GetHandler {
+        NineRouterResponsesClient.TransportResponse handle();
     }
 
     @FunctionalInterface
