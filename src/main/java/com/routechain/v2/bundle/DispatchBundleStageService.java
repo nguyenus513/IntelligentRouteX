@@ -222,6 +222,7 @@ public final class DispatchBundleStageService {
                     .limit(Math.max(1, properties.getBundle().getBeamWidth()))
                     .toList();
             feasibleCandidates.addAll(familyCandidates);
+            feasibleCandidates.addAll(singleOrderRecoveryCandidates(seed, context));
         }
         Map<BundleFamily, Integer> familyCounts = new EnumMap<>(BundleFamily.class);
         Map<BundleProposalSource, Integer> sourceCounts = new EnumMap<>(BundleProposalSource.class);
@@ -249,6 +250,40 @@ public final class DispatchBundleStageService {
                         DispatchStageLatency.measured("bundle-pool", bundlePoolElapsedMs, false)),
                 greedRlMetadata.build().stream().toList(),
                 List.copyOf(degradeReasons));
+    }
+
+    private List<BundleCandidate> singleOrderRecoveryCandidates(BundleSeed seed, BundleContext context) {
+        return seed.workingOrderIds().stream()
+                .sorted()
+                .map(orderId -> singleOrderRecoveryCandidate(seed, context, orderId))
+                .map(candidate -> bundleValidator.validate(candidate, context))
+                .filter(BundleCandidate::feasible)
+                .map(candidate -> bundleScorer.score(candidate, context))
+                .toList();
+    }
+
+    private BundleCandidate singleOrderRecoveryCandidate(BundleSeed seed, BundleContext context, String orderId) {
+        List<String> orderIds = List.of(orderId);
+        String orderSetSignature = context.orderSetSignature(orderIds);
+        var order = context.order(orderId);
+        String corridorSignature = order == null ? "unknown" : "%d:%d".formatted(
+                Math.round(order.dropoffPoint().latitude() - order.pickupPoint().latitude()),
+                Math.round(order.dropoffPoint().longitude() - order.pickupPoint().longitude()));
+        return new BundleCandidate(
+                "bundle-candidate/v1",
+                "SINGLE_ORDER_RECOVERY|%s|%s".formatted(orderSetSignature, orderId),
+                BundleProposalSource.DETERMINISTIC_FAMILY,
+                BundleFamily.FAN_OUT_LIGHT,
+                seed.cluster().clusterId(),
+                false,
+                List.of(),
+                orderIds,
+                orderSetSignature,
+                orderId,
+                corridorSignature,
+                0.0,
+                false,
+                List.of());
     }
 
     private GreedRlBundleResult proposeGreedRlBundles(String traceId, BundleSeed seed) {
