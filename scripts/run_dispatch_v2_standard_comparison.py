@@ -356,6 +356,7 @@ def cell_report_row(result: CellRunResult) -> Dict[str, object]:
     payload = result.benchmark
     metrics = payload.get("metrics", {}) if isinstance(payload.get("metrics", {}), dict) else {}
     route_metrics = payload.get("routeVectorMetrics", {}) if isinstance(payload.get("routeVectorMetrics", {}), dict) else {}
+    route_budget_metrics = payload.get("routeProposalBudgetMetrics", {}) if isinstance(payload.get("routeProposalBudgetMetrics", {}), dict) else {}
     token_usage = payload.get("tokenUsageSummary", {}) if isinstance(payload.get("tokenUsageSummary", {}), dict) else {}
     stage_summary = payload.get("stageFallbackSummary", {}) if isinstance(payload.get("stageFallbackSummary", {}), dict) else {}
     return {
@@ -387,6 +388,7 @@ def cell_report_row(result: CellRunResult) -> Dict[str, object]:
         "llmTotalTokens": token_usage.get("totalTokens", 0),
         "stageLatencies": summarize_stage_latencies(result.decision_log),
         "mlInvocations": summarize_ml_invocations(result.decision_log),
+        "routeProposalBudgetMetrics": route_budget_metrics,
         "workerStatusSnapshot": payload.get("workerStatusSnapshot", {}),
     }
 

@@ -78,7 +78,7 @@ public final class RouteProposalEngine {
                         List.of()));
     }
 
-    static String stopOrderSignature(List<String> stopOrder) {
+    public static String stopOrderSignature(List<String> stopOrder) {
         return String.join(">", stopOrder);
     }
 

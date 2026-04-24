@@ -111,6 +111,13 @@ public final class DispatchQualityArtifactWriter {
         builder.append("- token total: `").append(result.tokenUsageSummary().totalTokens()).append("`\n");
         builder.append("- stage fallbacks: `").append(result.stageFallbackSummary().totalFallbacks()).append("`\n");
         builder.append("- route vector geometry coverage: `").append(result.routeVectorMetrics().geometryCoverage()).append("`\n");
+        builder.append("- route proposal budget mode: `").append(result.routeProposalBudgetMetrics().budgetMode()).append("`\n");
+        builder.append("- route proposals before/after prune: `")
+                .append(result.routeProposalBudgetMetrics().candidateCountBeforePrune())
+                .append(" -> ")
+                .append(result.routeProposalBudgetMetrics().candidateCountAfterPrune())
+                .append("`\n");
+        builder.append("- route vector cache hit rate: `").append(result.routeProposalBudgetMetrics().routeVectorCacheHitRate()).append("`\n");
         builder.append("- selected proposals: `").append(metrics.selectedProposalCount()).append("`\n");
         builder.append("- executed assignments: `").append(metrics.executedAssignmentCount()).append("`\n");
         builder.append("- conflict free: `").append(metrics.conflictFreeAssignments()).append("`\n");

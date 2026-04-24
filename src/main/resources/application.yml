@@ -75,6 +75,16 @@ routechain:
       max-anchors: 3
       max-drivers: 8
       max-route-alternatives: 4
+      route-proposal-budget:
+        enabled: false
+        local-lite-max-total: 128
+        full-adaptive-s-max-total: 256
+        full-adaptive-m-max-total: 512
+        max-drivers-per-bundle: 4
+        max-anchors-per-bundle: 2
+        max-alternatives-per-tuple: 2
+        low-geometry-coverage-threshold: 0.75
+        low-geometry-coverage-breadth-multiplier: 0.70
     context:
       baseline-speed-kph: 22
       heavy-rain-multiplier: 1.28

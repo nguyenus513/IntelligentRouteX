@@ -13,7 +13,30 @@ public record RouteProposalSummary(
         int proposalCount,
         int retainedProposalCount,
         Map<RouteProposalSource, Integer> sourceCounts,
+        RouteProposalBudgetMetrics budgetMetrics,
         List<String> degradeReasons) implements SchemaVersioned {
+
+    public RouteProposalSummary {
+        budgetMetrics = budgetMetrics == null ? RouteProposalBudgetMetrics.empty() : budgetMetrics;
+    }
+
+    public RouteProposalSummary(String schemaVersion,
+                                int driverCandidateCount,
+                                int proposalTupleCount,
+                                int proposalCount,
+                                int retainedProposalCount,
+                                Map<RouteProposalSource, Integer> sourceCounts,
+                                List<String> degradeReasons) {
+        this(
+                schemaVersion,
+                driverCandidateCount,
+                proposalTupleCount,
+                proposalCount,
+                retainedProposalCount,
+                sourceCounts,
+                RouteProposalBudgetMetrics.empty(),
+                degradeReasons);
+    }
 
     public static RouteProposalSummary empty() {
         return new RouteProposalSummary(
@@ -23,6 +46,7 @@ public record RouteProposalSummary(
                 0,
                 0,
                 new EnumMap<>(RouteProposalSource.class),
+                RouteProposalBudgetMetrics.empty(),
                 List.of());
     }
 }

@@ -26,6 +26,16 @@ routechain:
         enabled: true
       forecast:
         enabled: true
+    candidate:
+      route-proposal-budget:
+        enabled: true
+        full-adaptive-s-max-total: 256
+        full-adaptive-m-max-total: 512
+        max-drivers-per-bundle: 6
+        max-anchors-per-bundle: 3
+        max-alternatives-per-tuple: 2
+        low-geometry-coverage-threshold: 0.75
+        low-geometry-coverage-breadth-multiplier: 0.70
     feedback:
       storage-mode: FILE
       base-dir: data/dispatch-v2-feedback

@@ -198,6 +198,7 @@ public final class DispatchQualityBenchmarkHarness {
                     intelligenceMetrics(result, feedbackSummary, request.scenarioPack()),
                     feedbackSummary.llmShadowAgreement(),
                     routeVectorMetrics(result),
+                    routeProposalBudgetMetrics(result),
                     feedbackSummary.tokenUsageSummary(),
                     feedbackSummary.stageFallbackSummary(),
                     distinctDegrades(result),
@@ -270,6 +271,7 @@ public final class DispatchQualityBenchmarkHarness {
                 DispatchIntelligenceMetrics.empty(),
                 DispatchLlmShadowAgreementSummary.empty(),
                 DispatchRouteVectorMetrics.empty(),
+                DispatchRouteProposalBudgetMetrics.empty(),
                 DispatchTokenUsageSummary.empty(),
                 DispatchStageFallbackSummary.empty(),
                 List.of(),
@@ -324,6 +326,7 @@ public final class DispatchQualityBenchmarkHarness {
                 DispatchIntelligenceMetrics.empty(),
                 DispatchLlmShadowAgreementSummary.empty(),
                 DispatchRouteVectorMetrics.empty(),
+                DispatchRouteProposalBudgetMetrics.empty(),
                 DispatchTokenUsageSummary.empty(),
                 DispatchStageFallbackSummary.empty(),
                 List.of(),
@@ -341,6 +344,7 @@ public final class DispatchQualityBenchmarkHarness {
                 request.promptFamily(),
                 request.executionMode(),
                 feedbackDirectory(request, baselineId, executionPolicy));
+        applyWorkloadBudget(properties, request.workloadSize());
         scenario.configureProperties(properties, baselineId);
         ScenarioDependencies dependencies = request.executionMode() == ExecutionMode.CONTROLLED
                 ? scenario.controlledDependencies(baselineId)
@@ -915,6 +919,20 @@ public final class DispatchQualityBenchmarkHarness {
         return properties;
     }
 
+    private void applyWorkloadBudget(RouteChainDispatchV2Properties properties,
+                                     DispatchPerfBenchmarkHarness.WorkloadSize workloadSize) {
+        if (!properties.getCandidate().getRouteProposalBudget().isEnabled()) {
+            return;
+        }
+        int maxTotal = switch (workloadSize) {
+            case S -> properties.getCandidate().getRouteProposalBudget().getFullAdaptiveSMaxTotal();
+            case M -> properties.getCandidate().getRouteProposalBudget().getFullAdaptiveMMaxTotal();
+            case L, XL -> properties.getCandidate().getRouteProposalBudget().getFullAdaptiveMMaxTotal();
+        };
+        properties.getCandidate().getRouteProposalBudget().setFullAdaptiveSMaxTotal(maxTotal);
+        properties.getCandidate().getRouteProposalBudget().setFullAdaptiveMMaxTotal(maxTotal);
+    }
+
     private void applyBenchmarkProfile(RouteChainDispatchV2Properties properties, String profileName) {
         if (!"dispatch-v2-full-adaptive".equalsIgnoreCase(blankToEmpty(profileName))) {
             return;
@@ -951,6 +969,12 @@ public final class DispatchQualityBenchmarkHarness {
         properties.getCompute().getAdaptive().setForecastMinProposalCount(2);
         properties.getCompute().getAdaptive().setForecastWeatherEscalationEnabled(true);
         properties.getCompute().getAdaptive().setForecastTrafficEscalationEnabled(true);
+        properties.getCandidate().getRouteProposalBudget().setEnabled(true);
+        properties.getCandidate().getRouteProposalBudget().setFullAdaptiveSMaxTotal(256);
+        properties.getCandidate().getRouteProposalBudget().setFullAdaptiveMMaxTotal(512);
+        properties.getCandidate().getRouteProposalBudget().setMaxDriversPerBundle(6);
+        properties.getCandidate().getRouteProposalBudget().setMaxAnchorsPerBundle(3);
+        properties.getCandidate().getRouteProposalBudget().setMaxAlternativesPerTuple(2);
         properties.getDecision().getLlm().setBaseUrl("http://127.0.0.1:20128/v1");
     }
 
@@ -1247,6 +1271,27 @@ public final class DispatchQualityBenchmarkHarness {
                 averageRouteRegret(result, bestRouteCost),
                 proposals.stream().mapToDouble(RouteProposal::straightnessScore).average().orElse(0.0),
                 averageEtaDominanceScore(proposals, bestTravelTime));
+    }
+
+    private DispatchRouteProposalBudgetMetrics routeProposalBudgetMetrics(DispatchV2Result result) {
+        if (result.routeProposalSummary() == null || result.routeProposalSummary().budgetMetrics() == null) {
+            return DispatchRouteProposalBudgetMetrics.empty();
+        }
+        com.routechain.v2.route.RouteProposalBudgetMetrics metrics = result.routeProposalSummary().budgetMetrics();
+        return new DispatchRouteProposalBudgetMetrics(
+                "dispatch-route-proposal-budget-metrics/v1",
+                metrics.budgetEnabled(),
+                metrics.budgetMode(),
+                metrics.budgetMaxTotalRouteProposals(),
+                metrics.candidateCountBeforeBudget(),
+                metrics.candidateCountAfterBudget(),
+                metrics.candidateCountBeforePrune(),
+                metrics.candidateCountAfterPrune(),
+                metrics.proposalPrunedBeforeRoutePool(),
+                metrics.pruneReasonCounts(),
+                metrics.routeVectorComputedCount(),
+                metrics.routeVectorReusedCount(),
+                metrics.routeVectorCacheHitRate());
     }
 
     private double dispatchRegretAverage(DispatchV2Result result) {

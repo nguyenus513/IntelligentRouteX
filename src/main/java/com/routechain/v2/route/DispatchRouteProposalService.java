@@ -23,6 +23,7 @@ import com.routechain.v2.integration.RouteFinderResult;
 import com.routechain.v2.harvest.HarvestRecorder;
 import com.routechain.v2.decision.DecisionStageLogger;
 import com.routechain.v2.routing.RouteVectorEnricher;
+import com.routechain.v2.routing.RouteVectorCache;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -43,6 +44,8 @@ public final class DispatchRouteProposalService {
     private final DecisionStageLogger decisionStageLogger;
     private final HarvestRecorder harvestRecorder;
     private final AdaptiveComputeGate adaptiveComputeGate;
+    private final RouteProposalBudgetPolicy routeProposalBudgetPolicy;
+    private final RouteProposalPrePruner routeProposalPrePruner;
 
     public DispatchRouteProposalService(RouteChainDispatchV2Properties properties,
                                         RouteProposalEngine routeProposalEngine,
@@ -66,6 +69,8 @@ public final class DispatchRouteProposalService {
         this.decisionStageLogger = decisionStageLogger;
         this.harvestRecorder = harvestRecorder;
         this.adaptiveComputeGate = adaptiveComputeGate;
+        this.routeProposalBudgetPolicy = new RouteProposalBudgetPolicy(properties);
+        this.routeProposalPrePruner = new RouteProposalPrePruner();
     }
 
     public DispatchRouteProposalService(RouteChainDispatchV2Properties properties,
@@ -138,24 +143,43 @@ public final class DispatchRouteProposalService {
                 request.decisionTime(),
                 request.weatherProfile() == null ? WeatherProfile.CLEAR : request.weatherProfile());
         RouteReusePreparation reusePreparation = prepareReuse(bundleStage, routeCandidateStage, reuseInput);
-        List<RouteProposalCandidate> deterministicGenerated = routeProposalEngine.generate(
+        RouteProposalBudgetDecision budgetDecision = routeProposalBudgetPolicy.decide(
+                request,
+                etaContext,
+                bundleStage.bundleCandidates().size(),
+                reusePreparation.freshDriverCandidates().size(),
+                0.0);
+        RouteProposalPruneResult inputBudget = routeProposalPrePruner.pruneInputs(
                 reusePreparation.freshDriverCandidates(),
                 routeCandidateStage.pickupAnchors(),
+                context,
+                budgetDecision);
+        List<RouteProposalCandidate> deterministicGenerated = routeProposalEngine.generate(
+                inputBudget.driverCandidates(),
+                inputBudget.pickupAnchors(),
                 context,
                 etaLegCache);
         RouteFinderGenerationOutcome routeFinderGeneration = generateRouteFinderProposals(request.traceId(), etaContext, deterministicGenerated, context);
         List<RouteProposalCandidate> generated = new ArrayList<>(reusePreparation.reusedCandidates());
         generated.addAll(deterministicGenerated);
         generated.addAll(routeFinderGeneration.generatedCandidates());
+        RouteProposalPruneResult candidateBudget = routeProposalPrePruner.pruneCandidates(
+                java.util.stream.Stream.concat(
+                                deterministicGenerated.stream(),
+                                routeFinderGeneration.generatedCandidates().stream())
+                        .toList(),
+                context,
+                budgetDecision);
+        RouteVectorCache routeVectorCache = new RouteVectorCache();
+        String weatherBucket = weatherBucket(etaContext);
+        String trafficBucket = trafficBucket(etaContext);
         List<RouteProposalCandidate> enrichedReused = reusePreparation.reusedCandidates().stream()
                 .map(candidate -> routeProposalValidator.validate(candidate, context))
-                .map(candidate -> enrichCandidate(request.traceId(), candidate, context))
+                .map(candidate -> enrichCandidate(request.traceId(), candidate, context, routeVectorCache, weatherBucket, trafficBucket))
                 .toList();
-        List<RouteProposalCandidate> validatedFresh = java.util.stream.Stream.concat(
-                        deterministicGenerated.stream(),
-                        routeFinderGeneration.generatedCandidates().stream())
+        List<RouteProposalCandidate> validatedFresh = candidateBudget.candidates().stream()
                 .map(candidate -> routeProposalValidator.validate(candidate, context))
-                .map(candidate -> enrichCandidate(request.traceId(), candidate, context))
+                .map(candidate -> enrichCandidate(request.traceId(), candidate, context, routeVectorCache, weatherBucket, trafficBucket))
                 .toList();
         List<RouteValueScoringOutcome> scoringOutcomes = validatedFresh.stream()
                 .map(candidate -> routeValueScorer.score(request.traceId(), candidate, context))
@@ -168,7 +192,8 @@ public final class DispatchRouteProposalService {
         List<RouteProposal> routeProposals = retained.stream().map(RouteProposalCandidate::proposal).toList();
         decisionStageLogger.writeFamily("route_selection_trace", request.traceId(), "route-proposal-pool", java.util.Map.of(
                 "generatedProposalIds", generated.stream().map(candidate -> candidate.proposal().proposalId()).toList(),
-                "retainedProposalIds", retained.stream().map(candidate -> candidate.proposal().proposalId()).toList()));
+                "retainedProposalIds", retained.stream().map(candidate -> candidate.proposal().proposalId()).toList(),
+                "budgetMetrics", budgetMetrics(budgetDecision, inputBudget, candidateBudget, routeVectorCache)));
         List<String> degradeReasons = java.util.stream.Stream.of(
                         reusePreparation.degradeReasons().stream(),
                         routeFinderGeneration.degradeReasons().stream(),
@@ -187,7 +212,8 @@ public final class DispatchRouteProposalService {
         return new DispatchRouteProposalStage(
                 "dispatch-route-proposal-stage/v1",
                 routeProposals,
-                summarize(routeCandidateStage.driverCandidates().size(), generated, retained, degradeReasons),
+                summarize(routeCandidateStage.driverCandidates().size(), generated, retained, degradeReasons,
+                        budgetMetrics(budgetDecision, inputBudget, candidateBudget, routeVectorCache)),
                 new HotStartReuseSummary(
                         "hot-start-reuse-summary/v1",
                         !reusePreparation.reusedCandidates().isEmpty(),
@@ -277,8 +303,11 @@ public final class DispatchRouteProposalService {
 
     private RouteProposalCandidate enrichCandidate(String traceId,
                                                    RouteProposalCandidate candidate,
-                                                   DispatchCandidateContext context) {
-        RouteProposal enrichedProposal = routeVectorEnricher.enrich(traceId, candidate.proposal(), context);
+                                                   DispatchCandidateContext context,
+                                                   RouteVectorCache routeVectorCache,
+                                                   String weatherBucket,
+                                                   String trafficBucket) {
+        RouteProposal enrichedProposal = routeVectorEnricher.enrich(traceId, candidate.proposal(), context, routeVectorCache, weatherBucket, trafficBucket);
         return new RouteProposalCandidate(
                 enrichedProposal,
                 candidate.tupleKey(),
@@ -483,10 +512,42 @@ public final class DispatchRouteProposalService {
         }
     }
 
+    private RouteProposalBudgetMetrics budgetMetrics(RouteProposalBudgetDecision budgetDecision,
+                                                     RouteProposalPruneResult inputBudget,
+                                                     RouteProposalPruneResult candidateBudget,
+                                                     RouteVectorCache routeVectorCache) {
+        Map<String, Integer> pruneReasons = new java.util.LinkedHashMap<>();
+        inputBudget.pruneReasonCounts().forEach((key, value) -> pruneReasons.merge(key, value, Integer::sum));
+        candidateBudget.pruneReasonCounts().forEach((key, value) -> pruneReasons.merge(key, value, Integer::sum));
+        return new RouteProposalBudgetMetrics(
+                "route-proposal-budget-metrics/v1",
+                budgetDecision.enabled(),
+                budgetDecision.budgetMode(),
+                budgetDecision.maxTotalRouteProposals(),
+                inputBudget.candidateCountBeforePrune(),
+                inputBudget.candidateCountAfterPrune(),
+                candidateBudget.candidateCountBeforePrune(),
+                candidateBudget.candidateCountAfterPrune(),
+                inputBudget.proposalPrunedBeforeRoutePool() + candidateBudget.proposalPrunedBeforeRoutePool(),
+                Map.copyOf(pruneReasons),
+                routeVectorCache.computedCount(),
+                routeVectorCache.reusedCount(),
+                routeVectorCache.hitRate());
+    }
+
+    private String weatherBucket(EtaContext etaContext) {
+        return etaContext != null && etaContext.weatherBadSignal() ? "weather:bad" : "weather:normal";
+    }
+
+    private String trafficBucket(EtaContext etaContext) {
+        return etaContext != null && etaContext.trafficBadSignal() ? "traffic:bad" : "traffic:normal";
+    }
+
     private RouteProposalSummary summarize(int driverCandidateCount,
                                           List<RouteProposalCandidate> generated,
                                           List<RouteProposalCandidate> retained,
-                                          List<String> degradeReasons) {
+                                          List<String> degradeReasons,
+                                          RouteProposalBudgetMetrics budgetMetrics) {
         Map<RouteProposalSource, Integer> sourceCounts = new EnumMap<>(RouteProposalSource.class);
         generated.forEach(candidate -> sourceCounts.merge(candidate.proposal().source(), 1, Integer::sum));
         int proposalTupleCount = (int) generated.stream().map(RouteProposalCandidate::tupleKey).distinct().count();
@@ -497,6 +558,7 @@ public final class DispatchRouteProposalService {
                 generated.size(),
                 retained.size(),
                 sourceCounts,
+                budgetMetrics,
                 List.copyOf(degradeReasons));
     }
 

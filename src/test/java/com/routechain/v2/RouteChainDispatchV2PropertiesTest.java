@@ -24,6 +24,15 @@ class RouteChainDispatchV2PropertiesTest {
         assertEquals(3, properties.getCandidate().getMaxAnchors());
         assertEquals(8, properties.getCandidate().getMaxDrivers());
         assertEquals(4, properties.getCandidate().getMaxRouteAlternatives());
+        assertFalse(properties.getCandidate().getRouteProposalBudget().isEnabled());
+        assertEquals(128, properties.getCandidate().getRouteProposalBudget().getLocalLiteMaxTotal());
+        assertEquals(256, properties.getCandidate().getRouteProposalBudget().getFullAdaptiveSMaxTotal());
+        assertEquals(512, properties.getCandidate().getRouteProposalBudget().getFullAdaptiveMMaxTotal());
+        assertEquals(4, properties.getCandidate().getRouteProposalBudget().getMaxDriversPerBundle());
+        assertEquals(2, properties.getCandidate().getRouteProposalBudget().getMaxAnchorsPerBundle());
+        assertEquals(2, properties.getCandidate().getRouteProposalBudget().getMaxAlternativesPerTuple());
+        assertEquals(0.75, properties.getCandidate().getRouteProposalBudget().getLowGeometryCoverageThreshold());
+        assertEquals(0.70, properties.getCandidate().getRouteProposalBudget().getLowGeometryCoverageBreadthMultiplier());
         assertEquals(22.0, properties.getContext().getBaselineSpeedKph());
         assertEquals(1.28, properties.getContext().getHeavyRainMultiplier());
         assertEquals(1.07, properties.getContext().getLightRainMultiplier());
@@ -110,8 +119,8 @@ class RouteChainDispatchV2PropertiesTest {
         assertEquals("responses", properties.getDecision().getLlm().getWireApi());
         assertEquals("cx/gpt-5.5", properties.getDecision().getLlm().getModel());
         assertEquals("OPENAI_API_KEY", properties.getDecision().getLlm().getApiKeyEnv());
-        assertEquals(Duration.ofSeconds(45), properties.getDecision().getLlm().getTimeoutMs());
-        assertEquals(2, properties.getDecision().getLlm().getMaxRetries());
+        assertEquals(Duration.ofSeconds(20), properties.getDecision().getLlm().getTimeoutMs());
+        assertEquals(0, properties.getDecision().getLlm().getMaxRetries());
         assertFalse(properties.getDecision().getLlm().isParallelToolCalls());
         assertTrue(properties.getDecision().getLlm().isStrictStructuredOutputs());
     }

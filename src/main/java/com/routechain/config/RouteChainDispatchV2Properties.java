@@ -248,6 +248,7 @@ public class RouteChainDispatchV2Properties {
         private int maxAnchors = 3;
         private int maxDrivers = 8;
         private int maxRouteAlternatives = 4;
+        private final RouteProposalBudget routeProposalBudget = new RouteProposalBudget();
 
         public int getMaxAnchors() {
             return maxAnchors;
@@ -271,6 +272,94 @@ public class RouteChainDispatchV2Properties {
 
         public void setMaxRouteAlternatives(int maxRouteAlternatives) {
             this.maxRouteAlternatives = maxRouteAlternatives;
+        }
+
+        public RouteProposalBudget getRouteProposalBudget() {
+            return routeProposalBudget;
+        }
+
+        public static final class RouteProposalBudget {
+            private boolean enabled = false;
+            private int localLiteMaxTotal = 128;
+            private int fullAdaptiveSMaxTotal = 256;
+            private int fullAdaptiveMMaxTotal = 512;
+            private int maxDriversPerBundle = 4;
+            private int maxAnchorsPerBundle = 2;
+            private int maxAlternativesPerTuple = 2;
+            private double lowGeometryCoverageThreshold = 0.75;
+            private double lowGeometryCoverageBreadthMultiplier = 0.70;
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
+            }
+
+            public int getLocalLiteMaxTotal() {
+                return localLiteMaxTotal;
+            }
+
+            public void setLocalLiteMaxTotal(int localLiteMaxTotal) {
+                this.localLiteMaxTotal = localLiteMaxTotal;
+            }
+
+            public int getFullAdaptiveSMaxTotal() {
+                return fullAdaptiveSMaxTotal;
+            }
+
+            public void setFullAdaptiveSMaxTotal(int fullAdaptiveSMaxTotal) {
+                this.fullAdaptiveSMaxTotal = fullAdaptiveSMaxTotal;
+            }
+
+            public int getFullAdaptiveMMaxTotal() {
+                return fullAdaptiveMMaxTotal;
+            }
+
+            public void setFullAdaptiveMMaxTotal(int fullAdaptiveMMaxTotal) {
+                this.fullAdaptiveMMaxTotal = fullAdaptiveMMaxTotal;
+            }
+
+            public int getMaxDriversPerBundle() {
+                return maxDriversPerBundle;
+            }
+
+            public void setMaxDriversPerBundle(int maxDriversPerBundle) {
+                this.maxDriversPerBundle = maxDriversPerBundle;
+            }
+
+            public int getMaxAnchorsPerBundle() {
+                return maxAnchorsPerBundle;
+            }
+
+            public void setMaxAnchorsPerBundle(int maxAnchorsPerBundle) {
+                this.maxAnchorsPerBundle = maxAnchorsPerBundle;
+            }
+
+            public int getMaxAlternativesPerTuple() {
+                return maxAlternativesPerTuple;
+            }
+
+            public void setMaxAlternativesPerTuple(int maxAlternativesPerTuple) {
+                this.maxAlternativesPerTuple = maxAlternativesPerTuple;
+            }
+
+            public double getLowGeometryCoverageThreshold() {
+                return lowGeometryCoverageThreshold;
+            }
+
+            public void setLowGeometryCoverageThreshold(double lowGeometryCoverageThreshold) {
+                this.lowGeometryCoverageThreshold = lowGeometryCoverageThreshold;
+            }
+
+            public double getLowGeometryCoverageBreadthMultiplier() {
+                return lowGeometryCoverageBreadthMultiplier;
+            }
+
+            public void setLowGeometryCoverageBreadthMultiplier(double lowGeometryCoverageBreadthMultiplier) {
+                this.lowGeometryCoverageBreadthMultiplier = lowGeometryCoverageBreadthMultiplier;
+            }
         }
     }
 

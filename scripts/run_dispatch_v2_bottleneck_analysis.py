@@ -302,12 +302,21 @@ def route_generation_breakdown(rows: Sequence[dict]) -> List[dict]:
     for row in rows:
         stages = row.get("stageLatencies", {}) if isinstance(row.get("stageLatencies"), dict) else {}
         invocations = row.get("mlInvocations", {}) if isinstance(row.get("mlInvocations"), dict) else {}
+        budget = row.get("routeProposalBudgetMetrics", {}) if isinstance(row.get("routeProposalBudgetMetrics", {}), dict) else {}
         result.append({
             "cell": f"{row.get('scenarioPack')}/{row.get('size')}/{row.get('profile')}",
             "routeStageLatencyMs": stages.get("route-proposal-pool", 0),
             "routeFinderLatencyMs": (invocations.get("routefinder-local", {}) or {}).get("latencyMs", 0) if isinstance(invocations.get("routefinder-local", {}), dict) else 0,
             "proposalCount": row.get("routeProposalCount"),
             "geometryCoverage": row.get("routeGeometryCoverage"),
+            "budgetMode": budget.get("budgetMode"),
+            "budgetMaxTotalRouteProposals": budget.get("budgetMaxTotalRouteProposals"),
+            "candidateCountBeforePrune": budget.get("candidateCountBeforePrune"),
+            "candidateCountAfterPrune": budget.get("candidateCountAfterPrune"),
+            "proposalPrunedBeforeRoutePool": budget.get("proposalPrunedBeforeRoutePool"),
+            "routeVectorCacheHitRate": budget.get("routeVectorCacheHitRate"),
+            "routeVectorComputedCount": budget.get("routeVectorComputedCount"),
+            "routeVectorReusedCount": budget.get("routeVectorReusedCount"),
             "robustUtilityAverage": row.get("robustUtilityAverage"),
             "executedAssignmentCount": row.get("executedAssignmentCount"),
         })
@@ -469,6 +478,14 @@ def render_markdown(payload: dict) -> str:
         lines.append(
             f"| {row.get('cell')} | {row.get('routeStageLatencyMs')} | {row.get('routeFinderLatencyMs')} | "
             f"{row.get('proposalCount')} | {row.get('geometryCoverage')} | {row.get('robustUtilityAverage')} | {row.get('executedAssignmentCount')} |"
+        )
+    lines.extend(["", "## Proposal Budget", ""])
+    for row in payload.get("routeGenerationBreakdown", [])[:12]:
+        lines.append(
+            f"- `{row.get('cell')}` mode=`{row.get('budgetMode')}` max=`{row.get('budgetMaxTotalRouteProposals')}` "
+            f"beforeAfter=`{row.get('candidateCountBeforePrune')}->{row.get('candidateCountAfterPrune')}` "
+            f"pruned=`{row.get('proposalPrunedBeforeRoutePool')}` cacheHitRate=`{row.get('routeVectorCacheHitRate')}` "
+            f"computed=`{row.get('routeVectorComputedCount')}` reused=`{row.get('routeVectorReusedCount')}`"
         )
     lines.extend(["", "## Fallbacks", ""])
     for row in payload.get("fallbackBreakdown", [])[:12]:
