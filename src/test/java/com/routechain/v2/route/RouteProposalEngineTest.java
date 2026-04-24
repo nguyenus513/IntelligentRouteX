@@ -51,4 +51,38 @@ class RouteProposalEngineTest {
                         && driverCandidate.anchorOrderId().equals(candidate.proposal().anchorOrderId())
                         && driverCandidate.driverId().equals(candidate.proposal().driverId()))));
     }
+
+    @Test
+    void emitsBoundedRecoveryStopOrdersForMultiOrderBundles() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        DispatchCandidateContext context = RouteTestFixtures.candidateContext(properties);
+        DispatchRouteCandidateStage routeCandidateStage = RouteTestFixtures.routeCandidateStage(properties);
+        EtaService etaService = new EtaService(
+                properties,
+                new BaselineTravelTimeEstimator(),
+                new TrafficProfileService(properties),
+                new WeatherContextService(properties, new NoOpOpenMeteoClient()),
+                new NoOpTomTomTrafficRefineClient(),
+                new NoOpTabularScoringClient(),
+                new EtaFeatureBuilder(),
+                new EtaUncertaintyEstimator());
+        var etaLegCache = new EtaLegCacheFactory(properties, etaService)
+                .create(RouteTestFixtures.request().traceId(), RouteTestFixtures.request().decisionTime(), RouteTestFixtures.request().weatherProfile());
+        DriverCandidate multiOrderDriver = routeCandidateStage.driverCandidates().stream()
+                .filter(candidate -> context.bundle(candidate.bundleId()).orderIds().size() >= 3)
+                .filter(candidate -> context.bundle(candidate.bundleId()).orderIds().size() <= 4)
+                .findFirst()
+                .orElseThrow();
+        PickupAnchor pickupAnchor = routeCandidateStage.pickupAnchors().stream()
+                .filter(anchor -> anchor.bundleId().equals(multiOrderDriver.bundleId())
+                        && anchor.anchorOrderId().equals(multiOrderDriver.anchorOrderId()))
+                .findFirst()
+                .orElseThrow();
+        RouteProposalEngine engine = new RouteProposalEngine();
+
+        List<RouteProposalCandidate> generated = engine.generate(List.of(multiOrderDriver), List.of(pickupAnchor), context, etaLegCache);
+
+        assertTrue(generated.size() > 3);
+        assertTrue(generated.stream().map(candidate -> candidate.proposal().stopOrder()).distinct().count() > 1);
+    }
 }

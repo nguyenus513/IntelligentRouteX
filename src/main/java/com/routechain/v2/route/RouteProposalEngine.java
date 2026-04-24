@@ -34,6 +34,9 @@ public final class RouteProposalEngine {
             generated.add(candidate(driverCandidate, pickupAnchor, RouteProposalSource.HEURISTIC_FAST, fastStopOrder(driverCandidate, context, etaLegCache), context, etaLegCache));
             generated.add(candidate(driverCandidate, pickupAnchor, RouteProposalSource.HEURISTIC_SAFE, safeStopOrder(driverCandidate, context), context, etaLegCache));
             generated.add(candidate(driverCandidate, pickupAnchor, RouteProposalSource.FALLBACK_SIMPLE, fallbackStopOrder(driverCandidate, context), context, etaLegCache));
+            for (List<String> stopOrder : recoveryStopOrders(driverCandidate, context, etaLegCache)) {
+                generated.add(candidate(driverCandidate, pickupAnchor, RouteProposalSource.HEURISTIC_SAFE, stopOrder, context, etaLegCache));
+            }
         }
         return List.copyOf(generated);
     }
@@ -193,6 +196,49 @@ public final class RouteProposalEngine {
         return prefixed(driverCandidate.anchorOrderId(), remainingOrders(driverCandidate.bundleId(), driverCandidate.anchorOrderId(), context).stream()
                 .sorted()
                 .toList());
+    }
+
+    private List<List<String>> recoveryStopOrders(DriverCandidate driverCandidate,
+                                                  DispatchCandidateContext context,
+                                                  EtaLegCache etaLegCache) {
+        List<String> remaining = remainingOrders(driverCandidate.bundleId(), driverCandidate.anchorOrderId(), context);
+        if (remaining.size() < 2 || remaining.size() > 3) {
+            return List.of();
+        }
+        List<List<String>> alternatives = new ArrayList<>();
+        List<String> reversed = new ArrayList<>(remaining);
+        java.util.Collections.reverse(reversed);
+        alternatives.add(prefixed(driverCandidate.anchorOrderId(), reversed));
+        alternatives.add(prefixed(driverCandidate.anchorOrderId(), nearestNeighborRemaining(driverCandidate.anchorOrderId(), remaining, context, etaLegCache)));
+        return alternatives.stream()
+                .distinct()
+                .toList();
+    }
+
+    private List<String> nearestNeighborRemaining(String anchorOrderId,
+                                                  List<String> remaining,
+                                                  DispatchCandidateContext context,
+                                                  EtaLegCache etaLegCache) {
+        List<String> ordered = new ArrayList<>();
+        List<String> candidates = new ArrayList<>(remaining);
+        String currentOrderId = anchorOrderId;
+        while (!candidates.isEmpty()) {
+            Order current = context.order(currentOrderId);
+            String fromOrderId = currentOrderId;
+            String nextOrderId = candidates.stream()
+                    .min(Comparator.comparingDouble((String orderId) -> etaLegCache.getOrEstimate(
+                                    current == null ? context.order(orderId).pickupPoint() : current.dropoffPoint(),
+                                    context.order(orderId).pickupPoint(),
+                                    "route-proposal-recovery-nearest",
+                                    fromOrderId + "->" + orderId)
+                            .etaMinutes())
+                            .thenComparing(orderId -> orderId))
+                    .orElse(candidates.getFirst());
+            ordered.add(nextOrderId);
+            candidates.remove(nextOrderId);
+            currentOrderId = nextOrderId;
+        }
+        return List.copyOf(ordered);
     }
 
     private List<String> prefixed(String anchorOrderId, List<String> remaining) {
