@@ -270,49 +270,107 @@ def color(index: int) -> str:
     return palette[(index - 1) % len(palette)]
 
 
-def render_svg(cell: dict, max_routes: int) -> str:
+def visible_routes(cell: dict, max_routes: int, max_drivers: int) -> List[dict]:
+    routes = []
+    seen_drivers = set()
+    for route in cell.get("selectedRoutes", []):
+        driver_id = route.get("driverId")
+        if driver_id in seen_drivers:
+            continue
+        routes.append(route)
+        seen_drivers.add(driver_id)
+        if len(routes) >= min(max_routes, max_drivers):
+            break
+    return routes
+
+
+def visible_order_ids(cell: dict, routes: Sequence[dict], max_orders: int) -> set:
+    order_ids = []
+    for route in routes:
+        for order_id in route.get("orderIds", []):
+            if order_id not in order_ids:
+                order_ids.append(order_id)
+    for order in cell.get("orders", []):
+        order_id = str(order.get("orderId"))
+        if order_id not in order_ids:
+            order_ids.append(order_id)
+        if len(order_ids) >= max_orders:
+            break
+    return set(order_ids[:max_orders])
+
+
+def route_path_d(projected_points: Sequence[str]) -> str:
+    if not projected_points:
+        return ""
+    first, *rest = projected_points
+    return "M " + first + " " + " ".join(f"L {point}" for point in rest)
+
+
+def render_svg(cell: dict, max_routes: int, max_orders: int, max_drivers: int) -> str:
     width = 980
     height = 620
-    points = all_geo_points(cell)
+    routes = visible_routes(cell, max_routes, max_drivers)
+    shown_order_ids = visible_order_ids(cell, routes, max_orders)
+    shown_driver_ids = {route.get("driverId") for route in routes}
+    points = []
+    for order in cell.get("orders", []):
+        if str(order.get("orderId")) in shown_order_ids:
+            points.append(geo(order.get("pickupPoint", {})))
+            points.append(geo(order.get("dropoffPoint", {})))
+    for driver in cell.get("drivers", []):
+        if str(driver.get("driverId")) in shown_driver_ids:
+            points.append(geo(driver.get("currentLocation", {})))
     if not points:
         return "<svg viewBox='0 0 980 620' class='map'><text x='40' y='60'>No coordinates available</text></svg>"
     box = bounds(points)
-    selected_order_ids = {order_id for route in cell.get("selectedRoutes", []) for order_id in route.get("orderIds", [])}
-    selected_driver_ids = {route.get("driverId") for route in cell.get("selectedRoutes", [])}
+    selected_order_ids = {order_id for route in routes for order_id in route.get("orderIds", [])}
+    selected_driver_ids = {route.get("driverId") for route in routes}
     parts = [
         f"<svg viewBox='0 0 {width} {height}' class='map' role='img' aria-label='Dispatch visual map'>",
-        "<defs><pattern id='grid' width='42' height='42' patternUnits='userSpaceOnUse'><path d='M 42 0 L 0 0 0 42' fill='none' stroke='#d9e7e0' stroke-width='1'/></pattern></defs>",
+        "<defs><pattern id='grid' width='42' height='42' patternUnits='userSpaceOnUse'><path d='M 42 0 L 0 0 0 42' fill='none' stroke='#d9e7e0' stroke-width='1'/></pattern><marker id='arrow' markerWidth='10' markerHeight='10' refX='8' refY='3' orient='auto'><path d='M0,0 L0,6 L9,3 z' fill='#17201b'/></marker></defs>",
         f"<rect x='0' y='0' width='{width}' height='{height}' fill='url(#grid)' rx='28'/>",
     ]
     for order in cell.get("orders", []):
         order_id = str(order.get("orderId"))
+        if order_id not in shown_order_ids:
+            continue
         px, py = project(*geo(order.get("pickupPoint", {})), box, width, height)
         dx, dy = project(*geo(order.get("dropoffPoint", {})), box, width, height)
         active = order_id in selected_order_ids
         opacity = "0.92" if active else "0.18"
         active_class = " selected-order" if active else ""
+        status_class = " order-pending"
         parts.append(f"<line x1='{px:.1f}' y1='{py:.1f}' x2='{dx:.1f}' y2='{dy:.1f}' class='order-link playback-order{active_class}' style='opacity:{opacity}'/>")
-        parts.append(f"<circle cx='{px:.1f}' cy='{py:.1f}' r='{5 if active else 3}' class='pickup playback-order{active_class}' style='opacity:{opacity}'><title>{html.escape(order_id)} pickup</title></circle>")
-        parts.append(f"<rect x='{dx - 4:.1f}' y='{dy - 4:.1f}' width='{8 if active else 6}' height='{8 if active else 6}' class='dropoff playback-order{active_class}' style='opacity:{opacity}'><title>{html.escape(order_id)} dropoff</title></rect>")
+        parts.append(f"<circle cx='{px:.1f}' cy='{py:.1f}' r='{7 if active else 4}' class='pickup playback-order{active_class}{status_class}' style='opacity:{opacity}'><title>{html.escape(order_id)} pickup</title></circle>")
+        parts.append(f"<rect x='{dx - 5:.1f}' y='{dy - 5:.1f}' width='{10 if active else 7}' height='{10 if active else 7}' class='dropoff playback-order{active_class}{status_class}' style='opacity:{opacity}'><title>{html.escape(order_id)} dropoff</title></rect>")
+        parts.append(f"<text x='{px + 8:.1f}' y='{py - 8:.1f}' class='point-label playback-order'>{html.escape(order_id)} P</text>")
+        parts.append(f"<text x='{dx + 8:.1f}' y='{dy + 14:.1f}' class='point-label playback-order'>{html.escape(order_id)} D</text>")
     for driver in cell.get("drivers", []):
         driver_id = str(driver.get("driverId"))
+        if driver_id not in shown_driver_ids:
+            continue
         x, y = project(*geo(driver.get("currentLocation", {})), box, width, height)
         active = driver_id in selected_driver_ids
         active_class = " selected-driver" if active else ""
-        parts.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='{8 if active else 4}' class='driver playback-driver{active_class}' style='opacity:{0.95 if active else 0.25}'><title>{html.escape(driver_id)}</title></circle>")
+        parts.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='62' class='driver-radius playback-driver{active_class}'/>")
+        triangle = f"{x:.1f},{y - 12:.1f} {x - 11:.1f},{y + 10:.1f} {x + 11:.1f},{y + 10:.1f}"
+        parts.append(f"<polygon points='{triangle}' class='driver-triangle playback-driver{active_class}'><title>{html.escape(driver_id)}</title></polygon>")
         if active:
-            parts.append(f"<text x='{x + 9:.1f}' y='{y - 9:.1f}' class='driver-label'>{html.escape(driver_id)}</text>")
-    for route in cell.get("selectedRoutes", [])[:max_routes]:
+            parts.append(f"<text x='{x + 14:.1f}' y='{y - 15:.1f}' class='driver-label'>{html.escape(driver_id)}</text>")
+    for route_index, route in enumerate(routes, start=1):
         route_color = color(int(route.get("rank", 1)))
         path_points = []
         for point in route.get("path", []):
             x, y = project(float(point.get("lat", 0.0)), float(point.get("lon", 0.0)), box, width, height)
             path_points.append(f"{x:.1f},{y:.1f}")
+        path_d = route_path_d(path_points)
         if len(path_points) > 1:
-            parts.append(f"<polyline points='{' '.join(path_points)}' class='playback-route' fill='none' stroke='{route_color}' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round' opacity='0.82'><title>{html.escape(str(route.get('driverId')))} -> {html.escape(', '.join(route.get('orderIds', [])))}</title></polyline>")
+            parts.append(f"<path id='route-path-{route_index}' d='{path_d}' class='playback-route' fill='none' stroke='{route_color}' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round' marker-end='url(#arrow)' opacity='0.82'><title>{html.escape(str(route.get('driverId')))} -> {html.escape(', '.join(route.get('orderIds', [])))}</title></path>")
+            parts.append(f"<polygon class='moving-driver playback-execute' points='0,-10 -9,8 9,8' fill='{route_color}'><animateMotion dur='7s' repeatCount='indefinite' rotate='auto'><mpath href='#route-path-{route_index}'/></animateMotion></polygon>")
         for sequence, point in enumerate(route.get("path", [])[1:], start=1):
             x, y = project(float(point.get("lat", 0.0)), float(point.get("lon", 0.0)), box, width, height)
             parts.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='10' fill='{route_color}' class='route-step playback-execute'/><text x='{x:.1f}' y='{y + 4:.1f}' class='route-step-label playback-execute'>{sequence}</text>")
+            parts.append(f"<text x='{x + 12:.1f}' y='{y + 3:.1f}' class='point-label route-label playback-execute'>Step {sequence}: {html.escape(str(point.get('id')))}</text>")
     parts.append("</svg>")
     return "\n".join(parts)
 
@@ -329,18 +387,35 @@ def fmt_number(value: object, digits: int = 2) -> str:
     return "n/a"
 
 
-def render_route_cards(cell: dict, max_routes: int) -> str:
+def route_step_text(route: dict) -> str:
+    labels = []
+    for index, point in enumerate(route.get("path", [])[1:], start=1):
+        labels.append(f"{index}. {point.get('id')}")
+    return " -> ".join(labels)
+
+
+def reasoning_text(route: dict) -> str:
+    reasons = ", ".join(route.get("reasons", [])) or "highest feasible selected score"
+    return (
+        f"System chooses {route.get('driverId')} because route value={fmt_number(route.get('routeValue'))}, "
+        f"pickup ETA={fmt_number(route.get('pickupEtaMinutes'))} min, completion={fmt_number(route.get('completionEtaMinutes'))} min, "
+        f"congestion={fmt_number(route.get('congestionScore'))}, reason={reasons}."
+    )
+
+
+def render_route_cards(cell: dict, max_routes: int, max_drivers: int) -> str:
     cards = []
-    for route in cell.get("selectedRoutes", [])[:max_routes]:
+    for route in visible_routes(cell, max_routes, max_drivers):
         order_text = " -> ".join(route.get("orderIds", []))
         cards.append(
             "<article class='route-card'>"
             f"<div class='route-rank' style='background:{color(int(route.get('rank', 1)))}'>#{route.get('rank')}</div>"
             f"<h3>{html.escape(str(route.get('driverId')))} picks {html.escape(order_text)}</h3>"
+            f"<p><b>Route text</b> {html.escape(route_step_text(route))}</p>"
             f"<p><b>Source</b> {html.escape(str(route.get('source')))} · <b>Bundle</b> {html.escape(str(route.get('bundleId')))}</p>"
             f"<p><b>Pickup ETA</b> {fmt_number(route.get('pickupEtaMinutes'))} min · <b>Complete</b> {fmt_number(route.get('completionEtaMinutes'))} min · <b>Distance</b> {fmt_number(route.get('distanceMeters'), 0)} m</p>"
             f"<p><b>Congestion</b> {fmt_number(route.get('congestionScore'))} · <b>Turns</b> {html.escape(str(route.get('turnCount')))} · <b>Value</b> {fmt_number(route.get('routeValue'))}</p>"
-            f"<p class='reason'>{html.escape(', '.join(route.get('reasons', [])) or 'no explicit reason')}</p>"
+            f"<p class='reason'>{html.escape(reasoning_text(route))}</p>"
             "</article>"
         )
     return "\n".join(cards)
@@ -382,7 +457,7 @@ def render_playback_script() -> str:
     """
 
 
-def render_html(payload: dict, max_routes: int) -> str:
+def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_drivers: int = 5) -> str:
     cells = payload.get("cells", [])
     first = cells[0] if cells else {}
     cell_tabs = "".join(f"<a href='#{html.escape(cell.get('scenario', 'cell'))}'>{html.escape(cell.get('cell', 'cell'))}</a>" for cell in cells)
@@ -395,8 +470,8 @@ def render_html(payload: dict, max_routes: int) -> str:
             f"<div class='section-head'><div><p class='eyebrow'>{html.escape(str(cell.get('weatherProfile')))} · {html.escape(str(cell.get('profile')))}</p><h2>{html.escape(str(cell.get('cell')))}</h2></div>"
             f"<div class='metric-pill'>Executed <b>{cell.get('executedAssignmentCount')}</b></div></div>"
             "<div class='metrics-grid'>"
-            f"<div><span>Orders</span><b>{len(cell.get('orders', []))}</b></div>"
-            f"<div><span>Drivers</span><b>{len(cell.get('drivers', []))}</b></div>"
+            f"<div><span>Shown orders</span><b>{min(max_orders, len(cell.get('orders', [])))}</b></div>"
+            f"<div><span>Shown drivers</span><b>{min(max_drivers, cell.get('selectedDriverCount', len(cell.get('drivers', []))))}</b></div>"
             f"<div><span>Selected drivers</span><b>{cell.get('selectedDriverCount', cell.get('selectedProposalCount'))}</b></div>"
             f"<div><span>Route proposals</span><b>{cell.get('routeProposalCount')}</b></div>"
             f"<div><span>Budget mode</span><b>{html.escape(str(budget.get('budgetMode', 'n/a')))}</b></div>"
@@ -406,16 +481,16 @@ def render_html(payload: dict, max_routes: int) -> str:
             "</div>"
             "<div class='playback-controls'><button data-play>Play realtime turn</button><button data-restart>Restart</button><span data-playback-label>1/5 orders</span></div>"
             "<div class='visual-grid'>"
-            f"<div>{render_svg(cell, max_routes)}</div>"
+            f"<div>{render_svg(cell, max_routes, max_orders, max_drivers)}</div>"
             "<aside class='timeline'><h3>Quy trình ghép đơn</h3>"
-            f"<div class='step' data-step='orders'><b>1. Order buffer</b><span>{len(cell.get('orders', []))} open orders enter this single dispatch turn.</span></div>"
+            f"<div class='step' data-step='orders'><b>1. Order buffer</b><span>Showing {min(max_orders, len(cell.get('orders', [])))} orders. Red means placed/waiting.</span></div>"
             f"<div class='step' data-step='bundles'><b>2. Bundle pool</b><span>Nearby pickups and compatible corridors are grouped into candidate bundles.</span></div>"
-            f"<div class='step' data-step='routes'><b>3. Route proposal pool</b><span>{cell.get('routeProposalCount')} route proposals remain after budget/prune, mode {html.escape(str(budget.get('budgetMode', 'n/a')))}.</span></div>"
-            f"<div class='step' data-step='select'><b>4. Global selector</b><span>{cell.get('selectedDriverCount', cell.get('selectedProposalCount'))} drivers are selected without order/driver conflicts.</span></div>"
-            f"<div class='step' data-step='execute'><b>5. Execute</b><span>{cell.get('executedAssignmentCount')} assignments are executed in this one turn.</span></div>"
+            f"<div class='step' data-step='routes'><b>3. Route proposal pool</b><span>System draws candidate routes. Yellow means picking up, green means delivering. {cell.get('routeProposalCount')} proposals remain after prune.</span></div>"
+            f"<div class='step' data-step='select'><b>4. Global selector</b><span>Showing {min(max_drivers, cell.get('selectedDriverCount', cell.get('selectedProposalCount')))} selected drivers. Radius circles show local pickup search area.</span></div>"
+            f"<div class='step' data-step='execute'><b>5. Execute</b><span>Driver triangles move along selected routes, then orders turn green when delivery is active.</span></div>"
             "</aside></div>"
             "<h3>Selected assignments</h3>"
-            f"<div class='route-cards'>{render_route_cards(cell, max_routes)}</div>"
+            f"<div class='route-cards'>{render_route_cards(cell, max_routes, max_drivers)}</div>"
             "</section>"
         )
     css = """
@@ -441,10 +516,16 @@ def render_html(payload: dict, max_routes: int) -> str:
     .visual-grid { display:grid; grid-template-columns: minmax(0, 1fr) 340px; gap:22px; align-items:stretch; }
     .map { width:100%; min-height:520px; border-radius:28px; background:#eef7f0; border:1px solid var(--line); overflow:hidden; }
     .order-link { stroke:#8da99b; stroke-width:1.5; stroke-dasharray:4 7; }
-    .pickup { fill:#0f8b68; stroke:white; stroke-width:1.5; }
-    .dropoff { fill:#f2994a; stroke:white; stroke-width:1.5; }
-    .driver { fill:#17201b; stroke:white; stroke-width:2; }
-    .driver-label { font-size:12px; font-weight:800; paint-order:stroke; stroke:white; stroke-width:3px; }
+    .pickup, .dropoff { fill:#d64045; stroke:white; stroke-width:1.8; }
+    body[data-playback-step='routes'] .selected-order, body[data-playback-step='select'] .selected-order { fill:#f2b84b !important; }
+    body[data-playback-step='execute'] .selected-order { fill:#21a67a !important; }
+    .driver-radius { fill:rgba(47,128,237,0.08); stroke:rgba(47,128,237,0.36); stroke-width:2; stroke-dasharray:8 7; }
+    .driver-triangle { fill:#17201b; stroke:white; stroke-width:2.3; }
+    body[data-playback-step='routes'] .selected-driver .driver-triangle, body[data-playback-step='select'] .driver-triangle { fill:#f2b84b; }
+    body[data-playback-step='execute'] .driver-triangle { fill:#21a67a; }
+    .driver-label, .point-label { font-size:12px; font-weight:800; paint-order:stroke; stroke:white; stroke-width:3px; fill:#17201b; }
+    .route-label { font-size:11px; fill:#34495e; }
+    .moving-driver { filter: drop-shadow(0 4px 8px rgba(0,0,0,0.22)); }
     .route-step { stroke:white; stroke-width:2; }
     .route-step-label { fill:white; font-size:10px; font-weight:900; text-anchor:middle; pointer-events:none; }
     .playback-controls { display:flex; gap:10px; align-items:center; margin:4px 0 18px; }
@@ -514,12 +595,12 @@ def build_payload(input_root: Path, scenarios: Sequence[str], profiles: Sequence
     }
 
 
-def write_reports(payload: dict, output_root: Path, max_routes: int) -> Tuple[Path, Path]:
+def write_reports(payload: dict, output_root: Path, max_routes: int, max_orders: int = 20, max_drivers: int = 5) -> Tuple[Path, Path]:
     output_root.mkdir(parents=True, exist_ok=True)
     json_path = output_root / "dispatch_visual_evidence.json"
     html_path = output_root / "dispatch_visual_evidence.html"
     write_json(json_path, payload)
-    html_path.write_text(render_html(payload, max_routes), encoding="utf-8")
+    html_path.write_text(render_html(payload, max_routes, max_orders=max_orders, max_drivers=max_drivers), encoding="utf-8")
     return json_path, html_path
 
 
@@ -531,6 +612,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--profiles", default="full-adaptive")
     parser.add_argument("--size", default="S")
     parser.add_argument("--max-routes", type=int, default=8, help="Maximum selected routes drawn per scenario")
+    parser.add_argument("--max-orders", type=int, default=20, help="Maximum orders shown on the playback map")
+    parser.add_argument("--max-drivers", type=int, default=5, help="Maximum selected drivers shown on the playback map")
     parser.add_argument("--single-turn", action="store_true", help="Render only the first matching dispatch turn with realtime playback")
     args = parser.parse_args(argv)
 
@@ -541,7 +624,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         args.size,
         single_turn=args.single_turn,
     )
-    json_path, html_path = write_reports(payload, resolve_repo_path(args.output_root), args.max_routes)
+    json_path, html_path = write_reports(payload, resolve_repo_path(args.output_root), args.max_routes, args.max_orders, args.max_drivers)
     print(f"[VISUAL EVIDENCE JSON] {json_path}")
     print(f"[VISUAL EVIDENCE HTML] {html_path}")
     for cell in payload.get("cells", []):
