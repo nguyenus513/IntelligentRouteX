@@ -23,10 +23,9 @@ public enum DecisionStageName {
 
     public DecisionEffort requestedEffort() {
         return switch (this) {
-            case PAIR_BUNDLE, ANCHOR, DRIVER -> DecisionEffort.MEDIUM;
-            case ROUTE_CRITIQUE, SCENARIO -> DecisionEffort.HIGH;
-            case ROUTE_GENERATION, FINAL_SELECTION -> DecisionEffort.XHIGH;
-            case OBSERVATION_PACK, SAFETY_EXECUTE -> DecisionEffort.MEDIUM;
+            case PAIR_BUNDLE, ROUTE_GENERATION, ROUTE_CRITIQUE, SCENARIO, FINAL_SELECTION -> DecisionEffort.MEDIUM;
+            case ANCHOR, DRIVER -> DecisionEffort.LOW;
+            case OBSERVATION_PACK, SAFETY_EXECUTE -> DecisionEffort.LOW;
         };
     }
 

@@ -57,18 +57,12 @@ public final class DecisionEffortPolicy {
         }
 
         DecisionEffort selected = base;
-        if (base == DecisionEffort.XHIGH
-                && complexity <= decisionProperties.getEffortPolicy().getLowComplexityThreshold()
-                && latencyPressure) {
-            selected = DecisionEffort.HIGH;
-        } else if (base == DecisionEffort.HIGH
-                && complexity <= decisionProperties.getEffortPolicy().getLowComplexityThreshold()
-                && !weatherBad
-                && !trafficBad) {
+        // Local 9router smoke runs are latency-bound. Keep the adaptive policy
+        // as a downshift-only policy so heavy stages never exceed medium effort.
+        if (base == DecisionEffort.XHIGH && latencyPressure) {
             selected = DecisionEffort.MEDIUM;
-        } else if (base == DecisionEffort.MEDIUM
-                && complexity >= decisionProperties.getEffortPolicy().getHighComplexityThreshold()) {
-            selected = DecisionEffort.HIGH;
+        } else if (base == DecisionEffort.HIGH && !weatherBad && !trafficBad) {
+            selected = DecisionEffort.MEDIUM;
         }
 
         String reason = selected == base

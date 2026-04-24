@@ -167,7 +167,7 @@ public final class NineRouterResponsesClient {
         }
         DecisionEffort effectiveEffort = requestedEffort == null ? DecisionEffort.MEDIUM : requestedEffort;
         return switch (effectiveEffort) {
-            case MEDIUM -> configuredTimeout;
+            case LOW, MEDIUM -> configuredTimeout;
             case HIGH -> configuredTimeout.multipliedBy(2);
             case XHIGH -> {
                 Duration boosted = configuredTimeout.multipliedBy(3);

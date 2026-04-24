@@ -1,6 +1,7 @@
 package com.routechain.v2.decision;
 
 public enum DecisionEffort {
+    LOW("low"),
     MEDIUM("medium"),
     HIGH("high"),
     XHIGH("xhigh");
