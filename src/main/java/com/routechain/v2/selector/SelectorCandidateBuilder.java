@@ -61,6 +61,11 @@ public final class SelectorCandidateBuilder {
                 degradeReasons.add("selector-missing-upstream-context");
                 continue;
             }
+            if ("REJECT_SHAPE".equals(RouteShapeQuality.verdict(proposal))) {
+                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-reject-zigzag-route"));
+                degradeReasons.add("selector-reject-zigzag-route");
+                continue;
+            }
 
             SelectorCandidate candidate = new SelectorCandidate(
                     "selector-candidate/v1",

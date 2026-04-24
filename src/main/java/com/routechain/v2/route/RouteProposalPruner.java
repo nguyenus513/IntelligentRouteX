@@ -30,9 +30,11 @@ public final class RouteProposalPruner {
     }
 
     private List<RouteProposalCandidate> pruneTuple(List<RouteProposalCandidate> tupleCandidates) {
-        Map<String, RouteProposalCandidate> deduped = new LinkedHashMap<>();
-        for (RouteProposalCandidate candidate : tupleCandidates.stream()
+        List<RouteProposalCandidate> shapePruned = removeShapeDominated(tupleCandidates.stream()
                 .filter(candidate -> candidate.proposal().feasible())
+                .toList());
+        Map<String, RouteProposalCandidate> deduped = new LinkedHashMap<>();
+        for (RouteProposalCandidate candidate : shapePruned.stream()
                 .sorted(comparator())
                 .toList()) {
             String dedupeKey = candidate.proposal().source().name() + "|" + RouteProposalEngine.stopOrderSignature(candidate.proposal().stopOrder());
@@ -41,6 +43,14 @@ public final class RouteProposalPruner {
         return deduped.values().stream()
                 .sorted(comparator())
                 .limit(Math.max(1, properties.getCandidate().getMaxRouteAlternatives()))
+                .toList();
+    }
+
+    private List<RouteProposalCandidate> removeShapeDominated(List<RouteProposalCandidate> candidates) {
+        return candidates.stream()
+                .filter(candidate -> candidates.stream()
+                        .filter(other -> other != candidate)
+                        .noneMatch(other -> RouteShapeQuality.dominates(other.proposal(), candidate.proposal())))
                 .toList();
     }
 }
