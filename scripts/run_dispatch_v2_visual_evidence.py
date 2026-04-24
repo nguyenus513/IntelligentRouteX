@@ -50,7 +50,7 @@ def split_csv(value: str) -> Tuple[str, ...]:
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
-def select_cells(payload: dict, scenarios: Sequence[str], profiles: Sequence[str], size: str) -> List[VisualCell]:
+def select_cells(payload: dict, scenarios: Sequence[str], profiles: Sequence[str], size: str, single_turn: bool = False) -> List[VisualCell]:
     scenario_filter = set(scenarios)
     profile_filter = set(profiles)
     cells: List[VisualCell] = []
@@ -73,6 +73,8 @@ def select_cells(payload: dict, scenarios: Sequence[str], profiles: Sequence[str
         artifact_path = resolve_repo_path(str(artifact_value))
         output_root = resolve_repo_path(str(output_value))
         cells.append(VisualCell(scenario, row_size, profile, artifact_path, output_root, row))
+        if single_turn:
+            break
     return cells
 
 
@@ -288,14 +290,16 @@ def render_svg(cell: dict, max_routes: int) -> str:
         dx, dy = project(*geo(order.get("dropoffPoint", {})), box, width, height)
         active = order_id in selected_order_ids
         opacity = "0.92" if active else "0.18"
-        parts.append(f"<line x1='{px:.1f}' y1='{py:.1f}' x2='{dx:.1f}' y2='{dy:.1f}' class='order-link' style='opacity:{opacity}'/>")
-        parts.append(f"<circle cx='{px:.1f}' cy='{py:.1f}' r='{5 if active else 3}' class='pickup' style='opacity:{opacity}'><title>{html.escape(order_id)} pickup</title></circle>")
-        parts.append(f"<rect x='{dx - 4:.1f}' y='{dy - 4:.1f}' width='{8 if active else 6}' height='{8 if active else 6}' class='dropoff' style='opacity:{opacity}'><title>{html.escape(order_id)} dropoff</title></rect>")
+        active_class = " selected-order" if active else ""
+        parts.append(f"<line x1='{px:.1f}' y1='{py:.1f}' x2='{dx:.1f}' y2='{dy:.1f}' class='order-link playback-order{active_class}' style='opacity:{opacity}'/>")
+        parts.append(f"<circle cx='{px:.1f}' cy='{py:.1f}' r='{5 if active else 3}' class='pickup playback-order{active_class}' style='opacity:{opacity}'><title>{html.escape(order_id)} pickup</title></circle>")
+        parts.append(f"<rect x='{dx - 4:.1f}' y='{dy - 4:.1f}' width='{8 if active else 6}' height='{8 if active else 6}' class='dropoff playback-order{active_class}' style='opacity:{opacity}'><title>{html.escape(order_id)} dropoff</title></rect>")
     for driver in cell.get("drivers", []):
         driver_id = str(driver.get("driverId"))
         x, y = project(*geo(driver.get("currentLocation", {})), box, width, height)
         active = driver_id in selected_driver_ids
-        parts.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='{8 if active else 4}' class='driver' style='opacity:{0.95 if active else 0.25}'><title>{html.escape(driver_id)}</title></circle>")
+        active_class = " selected-driver" if active else ""
+        parts.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='{8 if active else 4}' class='driver playback-driver{active_class}' style='opacity:{0.95 if active else 0.25}'><title>{html.escape(driver_id)}</title></circle>")
         if active:
             parts.append(f"<text x='{x + 9:.1f}' y='{y - 9:.1f}' class='driver-label'>{html.escape(driver_id)}</text>")
     for route in cell.get("selectedRoutes", [])[:max_routes]:
@@ -305,10 +309,10 @@ def render_svg(cell: dict, max_routes: int) -> str:
             x, y = project(float(point.get("lat", 0.0)), float(point.get("lon", 0.0)), box, width, height)
             path_points.append(f"{x:.1f},{y:.1f}")
         if len(path_points) > 1:
-            parts.append(f"<polyline points='{' '.join(path_points)}' fill='none' stroke='{route_color}' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round' opacity='0.82'><title>{html.escape(str(route.get('driverId')))} -> {html.escape(', '.join(route.get('orderIds', [])))}</title></polyline>")
+            parts.append(f"<polyline points='{' '.join(path_points)}' class='playback-route' fill='none' stroke='{route_color}' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round' opacity='0.82'><title>{html.escape(str(route.get('driverId')))} -> {html.escape(', '.join(route.get('orderIds', [])))}</title></polyline>")
         for sequence, point in enumerate(route.get("path", [])[1:], start=1):
             x, y = project(float(point.get("lat", 0.0)), float(point.get("lon", 0.0)), box, width, height)
-            parts.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='10' fill='{route_color}' class='route-step'/><text x='{x:.1f}' y='{y + 4:.1f}' class='route-step-label'>{sequence}</text>")
+            parts.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='10' fill='{route_color}' class='route-step playback-execute'/><text x='{x:.1f}' y='{y + 4:.1f}' class='route-step-label playback-execute'>{sequence}</text>")
     parts.append("</svg>")
     return "\n".join(parts)
 
@@ -342,6 +346,42 @@ def render_route_cards(cell: dict, max_routes: int) -> str:
     return "\n".join(cards)
 
 
+def render_playback_script() -> str:
+    return """
+    <script>
+    (() => {
+      const steps = ['orders', 'bundles', 'routes', 'select', 'execute'];
+      let current = 0;
+      let timer = null;
+      const label = document.querySelector('[data-playback-label]');
+      const setStep = (index) => {
+        current = Math.max(0, Math.min(index, steps.length - 1));
+        document.body.dataset.playbackStep = steps[current];
+        document.querySelectorAll('[data-step]').forEach((node, idx) => {
+          node.classList.toggle('active', idx === current);
+          node.classList.toggle('complete', idx < current);
+        });
+        if (label) label.textContent = `${current + 1}/${steps.length} ${steps[current]}`;
+      };
+      const stop = () => { if (timer) window.clearInterval(timer); timer = null; };
+      const play = () => {
+        stop();
+        setStep(0);
+        timer = window.setInterval(() => {
+          if (current >= steps.length - 1) { stop(); return; }
+          setStep(current + 1);
+        }, 1150);
+      };
+      document.querySelector('[data-play]')?.addEventListener('click', play);
+      document.querySelector('[data-restart]')?.addEventListener('click', () => { stop(); setStep(0); });
+      document.querySelectorAll('[data-step]').forEach((node, idx) => node.addEventListener('click', () => { stop(); setStep(idx); }));
+      setStep(0);
+      window.setTimeout(play, 500);
+    })();
+    </script>
+    """
+
+
 def render_html(payload: dict, max_routes: int) -> str:
     cells = payload.get("cells", [])
     first = cells[0] if cells else {}
@@ -364,14 +404,15 @@ def render_html(payload: dict, max_routes: int) -> str:
             f"<div><span>Geometry</span><b>{fmt_number(cell.get('geometryCoverage'))}</b></div>"
             f"<div><span>Utility</span><b>{fmt_number(cell.get('robustUtilityAverage'))}</b></div>"
             "</div>"
+            "<div class='playback-controls'><button data-play>Play realtime turn</button><button data-restart>Restart</button><span data-playback-label>1/5 orders</span></div>"
             "<div class='visual-grid'>"
             f"<div>{render_svg(cell, max_routes)}</div>"
             "<aside class='timeline'><h3>Quy trình ghép đơn</h3>"
-            f"<div class='step'><b>1. Order buffer</b><span>{len(cell.get('orders', []))} đơn mở được đưa vào cửa sổ xét.</span></div>"
-            f"<div class='step'><b>2. Bundle pool</b><span>Hệ gom pickup gần/cùng corridor thành bundle ứng viên.</span></div>"
-            f"<div class='step'><b>3. Route proposal pool</b><span>{cell.get('routeProposalCount')} route proposal sau budget/prune, mode {html.escape(str(budget.get('budgetMode', 'n/a')))}.</span></div>"
-            f"<div class='step'><b>4. Global selector</b><span>{cell.get('selectedProposalCount')} driver được chọn, không trùng đơn/driver.</span></div>"
-            f"<div class='step'><b>5. Execute</b><span>{cell.get('executedAssignmentCount')} assignment được thực thi.</span></div>"
+            f"<div class='step' data-step='orders'><b>1. Order buffer</b><span>{len(cell.get('orders', []))} open orders enter this single dispatch turn.</span></div>"
+            f"<div class='step' data-step='bundles'><b>2. Bundle pool</b><span>Nearby pickups and compatible corridors are grouped into candidate bundles.</span></div>"
+            f"<div class='step' data-step='routes'><b>3. Route proposal pool</b><span>{cell.get('routeProposalCount')} route proposals remain after budget/prune, mode {html.escape(str(budget.get('budgetMode', 'n/a')))}.</span></div>"
+            f"<div class='step' data-step='select'><b>4. Global selector</b><span>{cell.get('selectedDriverCount', cell.get('selectedProposalCount'))} drivers are selected without order/driver conflicts.</span></div>"
+            f"<div class='step' data-step='execute'><b>5. Execute</b><span>{cell.get('executedAssignmentCount')} assignments are executed in this one turn.</span></div>"
             "</aside></div>"
             "<h3>Selected assignments</h3>"
             f"<div class='route-cards'>{render_route_cards(cell, max_routes)}</div>"
@@ -406,8 +447,22 @@ def render_html(payload: dict, max_routes: int) -> str:
     .driver-label { font-size:12px; font-weight:800; paint-order:stroke; stroke:white; stroke-width:3px; }
     .route-step { stroke:white; stroke-width:2; }
     .route-step-label { fill:white; font-size:10px; font-weight:900; text-anchor:middle; pointer-events:none; }
+    .playback-controls { display:flex; gap:10px; align-items:center; margin:4px 0 18px; }
+    .playback-controls button { border:0; border-radius:999px; padding:11px 16px; background:#17201b; color:white; font-weight:800; cursor:pointer; }
+    .playback-controls span { color:var(--green); font-weight:900; letter-spacing:0.04em; text-transform:uppercase; }
+    .playback-order, .playback-driver, .playback-route, .playback-execute { transition: opacity 360ms ease, filter 360ms ease, transform 360ms ease; }
+    body[data-playback-step='orders'] .playback-driver, body[data-playback-step='orders'] .playback-route, body[data-playback-step='orders'] .playback-execute { opacity:0.04 !important; }
+    body[data-playback-step='orders'] .selected-order { filter: drop-shadow(0 0 6px rgba(15,139,104,0.55)); }
+    body[data-playback-step='bundles'] .playback-driver, body[data-playback-step='bundles'] .playback-route, body[data-playback-step='bundles'] .playback-execute { opacity:0.08 !important; }
+    body[data-playback-step='bundles'] .selected-order { opacity:0.95 !important; filter: drop-shadow(0 0 8px rgba(242,153,74,0.6)); }
+    body[data-playback-step='routes'] .playback-route { opacity:0.88 !important; filter: drop-shadow(0 0 8px rgba(47,128,237,0.4)); }
+    body[data-playback-step='routes'] .playback-execute { opacity:0.18 !important; }
+    body[data-playback-step='select'] .selected-driver, body[data-playback-step='select'] .playback-route { opacity:1 !important; filter: drop-shadow(0 0 10px rgba(111,231,183,0.7)); }
+    body[data-playback-step='execute'] .playback-execute { opacity:1 !important; filter: drop-shadow(0 0 10px rgba(232,93,117,0.65)); }
     .timeline { background:#17201b; color:white; border-radius:28px; padding:24px; }
-    .timeline .step { border-left:3px solid #6ee7b7; padding:0 0 18px 16px; margin-left:4px; }
+    .timeline .step { border-left:3px solid rgba(110,231,183,0.35); padding:0 0 18px 16px; margin-left:4px; cursor:pointer; opacity:0.62; transition:opacity 240ms ease, border-color 240ms ease; }
+    .timeline .step.active { opacity:1; border-color:#6ee7b7; }
+    .timeline .step.complete { opacity:0.86; border-color:#f2994a; }
     .timeline span { display:block; color:#d8eee5; margin-top:4px; line-height:1.45; }
     .route-cards { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:14px; }
     .route-card { position:relative; background:white; border:1px solid var(--line); border-radius:22px; padding:18px 18px 18px 64px; min-height:132px; }
@@ -439,14 +494,15 @@ def render_html(payload: dict, max_routes: int) -> str:
         *sections,
         "</main>",
         f"<footer>Generated at {html.escape(str(payload.get('generatedAt')))} from {html.escape(str(payload.get('sourceArtifact')))}. First cell: {html.escape(str(first.get('cell', 'n/a')))}</footer>",
+        render_playback_script(),
         "</body></html>",
     ])
 
 
-def build_payload(input_root: Path, scenarios: Sequence[str], profiles: Sequence[str], size: str) -> dict:
+def build_payload(input_root: Path, scenarios: Sequence[str], profiles: Sequence[str], size: str, single_turn: bool = False) -> dict:
     comparison_path = latest_standard_comparison(input_root)
     comparison = read_json(comparison_path)
-    cells = select_cells(comparison, scenarios, profiles, size)
+    cells = select_cells(comparison, scenarios, profiles, size, single_turn=single_turn)
     if not cells:
         raise ValueError("No matching benchmark cells found for visualization.")
     return {
@@ -475,6 +531,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--profiles", default="full-adaptive")
     parser.add_argument("--size", default="S")
     parser.add_argument("--max-routes", type=int, default=8, help="Maximum selected routes drawn per scenario")
+    parser.add_argument("--single-turn", action="store_true", help="Render only the first matching dispatch turn with realtime playback")
     args = parser.parse_args(argv)
 
     payload = build_payload(
@@ -482,6 +539,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         split_csv(args.scenarios),
         split_csv(args.profiles),
         args.size,
+        single_turn=args.single_turn,
     )
     json_path, html_path = write_reports(payload, resolve_repo_path(args.output_root), args.max_routes)
     print(f"[VISUAL EVIDENCE JSON] {json_path}")

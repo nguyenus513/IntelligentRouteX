@@ -88,9 +88,44 @@ class DispatchVisualEvidenceTest(unittest.TestCase):
             self.assertEqual(1, len(payload["cells"]))
             self.assertEqual(1, payload["cells"][0]["selectedProposalCount"])
             self.assertIn("Visual evidence", html)
+            self.assertIn("Play realtime turn", html)
+            self.assertIn("data-step='orders'", html)
+            self.assertIn("data-playback-step", html)
             self.assertIn("driver-1", html)
             self.assertIn("pickup", html)
             self.assertIn("Global selector", html)
+
+    def test_single_turn_limits_payload_to_first_matching_cell(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            rows = []
+            for scenario in ("normal-clear", "heavy-rain"):
+                output_root = root / "live" / "full-adaptive" / scenario / "s"
+                artifact_path = output_root / "dispatch-quality.json"
+                rows.append({
+                    "scenarioPack": scenario,
+                    "size": "S",
+                    "profile": "full-adaptive",
+                    "artifactPath": str(artifact_path),
+                    "outputRoot": str(output_root),
+                })
+                write_json(artifact_path, {
+                    "metrics": {"executedAssignmentCount": 1, "robustUtilityAverage": 0.8},
+                    "routeVectorMetrics": {"proposalCount": 2, "geometryCoverage": 1.0},
+                    "stageLatencies": {},
+                    "routeProposalBudgetMetrics": {},
+                    "degradeReasons": [],
+                })
+                base = output_root / "feedback" / scenario / "s" / "controlled" / "legacy" / "v2" / "c"
+                write_json(base / "replay" / "quality.json", {"request": {"openOrders": [], "availableDrivers": []}})
+                write_json(base / "reuse-states" / "quality-reuse-state.json", {"routeProposals": []})
+                write_json(base / "decision-log" / "quality.json", {"selectedProposalIds": [], "executedAssignmentIds": []})
+            write_json(root / "standard_comparison-1.json", {"gitCommit": "test", "cells": rows})
+
+            payload = visual.build_payload(root, (), ("full-adaptive",), "S", single_turn=True)
+
+            self.assertEqual(1, len(payload["cells"]))
+            self.assertEqual("normal-clear", payload["cells"][0]["scenario"])
 
 
 if __name__ == "__main__":
