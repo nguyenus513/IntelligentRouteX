@@ -32,7 +32,7 @@ class DispatchBundleStageServiceTest {
     }
 
     @Test
-    void emitsSingleOrderRecoveryCandidatesForEveryWorkingOrder() {
+    void emitsOnlyMultiOrderCandidatesWithinBundleSizeContract() {
         DispatchBundleStageService service = new DispatchBundleStageService(
                 RouteChainDispatchV2Properties.defaults(),
                 new BoundaryCandidateSelector(RouteChainDispatchV2Properties.defaults()),
@@ -48,15 +48,8 @@ class DispatchBundleStageServiceTest {
                 BundleTestFixtures.clearEtaContext(),
                 BundleTestFixtures.pairClusterStage());
 
-        assertTrue(stage.bundleCandidates().stream().anyMatch(candidate ->
-                candidate.bundleId().startsWith("SINGLE_ORDER_RECOVERY|")
-                        && candidate.orderIds().size() == 1
-                        && candidate.feasible()));
-        assertTrue(stage.bundleCandidates().stream().anyMatch(candidate ->
-                candidate.bundleId().equals("SINGLE_ORDER_RECOVERY|order-1|order-1")));
-        assertTrue(stage.bundleCandidates().stream().anyMatch(candidate ->
-                candidate.bundleId().equals("SINGLE_ORDER_RECOVERY|order-2|order-2")));
-        assertTrue(stage.bundleCandidates().stream().anyMatch(candidate ->
-                candidate.bundleId().equals("SINGLE_ORDER_RECOVERY|order-3|order-3")));
+        assertFalse(stage.bundleCandidates().stream().anyMatch(candidate -> candidate.orderIds().size() < 2));
+        assertTrue(stage.bundleCandidates().stream().allMatch(candidate -> candidate.orderIds().size() <= 5));
+        assertTrue(stage.bundleCandidates().stream().anyMatch(candidate -> candidate.orderIds().size() >= 3));
     }
 }

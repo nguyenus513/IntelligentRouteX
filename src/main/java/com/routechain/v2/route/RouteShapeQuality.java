@@ -6,6 +6,7 @@ import java.util.List;
 public final class RouteShapeQuality {
     public static final double STRAIGHTNESS_FLOOR = 0.55;
     public static final double STRAIGHTNESS_REJECT_FLOOR = 0.35;
+    public static final double MULTI_ORDER_STRAIGHTNESS_REJECT_FLOOR = 0.50;
     public static final int TURN_COUNT_SOFT_LIMIT = 20;
     public static final int TURN_COUNT_REJECT_LIMIT = 36;
     public static final double CONGESTION_HIGH_RISK = 0.90;
@@ -30,7 +31,9 @@ public final class RouteShapeQuality {
         }
         if (proposal.stopOrder().size() > 1
                 && (proposal.straightnessScore() < STRAIGHTNESS_REJECT_FLOOR
-                || proposal.turnCount() > TURN_COUNT_REJECT_LIMIT)) {
+                || proposal.straightnessScore() < MULTI_ORDER_STRAIGHTNESS_REJECT_FLOOR
+                || proposal.turnCount() > TURN_COUNT_REJECT_LIMIT
+                || proposal.turnCount() > multiOrderTurnRejectLimit(proposal.stopOrder().size()))) {
             return "REJECT_SHAPE";
         }
         if (proposal.straightnessScore() < STRAIGHTNESS_FLOOR
@@ -83,5 +86,9 @@ public final class RouteShapeQuality {
 
     private static boolean sameOrderSet(RouteProposal left, RouteProposal right) {
         return new java.util.HashSet<>(left.stopOrder()).equals(new java.util.HashSet<>(right.stopOrder()));
+    }
+
+    private static int multiOrderTurnRejectLimit(int stopCount) {
+        return Math.min(TURN_COUNT_REJECT_LIMIT, (8 * stopCount) + 6);
     }
 }

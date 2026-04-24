@@ -19,6 +19,13 @@ class RouteShapeQualityTest {
     }
 
     @Test
+    void rejectsMultiOrderRouteBelowOperationalStraightnessFloor() {
+        RouteProposal proposal = proposal("bad-shape", List.of("order-1", "order-2", "order-3"), 2900.0, 2400.0, 33, 0.46, 1.0);
+
+        assertEquals("REJECT_SHAPE", RouteShapeQuality.verdict(proposal));
+    }
+
+    @Test
     void cleanerRouteDominatesWorseRouteWithSameOrderSet() {
         RouteProposal clean = proposal("clean", List.of("order-2", "order-1"), 2100.0, 1800.0, 18, 0.64, 0.70);
         RouteProposal zigzag = proposal("zigzag", List.of("order-1", "order-2"), 2500.0, 2100.0, 28, 0.22, 1.0);

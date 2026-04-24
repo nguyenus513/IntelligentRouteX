@@ -149,6 +149,7 @@ public final class SelectorCandidateBuilder {
                 + (0.20 * proposal.routeValue())
                 + (0.10 * driverCandidate.rerankScore())
                 + (0.10 * context.bundleScore(proposal.bundleId()));
+        score += bundleSizeLift(proposal);
         if (proposal.source() == RouteProposalSource.FALLBACK_SIMPLE) {
             score -= properties.getSelector().getFallbackPenalty();
         }
@@ -158,6 +159,18 @@ public final class SelectorCandidateBuilder {
         }
         score -= RouteShapeQuality.penalty(proposal);
         return score;
+    }
+
+    private double bundleSizeLift(RouteProposal proposal) {
+        int bundleSize = proposal.stopOrder().size();
+        if (bundleSize <= 2) {
+            return proposal.straightnessScore() < 0.55 ? -0.04 : 0.0;
+        }
+        double shapeGuard = proposal.straightnessScore() >= 0.60 && proposal.turnCount() <= (8 * bundleSize + 6) ? 1.0 : 0.0;
+        if (shapeGuard == 0.0) {
+            return 0.0;
+        }
+        return Math.min(0.10, 0.035 * (bundleSize - 2));
     }
 
     private boolean isBetter(SelectorCandidateEnvelope candidate, SelectorCandidateEnvelope existing) {

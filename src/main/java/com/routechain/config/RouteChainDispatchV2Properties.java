@@ -215,9 +215,18 @@ public class RouteChainDispatchV2Properties {
     }
 
     public static final class Bundle {
+        private int minSize = 2;
         private int maxSize = 5;
         private int topNeighbors = 12;
         private int beamWidth = 16;
+
+        public int getMinSize() {
+            return minSize;
+        }
+
+        public void setMinSize(int minSize) {
+            this.minSize = minSize;
+        }
 
         public int getMaxSize() {
             return maxSize;

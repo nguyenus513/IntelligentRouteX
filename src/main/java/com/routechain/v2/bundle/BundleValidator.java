@@ -14,6 +14,9 @@ public final class BundleValidator {
 
     public BundleCandidate validate(BundleCandidate candidate, BundleContext context) {
         List<String> degradeReasons = new ArrayList<>(candidate.degradeReasons());
+        if (candidate.orderIds().size() < properties.getBundle().getMinSize()) {
+            degradeReasons.add("bundle-size-below-minimum");
+        }
         if (candidate.orderIds().size() > properties.getBundle().getMaxSize()) {
             degradeReasons.add("bundle-size-exceeds-limit");
         }

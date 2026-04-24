@@ -52,6 +52,10 @@ class SelectorCandidateBuilderTest {
                 + (0.20 * candidate.routeValue())
                 + (0.10 * driverCandidate.rerankScore())
                 + (0.10 * bundleCandidate.score())
+                + bundleSizeLift(routeProposalStage.routeProposals().stream()
+                .filter(proposal -> proposal.proposalId().equals(candidate.proposalId()))
+                .findFirst()
+                .orElseThrow())
                 - (bundleCandidate.boundaryCross() && context.acceptedBoundarySupport(candidate.bundleId()) < 0.60 ? 0.03 : 0.0)
                 - (candidate.source().name().equals("FALLBACK_SIMPLE") ? properties.getSelector().getFallbackPenalty() : 0.0)
                 - RouteShapeQuality.penalty(routeProposalStage.routeProposals().stream()
@@ -123,5 +127,16 @@ class SelectorCandidateBuilderTest {
 
         assertTrue(buildResult.candidateEnvelopes().isEmpty());
         assertTrue(buildResult.degradeReasons().contains("selector-reject-zigzag-route"));
+    }
+
+    private double bundleSizeLift(RouteProposal proposal) {
+        int bundleSize = proposal.stopOrder().size();
+        if (bundleSize <= 2) {
+            return proposal.straightnessScore() < 0.55 ? -0.04 : 0.0;
+        }
+        if (proposal.straightnessScore() < 0.60 || proposal.turnCount() > (8 * bundleSize + 6)) {
+            return 0.0;
+        }
+        return Math.min(0.10, 0.035 * (bundleSize - 2));
     }
 }
