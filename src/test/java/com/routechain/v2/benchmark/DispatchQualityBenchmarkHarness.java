@@ -924,6 +924,7 @@ public final class DispatchQualityBenchmarkHarness {
         if (!properties.getCandidate().getRouteProposalBudget().isEnabled()) {
             return;
         }
+        properties.getCandidate().getRouteProposalBudget().setWorkloadSizeHint(workloadSize.name());
         int maxTotal = switch (workloadSize) {
             case S -> properties.getCandidate().getRouteProposalBudget().getFullAdaptiveSMaxTotal();
             case M -> properties.getCandidate().getRouteProposalBudget().getFullAdaptiveMMaxTotal();

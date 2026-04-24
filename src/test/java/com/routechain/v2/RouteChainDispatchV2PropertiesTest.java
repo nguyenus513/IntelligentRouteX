@@ -33,6 +33,7 @@ class RouteChainDispatchV2PropertiesTest {
         assertEquals(2, properties.getCandidate().getRouteProposalBudget().getMaxAlternativesPerTuple());
         assertEquals(0.75, properties.getCandidate().getRouteProposalBudget().getLowGeometryCoverageThreshold());
         assertEquals(0.70, properties.getCandidate().getRouteProposalBudget().getLowGeometryCoverageBreadthMultiplier());
+        assertEquals("", properties.getCandidate().getRouteProposalBudget().getWorkloadSizeHint());
         assertEquals(22.0, properties.getContext().getBaselineSpeedKph());
         assertEquals(1.28, properties.getContext().getHeavyRainMultiplier());
         assertEquals(1.07, properties.getContext().getLightRainMultiplier());

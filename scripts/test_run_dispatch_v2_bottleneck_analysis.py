@@ -117,7 +117,13 @@ class BottleneckAnalysisRunnerTest(unittest.TestCase):
                 "stageLatencyRank": [{"name": "route-proposal-pool", "totalLatencyMs": 4000}],
                 "mlLatencyRank": [],
                 "llmLatencyRank": [],
-                "routeGenerationBreakdown": [],
+                "routeGenerationBreakdown": [{
+                    "cell": "normal-clear/S/full-adaptive",
+                    "proposalCount": 256,
+                    "routeStageLatencyMs": 799,
+                    "geometryCoverage": 1.0,
+                    "executedAssignmentCount": 16,
+                }],
                 "fallbackBreakdown": [],
                 "qualityVsCost": [],
             }
@@ -126,7 +132,11 @@ class BottleneckAnalysisRunnerTest(unittest.TestCase):
 
             self.assertTrue(json_path.is_file())
             self.assertTrue(markdown_path.is_file())
-            self.assertIn("ROUTE_GENERATION", markdown_path.read_text(encoding="utf-8"))
+            markdown = markdown_path.read_text(encoding="utf-8")
+            self.assertIn("ROUTE_GENERATION", markdown)
+            self.assertIn("## Final Verdict", markdown)
+            self.assertIn("candidate explosion", markdown)
+            self.assertIn("RouteFinder inference is not the primary runtime bottleneck", markdown)
 
 
 if __name__ == "__main__":

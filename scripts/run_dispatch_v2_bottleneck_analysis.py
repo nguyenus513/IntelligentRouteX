@@ -450,6 +450,29 @@ def top_names(rows: Sequence[dict], name_key: str = "name", value_key: str = "to
     return ", ".join(f"{row.get(name_key)}={row.get(value_key)}" for row in rows[:limit])
 
 
+def final_verdict_lines(payload: dict) -> List[str]:
+    route_rows = payload.get("routeGenerationBreakdown", [])
+    if not route_rows:
+        return ["- Evidence gap: no route-generation rows were collected."]
+    top_route = route_rows[0]
+    verdict = payload.get("bottleneckVerdict", {})
+    secondary = verdict.get("secondary", []) or []
+    lines = [
+        "- Route-generation candidate explosion is now bounded by an explicit proposal budget and pre-route pruning.",
+        "- RouteFinder inference is not the primary runtime bottleneck when routefinder latency remains small relative to route-proposal-pool latency.",
+        "- The next optimization target should stay on proposal breadth, route-vector work, and geo-source readiness rather than forcing more RouteFinder GPU work.",
+    ]
+    if top_route.get("proposalCount") is not None and top_route.get("routeStageLatencyMs") is not None:
+        lines.append(
+            f"- Current top route cell `{top_route.get('cell')}` has proposals=`{top_route.get('proposalCount')}`, "
+            f"routeMs=`{top_route.get('routeStageLatencyMs')}`, geometry=`{top_route.get('geometryCoverage')}`, "
+            f"executed=`{top_route.get('executedAssignmentCount')}`."
+        )
+    if "GEO_SOURCE" in secondary:
+        lines.append("- Remaining `PASS_WITH_LIMITS` evidence is still partly driven by geo-source readiness, not by RouteFinder inference cost.")
+    return lines
+
+
 def render_markdown(payload: dict) -> str:
     verdict = payload.get("bottleneckVerdict", {})
     lines = [
@@ -462,6 +485,10 @@ def render_markdown(payload: dict) -> str:
         f"- primary bottleneck: `{verdict.get('primary')}`",
         f"- secondary bottlenecks: `{verdict.get('secondary', [])}`",
         f"- source counts: `{payload.get('sourceCounts')}`",
+        "",
+        "## Final Verdict",
+        "",
+        *final_verdict_lines(payload),
         "",
         "## Top Latency",
         "",

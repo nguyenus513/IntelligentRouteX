@@ -288,6 +288,7 @@ public class RouteChainDispatchV2Properties {
             private int maxAlternativesPerTuple = 2;
             private double lowGeometryCoverageThreshold = 0.75;
             private double lowGeometryCoverageBreadthMultiplier = 0.70;
+            private String workloadSizeHint = "";
 
             public boolean isEnabled() {
                 return enabled;
@@ -359,6 +360,14 @@ public class RouteChainDispatchV2Properties {
 
             public void setLowGeometryCoverageBreadthMultiplier(double lowGeometryCoverageBreadthMultiplier) {
                 this.lowGeometryCoverageBreadthMultiplier = lowGeometryCoverageBreadthMultiplier;
+            }
+
+            public String getWorkloadSizeHint() {
+                return workloadSizeHint;
+            }
+
+            public void setWorkloadSizeHint(String workloadSizeHint) {
+                this.workloadSizeHint = workloadSizeHint;
             }
         }
     }

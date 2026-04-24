@@ -88,10 +88,19 @@ public final class RouteProposalBudgetPolicy {
     }
 
     private String inferredSize(DispatchV2Request request, int bundleCount, int driverCandidateCount) {
+        String hint = properties.getCandidate().getRouteProposalBudget().getWorkloadSizeHint();
+        if (hint != null && !hint.isBlank()) {
+            String normalized = hint.trim().toUpperCase(java.util.Locale.ROOT);
+            if (List.of("S", "M", "L", "XL").contains(normalized)) {
+                return "S".equals(normalized) ? "S" : "M";
+            }
+        }
         int openOrderCount = request == null || request.openOrders() == null ? 0 : request.openOrders().size();
-        int availableDriverCount = request == null || request.availableDrivers() == null ? 0 : request.availableDrivers().size();
-        if (openOrderCount <= 24 && availableDriverCount <= 16) {
+        if (openOrderCount > 0 && openOrderCount <= 24) {
             return "S";
+        }
+        if (openOrderCount > 24) {
+            return "M";
         }
         return bundleCount > 12 || driverCandidateCount > 96 ? "M" : "S";
     }
