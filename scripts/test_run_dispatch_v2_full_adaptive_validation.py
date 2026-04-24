@@ -66,6 +66,19 @@ def benchmark_payload(scenario_pack: str, prompt_family: str = "v2", latency_off
     }
 
 
+def benchmark_payload_with_provider_failures(scenario_pack: str) -> dict:
+    payload = benchmark_payload(scenario_pack)
+    payload["stageFallbackSummary"] = {
+        "totalFallbacks": 3,
+        "latestFallbackReasonByStage": {
+            "ROUTE_GENERATION": "provider-http-error status=500 upstream unavailable",
+            "SCENARIO": "provider-timeout after 3000ms",
+            "FINAL_SELECTION": "provider-schema-invalid missing selectedPlan",
+        },
+    }
+    return payload
+
+
 def adaptive_trace_payload(trace_id: str, stage_name: str, worker_name: str, escalated: bool, reason: str) -> dict:
     return {
         "traceId": trace_id,
@@ -108,6 +121,22 @@ class RunDispatchFullAdaptiveValidationTest(unittest.TestCase):
         self.assertIn("target-stages=['bundle-pool']", output)
         self.assertIn("target-cases=['normal-clear/S']", output)
         self.assertIn("case-count=1", output)
+
+    def test_dry_run_route_generation_focus_defaults_cases_and_stage(self) -> None:
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            exit_code = validation_runner.main([
+                "--dry-run",
+                "--mode", "adaptive-only",
+                "--route-generation-focus",
+            ])
+
+        output = stdout.getvalue()
+        self.assertEqual(0, exit_code)
+        self.assertIn("target-stages=['route-proposal-pool']", output)
+        self.assertIn("target-cases=['heavy-rain/S', 'traffic-shock/S']", output)
+        self.assertIn("route-generation-focus=True", output)
+        self.assertIn("case-count=2", output)
 
     def test_collects_adaptive_and_comparison_evidence_into_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -359,6 +388,52 @@ class RunDispatchFullAdaptiveValidationTest(unittest.TestCase):
             normal_clear_case = next(case for case in payload["cases"] if case["scenarioPack"] == "normal-clear")
             self.assertEqual("PASS_WITH_LIMITS", normal_clear_case["verdict"])
             self.assertEqual(["adaptive-skip-not-observed"], normal_clear_case["verdictReasons"])
+
+    def test_route_generation_focus_reports_routefinder_and_provider_classes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            adaptive_root = temp_root / "adaptive"
+            output_dir = temp_root / "out"
+
+            write_json(
+                adaptive_root / "dispatch-quality-heavy-rain-s-llm-authoritative-v2-controlled-c-20260423-000001.json",
+                benchmark_payload_with_provider_failures("heavy-rain"),
+            )
+            heavy_feedback_root = adaptive_root / "feedback" / "heavy-rain" / "s" / "controlled" / "llm-authoritative" / "v2" / "c" / "decision-stage" / "adaptive_compute_trace"
+            write_json(
+                heavy_feedback_root / "trace-heavy-rain-route.json",
+                adaptive_trace_payload("trace-heavy-rain", "route-proposal-pool", "ml-routefinder-worker", False, "routefinder-tuple-budget-exhausted"),
+            )
+
+            traffic_payload = benchmark_payload("traffic-shock")
+            traffic_payload["routeVectorMetrics"] = {"geometryCoverage": 0.5}
+            write_json(
+                adaptive_root / "dispatch-quality-traffic-shock-s-llm-authoritative-v2-controlled-c-20260423-000001.json",
+                traffic_payload,
+            )
+            traffic_feedback_root = adaptive_root / "feedback" / "traffic-shock" / "s" / "controlled" / "llm-authoritative" / "v2" / "c" / "decision-stage" / "adaptive_compute_trace"
+            write_json(
+                traffic_feedback_root / "trace-traffic-shock-route.json",
+                adaptive_trace_payload("trace-traffic-shock", "route-proposal-pool", "ml-routefinder-worker", True, ""),
+            )
+
+            exit_code = validation_runner.main([
+                "--adaptive-root", str(adaptive_root),
+                "--output-dir", str(output_dir),
+                "--mode", "adaptive-only",
+                "--route-generation-focus",
+            ])
+
+            self.assertEqual(0, exit_code)
+            payload = json.loads(next(output_dir.glob("targeted_adaptive_closure-route-proposal-pool-*.json")).read_text(encoding="utf-8"))
+            self.assertTrue(payload["routeGenerationFocus"])
+            heavy_case = next(case for case in payload["cases"] if case["scenarioPack"] == "heavy-rain")
+            traffic_case = next(case for case in payload["cases"] if case["scenarioPack"] == "traffic-shock")
+            self.assertEqual("http-5xx", heavy_case["routeGenerationFocus"]["routeGenerationProviderFailureClass"])
+            self.assertEqual("timeout", heavy_case["adaptive"]["benchmark"]["providerFailureClassesByStage"]["SCENARIO"])
+            self.assertEqual(1, heavy_case["routeGenerationFocus"]["routeFinderSkippedCount"])
+            self.assertEqual(1, traffic_case["routeGenerationFocus"]["routeFinderEscalatedCount"])
+            self.assertEqual("partial", traffic_case["routeGenerationFocus"]["routeVectorAvailability"])
 
     def test_target_stage_filter_ignores_stale_other_stage_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

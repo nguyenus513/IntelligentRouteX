@@ -20,6 +20,7 @@ TARGET_CASES = (
     ("forecast-heavy", "S"),
 )
 TARGET_STAGE_CHOICES = ("bundle-pool", "route-proposal-pool", "scenario-evaluation")
+ROUTE_GENERATION_FOCUS_CASES = (("heavy-rain", "S"), ("traffic-shock", "S"))
 VERDICTS = ("PASS", "PASS_WITH_LIMITS", "REGRESSION_RISK", "EVIDENCE_GAP")
 
 
@@ -171,6 +172,14 @@ def selected_target_cases(case_ids: Sequence[str]) -> List[Tuple[str, str]]:
             raise ValueError(f"Unsupported target case '{case_id}'. Allowed: {', '.join(indexed)}")
         selected.append(indexed[case_id])
     return selected
+
+
+def target_case_ids(target_cases: Sequence[Tuple[str, str]]) -> List[str]:
+    return [f"{scenario_pack}/{size}" for scenario_pack, size in target_cases]
+
+
+def route_focus_default_case_ids() -> List[str]:
+    return target_case_ids(ROUTE_GENERATION_FOCUS_CASES)
 
 
 def case_cells(mode: str,
@@ -409,6 +418,39 @@ def worker_device_audit(result: Optional[dict]) -> List[dict]:
     ]
 
 
+def classify_provider_failure(reason: str) -> str:
+    normalized = (reason or "").strip().lower()
+    if not normalized:
+        return ""
+    if "model-discovery" in normalized:
+        return "model-discovery-failed"
+    if "timeout" in normalized or "timed out" in normalized:
+        return "timeout"
+    if "schema" in normalized and ("invalid" in normalized or "validation" in normalized or "failed" in normalized):
+        return "schema-invalid"
+    if "empty" in normalized and ("response" in normalized or "provider" in normalized):
+        return "empty-response"
+    if "http-4" in normalized or "status=4" in normalized or "status:4" in normalized or "status 4" in normalized:
+        return "http-4xx"
+    if "http-5" in normalized or "status=5" in normalized or "status:5" in normalized or "status 5" in normalized:
+        return "http-5xx"
+    if "provider-http-error" in normalized or "http-error" in normalized:
+        return "provider-http-error"
+    return ""
+
+
+def classify_stage_provider_failures(stage_fallback_summary: dict) -> Dict[str, str]:
+    latest_reasons = stage_fallback_summary.get("latestFallbackReasonByStage", {})
+    if not isinstance(latest_reasons, dict):
+        return {}
+    classified: Dict[str, str] = {}
+    for stage_name, reason in latest_reasons.items():
+        failure_class = classify_provider_failure(str(reason))
+        if failure_class:
+            classified[str(stage_name)] = failure_class
+    return classified
+
+
 def summarize_traces(rows: Iterable[AdaptiveTraceRow]) -> dict:
     worker_summary: Dict[str, dict] = {}
     stage_summary: Dict[str, dict] = {}
@@ -474,6 +516,8 @@ def benchmark_summary(result: Optional[dict]) -> dict:
         return {}
     artifact_path = str(result.get("_artifactPath", ""))
     metrics = result.get("metrics", {}) if isinstance(result.get("metrics"), dict) else {}
+    stage_fallback_summary = result.get("stageFallbackSummary", {}) if isinstance(result.get("stageFallbackSummary"), dict) else {}
+    provider_failure_classes = classify_stage_provider_failures(stage_fallback_summary)
     return {
         "artifactPath": artifact_path,
         "artifactLastModifiedAt": artifact_last_modified_at(artifact_path),
@@ -488,8 +532,59 @@ def benchmark_summary(result: Optional[dict]) -> dict:
         "selectorObjectiveValue": metrics.get("selectorObjectiveValue"),
         "workerFallbackRate": metrics.get("workerFallbackRate"),
         "routeGeometryCoverage": result.get("routeVectorMetrics", {}).get("geometryCoverage", None),
-        "stageFallbackSummary": result.get("stageFallbackSummary", {}),
+        "stageFallbackSummary": stage_fallback_summary,
+        "providerFailureClassesByStage": provider_failure_classes,
+        "providerFailureClasses": sorted(set(provider_failure_classes.values())),
         "workerDeviceAudit": worker_device_audit(result),
+    }
+
+
+def route_vector_availability(route_geometry_coverage: object) -> str:
+    if not isinstance(route_geometry_coverage, (int, float)):
+        return "unknown"
+    if route_geometry_coverage <= 0:
+        return "missing"
+    if route_geometry_coverage >= 0.95:
+        return "complete"
+    return "partial"
+
+
+def route_generation_focus_summary(adaptive_benchmark: dict, adaptive_rows: Sequence[AdaptiveTraceRow]) -> dict:
+    routefinder_rows = [
+        row for row in adaptive_rows
+        if row.stage_name == "route-proposal-pool" or row.worker_name == "ml-routefinder-worker"
+    ]
+    stage_fallback_summary = adaptive_benchmark.get("stageFallbackSummary", {})
+    latest_reasons = stage_fallback_summary.get("latestFallbackReasonByStage", {}) if isinstance(stage_fallback_summary, dict) else {}
+    route_generation_reason = ""
+    if isinstance(latest_reasons, dict):
+        route_generation_reason = str(
+            latest_reasons.get("ROUTE_GENERATION")
+            or latest_reasons.get("route-generation")
+            or "")
+    route_geometry_coverage = adaptive_benchmark.get("routeGeometryCoverage")
+    reasons: Dict[str, int] = {}
+    devices = set()
+    audit_missing_fields = set()
+    for row in routefinder_rows:
+        reasons[row.reason or "unspecified"] = reasons.get(row.reason or "unspecified", 0) + 1
+        if row.device_used:
+            devices.add(row.device_used)
+        audit_missing_fields.update(row.worker_audit_missing_fields)
+    return {
+        "selectedProposalCount": adaptive_benchmark.get("selectedProposalCount"),
+        "executedAssignmentCount": adaptive_benchmark.get("executedAssignmentCount"),
+        "robustUtilityAverage": adaptive_benchmark.get("robustUtilityAverage"),
+        "routeGeometryCoverage": route_geometry_coverage,
+        "routeVectorAvailability": route_vector_availability(route_geometry_coverage),
+        "routeGenerationFallbackReason": route_generation_reason,
+        "routeGenerationProviderFailureClass": classify_provider_failure(route_generation_reason),
+        "routeFinderDecisionCount": len(routefinder_rows),
+        "routeFinderEscalatedCount": sum(1 for row in routefinder_rows if row.escalated),
+        "routeFinderSkippedCount": sum(1 for row in routefinder_rows if not row.escalated),
+        "routeFinderReasons": reasons,
+        "routeFinderDevices": sorted(devices),
+        "routeFinderAuditMissingFields": sorted(audit_missing_fields),
     }
 
 
@@ -573,6 +668,7 @@ def build_case_report(
         "benchmark": benchmark_summary(adaptive_result),
         "adaptiveTrace": summarize_traces(adaptive_rows),
     }
+    route_focus = route_generation_focus_summary(adaptive_summary["benchmark"], adaptive_rows)
     comparison_summary = benchmark_summary(comparison_result)
     verdict, reasons = determine_verdict(adaptive_summary, comparison_summary, target_stages)
     return {
@@ -584,6 +680,7 @@ def build_case_report(
         "promptFamily": prompt_family,
         "adaptive": adaptive_summary,
         "comparison": comparison_summary,
+        "routeGenerationFocus": route_focus,
         "targetStages": list(target_stages),
         "verdict": verdict,
         "verdictReasons": reasons,
@@ -596,9 +693,17 @@ def report_stem(target_stages: Sequence[str]) -> str:
     return "targeted_adaptive_closure-" + "__".join(stage.replace("/", "-") for stage in target_stages)
 
 
+def report_title(payload: dict) -> str:
+    if payload.get("routeGenerationFocus"):
+        return "# Route Generation Focus Report"
+    if payload.get("targetStages"):
+        return "# Targeted Adaptive Closure Report"
+    return "# Full Adaptive Validation Report"
+
+
 def markdown_report(payload: dict) -> str:
     lines = [
-        "# Targeted Adaptive Closure Report" if payload.get("targetStages") else "# Full Adaptive Validation Report",
+        report_title(payload),
         "",
         f"- generatedAt: `{payload['generatedAt']}`",
         f"- validationCommit: `{payload['validationCommit']}`",
@@ -610,6 +715,7 @@ def markdown_report(payload: dict) -> str:
         f"- comparisonRoots: `{', '.join(payload['comparisonRoots']) or 'none'}`",
         f"- targetStages: `{payload.get('targetStages', [])}`",
         f"- targetCases: `{payload.get('targetCases', [])}`",
+        f"- routeGenerationFocus: `{payload.get('routeGenerationFocus', False)}`",
         f"- rerunExecuted: `{payload['rerunExecuted']}`",
         "",
         "## Case Verdicts",
@@ -654,6 +760,24 @@ def markdown_report(payload: dict) -> str:
             f"skipped=`{adaptive_trace.get('skippedCount', 0)}` "
             f"escalated=`{adaptive_trace.get('escalatedCount', 0)}`"
         )
+        route_focus = case.get("routeGenerationFocus", {})
+        if payload.get("routeGenerationFocus") and route_focus:
+            lines.append(
+                f"- route generation: routeVector=`{route_focus.get('routeVectorAvailability')}` "
+                f"geometryCoverage=`{route_focus.get('routeGeometryCoverage', 'n/a')}` "
+                f"routeFinderDecisions=`{route_focus.get('routeFinderDecisionCount', 0)}` "
+                f"routeFinderEscalated=`{route_focus.get('routeFinderEscalatedCount', 0)}` "
+                f"routeFinderSkipped=`{route_focus.get('routeFinderSkippedCount', 0)}` "
+                f"routeFinderReasons=`{route_focus.get('routeFinderReasons', {})}`"
+            )
+            lines.append(
+                f"- route fallback: reason=`{route_focus.get('routeGenerationFallbackReason', '')}` "
+                f"providerClass=`{route_focus.get('routeGenerationProviderFailureClass', '')}`"
+            )
+        if adaptive_benchmark.get("providerFailureClassesByStage"):
+            lines.append(
+                f"- provider failures: classesByStage=`{adaptive_benchmark.get('providerFailureClassesByStage', {})}`"
+            )
         comparison = case["comparison"]
         if comparison:
             lines.append(
@@ -788,6 +912,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--profile", default="dispatch-v2-full-adaptive")
     parser.add_argument("--target-case", action="append", default=[], help="Optional case filter: normal-clear/S, heavy-rain/S, traffic-shock/S, forecast-heavy/S")
     parser.add_argument("--target-stage", action="append", default=[], choices=TARGET_STAGE_CHOICES)
+    parser.add_argument("--route-generation-focus", action="store_true", help="Default to heavy-rain/S and traffic-shock/S route-proposal-pool evidence.")
     parser.add_argument("--rerun-cells", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -795,8 +920,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     output_dir = Path(args.output_dir)
     adaptive_roots = [Path(path) for path in args.adaptive_root]
     comparison_roots = [Path(path) for path in args.comparison_root]
-    target_cases = selected_target_cases(args.target_case)
-    target_stages = tuple(dict.fromkeys(stage for stage in args.target_stage if stage))
+    requested_target_cases = list(args.target_case)
+    requested_target_stages = list(args.target_stage)
+    if args.route_generation_focus:
+        if not requested_target_cases:
+            requested_target_cases = route_focus_default_case_ids()
+        if not requested_target_stages:
+            requested_target_stages = ["route-proposal-pool"]
+    target_cases = selected_target_cases(requested_target_cases)
+    target_stages = tuple(dict.fromkeys(stage for stage in requested_target_stages if stage))
     cells = case_cells(args.mode, args.decision_mode, args.prompt_family, args.profile, target_cases)
     print(f"[FULL ADAPTIVE VALIDATION] case-count={len(cells)}")
     for cell in cells:
@@ -807,8 +939,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
     if target_stages:
         print(f"- target-stages={list(target_stages)}")
-    if args.target_case:
-        print(f"- target-cases={list(args.target_case)}")
+    if requested_target_cases:
+        print(f"- target-cases={list(requested_target_cases)}")
+    if args.route_generation_focus:
+        print("- route-generation-focus=True")
     if args.dry_run:
         return 0
 
@@ -894,6 +1028,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "comparisonRoots": [str(path) for path in comparison_roots],
         "targetStages": list(target_stages),
         "targetCases": [f"{scenario_pack}/{size}" for scenario_pack, size in target_cases],
+        "routeGenerationFocus": bool(args.route_generation_focus),
         "rerunExecuted": rerun_executed,
         "cases": cases,
         "verdicts": list(VERDICTS),
