@@ -830,8 +830,10 @@ public final class DispatchQualityBenchmarkHarness {
         boolean heavyMode = windows
                 && (request.authorityRun()
                 || request.executionMode() == ExecutionMode.LOCAL_REAL
-                || request.workloadSize() != DispatchPerfBenchmarkHarness.WorkloadSize.S);
+                || (request.workloadSize() != DispatchPerfBenchmarkHarness.WorkloadSize.XS
+                && request.workloadSize() != DispatchPerfBenchmarkHarness.WorkloadSize.S));
         long perCellTimeoutMillis = switch (request.workloadSize()) {
+            case XS -> heavyMode ? 75_000L : 35_000L;
             case S -> heavyMode ? 90_000L : 45_000L;
             case M -> heavyMode ? 180_000L : 120_000L;
             case L -> heavyMode ? 300_000L : 240_000L;
@@ -979,6 +981,7 @@ public final class DispatchQualityBenchmarkHarness {
         }
         properties.getCandidate().getRouteProposalBudget().setWorkloadSizeHint(workloadSize.name());
         int maxTotal = switch (workloadSize) {
+            case XS -> Math.max(96, properties.getCandidate().getRouteProposalBudget().getLocalLiteMaxTotal());
             case S -> properties.getCandidate().getRouteProposalBudget().getFullAdaptiveSMaxTotal();
             case M -> properties.getCandidate().getRouteProposalBudget().getFullAdaptiveMMaxTotal();
             case L, XL -> properties.getCandidate().getRouteProposalBudget().getFullAdaptiveMMaxTotal();
@@ -1605,6 +1608,28 @@ public final class DispatchQualityBenchmarkHarness {
                     return noOps();
                 }
             };
+            case DENSE_BUNDLE_20X5 -> new ScenarioDefinition() {
+                @Override
+                public void configureProperties(RouteChainDispatchV2Properties properties, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
+                    properties.getBundle().setMaxSize(5);
+                    properties.getBundle().setBeamWidth(24);
+                    properties.getBundle().setTopNeighbors(16);
+                    properties.getCandidate().setMaxDrivers(5);
+                    properties.getCandidate().setMaxAnchors(4);
+                    properties.getCandidate().getRouteProposalBudget().setFullAdaptiveSMaxTotal(384);
+                    properties.getCandidate().getRouteProposalBudget().setLocalLiteMaxTotal(192);
+                }
+
+                @Override
+                public DispatchV2Request request(DispatchPerfBenchmarkHarness.WorkloadSize workloadSize, String traceId, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
+                    return DispatchPerfWorkloadFactory.request(DispatchPerfBenchmarkHarness.WorkloadSize.XS, traceId, DispatchPerfWorkloadFactory.ScenarioWorldProfile.DENSE_BUNDLE_DEMO);
+                }
+
+                @Override
+                public ScenarioDependencies controlledDependencies(DispatchPerfBenchmarkHarness.BaselineId baselineId) {
+                    return baselineId == DispatchPerfBenchmarkHarness.BaselineId.C ? appliedMlOnly() : noOps();
+                }
+            };
             case WORKER_DEGRADATION -> new ScenarioDefinition() {
                 @Override
                 public void configureProperties(RouteChainDispatchV2Properties properties, DispatchPerfBenchmarkHarness.BaselineId baselineId) {
@@ -2067,6 +2092,7 @@ public final class DispatchQualityBenchmarkHarness {
         HEAVY_RAIN("heavy-rain"),
         TRAFFIC_SHOCK("traffic-shock"),
         FORECAST_HEAVY("forecast-heavy"),
+        DENSE_BUNDLE_20X5("dense-bundle-20x5"),
         WORKER_DEGRADATION("worker-degradation"),
         LIVE_SOURCE_DEGRADATION("live-source-degradation");
 

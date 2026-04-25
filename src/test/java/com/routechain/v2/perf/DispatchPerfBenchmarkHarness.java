@@ -392,6 +392,7 @@ public final class DispatchPerfBenchmarkHarness {
     }
 
     public enum WorkloadSize {
+        XS(20, 5, 77L),
         S(50, 20, 101L),
         M(200, 80, 202L),
         L(1000, 400, 303L),

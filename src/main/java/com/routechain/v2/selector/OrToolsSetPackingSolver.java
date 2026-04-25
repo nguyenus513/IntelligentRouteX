@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class OrToolsSetPackingSolver implements SelectorSolver {
+    private static final double SCARCE_ORDER_COVERAGE_BONUS = 0.32;
     private static final AtomicBoolean NATIVE_LIBRARIES_LOADED = new AtomicBoolean(false);
     private static final AtomicBoolean NATIVE_LIBRARIES_UNAVAILABLE = new AtomicBoolean(false);
 
@@ -76,8 +77,9 @@ public final class OrToolsSetPackingSolver implements SelectorSolver {
         LinearArgument[] variables = candidateDecisions.stream()
                 .map(CandidateDecision::decision)
                 .toArray(LinearArgument[]::new);
+        boolean scarceBundling = scarceBundling(selectorCandidates);
         long[] coefficients = candidateDecisions.stream()
-                .mapToLong(candidateDecision -> objectiveScaler.scale(candidateDecision.selectorCandidate().selectionScore()))
+                .mapToLong(candidateDecision -> objectiveScaler.scale(selectionPriority(candidateDecision.selectorCandidate(), scarceBundling)))
                 .toArray();
         model.maximize(LinearExpr.weightedSum(variables, coefficients));
 
@@ -93,7 +95,7 @@ public final class OrToolsSetPackingSolver implements SelectorSolver {
                     .toList();
             List<SelectedProposal> selectedProposals = SelectorCandidateRanking.toSelectedProposals(
                     selectedEnvelopes,
-                    ignored -> List.of("selected-by-ortools"));
+                    ignored -> List.of(scarceBundling ? "selected-by-ortools-scarce-bundling" : "selected-by-ortools"));
             return new SelectorSolverResult(
                     Optional.of(new GlobalSelectionResult(
                             "global-selection-result/v1",
@@ -102,13 +104,36 @@ public final class OrToolsSetPackingSolver implements SelectorSolver {
                             selectedProposals.size(),
                             SelectionSolverMode.ORTOOLS,
                             SelectorCandidateRanking.objectiveValue(selectedEnvelopes),
-                            List.of())),
+                            scarceBundling ? List.of("scarce-bundling-priority-enabled") : List.of())),
                     List.of());
         }
         if (status == CpSolverStatus.FEASIBLE || status == CpSolverStatus.UNKNOWN) {
             return new SelectorSolverResult(Optional.empty(), List.of("selector-ortools-timeout"));
         }
         return new SelectorSolverResult(Optional.empty(), List.of("selector-ortools-failed"));
+    }
+
+    private boolean scarceBundling(List<SelectorCandidate> selectorCandidates) {
+        long driverCount = selectorCandidates.stream()
+                .filter(SelectorCandidate::feasible)
+                .map(SelectorCandidate::driverId)
+                .distinct()
+                .count();
+        long orderCount = selectorCandidates.stream()
+                .filter(SelectorCandidate::feasible)
+                .flatMap(candidate -> candidate.orderIds().stream())
+                .distinct()
+                .count();
+        boolean hasMultiOrderCandidate = selectorCandidates.stream()
+                .filter(SelectorCandidate::feasible)
+                .anyMatch(candidate -> candidate.orderIds().size() > 2);
+        return driverCount > 0 && hasMultiOrderCandidate && ((double) orderCount / (double) driverCount) >= 2.0;
+    }
+
+    private double selectionPriority(SelectorCandidate selectorCandidate, boolean scarceBundling) {
+        int orderCount = selectorCandidate.orderIds().size();
+        double coverageBonus = scarceBundling ? Math.max(0, orderCount - 2) * SCARCE_ORDER_COVERAGE_BONUS : 0.0;
+        return selectorCandidate.selectionScore() + coverageBonus;
     }
 
     private void addAtMostOneConstraints(CpModel model, Map<String, List<BoolVar>> groupedDecisions) {

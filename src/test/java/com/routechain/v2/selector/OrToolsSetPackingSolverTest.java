@@ -41,4 +41,27 @@ class OrToolsSetPackingSolverTest {
         assertTrue(result.selectedProposals().stream().noneMatch(selected -> selected.proposalId().equals("proposal-a")));
         assertTrue(result.selectedProposals().stream().noneMatch(selected -> selected.proposalId().equals("proposal-b")));
     }
+    @Test
+    void scarcityObjectivePrefersCleanLargerBundleOverBlockingPairs() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        properties.getSelector().getOrtools().setTimeout(Duration.ofSeconds(2));
+        OrToolsSetPackingSolver solver = new OrToolsSetPackingSolver(properties);
+        List<SelectorCandidate> candidates = List.of(
+                SelectorTestFixtures.candidate("proposal-big", "bundle-big", "driver-1", List.of("order-1", "order-2", "order-3", "order-4"), 0.82, 0.82, 0.86, true),
+                SelectorTestFixtures.candidate("proposal-pair-a", "bundle-pair-a", "driver-1", List.of("order-1", "order-2"), 0.90, 0.90, 0.98, true),
+                SelectorTestFixtures.candidate("proposal-pair-b", "bundle-pair-b", "driver-2", List.of("order-3", "order-4"), 0.88, 0.88, 0.96, true),
+                SelectorTestFixtures.candidate("proposal-other", "bundle-other", "driver-2", List.of("order-5", "order-6"), 0.80, 0.80, 0.84, true));
+        ConflictGraph graph = new ConflictGraphBuilder().build(candidates);
+
+        GlobalSelectionResult result = solver.solve(candidates, graph).selectionResult().orElseThrow();
+
+        assertEquals(List.of("proposal-big", "proposal-other"), result.selectedProposals().stream().map(SelectedProposal::proposalId).toList());
+        assertTrue(result.degradeReasons().contains("scarce-bundling-priority-enabled"));
+        assertTrue(result.selectedProposals().stream()
+                .filter(selected -> selected.proposalId().equals("proposal-big"))
+                .findFirst()
+                .orElseThrow()
+                .reasons()
+                .contains("selected-by-ortools-scarce-bundling"));
+    }
 }

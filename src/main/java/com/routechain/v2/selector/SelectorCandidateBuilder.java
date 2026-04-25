@@ -193,8 +193,9 @@ public final class SelectorCandidateBuilder {
         if (shapeGuard == 0.0) {
             return 0.0;
         }
-        double compactShapeBonus = Math.min(0.03, Math.max(0.0, analysis.shapeScore() - 0.65) * 0.08);
-        return Math.min(0.14, (0.045 * (bundleSize - 2)) + compactShapeBonus);
+        double compactShapeBonus = Math.min(0.06, Math.max(0.0, analysis.shapeScore() - 0.65) * 0.12);
+        double coverageLift = 0.22 * (bundleSize - 2);
+        return Math.min(0.62, coverageLift + compactShapeBonus);
     }
 
     private boolean shouldRejectWeakShape(RouteProposal proposal) {

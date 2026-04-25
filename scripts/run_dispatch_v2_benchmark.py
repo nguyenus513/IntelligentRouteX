@@ -10,12 +10,13 @@ from typing import List, Optional, Sequence, Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "benchmark"
 BASELINES = ("A", "B", "C")
-SIZES = ("S", "M", "L", "XL")
+SIZES = ("XS", "S", "M", "L", "XL")
 SCENARIO_PACKS = (
     "normal-clear",
     "heavy-rain",
     "traffic-shock",
     "forecast-heavy",
+    "dense-bundle-20x5",
     "worker-degradation",
     "live-source-degradation",
 )
@@ -218,7 +219,7 @@ def write_summary(results: Sequence[dict], output_dir: Path) -> Path:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Run Dispatch V2 quality benchmark smoke scenarios.")
     parser.add_argument("--baseline", default="all", help="A|B|C|all")
-    parser.add_argument("--size", default="all", help="S|M|L|XL|all")
+    parser.add_argument("--size", default="all", help="XS|S|M|L|XL|all")
     parser.add_argument("--scenario-pack", default="all", help="scenario pack or all")
     parser.add_argument("--decision-mode", default="legacy", help="legacy|llm-shadow|llm-authoritative|all")
     parser.add_argument("--prompt-family", default="v2", help="v2|v3|all")

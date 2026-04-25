@@ -24,6 +24,7 @@ STANDARD_SCENARIOS = (
     "driver-scarcity",
     "route-ambiguity",
     "single-order-simple",
+    "dense-bundle-20x5",
 )
 DEFAULT_PROFILES = (
     "heuristic-only",
