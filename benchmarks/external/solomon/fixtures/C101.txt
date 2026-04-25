@@ -1,0 +1,12 @@
+C101
+# BEST_KNOWN_VEHICLES 1
+# BEST_KNOWN_DISTANCE 60.0
+VEHICLE
+NUMBER     CAPACITY
+1          200
+CUSTOMER
+CUST NO.   XCOORD.   YCOORD.   DEMAND   READY TIME   DUE DATE   SERVICE TIME
+0          0         0         0        0            1000       0
+1          10        0         10       0            1000       0
+2          20        0         10       0            1000       0
+3          30        0         10       0            1000       0
