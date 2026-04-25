@@ -4,6 +4,7 @@ import argparse
 import html
 import json
 import math
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +14,8 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_INPUT_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "proposal-reduction-label-fix-v2"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "artifacts" / "visual" / "dispatch-v2"
+DEFAULT_TILE_PROBE_ROOT = REPO_ROOT / "artifacts" / "validation" / "geo-tiles"
+AVAILABLE_TILE_STATUSES = {"FETCHED", "CACHE_HIT"}
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,16 @@ def latest_standard_comparison(root: Path) -> Path:
     if not candidates:
         raise FileNotFoundError(f"No standard_comparison-*.json found under {root}")
     return candidates[0]
+
+
+def latest_tile_probe(root: Path) -> Optional[Path]:
+    if root.is_file():
+        return root
+    direct = root / "geo_tile_probe.json"
+    if direct.exists():
+        return direct
+    candidates = sorted(root.rglob("geo_tile_probe.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+    return candidates[0] if candidates else None
 
 
 def split_csv(value: str) -> Tuple[str, ...]:
@@ -88,6 +101,94 @@ def safe_display_path(path: Path) -> str:
         return str(path.relative_to(REPO_ROOT))
     except ValueError:
         return str(path)
+
+
+def redact_url_template(value: object) -> str:
+    text = str(value or "")
+    if "key=" not in text:
+        return text
+    prefix, _, _suffix = text.partition("key=")
+    return prefix + "key=<redacted>"
+
+
+def tile_cache_path(value: object) -> Path:
+    path = Path(str(value or ""))
+    return path if path.is_absolute() else REPO_ROOT / path
+
+
+def load_tile_evidence(tile_probe_root: Optional[Path]) -> dict:
+    root = tile_probe_root if tile_probe_root is not None else DEFAULT_TILE_PROBE_ROOT
+    probe_path = latest_tile_probe(root)
+    if probe_path is None:
+        return {
+            "status": "missing",
+            "sourceArtifact": "",
+            "missingReason": "geo-tile-probe-missing",
+            "tiles": [],
+        }
+    probe = read_json(probe_path)
+    tiles = []
+    available_count = 0
+    for row in probe.get("tiles", []):
+        if not isinstance(row, dict):
+            continue
+        status = str(row.get("status", "missing"))
+        available = status in AVAILABLE_TILE_STATUSES and bool(row.get("byteCount", 0))
+        if available:
+            available_count += 1
+        tiles.append({
+            "provider": row.get("provider"),
+            "tile": row.get("tile", probe.get("tile")),
+            "status": status,
+            "httpStatus": row.get("httpStatus"),
+            "byteCount": row.get("byteCount", 0),
+            "cacheHit": bool(row.get("cacheHit", False)),
+            "latencyMs": row.get("latencyMs", 0),
+            "degradeReason": row.get("degradeReason", ""),
+            "cachePath": row.get("cachePath", ""),
+            "urlTemplate": redact_url_template(row.get("urlTemplate", "")),
+            "attribution": row.get("attribution", ""),
+            "imageAvailable": False,
+            "visualPath": "",
+        })
+    if available_count == 0:
+        status = "unavailable"
+    elif available_count < len(tiles):
+        status = "partial"
+    else:
+        status = "available"
+    return {
+        "status": status,
+        "sourceArtifact": safe_display_path(probe_path),
+        "generatedAt": probe.get("generatedAt"),
+        "center": probe.get("center"),
+        "zoom": probe.get("zoom"),
+        "tile": probe.get("tile"),
+        "providers": probe.get("providers", []),
+        "tiles": tiles,
+    }
+
+
+def copy_tile_images(tile_evidence: dict, output_root: Path) -> None:
+    if tile_evidence.get("status") == "missing":
+        return
+    tile_root = output_root / "tiles"
+    for row in tile_evidence.get("tiles", []):
+        source = tile_cache_path(row.get("cachePath"))
+        if row.get("status") not in AVAILABLE_TILE_STATUSES or not source.exists():
+            row["imageAvailable"] = False
+            row["visualPath"] = ""
+            continue
+        provider = str(row.get("provider") or "unknown")
+        tile = row.get("tile") if isinstance(row.get("tile"), dict) else tile_evidence.get("tile", {})
+        z = str(tile.get("z", "z"))
+        x = str(tile.get("x", "x"))
+        y = str(tile.get("y", source.stem))
+        target = tile_root / provider / z / x / f"{y}.png"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        row["imageAvailable"] = True
+        row["visualPath"] = target.relative_to(output_root).as_posix()
 
 
 def first_file(root: Path, pattern: str) -> Optional[Path]:
@@ -313,7 +414,24 @@ def route_path_d(projected_points: Sequence[str]) -> str:
     return "M " + first + " " + " ".join(f"L {point}" for point in rest)
 
 
-def render_svg(cell: dict, max_routes: int, max_orders: int, max_drivers: int) -> str:
+def background_tile(tile_evidence: dict) -> Optional[dict]:
+    preferred = ("osm-raster", "tomtom-raster-basic")
+    by_provider = {str(row.get("provider")): row for row in tile_evidence.get("tiles", []) if isinstance(row, dict)}
+    for provider in preferred:
+        row = by_provider.get(provider)
+        if row and row.get("imageAvailable") and row.get("visualPath"):
+            return row
+    return None
+
+
+def traffic_tile(tile_evidence: dict) -> Optional[dict]:
+    for row in tile_evidence.get("tiles", []):
+        if row.get("provider") == "tomtom-traffic-flow" and row.get("imageAvailable") and row.get("visualPath"):
+            return row
+    return None
+
+
+def render_svg(cell: dict, max_routes: int, max_orders: int, max_drivers: int, tile_evidence: Optional[dict] = None) -> str:
     width = 980
     height = 620
     routes = visible_routes(cell, max_routes, max_drivers)
@@ -332,11 +450,20 @@ def render_svg(cell: dict, max_routes: int, max_orders: int, max_drivers: int) -
     box = bounds(points)
     selected_order_ids = {order_id for route in routes for order_id in route.get("orderIds", [])}
     selected_driver_ids = {route.get("driverId") for route in routes}
+    tile_evidence = tile_evidence or {}
+    base_tile = background_tile(tile_evidence)
+    flow_tile = traffic_tile(tile_evidence)
     parts = [
         f"<svg viewBox='0 0 {width} {height}' class='map' role='img' aria-label='Dispatch visual map'>",
         "<defs><pattern id='grid' width='42' height='42' patternUnits='userSpaceOnUse'><path d='M 42 0 L 0 0 0 42' fill='none' stroke='#d9e7e0' stroke-width='1'/></pattern><marker id='arrow' markerWidth='10' markerHeight='10' refX='8' refY='3' orient='auto'><path d='M0,0 L0,6 L9,3 z' fill='#17201b'/></marker></defs>",
-        f"<rect x='0' y='0' width='{width}' height='{height}' fill='url(#grid)' rx='28'/>",
     ]
+    if base_tile:
+        parts.append(f"<image href='{html.escape(str(base_tile.get('visualPath')))}' x='0' y='0' width='{width}' height='{height}' preserveAspectRatio='xMidYMid slice' opacity='0.48'/>")
+        parts.append(f"<rect x='0' y='0' width='{width}' height='{height}' fill='rgba(251,247,239,0.42)' rx='28'/>")
+    else:
+        parts.append(f"<rect x='0' y='0' width='{width}' height='{height}' fill='url(#grid)' rx='28'/>")
+    if flow_tile:
+        parts.append(f"<image href='{html.escape(str(flow_tile.get('visualPath')))}' x='0' y='0' width='{width}' height='{height}' preserveAspectRatio='xMidYMid slice' opacity='0.30'/>")
     for order in cell.get("orders", []):
         order_id = str(order.get("orderId"))
         if order_id not in shown_order_ids:
@@ -428,6 +555,38 @@ def render_route_cards(cell: dict, max_routes: int, max_drivers: int) -> str:
     return "\n".join(cards)
 
 
+def render_tile_evidence(tile_evidence: dict) -> str:
+    status = html.escape(str(tile_evidence.get("status", "missing")))
+    source = html.escape(str(tile_evidence.get("sourceArtifact", "")) or "n/a")
+    center = html.escape(str(tile_evidence.get("center", "n/a")))
+    zoom = html.escape(str(tile_evidence.get("zoom", "n/a")))
+    rows = []
+    for row in tile_evidence.get("tiles", []):
+        provider = html.escape(str(row.get("provider", "unknown")))
+        row_status = html.escape(str(row.get("status", "missing")))
+        bytes_text = html.escape(str(row.get("byteCount", 0)))
+        latency = html.escape(str(row.get("latencyMs", 0)))
+        reason = html.escape(str(row.get("degradeReason", "")) or "ok")
+        visual = html.escape(str(row.get("visualPath", "")) or "not copied")
+        rows.append(
+            "<tr>"
+            f"<td>{provider}</td><td><b>{row_status}</b></td><td>{bytes_text}</td>"
+            f"<td>{latency}</td><td>{reason}</td><td>{visual}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append("<tr><td colspan='6'>No tile probe artifact found. Visual falls back to abstract grid.</td></tr>")
+    return (
+        "<section class='tile-evidence'>"
+        "<div><p class='eyebrow'>Geo Tile Evidence</p>"
+        f"<h2>Tile source status: {status}</h2>"
+        f"<p>Source artifact: <code>{source}</code>. Center: <code>{center}</code>. Zoom: <code>{zoom}</code>.</p></div>"
+        "<table><thead><tr><th>Provider</th><th>Status</th><th>Bytes</th><th>Latency ms</th><th>Reason</th><th>Visual copy</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table>"
+        "</section>"
+    )
+
+
 def render_playback_script() -> str:
     return """
     <script>
@@ -467,6 +626,7 @@ def render_playback_script() -> str:
 def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_drivers: int = 5) -> str:
     cells = payload.get("cells", [])
     first = cells[0] if cells else {}
+    tile_evidence = payload.get("tileEvidence", {"status": "missing", "tiles": []})
     cell_tabs = "".join(f"<a href='#{html.escape(cell.get('scenario', 'cell'))}'>{html.escape(cell.get('cell', 'cell'))}</a>" for cell in cells)
     sections = []
     for cell in cells:
@@ -491,7 +651,7 @@ def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_driver
             "</div>"
             "<div class='playback-controls'><button data-play>Play realtime turn</button><button data-restart>Restart</button><span data-playback-label>1/5 orders</span></div>"
             "<div class='visual-grid'>"
-            f"<div>{render_svg(cell, max_routes, max_orders, max_drivers)}</div>"
+            f"<div>{render_svg(cell, max_routes, max_orders, max_drivers, tile_evidence)}</div>"
             "<aside class='timeline'><h3>Quy trình ghép đơn</h3>"
             f"<div class='step' data-step='orders'><b>1. Order buffer</b><span>Showing {min(max_orders, len(cell.get('orders', [])))} orders. Red means placed/waiting.</span></div>"
             f"<div class='step' data-step='bundles'><b>2. Bundle pool</b><span>Nearby pickups and compatible corridors are grouped into candidate bundles.</span></div>"
@@ -550,6 +710,12 @@ def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_driver
     body[data-playback-step='routes'] .playback-execute { opacity:0.18 !important; }
     body[data-playback-step='select'] .selected-driver, body[data-playback-step='select'] .playback-route { opacity:1 !important; filter: drop-shadow(0 0 10px rgba(111,231,183,0.7)); }
     body[data-playback-step='execute'] .playback-execute { opacity:1 !important; filter: drop-shadow(0 0 10px rgba(232,93,117,0.65)); }
+    .tile-evidence { margin:0 auto 26px; max-width:1420px; background:rgba(255,255,255,0.78); border:1px solid rgba(35,60,45,0.14); border-radius:28px; padding:24px; box-shadow:0 16px 48px rgba(42,65,51,0.09); }
+    .tile-evidence p { color:var(--muted); line-height:1.45; }
+    .tile-evidence table { width:100%; border-collapse:collapse; overflow:hidden; border-radius:18px; background:white; }
+    .tile-evidence th, .tile-evidence td { text-align:left; padding:11px 12px; border-bottom:1px solid var(--line); font-size:13px; }
+    .tile-evidence th { color:#0f8b68; background:#f2fbf6; }
+    code { background:#eef7f1; border:1px solid #d8e4dc; border-radius:8px; padding:2px 6px; }
     .timeline { background:#17201b; color:white; border-radius:28px; padding:24px; }
     .timeline .step { border-left:3px solid rgba(110,231,183,0.35); padding:0 0 18px 16px; margin-left:4px; cursor:pointer; opacity:0.62; transition:opacity 240ms ease, border-color 240ms ease; }
     .timeline .step.active { opacity:1; border-color:#6ee7b7; }
@@ -582,6 +748,7 @@ def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_driver
         f"<nav>{cell_tabs}</nav>",
         "</header>",
         "<main>",
+        render_tile_evidence(tile_evidence),
         *sections,
         "</main>",
         f"<footer>Generated at {html.escape(str(payload.get('generatedAt')))} from {html.escape(str(payload.get('sourceArtifact')))}. First cell: {html.escape(str(first.get('cell', 'n/a')))}</footer>",
@@ -590,7 +757,14 @@ def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_driver
     ])
 
 
-def build_payload(input_root: Path, scenarios: Sequence[str], profiles: Sequence[str], size: str, single_turn: bool = False) -> dict:
+def build_payload(
+    input_root: Path,
+    scenarios: Sequence[str],
+    profiles: Sequence[str],
+    size: str,
+    single_turn: bool = False,
+    tile_probe_root: Optional[Path] = None,
+) -> dict:
     comparison_path = latest_standard_comparison(input_root)
     comparison = read_json(comparison_path)
     cells = select_cells(comparison, scenarios, profiles, size, single_turn=single_turn)
@@ -601,12 +775,14 @@ def build_payload(input_root: Path, scenarios: Sequence[str], profiles: Sequence
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "sourceArtifact": safe_display_path(comparison_path),
         "gitCommit": comparison.get("gitCommit"),
+        "tileEvidence": load_tile_evidence(tile_probe_root),
         "cells": [build_visual_cell(cell) for cell in cells],
     }
 
 
 def write_reports(payload: dict, output_root: Path, max_routes: int, max_orders: int = 20, max_drivers: int = 5) -> Tuple[Path, Path]:
     output_root.mkdir(parents=True, exist_ok=True)
+    copy_tile_images(payload.get("tileEvidence", {}), output_root)
     json_path = output_root / "dispatch_visual_evidence.json"
     html_path = output_root / "dispatch_visual_evidence.html"
     write_json(json_path, payload)
@@ -624,6 +800,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--max-routes", type=int, default=8, help="Maximum selected routes drawn per scenario")
     parser.add_argument("--max-orders", type=int, default=20, help="Maximum orders shown on the playback map")
     parser.add_argument("--max-drivers", type=int, default=5, help="Maximum selected drivers shown on the playback map")
+    parser.add_argument("--tile-probe-root", default=str(DEFAULT_TILE_PROBE_ROOT), help="geo_tile_probe.json file or root containing tile probe artifacts")
     parser.add_argument("--single-turn", action="store_true", help="Render only the first matching dispatch turn with realtime playback")
     args = parser.parse_args(argv)
 
@@ -633,6 +810,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         split_csv(args.profiles),
         args.size,
         single_turn=args.single_turn,
+        tile_probe_root=resolve_repo_path(args.tile_probe_root),
     )
     json_path, html_path = write_reports(payload, resolve_repo_path(args.output_root), args.max_routes, args.max_orders, args.max_drivers)
     print(f"[VISUAL EVIDENCE JSON] {json_path}")

@@ -3,6 +3,7 @@ import json
 import sys
 import tempfile
 import unittest
+import base64
 from pathlib import Path
 
 
@@ -17,6 +18,11 @@ SPEC.loader.exec_module(visual)
 def write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def write_png(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="))
 
 
 class DispatchVisualEvidenceTest(unittest.TestCase):
@@ -98,6 +104,84 @@ class DispatchVisualEvidenceTest(unittest.TestCase):
             self.assertIn("driver-1", html)
             self.assertIn("pickup", html)
             self.assertIn("Global selector", html)
+
+    def test_tile_probe_evidence_is_copied_and_rendered(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            output_root = root / "live" / "full-adaptive" / "normal-clear" / "s"
+            artifact_path = output_root / "dispatch-quality.json"
+            tile_root = root / "tiles"
+            osm_cache = tile_root / "cache" / "osm-raster" / "14" / "13045" / "7740.png"
+            tomtom_cache = tile_root / "cache" / "tomtom-raster-basic" / "14" / "13045" / "7740.png"
+            write_png(osm_cache)
+            write_png(tomtom_cache)
+            write_json(tile_root / "geo_tile_probe.json", {
+                "schemaVersion": "dispatch-v2-geo-tile-probe/v1",
+                "generatedAt": "2026-04-25T00:00:00+00:00",
+                "center": {"lat": 10.7769, "lon": 106.7009},
+                "zoom": 14,
+                "tile": {"z": 14, "x": 13045, "y": 7740},
+                "providers": ["osm", "tomtom"],
+                "tiles": [{
+                    "provider": "osm-raster",
+                    "tile": {"z": 14, "x": 13045, "y": 7740},
+                    "urlTemplate": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                    "status": "FETCHED",
+                    "httpStatus": 200,
+                    "byteCount": 68,
+                    "cachePath": str(osm_cache),
+                    "cacheHit": False,
+                    "latencyMs": 12,
+                    "degradeReason": "",
+                    "attribution": "OpenStreetMap contributors",
+                }, {
+                    "provider": "tomtom-raster-basic",
+                    "tile": {"z": 14, "x": 13045, "y": 7740},
+                    "urlTemplate": "https://api.tomtom.com/map/1/tile/basic/main/{z}/{x}/{y}.png?key=secret",
+                    "status": "CACHE_HIT",
+                    "httpStatus": 200,
+                    "byteCount": 68,
+                    "cachePath": str(tomtom_cache),
+                    "cacheHit": True,
+                    "latencyMs": 1,
+                    "degradeReason": "",
+                    "attribution": "TomTom",
+                }],
+            })
+            write_json(root / "standard_comparison-1.json", {
+                "gitCommit": "test",
+                "cells": [{
+                    "scenarioPack": "normal-clear",
+                    "size": "S",
+                    "profile": "full-adaptive",
+                    "artifactPath": str(artifact_path),
+                    "outputRoot": str(output_root),
+                }],
+            })
+            write_json(artifact_path, {
+                "metrics": {"executedAssignmentCount": 1, "robustUtilityAverage": 0.8},
+                "routeVectorMetrics": {"proposalCount": 2, "geometryCoverage": 1.0},
+                "stageLatencies": {},
+                "routeProposalBudgetMetrics": {},
+                "degradeReasons": [],
+            })
+            base = output_root / "feedback" / "normal-clear" / "s" / "controlled" / "legacy" / "v2" / "c"
+            write_json(base / "replay" / "quality.json", {"request": {"openOrders": [], "availableDrivers": []}})
+            write_json(base / "reuse-states" / "quality-reuse-state.json", {"routeProposals": []})
+            write_json(base / "decision-log" / "quality.json", {"selectedProposalIds": [], "executedAssignmentIds": []})
+
+            payload = visual.build_payload(root, ("normal-clear",), ("full-adaptive",), "S", tile_probe_root=tile_root)
+            report_root = root / "visual"
+            visual.write_reports(payload, report_root, max_routes=4)
+            html = (report_root / "dispatch_visual_evidence.html").read_text(encoding="utf-8")
+
+            self.assertEqual("available", payload["tileEvidence"]["status"])
+            self.assertIn("key=<redacted>", payload["tileEvidence"]["tiles"][1]["urlTemplate"])
+            self.assertTrue((report_root / "tiles" / "osm-raster" / "14" / "13045" / "7740.png").exists())
+            self.assertIn("Tile source status: available", html)
+            self.assertIn("osm-raster", html)
+            self.assertIn("tomtom-raster-basic", html)
+            self.assertIn("tiles/osm-raster/14/13045/7740.png", html)
 
     def test_single_turn_limits_payload_to_first_matching_cell(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
