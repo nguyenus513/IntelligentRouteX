@@ -42,6 +42,13 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertEqual("1", instance["requests"][0]["pickupNodeId"])
         self.assertEqual("2", instance["requests"][0]["dropoffNodeId"])
 
+    def test_parse_official_li_lim_format(self) -> None:
+        instance = li_lim.parse_li_lim(Path("benchmarks/external/official/li-lim-pdptw/LC101.txt"))
+
+        self.assertEqual("PDPTW", instance["problemType"])
+        self.assertEqual(53, len(instance["requests"]))
+        self.assertEqual(10, instance["bestKnown"]["vehicleCount"])
+        self.assertEqual(828.94, instance["bestKnown"]["objective"])
     def test_checker_detects_pickup_dropoff_violation(self) -> None:
         instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
         solution = {"routes": [["0", "2", "1", "3", "4", "0"]]}
@@ -102,7 +109,7 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
             row = runner.run_instance("solomon", "MISSING", "our-dispatch-v2", Path(temp_dir), 20.0, 30_000)
 
             self.assertEqual("EVIDENCE_GAP", row["verdict"])
-            self.assertIn("instance-fixture-missing", row["verdictReasons"])
+            self.assertIn("instance-data-missing", row["verdictReasons"])
 
     def test_runner_writes_report_for_smoke_suite(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

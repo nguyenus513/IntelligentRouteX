@@ -1,0 +1,52 @@
+{
+  "entries": [
+    {
+      "error": null,
+      "mirror": "https://raw.githubusercontent.com/iRB-Lab/py-ga-VRPTW/master/data/text/C101.txt",
+      "path": "benchmarks\\external\\official\\solomon\\C101.txt",
+      "primary": "https://www.sintef.no/globalassets/project/top/vrptw/solomon/solomon-100.zip",
+      "sourceUsed": "mirror"
+    },
+    {
+      "error": null,
+      "mirror": "https://raw.githubusercontent.com/iRB-Lab/py-ga-VRPTW/master/data/text/R101.txt",
+      "path": "benchmarks\\external\\official\\solomon\\R101.txt",
+      "primary": "https://www.sintef.no/globalassets/project/top/vrptw/solomon/solomon-100.zip",
+      "sourceUsed": "mirror"
+    },
+    {
+      "error": null,
+      "mirror": "https://raw.githubusercontent.com/iRB-Lab/py-ga-VRPTW/master/data/text/RC101.txt",
+      "path": "benchmarks\\external\\official\\solomon\\RC101.txt",
+      "primary": "https://www.sintef.no/globalassets/project/top/vrptw/solomon/solomon-100.zip",
+      "sourceUsed": "mirror"
+    },
+    {
+      "error": null,
+      "mirror": "https://git.xkool.org/hw/or-tools/-/raw/b40d6b59e3bf7fc2c2c103a543a556eff8b75626/examples/data/pdptw/lc101.txt",
+      "path": "benchmarks\\external\\official\\li-lim-pdptw\\LC101.txt",
+      "primary": "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_100.zip",
+      "sourceUsed": "mirror"
+    },
+    {
+      "error": null,
+      "mirror": "https://git.xkool.org/hw/or-tools/-/raw/b40d6b59e3bf7fc2c2c103a543a556eff8b75626/examples/data/pdptw/lr101.txt",
+      "path": "benchmarks\\external\\official\\li-lim-pdptw\\LR101.txt",
+      "primary": "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_100.zip",
+      "sourceUsed": "mirror"
+    },
+    {
+      "error": null,
+      "mirror": "https://git.xkool.org/hw/or-tools/-/raw/b40d6b59e3bf7fc2c2c103a543a556eff8b75626/examples/data/pdptw/lrc101.txt",
+      "path": "benchmarks\\external\\official\\li-lim-pdptw\\LRC101.txt",
+      "primary": "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_100.zip",
+      "sourceUsed": "mirror"
+    }
+  ],
+  "notes": [
+    "Primary SINTEF zip URLs can be protected by browser challenges in headless environments.",
+    "Mirror downloads are raw text copies used only when --allow-mirror is explicit."
+  ],
+  "schemaVersion": "external-benchmark-download-manifest/v1",
+  "status": "downloaded"
+}

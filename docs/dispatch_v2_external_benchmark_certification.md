@@ -16,19 +16,27 @@ This rail evaluates Dispatch V2 against academic benchmark instances without OSR
 ## Verdicts
 
 - `PASS`: feasible, no constraint violations, objective gap within threshold, runtime within limit.
-- `PASS_WITH_LIMITS`: feasible but gap is high, or best-known solution is missing.
-- `FAIL`: infeasible, timeout, capacity violation, time-window violation, or pickup/dropoff violation.
-- `EVIDENCE_GAP`: parser, fixture, best-known data, or optional baseline is unavailable.
+- `PASS_WITH_LIMITS`: feasible but distance gap is high, best-known solution is missing, or vehicle count is above best-known while the route remains feasible.
+- `FAIL`: infeasible, timeout, capacity violation, time-window violation, vehicle-count violation, or pickup/dropoff violation.
+- `EVIDENCE_GAP`: parser, fixture, benchmark data, or optional baseline is unavailable.
 
 ## Current Scope
 
-The initial rail uses small fixture instances to validate parser, normalized schema, independent feasibility checks, runner behavior, and report output. These fixtures are not a substitute for official Solomon or Li & Lim certification. Official dataset download URLs, checksums, and reference-solution provenance must be locked before publishing academic-grade gap claims.
+The rail now supports fixture smoke data and official-format smoke data. Direct SINTEF asset downloads can be blocked by browser challenges in terminal environments, so `scripts/download_external_benchmarks.py --allow-mirror` records the primary SINTEF URL and the raw mirror actually used in `benchmarks/external/official/download_manifest.json`.
 
-Current `our-dispatch-v2` and `ortools-baseline` runner modes use a deterministic normalized baseline route. The next production step is wiring `ExternalBenchmarkToDispatchCaseAdapter` into the real Dispatch V2 solver path and adding a real OR-Tools/PyVRP baseline runner.
+`ortools-baseline` runs Python OR-Tools Routing as an independent baseline. `our-dispatch-v2` is still the deterministic normalized baseline path until `ExternalBenchmarkToDispatchCaseAdapter` is wired into the real Dispatch V2 runtime.
 
-## Smoke Command
+## Commands
 
 ```bash
-python scripts/run_external_benchmark_certification.py --suite li-lim --preset preset:smoke --solver our-dispatch-v2 --mode benchmark-native --time-limit 30s
-python scripts/run_external_benchmark_certification.py --suite solomon --preset preset:smoke --solver our-dispatch-v2 --mode benchmark-native --time-limit 30s
+python scripts/download_external_benchmarks.py --allow-mirror
+python scripts/run_external_benchmark_certification.py --suite li-lim --preset preset:smoke --solver ortools-baseline --data-source official --mode benchmark-native --time-limit 75s
+python scripts/run_external_benchmark_certification.py --suite solomon --preset preset:smoke --solver ortools-baseline --data-source official --mode benchmark-native --time-limit 75s
+```
+
+For current Dispatch V2 adapter readiness checks:
+
+```bash
+python scripts/run_external_benchmark_certification.py --suite li-lim --preset preset:smoke --solver our-dispatch-v2 --data-source official --mode benchmark-native --time-limit 30s
+python scripts/run_external_benchmark_certification.py --suite solomon --preset preset:smoke --solver our-dispatch-v2 --data-source official --mode benchmark-native --time-limit 30s
 ```

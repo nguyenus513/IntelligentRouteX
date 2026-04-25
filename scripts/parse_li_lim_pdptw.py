@@ -3,12 +3,25 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any, Dict, Iterable, List
 
 from external_benchmark_support import best_known, normalize_instance, read_lines
 
+OFFICIAL_BEST_KNOWN: Dict[str, Dict[str, Any]] = {
+    "LC101": {"vehicleCount": 10, "objective": 828.94, "source": "Li & Lim/SINTEF PDPTW 100 customers BKS"},
+    "LR101": {"vehicleCount": 19, "objective": 1650.80, "source": "Li & Lim/SINTEF PDPTW 100 customers BKS"},
+    "LRC101": {"vehicleCount": 14, "objective": 1708.80, "source": "Li & Lim/SINTEF PDPTW 100 customers BKS"},
+}
 
-def parse_li_lim(path: Path) -> dict:
-    lines = read_lines(path)
+
+def _best_known(instance_name: str, lines: Iterable[str]) -> Dict[str, Any]:
+    parsed = best_known(lines)
+    if "objective" in parsed:
+        return parsed
+    return OFFICIAL_BEST_KNOWN.get(instance_name.upper(), {"source": "missing"})
+
+
+def _parse_fixture(lines: List[str], path: Path) -> dict:
     instance_name = lines[0]
     capacity = 0
     vehicle_count = 0
@@ -43,20 +56,83 @@ def parse_li_lim(path: Path) -> dict:
             "pairNodeId": None if parts[7] == "-" else parts[7],
             "type": parts[8],
         })
+    return _normalize(instance_name, vehicle_count, capacity, nodes, lines, path)
+
+
+def _parse_official(lines: List[str], path: Path) -> dict:
+    instance_name = path.stem.upper()
+    header = lines[0].split()
+    if len(header) < 2:
+        raise ValueError(f"Li & Lim official vehicle metadata not found: {path}")
+    vehicle_count = int(float(header[0]))
+    capacity = int(float(header[1]))
+    nodes = []
+    for line in lines[1:]:
+        parts = line.split()
+        if len(parts) < 9:
+            continue
+        node_id = parts[0]
+        demand = int(float(parts[3]))
+        pickup_pair = parts[7]
+        dropoff_pair = parts[8]
+        node_type = "DEPOT"
+        pair_node_id = None
+        if node_id != "0" and demand > 0:
+            node_type = "PICKUP"
+            pair_node_id = dropoff_pair
+        elif node_id != "0" and demand < 0:
+            node_type = "DROPOFF"
+            pair_node_id = pickup_pair
+        nodes.append({
+            "id": node_id,
+            "x": float(parts[1]),
+            "y": float(parts[2]),
+            "demand": demand,
+            "readyTime": float(parts[4]),
+            "dueTime": float(parts[5]),
+            "serviceTime": float(parts[6]),
+            "pairNodeId": pair_node_id,
+            "type": node_type,
+        })
+    return _normalize(instance_name, vehicle_count, capacity, nodes, lines, path)
+
+
+def _normalize(instance_name: str, vehicle_count: int, capacity: int, nodes: List[Dict[str, Any]], lines: Iterable[str], path: Path) -> dict:
     if not nodes:
         raise ValueError(f"Li & Lim instance has no node rows: {path}")
+    node_ids = {str(node["id"]) for node in nodes}
     requests = []
     for node in nodes:
         if node["type"] == "PICKUP":
+            dropoff = str(node.get("pairNodeId"))
+            if dropoff not in node_ids:
+                raise ValueError(f"Li & Lim pickup {node['id']} points to missing dropoff {dropoff}: {path}")
             requests.append({
-                "requestId": f"request-{node['id']}-{node['pairNodeId']}",
+                "requestId": f"request-{node['id']}-{dropoff}",
                 "pickupNodeId": node["id"],
-                "dropoffNodeId": node["pairNodeId"],
+                "dropoffNodeId": dropoff,
                 "demand": node["demand"],
             })
     if not requests:
         raise ValueError(f"Li & Lim instance has no pickup/dropoff requests: {path}")
-    return normalize_instance("li-lim", "PDPTW", instance_name, vehicle_count, capacity, nodes, requests, best_known(lines))
+    return normalize_instance(
+        "li-lim",
+        "PDPTW",
+        instance_name,
+        vehicle_count,
+        capacity,
+        nodes,
+        requests,
+        _best_known(instance_name, lines),
+        source_path=str(path),
+    )
+
+
+def parse_li_lim(path: Path) -> dict:
+    lines = read_lines(path)
+    if any(line.startswith("ID X Y") for line in lines):
+        return _parse_fixture(lines, path)
+    return _parse_official(lines, path)
 
 
 def main() -> int:

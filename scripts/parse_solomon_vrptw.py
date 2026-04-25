@@ -3,8 +3,22 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any, Dict, Iterable
 
 from external_benchmark_support import best_known, normalize_instance, read_lines
+
+OFFICIAL_BEST_KNOWN: Dict[str, Dict[str, Any]] = {
+    "C101": {"vehicleCount": 10, "objective": 828.94, "source": "SINTEF Solomon 100 customers BKS"},
+    "R101": {"vehicleCount": 19, "objective": 1650.80, "source": "SINTEF Solomon 100 customers BKS"},
+    "RC101": {"vehicleCount": 14, "objective": 1696.94, "source": "SINTEF Solomon 100 customers BKS"},
+}
+
+
+def _best_known(instance_name: str, lines: Iterable[str]) -> Dict[str, Any]:
+    parsed = best_known(lines)
+    if "objective" in parsed:
+        return parsed
+    return OFFICIAL_BEST_KNOWN.get(instance_name.upper(), {"source": "missing"})
 
 
 def parse_solomon(path: Path) -> dict:
@@ -44,7 +58,17 @@ def parse_solomon(path: Path) -> dict:
         })
     if not nodes:
         raise ValueError(f"Solomon instance has no customer rows: {path}")
-    return normalize_instance("solomon", "VRPTW", instance_name, vehicle_count, capacity, nodes, [], best_known(lines))
+    return normalize_instance(
+        "solomon",
+        "VRPTW",
+        instance_name,
+        vehicle_count,
+        capacity,
+        nodes,
+        [],
+        _best_known(instance_name, lines),
+        source_path=str(path),
+    )
 
 
 def main() -> int:
