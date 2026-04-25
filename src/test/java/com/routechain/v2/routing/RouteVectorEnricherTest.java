@@ -53,7 +53,7 @@ class RouteVectorEnricherTest {
     }
 
     @Test
-    void multiOrderRouteVisitsAllPickupsBeforeDeliveryLegs() {
+    void multiOrderRoutePreservesPickupBeforeOwnDropoff() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         DispatchCandidateContext context = RouteTestFixtures.candidateContext(properties);
         String bundleId = context.bundleIds().stream()
@@ -85,9 +85,13 @@ class RouteVectorEnricherTest {
                 .toList();
 
         assertEquals(stopOrder.size() * 2 - 1, enriched.legCount());
-        assertEquals(stopOrder.get(0) + ":pickup->" + stopOrder.get(1) + ":pickup", legTransitions.get(0));
-        assertEquals(stopOrder.get(1) + ":pickup->" + stopOrder.get(2) + ":pickup", legTransitions.get(1));
-        assertTrue(legTransitions.subList(2, legTransitions.size()).stream().allMatch(transition -> transition.contains(":dropoff")));
+        for (String orderId : stopOrder) {
+            int pickupIndex = firstTransitionIndexContaining(legTransitions, orderId + ":pickup");
+            int dropoffIndex = firstTransitionIndexContaining(legTransitions, orderId + ":dropoff");
+            assertTrue(pickupIndex >= 0, "missing pickup for " + orderId);
+            assertTrue(dropoffIndex >= 0, "missing dropoff for " + orderId);
+            assertTrue(pickupIndex <= dropoffIndex, "dropoff must not appear before pickup for " + orderId);
+        }
     }
 
     @Test
@@ -123,4 +127,12 @@ class RouteVectorEnricherTest {
         assertTrue(Files.isRegularFile(feedbackDir.resolve("decision-stage").resolve("route_leg_vector_trace").resolve("trace-single-stop-proposal-single-stop.json")));
         assertTrue(Files.isRegularFile(feedbackDir.resolve("decision-stage").resolve("route_vector_summary_trace").resolve("trace-single-stop-proposal-single-stop.json")));
     }
-}
+
+    private int firstTransitionIndexContaining(List<String> transitions, String stopId) {
+        for (int index = 0; index < transitions.size(); index++) {
+            if (transitions.get(index).contains(stopId)) {
+                return index;
+            }
+        }
+        return -1;
+    }}

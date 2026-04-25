@@ -80,6 +80,8 @@ import com.routechain.v2.routing.BestPathRouter;
 import com.routechain.v2.routing.BudgetedRoutingProvider;
 import com.routechain.v2.routing.HttpOsrmRoutingProvider;
 import com.routechain.v2.routing.HttpTomTomRoutingProvider;
+import com.routechain.v2.routing.DurationMatrixCache;
+import com.routechain.v2.routing.OsrmTableClient;
 import com.routechain.v2.routing.RoadGraphProvider;
 import com.routechain.v2.routing.RouteCostFunction;
 import com.routechain.v2.routing.RouteVectorEnricher;
@@ -730,10 +732,24 @@ public class DispatchV2Configuration {
     }
 
     @Bean
-    RouteVectorEnricher routeVectorEnricher(RoutingProvider routingProvider,
+    OsrmTableClient osrmTableClient(RouteChainDispatchV2Properties properties) {
+        return new OsrmTableClient(
+                properties.getRouting().getBaseUrl(),
+                properties.getRouting().getConnectTimeout(),
+                properties.getRouting().getReadTimeout(),
+                new DurationMatrixCache());
+    }
+
+    @Bean
+    RouteVectorEnricher routeVectorEnricher(RouteChainDispatchV2Properties properties,
+                                            RoutingProvider routingProvider,
+                                            OsrmTableClient osrmTableClient,
                                             DecisionStageLogger decisionStageLogger,
                                             HarvestRecorder harvestRecorder) {
-        return new RouteVectorEnricher(routingProvider, decisionStageLogger, harvestRecorder);
+        OsrmTableClient activeTableClient = "osrm".equalsIgnoreCase(properties.getRouting().getProvider())
+                ? osrmTableClient
+                : null;
+        return new RouteVectorEnricher(routingProvider, activeTableClient, decisionStageLogger, harvestRecorder);
     }
 
     @Bean

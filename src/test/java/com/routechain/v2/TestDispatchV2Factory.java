@@ -62,6 +62,7 @@ import com.routechain.v2.route.RouteProposalPruner;
 import com.routechain.v2.route.RouteProposalValidator;
 import com.routechain.v2.route.RouteValueScorer;
 import com.routechain.v2.routing.BestPathRouter;
+import com.routechain.v2.routing.OsrmTableClient;
 import com.routechain.v2.routing.RoadGraphProvider;
 import com.routechain.v2.routing.RouteCostFunction;
 import com.routechain.v2.routing.RouteVectorEnricher;
@@ -270,7 +271,8 @@ public final class TestDispatchV2Factory {
         RouteCostFunction routeCostFunction = configuration.routeCostFunction();
         BestPathRouter bestPathRouter = configuration.bestPathRouter(roadGraphProvider, routeCostFunction);
         RoutingProvider routingProvider = configuration.routingProvider(properties, bestPathRouter, routeCostFunction);
-        RouteVectorEnricher routeVectorEnricher = configuration.routeVectorEnricher(routingProvider, decisionStageLogger, harvestRecorder);
+        OsrmTableClient osrmTableClient = configuration.osrmTableClient(properties);
+        RouteVectorEnricher routeVectorEnricher = configuration.routeVectorEnricher(properties, routingProvider, osrmTableClient, decisionStageLogger, harvestRecorder);
         DispatchRouteProposalService dispatchRouteProposalService = configuration.dispatchRouteProposalService(
                 properties,
                 routeProposalEngine,
