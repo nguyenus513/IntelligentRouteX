@@ -26,6 +26,15 @@ class RouteShapeQualityTest {
     }
 
     @Test
+    void classifiesMultiOrderVisualRiskAsWeakShape() {
+        RouteProposal proposal = proposal("weak-shape", List.of("order-1", "order-2"), 1800.0, 1500.0, 18, 0.58, 0.93);
+
+        assertEquals("WEAK_SHAPE", RouteShapeQuality.verdict(proposal));
+        assertTrue(RouteShapeQuality.reasons(proposal).contains("route-shape-weak-straightness"));
+        assertTrue(RouteShapeQuality.reasons(proposal).contains("route-shape-weak-turn-count"));
+    }
+
+    @Test
     void cleanerRouteDominatesWorseRouteWithSameOrderSet() {
         RouteProposal clean = proposal("clean", List.of("order-2", "order-1"), 2100.0, 1800.0, 18, 0.64, 0.70);
         RouteProposal zigzag = proposal("zigzag", List.of("order-1", "order-2"), 2500.0, 2100.0, 28, 0.22, 1.0);

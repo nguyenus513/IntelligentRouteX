@@ -7,9 +7,12 @@ public final class RouteShapeQuality {
     public static final double STRAIGHTNESS_FLOOR = 0.55;
     public static final double STRAIGHTNESS_REJECT_FLOOR = 0.35;
     public static final double MULTI_ORDER_STRAIGHTNESS_REJECT_FLOOR = 0.50;
+    public static final double MULTI_ORDER_STRAIGHTNESS_WEAK_FLOOR = 0.60;
     public static final int TURN_COUNT_SOFT_LIMIT = 20;
+    public static final int MULTI_ORDER_TURN_WEAK_LIMIT = 16;
     public static final int TURN_COUNT_REJECT_LIMIT = 36;
     public static final double CONGESTION_HIGH_RISK = 0.90;
+    public static final double CONGESTION_SELECTED_REJECT_RISK = 0.95;
 
     private RouteShapeQuality() {
     }
@@ -35,6 +38,12 @@ public final class RouteShapeQuality {
                 || proposal.turnCount() > TURN_COUNT_REJECT_LIMIT
                 || proposal.turnCount() > multiOrderTurnRejectLimit(proposal.stopOrder().size()))) {
             return "REJECT_SHAPE";
+        }
+        if (proposal.stopOrder().size() > 1
+                && (proposal.straightnessScore() < MULTI_ORDER_STRAIGHTNESS_WEAK_FLOOR
+                || proposal.turnCount() > MULTI_ORDER_TURN_WEAK_LIMIT
+                || (proposal.congestionScore() >= CONGESTION_SELECTED_REJECT_RISK && proposal.straightnessScore() < 0.70))) {
+            return "WEAK_SHAPE";
         }
         if (proposal.straightnessScore() < STRAIGHTNESS_FLOOR
                 || proposal.turnCount() > TURN_COUNT_SOFT_LIMIT
@@ -77,6 +86,17 @@ public final class RouteShapeQuality {
         }
         if (proposal.turnCount() > TURN_COUNT_SOFT_LIMIT) {
             reasons.add("route-shape-turn-penalty");
+        }
+        if (proposal.stopOrder().size() > 1 && proposal.turnCount() > MULTI_ORDER_TURN_WEAK_LIMIT) {
+            reasons.add("route-shape-weak-turn-count");
+        }
+        if (proposal.stopOrder().size() > 1 && proposal.straightnessScore() < MULTI_ORDER_STRAIGHTNESS_WEAK_FLOOR) {
+            reasons.add("route-shape-weak-straightness");
+        }
+        if (proposal.stopOrder().size() > 1
+                && proposal.congestionScore() >= CONGESTION_SELECTED_REJECT_RISK
+                && proposal.straightnessScore() < 0.70) {
+            reasons.add("route-shape-weak-congestion");
         }
         if (proposal.congestionScore() >= CONGESTION_HIGH_RISK && proposal.straightnessScore() < STRAIGHTNESS_FLOOR) {
             reasons.add("route-shape-congestion-zigzag-penalty");

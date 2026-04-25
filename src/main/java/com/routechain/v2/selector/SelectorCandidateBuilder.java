@@ -51,6 +51,11 @@ public final class SelectorCandidateBuilder {
         List<String> degradeReasons = new ArrayList<>();
 
         for (RouteProposal proposal : routeProposalStage.routeProposals()) {
+            if (isDominatedBySameOrderSetAlternative(proposal, routeProposalStage.routeProposals())) {
+                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-reject-dominated-route-shape"));
+                degradeReasons.add("selector-reject-dominated-route-shape");
+                continue;
+            }
             RobustUtility robustUtility = robustUtilityByProposalId.get(proposal.proposalId());
             DriverCandidate driverCandidate = driverCandidateByKey.get(driverKey(proposal.bundleId(), proposal.anchorOrderId(), proposal.driverId()));
             BundleCandidate bundleCandidate = context.bundle(proposal.bundleId());
@@ -64,6 +69,11 @@ public final class SelectorCandidateBuilder {
             if ("REJECT_SHAPE".equals(RouteShapeQuality.verdict(proposal))) {
                 missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-reject-zigzag-route"));
                 degradeReasons.add("selector-reject-zigzag-route");
+                continue;
+            }
+            if ("WEAK_SHAPE".equals(RouteShapeQuality.verdict(proposal))) {
+                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-reject-weak-shape-route"));
+                degradeReasons.add("selector-reject-weak-shape-route");
                 continue;
             }
 
@@ -171,6 +181,15 @@ public final class SelectorCandidateBuilder {
             return 0.0;
         }
         return Math.min(0.10, 0.035 * (bundleSize - 2));
+    }
+
+    private boolean isDominatedBySameOrderSetAlternative(RouteProposal proposal, List<RouteProposal> routeProposals) {
+        if (proposal == null || proposal.stopOrder().size() <= 1) {
+            return false;
+        }
+        return routeProposals.stream()
+                .filter(other -> other != proposal)
+                .anyMatch(other -> RouteShapeQuality.dominates(other, proposal));
     }
 
     private boolean isBetter(SelectorCandidateEnvelope candidate, SelectorCandidateEnvelope existing) {
