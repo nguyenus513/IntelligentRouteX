@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import html
 import json
 import math
@@ -218,6 +219,72 @@ def geo(point: dict) -> Tuple[float, float]:
     return float(point.get("latitude", 0.0)), float(point.get("longitude", 0.0))
 
 
+def osrm_base_url() -> str:
+    return (os.environ.get("IRX_ROUTING_BASE_URL") or os.environ.get("IRX_OSRM_BASE_URL") or "http://127.0.0.1:5000").rstrip("/")
+
+
+def osrm_nearest_point(lat: float, lon: float) -> Optional[Tuple[float, float, float]]:
+    query = urllib.parse.urlencode({"number": "1"})
+    url = f"{osrm_base_url()}/nearest/v1/driving/{lon},{lat}?{query}"
+    try:
+        with urllib.request.urlopen(url, timeout=3) as response:
+            body = json.loads(response.read().decode("utf-8"))
+        waypoint = (body.get("waypoints") or [{}])[0]
+        location = waypoint.get("location") or []
+        if len(location) < 2:
+            return None
+        return float(location[1]), float(location[0]), float(waypoint.get("distance", 0.0))
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, KeyError, IndexError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def snap_point_to_road(point: dict) -> Tuple[dict, Optional[float]]:
+    lat, lon = geo(point)
+    snapped = osrm_nearest_point(lat, lon)
+    if snapped is None:
+        return dict(point), None
+    snapped_lat, snapped_lon, distance_meters = snapped
+    return {**point, "latitude": snapped_lat, "longitude": snapped_lon}, distance_meters
+
+
+def snap_visual_entities(orders: Dict[str, dict], drivers: Dict[str, dict]) -> Tuple[Dict[str, dict], Dict[str, dict], dict]:
+    snapped_orders: Dict[str, dict] = {}
+    snapped_drivers: Dict[str, dict] = {}
+    distances: List[float] = []
+    failures = 0
+    for order_id, order in orders.items():
+        display_order = copy.deepcopy(order)
+        pickup_point, pickup_distance = snap_point_to_road(display_order.get("pickupPoint", {}))
+        dropoff_point, dropoff_distance = snap_point_to_road(display_order.get("dropoffPoint", {}))
+        display_order["pickupPoint"] = pickup_point
+        display_order["dropoffPoint"] = dropoff_point
+        display_order["visualRoadSnap"] = {
+            "pickupDistanceMeters": pickup_distance,
+            "dropoffDistanceMeters": dropoff_distance,
+        }
+        distances.extend(distance for distance in (pickup_distance, dropoff_distance) if distance is not None)
+        failures += int(pickup_distance is None) + int(dropoff_distance is None)
+        snapped_orders[order_id] = display_order
+    for driver_id, driver in drivers.items():
+        display_driver = copy.deepcopy(driver)
+        current_location, snap_distance = snap_point_to_road(display_driver.get("currentLocation", {}))
+        display_driver["currentLocation"] = current_location
+        display_driver["visualRoadSnap"] = {"distanceMeters": snap_distance}
+        if snap_distance is None:
+            failures += 1
+        else:
+            distances.append(snap_distance)
+        snapped_drivers[driver_id] = display_driver
+    return snapped_orders, snapped_drivers, {
+        "provider": "osrm-nearest",
+        "requestedPointCount": (len(orders) * 2) + len(drivers),
+        "snappedPointCount": len(distances),
+        "failedPointCount": failures,
+        "maxSnapDistanceMeters": max(distances) if distances else None,
+        "avgSnapDistanceMeters": (sum(distances) / len(distances)) if distances else None,
+    }
+
+
 def route_stop_point(stop_id: str, orders: Dict[str, dict]) -> Optional[Tuple[float, float]]:
     order_id, _, stop_kind = stop_id.partition(":")
     order = orders.get(order_id)
@@ -270,7 +337,7 @@ def proposal_path_points(proposal: dict, orders: Dict[str, dict], drivers: Dict[
 
 
 def osrm_route_overlay(proposal: dict, orders: Dict[str, dict], drivers: Dict[str, dict]) -> Tuple[List[dict], dict]:
-    base_url = (os.environ.get("IRX_ROUTING_BASE_URL") or os.environ.get("IRX_OSRM_BASE_URL") or "http://127.0.0.1:5000").rstrip("/")
+    base_url = osrm_base_url()
     stop_points = proposal_path_points({**proposal, "legs": []}, orders, drivers)
     if len(stop_points) < 2:
         return [], {"status": "missing", "reason": "not-enough-stops"}
@@ -391,6 +458,7 @@ def build_visual_cell(cell: VisualCell) -> dict:
     request = replay.get("request", {})
     orders = {str(order.get("orderId")): order for order in request.get("openOrders", []) if isinstance(order, dict)}
     drivers = {str(driver.get("driverId")): driver for driver in request.get("availableDrivers", []) if isinstance(driver, dict)}
+    display_orders, display_drivers, road_snap_evidence = snap_visual_entities(orders, drivers)
     decision_log = first_file(cell.output_root / "feedback", "decision-log/*.json")
     selected_ids = []
     executed_ids = []
@@ -402,8 +470,8 @@ def build_visual_cell(cell: VisualCell) -> dict:
     selected_routes = []
     for rank, proposal in enumerate(selected, start=1):
         order_ids = [str(order_id) for order_id in proposal.get("stopOrder", [])]
-        road_overlay_path, road_overlay_status = osrm_route_overlay(proposal, orders, drivers)
-        visual_path = road_overlay_path if road_overlay_path else proposal_path_points(proposal, orders, drivers)
+        road_overlay_path, road_overlay_status = osrm_route_overlay(proposal, display_orders, display_drivers)
+        visual_path = road_overlay_path if road_overlay_path else proposal_path_points(proposal, display_orders, display_drivers)
         selected_routes.append({
             "rank": rank,
             "proposalId": proposal.get("proposalId"),
@@ -412,7 +480,7 @@ def build_visual_cell(cell: VisualCell) -> dict:
             "source": proposal.get("source"),
             "orderIds": order_ids,
             "path": visual_path,
-            "benchmarkPath": proposal_path_points(proposal, orders, drivers),
+            "benchmarkPath": proposal_path_points(proposal, display_orders, display_drivers),
             "roadOverlay": road_overlay_status,
             "routeValue": proposal.get("routeValue"),
             "pickupEtaMinutes": proposal.get("projectedPickupEtaMinutes"),
@@ -440,8 +508,9 @@ def build_visual_cell(cell: VisualCell) -> dict:
         "traceId": request.get("traceId"),
         "weatherProfile": request.get("weatherProfile"),
         "decisionTime": request.get("decisionTime"),
-        "orders": list(orders.values()),
-        "drivers": list(drivers.values()),
+        "orders": list(display_orders.values()),
+        "drivers": list(display_drivers.values()),
+        "visualRoadSnapEvidence": road_snap_evidence,
         "selectedRoutes": selected_routes,
         "selectedProposalCount": len(selected_routes),
         "selectedDriverCount": selected_driver_count,
@@ -798,6 +867,7 @@ def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_driver
     for cell in cells:
         budget = cell.get("budgetMetrics", {})
         latencies = cell.get("stageLatencies", {})
+        road_snap = cell.get("visualRoadSnapEvidence", {})
         sections.append(
             f"<section class='cell-section' id='{html.escape(str(cell.get('scenario')))}'>"
             f"<div class='section-head'><div><p class='eyebrow'>{html.escape(str(cell.get('weatherProfile')))} · {html.escape(str(cell.get('profile')))}</p><h2>{html.escape(str(cell.get('cell')))}</h2></div>"
@@ -814,6 +884,8 @@ def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_driver
             f"<div><span>Route pool ms</span><b>{html.escape(str(latencies.get('route-proposal-pool', 'n/a')))}</b></div>"
             f"<div><span>Geometry</span><b>{fmt_number(cell.get('geometryCoverage'))}</b></div>"
             f"<div><span>Utility</span><b>{fmt_number(cell.get('robustUtilityAverage'))}</b></div>"
+            f"<div><span>Road-snapped points</span><b>{road_snap.get('snappedPointCount', 0)}/{road_snap.get('requestedPointCount', 0)}</b></div>"
+            f"<div><span>Max snap meters</span><b>{fmt_number(road_snap.get('maxSnapDistanceMeters'), 0)}</b></div>"
             "</div>"
             "<div class='playback-controls'><button data-play>Play realtime turn</button><button data-restart>Restart</button><button data-show-all-routes>Show all routes</button><button data-toggle-labels>Show labels</button><span data-playback-label>1/5 orders</span></div>"
             f"<div class='driver-lens'>{render_driver_lens(cell, max_routes, max_drivers)}</div>"
