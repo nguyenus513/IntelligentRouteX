@@ -9,6 +9,7 @@ import com.routechain.v2.route.RouteProposal;
 import com.routechain.v2.route.RouteProposalSource;
 import com.routechain.v2.route.RouteShapeQuality;
 import com.routechain.v2.route.RouteTestFixtures;
+import com.routechain.v2.scenario.DispatchScenarioStage;
 import com.routechain.v2.scenario.RobustUtility;
 import org.junit.jupiter.api.Test;
 
@@ -224,7 +225,59 @@ class SelectorCandidateBuilderTest {
         assertTrue(buildResult.degradeReasons().contains("selector-reject-dominated-route-shape"));
     }
 
-    private double bundleSizeLift(RouteProposal proposal) {
+
+    @Test
+    void keepsSameOrderSetAlternativesAcrossDifferentDrivers() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        var pairClusterStage = RouteTestFixtures.pairClusterStage(properties);
+        var bundleStage = RouteTestFixtures.bundleStage(properties, pairClusterStage);
+        var routeCandidateStage = RouteTestFixtures.routeCandidateStage(properties);
+        var routeProposalStage = RouteTestFixtures.routeProposalStage(properties);
+        var scenarioStage = RouteTestFixtures.scenarioStage(properties);
+        DispatchCandidateContext context = new DispatchCandidateContext(
+                pairClusterStage.bufferedOrderWindow().orders(),
+                RouteTestFixtures.request().availableDrivers(),
+                pairClusterStage,
+                bundleStage);
+        RouteProposal original = routeProposalStage.routeProposals().stream()
+                .filter(proposal -> proposal.stopOrder().size() > 1)
+                .findFirst()
+                .orElseThrow();
+        String alternateDriverId = routeCandidateStage.driverCandidates().stream()
+                .filter(candidate -> candidate.bundleId().equals(original.bundleId()))
+                .filter(candidate -> candidate.anchorOrderId().equals(original.anchorOrderId()))
+                .map(DriverCandidate::driverId)
+                .filter(driverId -> !driverId.equals(original.driverId()))
+                .findFirst()
+                .orElseThrow();
+        RouteProposal dominatedSameDriver = shapedProposal(original, original.proposalId() + "-same-driver", original.stopOrder(), 1800.0, 1500.0, 14, 0.72, 0.60);
+        RouteProposal betterDifferentDriver = shapedProposal(original, original.proposalId() + "-different-driver", original.stopOrder().reversed(), 1300.0, 1100.0, 10, 0.84, 0.45, alternateDriverId);
+        DispatchRouteProposalStage stage = new DispatchRouteProposalStage(
+                routeProposalStage.schemaVersion(),
+                java.util.List.of(dominatedSameDriver, betterDifferentDriver),
+                routeProposalStage.routeProposalSummary(),
+                routeProposalStage.hotStartReuseSummary(),
+                routeProposalStage.stageLatencies(),
+                routeProposalStage.mlStageMetadata(),
+                routeProposalStage.degradeReasons());
+        DispatchScenarioStage localScenarioStage = new DispatchScenarioStage(
+                scenarioStage.schemaVersion(),
+                java.util.List.of(),
+                java.util.List.of(robustUtility(dominatedSameDriver.proposalId()), robustUtility(betterDifferentDriver.proposalId())),
+                scenarioStage.scenarioEvaluationSummary(),
+                scenarioStage.freshnessMetadata(),
+                scenarioStage.stageLatencies(),
+                scenarioStage.mlStageMetadata(),
+                scenarioStage.degradeReasons());
+        SelectorCandidateBuilder builder = new SelectorCandidateBuilder(properties);
+
+        SelectorCandidateBuildResult buildResult = builder.build(stage, localScenarioStage, routeCandidateStage, context);
+
+        assertTrue(buildResult.candidateEnvelopes().stream()
+                .anyMatch(envelope -> envelope.candidate().proposalId().equals(dominatedSameDriver.proposalId())));
+        assertTrue(buildResult.candidateEnvelopes().stream()
+                .anyMatch(envelope -> envelope.candidate().proposalId().equals(betterDifferentDriver.proposalId())));
+    }    private double bundleSizeLift(RouteProposal proposal) {
         int bundleSize = proposal.stopOrder().size();
         var analysis = RouteShapeQuality.analyze(proposal);
         if (bundleSize <= 2) {
@@ -240,6 +293,11 @@ class SelectorCandidateBuilderTest {
         return Math.min(0.14, (0.045 * (bundleSize - 2)) + compactShapeBonus);
     }
 
+
+    private RobustUtility robustUtility(String proposalId) {
+        return new RobustUtility("robust-utility/v1", proposalId, 0.8, 0.7, 0.8, 0.9, 0.82, 3, 3);
+    }
+
     private RouteProposal shapedProposal(RouteProposal original,
                                          String proposalId,
                                          java.util.List<String> stopOrder,
@@ -248,12 +306,24 @@ class SelectorCandidateBuilderTest {
                                          int turnCount,
                                          double straightnessScore,
                                          double congestionScore) {
+        return shapedProposal(original, proposalId, stopOrder, routeCost, travelTimeSeconds, turnCount, straightnessScore, congestionScore, original.driverId());
+    }
+
+    private RouteProposal shapedProposal(RouteProposal original,
+                                         String proposalId,
+                                         java.util.List<String> stopOrder,
+                                         double routeCost,
+                                         double travelTimeSeconds,
+                                         int turnCount,
+                                         double straightnessScore,
+                                         double congestionScore,
+                                         String driverId) {
         return new RouteProposal(
                 original.schemaVersion(),
                 proposalId,
                 original.bundleId(),
                 stopOrder.getFirst(),
-                original.driverId(),
+                driverId,
                 RouteProposalSource.HEURISTIC_SAFE,
                 stopOrder,
                 original.projectedPickupEtaMinutes(),

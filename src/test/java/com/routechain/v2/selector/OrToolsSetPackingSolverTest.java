@@ -64,4 +64,30 @@ class OrToolsSetPackingSolverTest {
                 .reasons()
                 .contains("selected-by-ortools-scarce-bundling"));
     }
-}
+
+    @Test
+    void scarcityObjectivePrefersCoveringMoreOrdersBeforeMarginalScore() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        properties.getSelector().getOrtools().setTimeout(Duration.ofSeconds(2));
+        OrToolsSetPackingSolver solver = new OrToolsSetPackingSolver(properties);
+        List<SelectorCandidate> candidates = List.of(
+                SelectorTestFixtures.candidate("proposal-a-4", "bundle-a-4", "driver-1", List.of("order-1", "order-2", "order-3", "order-4"), 0.90, 0.90, 1.20, true),
+                SelectorTestFixtures.candidate("proposal-b-4", "bundle-b-4", "driver-2", List.of("order-5", "order-6", "order-7", "order-8"), 0.90, 0.90, 1.20, true),
+                SelectorTestFixtures.candidate("proposal-c-4", "bundle-c-4", "driver-3", List.of("order-9", "order-10", "order-11", "order-12"), 0.90, 0.90, 1.20, true),
+                SelectorTestFixtures.candidate("proposal-d-4", "bundle-d-4", "driver-4", List.of("order-13", "order-14", "order-15", "order-16"), 0.90, 0.90, 1.20, true),
+                SelectorTestFixtures.candidate("proposal-e-3-high-score", "bundle-e-3", "driver-5", List.of("order-17", "order-18", "order-19"), 0.99, 0.99, 1.80, true),
+                SelectorTestFixtures.candidate("proposal-e-4-lower-score", "bundle-e-4", "driver-5", List.of("order-17", "order-18", "order-19", "order-20"), 0.82, 0.82, 0.92, true));
+        ConflictGraph graph = new ConflictGraphBuilder().build(candidates);
+
+        GlobalSelectionResult result = solver.solve(candidates, graph).selectionResult().orElseThrow();
+
+        assertTrue(result.degradeReasons().contains("scarce-bundling-priority-enabled"));
+        assertTrue(result.selectedProposals().stream().anyMatch(selected -> selected.proposalId().equals("proposal-e-4-lower-score")));
+        assertTrue(result.selectedProposals().stream().noneMatch(selected -> selected.proposalId().equals("proposal-e-3-high-score")));
+        assertEquals(20, result.selectedProposals().stream()
+                .map(SelectedProposal::proposalId)
+                .map(id -> candidates.stream().filter(candidate -> candidate.proposalId().equals(id)).findFirst().orElseThrow())
+                .flatMap(candidate -> candidate.orderIds().stream())
+                .collect(java.util.stream.Collectors.toSet())
+                .size());
+    }}

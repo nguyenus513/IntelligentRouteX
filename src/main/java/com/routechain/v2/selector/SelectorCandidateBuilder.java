@@ -215,6 +215,7 @@ public final class SelectorCandidateBuilder {
         }
         return routeProposals.stream()
                 .filter(other -> other != proposal)
+                .filter(other -> other.driverId().equals(proposal.driverId()))
                 .anyMatch(other -> RouteShapeQuality.dominates(other, proposal));
     }
 

@@ -155,6 +155,7 @@ public final class DispatchQualityBenchmarkHarness {
             if (execution.attachDiagnostics().mlAttachStatus() == DispatchQualityMlAttachStatus.ML_ATTACH_FAIL) {
                 notes.add("ML_ATTACH_FAIL");
             }
+            notes.addAll(coverageDiagnostics(result));
             String runAuthorityClass = request.authorityRun() ? "AUTHORITY_REAL" : "LOCAL_NON_AUTHORITY";
             boolean authorityEligible = request.authorityRun() && notes.stream().noneMatch("non-authoritative-local-real-run"::equals);
             Instant cellCompletedAt = Instant.now();
@@ -217,6 +218,70 @@ public final class DispatchQualityBenchmarkHarness {
             }
             return timeoutResult(request, baselineId, executionPolicy, cellStartedAt, classifyTimeoutPhase(exception), exception);
         }
+    }
+
+
+    private List<String> coverageDiagnostics(DispatchV2Result result) {
+        java.util.Set<String> allOrderIds = result.bufferedOrderWindow().orders().stream()
+                .map(order -> order.orderId())
+                .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
+        java.util.Set<String> coveredOrderIds = result.assignments().stream()
+                .flatMap(assignment -> assignment.orderIds().stream())
+                .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
+        java.util.Set<String> uncoveredOrderIds = new java.util.TreeSet<>(allOrderIds);
+        uncoveredOrderIds.removeAll(coveredOrderIds);
+        if (uncoveredOrderIds.isEmpty()) {
+            return List.of();
+        }
+        List<String> diagnostics = new ArrayList<>();
+        diagnostics.add("coverage-diagnostic:uncovered=" + String.join("|", uncoveredOrderIds));
+        for (String orderId : uncoveredOrderIds) {
+            long routeProposalCount = result.routeProposals().stream()
+                    .filter(proposal -> proposal.stopOrder().contains(orderId))
+                    .count();
+            long selectorCandidateCount = result.selectorCandidates().stream()
+                    .filter(candidate -> candidate.orderIds().contains(orderId))
+                    .count();
+            long selectedConflictCount = result.assignments().stream()
+                    .filter(assignment -> assignment.orderIds().stream().anyMatch(covered -> conflictsWithUncoveredCandidate(result, orderId, covered)))
+                    .count();
+            diagnostics.add("coverage-diagnostic:" + orderId
+                    + ":routeProposals=" + routeProposalCount
+                    + ":selectorCandidates=" + selectorCandidateCount
+                    + ":selectedConflictAssignments=" + selectedConflictCount);
+            diagnostics.add("coverage-diagnostic:" + orderId + ":topSelectorCandidates=" + result.selectorCandidates().stream()
+                    .filter(candidate -> candidate.orderIds().contains(orderId))
+                    .sorted(java.util.Comparator.comparingDouble(com.routechain.v2.selector.SelectorCandidate::selectionScore).reversed())
+                    .limit(5)
+                    .map(candidate -> candidate.driverId()
+                            + "[" + String.join("|", candidate.orderIds()) + "]"
+                            + ":score=" + "%.4f".formatted(candidate.selectionScore())
+                            + ":source=" + candidate.source())
+                    .collect(java.util.stream.Collectors.joining(",")));
+            diagnostics.add("coverage-diagnostic:" + orderId + ":selectorCandidateSizeCounts=" + result.selectorCandidates().stream()
+                    .filter(candidate -> candidate.orderIds().contains(orderId))
+                    .collect(java.util.stream.Collectors.groupingBy(candidate -> candidate.orderIds().size(), java.util.TreeMap::new, java.util.stream.Collectors.counting())));
+            diagnostics.add("coverage-diagnostic:" + orderId + ":largestSelectorCandidates=" + result.selectorCandidates().stream()
+                    .filter(candidate -> candidate.orderIds().contains(orderId))
+                    .sorted(java.util.Comparator.<com.routechain.v2.selector.SelectorCandidate>comparingInt(candidate -> candidate.orderIds().size()).reversed()
+                            .thenComparing(java.util.Comparator.comparingDouble(com.routechain.v2.selector.SelectorCandidate::selectionScore).reversed()))
+                    .limit(5)
+                    .map(candidate -> candidate.driverId()
+                            + "[" + String.join("|", candidate.orderIds()) + "]"
+                            + ":score=" + "%.4f".formatted(candidate.selectionScore())
+                            + ":source=" + candidate.source())
+                    .collect(java.util.stream.Collectors.joining(",")));
+        }
+        diagnostics.add("coverage-diagnostic:selected=" + result.assignments().stream()
+                .map(assignment -> assignment.driverId() + "[" + String.join("|", assignment.orderIds()) + "]")
+                .collect(java.util.stream.Collectors.joining(",")));
+        return List.copyOf(diagnostics);
+    }
+
+    private boolean conflictsWithUncoveredCandidate(DispatchV2Result result, String uncoveredOrderId, String coveredOrderId) {
+        return result.selectorCandidates().stream()
+                .filter(candidate -> candidate.orderIds().contains(uncoveredOrderId))
+                .anyMatch(candidate -> candidate.orderIds().contains(coveredOrderId));
     }
 
     private DispatchQualityBenchmarkResult timeoutResult(BenchmarkRequest request,

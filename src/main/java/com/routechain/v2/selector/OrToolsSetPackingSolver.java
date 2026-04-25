@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class OrToolsSetPackingSolver implements SelectorSolver {
     private static final double SCARCE_ORDER_COVERAGE_BONUS = 0.32;
+    private static final double SCARCE_COVERAGE_FIRST_BONUS = 2.50;
     private static final AtomicBoolean NATIVE_LIBRARIES_LOADED = new AtomicBoolean(false);
     private static final AtomicBoolean NATIVE_LIBRARIES_UNAVAILABLE = new AtomicBoolean(false);
 
@@ -132,8 +133,9 @@ public final class OrToolsSetPackingSolver implements SelectorSolver {
 
     private double selectionPriority(SelectorCandidate selectorCandidate, boolean scarceBundling) {
         int orderCount = selectorCandidate.orderIds().size();
-        double coverageBonus = scarceBundling ? Math.max(0, orderCount - 2) * SCARCE_ORDER_COVERAGE_BONUS : 0.0;
-        return selectorCandidate.selectionScore() + coverageBonus;
+        double bundleSizeBonus = scarceBundling ? Math.max(0, orderCount - 2) * SCARCE_ORDER_COVERAGE_BONUS : 0.0;
+        double coverageFirstBonus = scarceBundling ? orderCount * SCARCE_COVERAGE_FIRST_BONUS : 0.0;
+        return selectorCandidate.selectionScore() + coverageFirstBonus + bundleSizeBonus;
     }
 
     private void addAtMostOneConstraints(CpModel model, Map<String, List<BoolVar>> groupedDecisions) {
