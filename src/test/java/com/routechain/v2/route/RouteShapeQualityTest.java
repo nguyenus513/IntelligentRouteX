@@ -42,6 +42,17 @@ class RouteShapeQualityTest {
         assertTrue(RouteShapeQuality.dominates(clean, zigzag));
     }
 
+    @Test
+    void classifiesHighDetourRouteAsWeakShapeEvenWhenStraightEnough() {
+        RouteProposal proposal = proposal("detour", List.of("order-1", "order-2"), 2500.0, 2100.0, 13, 0.61, 0.50, 1400.0);
+
+        RouteShapeAnalysis analysis = RouteShapeQuality.analyze(proposal);
+
+        assertEquals("WEAK_SHAPE", analysis.verdict());
+        assertTrue(analysis.detourRatio() > RouteShapeQuality.DETOUR_WEAK_RATIO);
+        assertTrue(analysis.reasons().contains("route-shape-detour-penalty"));
+    }
+
     private RouteProposal proposal(String proposalId,
                                    List<String> stopOrder,
                                    double routeCost,
@@ -49,6 +60,17 @@ class RouteShapeQualityTest {
                                    int turnCount,
                                    double straightnessScore,
                                    double congestionScore) {
+        return proposal(proposalId, stopOrder, routeCost, travelTimeSeconds, turnCount, straightnessScore, congestionScore, Math.max(1.0, routeCost * straightnessScore * 0.90));
+    }
+
+    private RouteProposal proposal(String proposalId,
+                                   List<String> stopOrder,
+                                   double routeCost,
+                                   double travelTimeSeconds,
+                                   int turnCount,
+                                   double straightnessScore,
+                                   double congestionScore,
+                                   double legDirectDistanceMeters) {
         return new RouteProposal(
                 "route-proposal/v1",
                 proposalId,
@@ -74,6 +96,27 @@ class RouteShapeQualityTest {
                 congestionScore,
                 straightnessScore,
                 true,
-                List.of());
+                List.of(new com.routechain.v2.routing.LegRouteVector(
+                        "route-leg-vector/v1",
+                        "a",
+                        "b",
+                        0.0,
+                        0.01,
+                        0.0,
+                        0.0,
+                        0.0,
+                        legDirectDistanceMeters,
+                        travelTimeSeconds,
+                        6.0,
+                        0.7,
+                        0.3,
+                        turnCount,
+                        0,
+                        0,
+                        0,
+                        straightnessScore,
+                        congestionScore,
+                        0.1,
+                        routeCost)));
     }
 }

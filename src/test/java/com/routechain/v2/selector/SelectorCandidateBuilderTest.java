@@ -226,13 +226,18 @@ class SelectorCandidateBuilderTest {
 
     private double bundleSizeLift(RouteProposal proposal) {
         int bundleSize = proposal.stopOrder().size();
+        var analysis = RouteShapeQuality.analyze(proposal);
         if (bundleSize <= 2) {
-            return proposal.straightnessScore() < 0.55 ? -0.04 : 0.0;
+            return proposal.straightnessScore() < 0.55 || analysis.detourRatio() > RouteShapeQuality.DETOUR_WEAK_RATIO ? -0.04 : 0.0;
         }
-        if (proposal.straightnessScore() < 0.60 || proposal.turnCount() > (8 * bundleSize + 6)) {
+        if (proposal.straightnessScore() < 0.62
+                || proposal.turnCount() > (7 * bundleSize + 6)
+                || analysis.detourRatio() > 1.55
+                || analysis.backtrackCount() > 0) {
             return 0.0;
         }
-        return Math.min(0.10, 0.035 * (bundleSize - 2));
+        double compactShapeBonus = Math.min(0.03, Math.max(0.0, analysis.shapeScore() - 0.65) * 0.08);
+        return Math.min(0.14, (0.045 * (bundleSize - 2)) + compactShapeBonus);
     }
 
     private RouteProposal shapedProposal(RouteProposal original,

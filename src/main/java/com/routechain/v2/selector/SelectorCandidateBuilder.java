@@ -9,6 +9,7 @@ import com.routechain.v2.route.DriverCandidate;
 import com.routechain.v2.route.PickupAnchor;
 import com.routechain.v2.route.RouteProposal;
 import com.routechain.v2.route.RouteProposalSource;
+import com.routechain.v2.route.RouteShapeAnalysis;
 import com.routechain.v2.route.RouteShapeQuality;
 import com.routechain.v2.scenario.DispatchScenarioStage;
 import com.routechain.v2.scenario.RobustUtility;
@@ -71,7 +72,7 @@ public final class SelectorCandidateBuilder {
                 degradeReasons.add("selector-reject-zigzag-route");
                 continue;
             }
-            if ("WEAK_SHAPE".equals(RouteShapeQuality.verdict(proposal))) {
+            if (shouldRejectWeakShape(proposal)) {
                 missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-reject-weak-shape-route"));
                 degradeReasons.add("selector-reject-weak-shape-route");
                 continue;
@@ -128,6 +129,13 @@ public final class SelectorCandidateBuilder {
             reasons.add("selector-route-vector-tie-break-available");
         }
         reasons.addAll(RouteShapeQuality.reasons(proposal));
+        RouteShapeAnalysis analysis = RouteShapeQuality.analyze(proposal);
+        if (!"UNKNOWN".equals(analysis.verdict())) {
+            reasons.add("route-shape-verdict-" + analysis.verdict().toLowerCase(java.util.Locale.ROOT).replace('_', '-'));
+        }
+        if (analysis.detourRatio() > RouteShapeQuality.DETOUR_WEAK_RATIO) {
+            reasons.add("selector-detour-guard-active");
+        }
         return List.copyOf(reasons);
     }
 
@@ -167,20 +175,37 @@ public final class SelectorCandidateBuilder {
                 && context.acceptedBoundarySupport(proposal.bundleId()) < WEAK_BOUNDARY_SUPPORT_THRESHOLD) {
             score -= 0.03;
         }
-        score -= RouteShapeQuality.penalty(proposal);
+        RouteShapeAnalysis analysis = RouteShapeQuality.analyze(proposal);
+        score -= analysis.penalty();
         return score;
     }
 
     private double bundleSizeLift(RouteProposal proposal) {
         int bundleSize = proposal.stopOrder().size();
+        RouteShapeAnalysis analysis = RouteShapeQuality.analyze(proposal);
         if (bundleSize <= 2) {
-            return proposal.straightnessScore() < 0.55 ? -0.04 : 0.0;
+            return proposal.straightnessScore() < 0.55 || analysis.detourRatio() > RouteShapeQuality.DETOUR_WEAK_RATIO ? -0.04 : 0.0;
         }
-        double shapeGuard = proposal.straightnessScore() >= 0.60 && proposal.turnCount() <= (8 * bundleSize + 6) ? 1.0 : 0.0;
+        double shapeGuard = proposal.straightnessScore() >= 0.62
+                && proposal.turnCount() <= (7 * bundleSize + 6)
+                && analysis.detourRatio() <= 1.55
+                && analysis.backtrackCount() == 0 ? 1.0 : 0.0;
         if (shapeGuard == 0.0) {
             return 0.0;
         }
-        return Math.min(0.10, 0.035 * (bundleSize - 2));
+        double compactShapeBonus = Math.min(0.03, Math.max(0.0, analysis.shapeScore() - 0.65) * 0.08);
+        return Math.min(0.14, (0.045 * (bundleSize - 2)) + compactShapeBonus);
+    }
+
+    private boolean shouldRejectWeakShape(RouteProposal proposal) {
+        RouteShapeAnalysis analysis = RouteShapeQuality.analyze(proposal);
+        if (!"WEAK_SHAPE".equals(analysis.verdict()) || proposal.stopOrder().size() <= 1) {
+            return false;
+        }
+        return proposal.straightnessScore() < RouteShapeQuality.MULTI_ORDER_STRAIGHTNESS_WEAK_FLOOR
+                || proposal.turnCount() > RouteShapeQuality.MULTI_ORDER_TURN_WEAK_LIMIT
+                || analysis.detourRatio() > RouteShapeQuality.DETOUR_REJECT_RATIO
+                || (proposal.congestionScore() >= RouteShapeQuality.CONGESTION_SELECTED_REJECT_RISK && proposal.straightnessScore() < 0.70);
     }
 
     private boolean isDominatedBySameOrderSetAlternative(RouteProposal proposal, List<RouteProposal> routeProposals) {

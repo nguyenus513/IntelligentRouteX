@@ -272,6 +272,64 @@ def selected_proposals(reuse_state: dict, selected_ids: Iterable[str]) -> List[d
     return selected
 
 
+def route_shape_analysis(proposal: dict) -> dict:
+    straightness = float(proposal.get("straightnessScore") or 0.0)
+    turn_count = int(proposal.get("turnCount") or 0)
+    distance_meters = float(proposal.get("totalDistanceMeters") or proposal.get("distanceMeters") or 0.0)
+    legs = proposal.get("legs", []) if isinstance(proposal.get("legs"), list) else []
+    leg_distance = sum(float(leg.get("distanceMeters") or 0.0) for leg in legs if isinstance(leg, dict))
+    detour_ratio = max(1.0, distance_meters / leg_distance) if distance_meters > 0.0 and leg_distance > 0.0 else 1.0
+    turn_density = turn_count / max(0.1, distance_meters / 1000.0) if distance_meters > 0.0 else 0.0
+    bearings = [float(leg.get("bearingMeanDeg") or 0.0) for leg in legs if isinstance(leg, dict)]
+    backtrack_count = sum(1 for left, right in zip(bearings, bearings[1:]) if bearing_delta(left, right) >= 145.0)
+    zigzag_count = 0
+    for index in range(2, len(bearings)):
+        previous = signed_bearing_delta(bearings[index - 2], bearings[index - 1])
+        current = signed_bearing_delta(bearings[index - 1], bearings[index])
+        if abs(previous) >= 45.0 and abs(current) >= 45.0 and (previous > 0) != (current > 0):
+            zigzag_count += 1
+    order_count = len(proposal.get("stopOrder", []) or [])
+    reasons = []
+    if straightness < 0.60 and order_count > 1:
+        reasons.append("low-straightness")
+    if turn_count > 16 and order_count > 1:
+        reasons.append("too-many-turns")
+    if detour_ratio > 1.65:
+        reasons.append("detour-risk")
+    if turn_density > 16.0:
+        reasons.append("turn-density-risk")
+    if backtrack_count > 1 and straightness < 0.68:
+        reasons.append("backtrack-risk")
+    if zigzag_count > max(2, order_count) and straightness < 0.72:
+        reasons.append("zigzag-bearing-change")
+    if order_count > 1 and (straightness < 0.50 or turn_count > min(36, 8 * order_count + 6) or detour_ratio > 2.30):
+        verdict = "REJECT_SHAPE"
+    elif order_count > 1 and reasons:
+        verdict = "WEAK_SHAPE"
+    elif straightness < 0.70 or turn_count > 14:
+        verdict = "ACCEPTABLE"
+    else:
+        verdict = "GOOD"
+    return {
+        "verdict": verdict,
+        "detourRatio": detour_ratio,
+        "turnDensity": turn_density,
+        "backtrackCount": backtrack_count,
+        "zigzagChangeCount": zigzag_count,
+        "reasons": reasons,
+    }
+
+
+def bearing_delta(left: float, right: float) -> float:
+    delta = abs(left - right) % 360.0
+    return 360.0 - delta if delta > 180.0 else delta
+
+
+def signed_bearing_delta(left: float, right: float) -> float:
+    delta = (right - left + 540.0) % 360.0 - 180.0
+    return 180.0 if delta == -180.0 else delta
+
+
 def build_visual_cell(cell: VisualCell) -> dict:
     replay = read_json(replay_path(cell))
     reuse_state = read_json(reuse_state_path(cell))
@@ -306,6 +364,8 @@ def build_visual_cell(cell: VisualCell) -> dict:
             "routeCost": proposal.get("routeCost"),
             "congestionScore": proposal.get("congestionScore"),
             "turnCount": proposal.get("turnCount"),
+            "straightnessScore": proposal.get("straightnessScore"),
+            "shapeAnalysis": route_shape_analysis(proposal),
             "reasons": proposal.get("reasons", []),
             "degradeReasons": proposal.get("degradeReasons", []),
         })
@@ -530,10 +590,12 @@ def route_step_text(route: dict) -> str:
 
 def reasoning_text(route: dict) -> str:
     reasons = ", ".join(route.get("reasons", [])) or "highest feasible selected score"
+    shape = route.get("shapeAnalysis", {})
+    shape_reasons = ", ".join(shape.get("reasons", [])) or "shape within guardrails"
     return (
         f"System chooses {route.get('driverId')} because route value={fmt_number(route.get('routeValue'))}, "
         f"pickup ETA={fmt_number(route.get('pickupEtaMinutes'))} min, completion={fmt_number(route.get('completionEtaMinutes'))} min, "
-        f"congestion={fmt_number(route.get('congestionScore'))}, reason={reasons}."
+        f"congestion={fmt_number(route.get('congestionScore'))}, shape={shape.get('verdict', 'UNKNOWN')} ({shape_reasons}), reason={reasons}."
     )
 
 
@@ -541,14 +603,18 @@ def render_route_cards(cell: dict, max_routes: int, max_drivers: int) -> str:
     cards = []
     for route in visible_routes(cell, max_routes, max_drivers):
         order_text = " -> ".join(route.get("orderIds", []))
+        shape = route.get("shapeAnalysis", {})
+        verdict = str(shape.get("verdict", "UNKNOWN"))
+        verdict_class = verdict.lower().replace("_", "-")
         cards.append(
-            "<article class='route-card'>"
+            f"<article class='route-card shape-{html.escape(verdict_class)}'>"
             f"<div class='route-rank' style='background:{color(int(route.get('rank', 1)))}'>#{route.get('rank')}</div>"
-            f"<h3>{html.escape(str(route.get('driverId')))} picks {html.escape(order_text)}</h3>"
+            f"<h3>{html.escape(str(route.get('driverId')))} picks {html.escape(order_text)} <span class='shape-badge'>{html.escape(verdict)}</span></h3>"
             f"<p><b>Route text</b> {html.escape(route_step_text(route))}</p>"
             f"<p><b>Source</b> {html.escape(str(route.get('source')))} · <b>Bundle</b> {html.escape(str(route.get('bundleId')))}</p>"
             f"<p><b>Pickup ETA</b> {fmt_number(route.get('pickupEtaMinutes'))} min · <b>Complete</b> {fmt_number(route.get('completionEtaMinutes'))} min · <b>Distance</b> {fmt_number(route.get('distanceMeters'), 0)} m</p>"
             f"<p><b>Congestion</b> {fmt_number(route.get('congestionScore'))} · <b>Turns</b> {html.escape(str(route.get('turnCount')))} · <b>Value</b> {fmt_number(route.get('routeValue'))}</p>"
+            f"<p><b>Straight</b> {fmt_number(route.get('straightnessScore'))} · <b>Detour</b> {fmt_number(shape.get('detourRatio'))} · <b>Turn density</b> {fmt_number(shape.get('turnDensity'))}/km · <b>Backtrack</b> {html.escape(str(shape.get('backtrackCount', 0)))} · <b>Zigzag</b> {html.escape(str(shape.get('zigzagChangeCount', 0)))}</p>"
             f"<p class='reason'>{html.escape(reasoning_text(route))}</p>"
             "</article>"
         )
@@ -723,9 +789,13 @@ def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_driver
     .timeline span { display:block; color:#d8eee5; margin-top:4px; line-height:1.45; }
     .route-cards { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:14px; }
     .route-card { position:relative; background:white; border:1px solid var(--line); border-radius:22px; padding:18px 18px 18px 64px; min-height:132px; }
+    .route-card.shape-good { border-color:#9be7c7; box-shadow:inset 4px 0 0 #0f8b68; }
+    .route-card.shape-acceptable { border-color:#f5c16c; box-shadow:inset 4px 0 0 #f2994a; }
+    .route-card.shape-weak-shape, .route-card.shape-reject-shape { border-color:#f0a3ae; box-shadow:inset 4px 0 0 #e85d75; }
     .route-rank { position:absolute; left:16px; top:18px; width:34px; height:34px; border-radius:12px; color:white; display:grid; place-items:center; font-weight:900; }
     .route-card h3 { font-size:17px; }
     .route-card p { margin:7px 0; color:var(--muted); line-height:1.4; }
+    .shape-badge { display:inline-block; margin-left:8px; padding:3px 8px; border-radius:999px; background:#eef7f1; color:#0f8b68; font-size:11px; letter-spacing:0.03em; }
     .reason { color:#0f8b68 !important; font-weight:700; }
     footer { color:var(--muted); padding:0 48px 36px; }
     @media (max-width: 980px) { header { padding:28px 22px; } main { padding:0 14px 28px; } .visual-grid, .route-cards { grid-template-columns:1fr; } .metrics-grid { grid-template-columns:repeat(2, 1fr); } .section-head { flex-direction:column; } }
