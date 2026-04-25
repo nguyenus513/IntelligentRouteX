@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
@@ -77,6 +78,45 @@ def point_snap_status(snap_distance: float) -> str:
     return "BAD_GEO_POINT"
 
 
+def selected_stop_sequence(route: Dict[str, Any]) -> list[str]:
+    sequence: list[str] = []
+    seen: set[str] = set()
+    for point in route.get("benchmarkPath") or []:
+        if not isinstance(point, dict):
+            continue
+        point_id = str(point.get("id", ""))
+        for match in re.finditer(r"(order-\d+:(?:pickup|dropoff))", point_id):
+            stop_id = match.group(1)
+            if stop_id not in seen:
+                sequence.append(stop_id)
+                seen.add(stop_id)
+    return sequence
+
+
+def pickup_before_dropoff_valid(route: Dict[str, Any]) -> bool:
+    sequence = selected_stop_sequence(route)
+    if not sequence:
+        return False
+    positions = {stop_id: index for index, stop_id in enumerate(sequence)}
+    for order_id in route.get("orderIds") or []:
+        pickup = f"{order_id}:pickup"
+        dropoff = f"{order_id}:dropoff"
+        if pickup not in positions or dropoff not in positions:
+            return False
+        if positions[pickup] >= positions[dropoff]:
+            return False
+    return True
+
+
+def feasible_sequence_upper_bound(order_count: int) -> int:
+    if order_count <= 0:
+        return 0
+    value = 1
+    for number in range(2, order_count * 2 + 1):
+        value *= number
+    return value // (2 ** order_count)
+
+
 def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
     benchmark = load_benchmark_cell(benchmark_root)
     visual = load_visual_payload(visual_root)
@@ -109,6 +149,8 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
     weak_road_route_count = 0
     network_detours: list[float] = []
     road_etas: list[float] = []
+    pickup_before_dropoff_valid_count = 0
+    evaluated_sequence_count = 0
 
     for route in routes:
         path = route.get("path") or []
@@ -137,6 +179,9 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
         if "detourRatio" in shape:
             network_detours.append(as_number(shape.get("detourRatio"), 0.0))
         road_etas.append(as_number(route.get("travelTimeSeconds"), 0.0))
+        if pickup_before_dropoff_valid(route):
+            pickup_before_dropoff_valid_count += 1
+        evaluated_sequence_count += feasible_sequence_upper_bound(len(route.get("orderIds") or []))
 
     road_route_coverage = road_route_count / route_count if route_count else as_number(route_metrics.get("geometryCoverage"), 0.0)
     selected_route_polyline_coverage = selected_polyline_count / route_count if route_count else 0.0
@@ -186,6 +231,12 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
         "matrixLatencyMs": 0.0,
         "matrixFallbackRate": matrix_fallback_rate,
         "selectedRouteMatrixCoverage": selected_route_matrix_coverage,
+        "pickupBeforeDropoffValid": route_count > 0 and pickup_before_dropoff_valid_count == route_count,
+        "pickupBeforeDropoffValidRouteCount": pickup_before_dropoff_valid_count,
+        "selectedRouteCount": route_count,
+        "evaluatedSequenceCount": evaluated_sequence_count,
+        "bestRoadDurationSeconds": min(road_etas) if road_etas else 0.0,
+        "sequenceRejectReasons": [],
         "planRepairLatencyMs": 0.0,
         "routeProposalCount": int(as_number(route_metrics.get("proposalCount"), 0.0)),
         "routeVectorGeometryCoverage": as_number(route_metrics.get("geometryCoverage"), 0.0),
@@ -223,6 +274,9 @@ def main() -> int:
         "matrixFallbackRate",
         "matrixPointCount",
         "matrixPairCount",
+        "pickupBeforeDropoffValid",
+        "evaluatedSequenceCount",
+        "selectedSingleOrderCount",
     ):
         print(f"- {key}: {metrics.get(key)}")
     return 0

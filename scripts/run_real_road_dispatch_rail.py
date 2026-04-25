@@ -25,7 +25,7 @@ LOOP_NAMES = {
     8: "visual-road-evidence-closure",
 }
 
-IMPLEMENTED_LOOPS = {1, 2, 3}
+IMPLEMENTED_LOOPS = {1, 2, 3, 4}
 
 PRESETS = {
     "preset:smoke": {"matrix": "standard-v1", "scenarios": "dense-bundle-20x5", "size": "XS"},
@@ -196,6 +196,10 @@ def run_loop_3(loop_dir: Path, args: argparse.Namespace, preset: Dict[str, str],
     return run_benchmark_visual_metrics(loop_dir, args, preset, manifest_path, 3)
 
 
+def run_loop_4(loop_dir: Path, args: argparse.Namespace, preset: Dict[str, str], manifest_path: Path) -> Tuple[str, List[str]]:
+    return run_benchmark_visual_metrics(loop_dir, args, preset, manifest_path, 4)
+
+
 def run_unimplemented_loop(loop_dir: Path, loop: int, manifest_path: Path) -> Tuple[str, List[str]]:
     reasons = [f"loop-{loop:02d}-{LOOP_NAMES.get(loop, 'unknown')}-implementation-not-yet-wired"]
     metrics_path = loop_dir / "metrics.json"
@@ -229,6 +233,8 @@ def run_loop(loop: int, args: argparse.Namespace, preset: Dict[str, str]) -> Tup
             verdict, reasons = run_loop_2(loop_dir, args, preset, manifest_path)
         elif loop == 3:
             verdict, reasons = run_loop_3(loop_dir, args, preset, manifest_path)
+        elif loop == 4:
+            verdict, reasons = run_loop_4(loop_dir, args, preset, manifest_path)
         else:
             verdict, reasons = run_unimplemented_loop(loop_dir, loop, manifest_path)
     else:

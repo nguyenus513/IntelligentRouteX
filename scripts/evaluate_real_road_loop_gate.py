@@ -17,7 +17,7 @@ def write_json(path: Path, payload: Dict[str, Any]) -> None:
 
 def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -> Tuple[str, List[str]]:
     reasons: List[str] = []
-    if loop not in (1, 2, 3):
+    if loop not in (1, 2, 3, 4):
         return "EVIDENCE_GAP", [f"loop-{loop:02d}-implementation-not-yet-wired"]
 
     if float(metrics.get("snapSuccessRate", 0.0)) < 0.95:
@@ -50,6 +50,15 @@ def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -
             reasons.append("matrix-point-count-missing")
         if int(metrics.get("matrixPairCount", 0)) <= 0:
             reasons.append("matrix-pair-count-missing")
+    if loop == 4:
+        if not bool(metrics.get("pickupBeforeDropoffValid", False)):
+            reasons.append("pickup-before-dropoff-invalid")
+        if int(metrics.get("evaluatedSequenceCount", 0)) <= 0:
+            reasons.append("evaluated-sequence-count-missing")
+        if int(metrics.get("coveredOrderCount", 0)) < int(metrics.get("baselineCoveredOrderCount", 0)):
+            reasons.append("covered-order-count-regressed")
+        if int(metrics.get("selectedSingleOrderCount", 0)) > 0:
+            reasons.append("selected-single-order-remains-in-visual-case")
 
     if reasons:
         return "FAIL", reasons
@@ -63,6 +72,7 @@ def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -
         1: "loop-01-road-route-evidence-pass",
         2: "loop-02-road-aware-generator-pass",
         3: "loop-03-osrm-table-matrix-cache-pass",
+        4: "loop-04-road-native-sequence-optimizer-pass",
     }[loop]
     return "PASS", [pass_reason]
 
