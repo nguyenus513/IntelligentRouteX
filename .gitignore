@@ -16,3 +16,6 @@ data/gold/
 services/models/materialized/chronos-2/
 services/models/materialized/greedrl/
 services/models/materialized/tabular/
+artifacts/osrm/
+artifacts/visual/
+artifacts/validation/geo-tiles/
