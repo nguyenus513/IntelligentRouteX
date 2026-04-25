@@ -77,10 +77,13 @@ import com.routechain.v2.route.RouteProposalPruner;
 import com.routechain.v2.route.RouteProposalValidator;
 import com.routechain.v2.route.RouteValueScorer;
 import com.routechain.v2.routing.BestPathRouter;
+import com.routechain.v2.routing.HttpTomTomRoutingProvider;
 import com.routechain.v2.routing.RoadGraphProvider;
 import com.routechain.v2.routing.RouteCostFunction;
 import com.routechain.v2.routing.RouteVectorEnricher;
+import com.routechain.v2.routing.RoutingProvider;
 import com.routechain.v2.routing.SyntheticRoadGraphProvider;
+import com.routechain.v2.routing.SyntheticRoutingProvider;
 import com.routechain.v2.scenario.DispatchScenarioService;
 import com.routechain.v2.scenario.DemandShiftFeatureBuilder;
 import com.routechain.v2.scenario.PostDropShiftFeatureBuilder;
@@ -698,10 +701,27 @@ public class DispatchV2Configuration {
     }
 
     @Bean
-    RouteVectorEnricher routeVectorEnricher(BestPathRouter bestPathRouter,
+    RoutingProvider routingProvider(RouteChainDispatchV2Properties properties,
+                                    BestPathRouter bestPathRouter,
+                                    RouteCostFunction routeCostFunction) {
+        RoutingProvider syntheticProvider = new SyntheticRoutingProvider(bestPathRouter);
+        if ("tomtom".equalsIgnoreCase(properties.getRouting().getProvider())) {
+            return new HttpTomTomRoutingProvider(
+                    properties.getTraffic().getBaseUrl(),
+                    properties.getTraffic().getApiKey(),
+                    properties.getTraffic().getConnectTimeout(),
+                    properties.getTraffic().getReadTimeout(),
+                    routeCostFunction,
+                    syntheticProvider);
+        }
+        return syntheticProvider;
+    }
+
+    @Bean
+    RouteVectorEnricher routeVectorEnricher(RoutingProvider routingProvider,
                                             DecisionStageLogger decisionStageLogger,
                                             HarvestRecorder harvestRecorder) {
-        return new RouteVectorEnricher(bestPathRouter, decisionStageLogger, harvestRecorder);
+        return new RouteVectorEnricher(routingProvider, decisionStageLogger, harvestRecorder);
     }
 
     @Bean

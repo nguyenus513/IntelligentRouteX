@@ -65,6 +65,7 @@ import com.routechain.v2.routing.BestPathRouter;
 import com.routechain.v2.routing.RoadGraphProvider;
 import com.routechain.v2.routing.RouteCostFunction;
 import com.routechain.v2.routing.RouteVectorEnricher;
+import com.routechain.v2.routing.RoutingProvider;
 import com.routechain.v2.scenario.DispatchScenarioService;
 import com.routechain.v2.scenario.RobustUtilityAggregator;
 import com.routechain.v2.scenario.ScenarioEvaluator;
@@ -268,7 +269,8 @@ public final class TestDispatchV2Factory {
         RoadGraphProvider roadGraphProvider = configuration.roadGraphProvider();
         RouteCostFunction routeCostFunction = configuration.routeCostFunction();
         BestPathRouter bestPathRouter = configuration.bestPathRouter(roadGraphProvider, routeCostFunction);
-        RouteVectorEnricher routeVectorEnricher = configuration.routeVectorEnricher(bestPathRouter, decisionStageLogger, harvestRecorder);
+        RoutingProvider routingProvider = configuration.routingProvider(properties, bestPathRouter, routeCostFunction);
+        RouteVectorEnricher routeVectorEnricher = configuration.routeVectorEnricher(routingProvider, decisionStageLogger, harvestRecorder);
         DispatchRouteProposalService dispatchRouteProposalService = configuration.dispatchRouteProposalService(
                 properties,
                 routeProposalEngine,

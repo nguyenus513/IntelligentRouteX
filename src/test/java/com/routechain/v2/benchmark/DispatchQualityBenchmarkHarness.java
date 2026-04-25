@@ -919,6 +919,10 @@ public final class DispatchQualityBenchmarkHarness {
                 "dispatchV2.traffic.apiKey",
                 "IRX_TOMTOM_API_KEY",
                 properties.getTraffic().getApiKey()));
+        properties.getRouting().setProvider(configuredValue(
+                "dispatchV2.routing.provider",
+                "IRX_ROUTING_PROVIDER",
+                properties.getRouting().getProvider()));
         properties.setEnabled(true);
         properties.setMlEnabled(false);
         properties.setSelectorOrtoolsEnabled(false);

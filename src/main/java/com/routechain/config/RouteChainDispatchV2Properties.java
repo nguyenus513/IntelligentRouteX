@@ -37,6 +37,7 @@ public class RouteChainDispatchV2Properties {
     private final Performance performance = new Performance();
     private final Compute compute = new Compute();
     private final Decision decision = new Decision();
+    private final Routing routing = new Routing();
 
     public static RouteChainDispatchV2Properties defaults() {
         return new RouteChainDispatchV2Properties();
@@ -188,6 +189,22 @@ public class RouteChainDispatchV2Properties {
 
     public Decision getDecision() {
         return decision;
+    }
+
+    public Routing getRouting() {
+        return routing;
+    }
+
+    public static final class Routing {
+        private String provider = "synthetic";
+
+        public String getProvider() {
+            return provider;
+        }
+
+        public void setProvider(String provider) {
+            this.provider = provider;
+        }
     }
 
     public static final class Buffer {
