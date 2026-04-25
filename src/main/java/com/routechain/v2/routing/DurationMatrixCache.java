@@ -48,6 +48,15 @@ public final class DurationMatrixCache {
         return missCount;
     }
 
+    public int requestCount() {
+        return hitCount + missCount;
+    }
+
+    public double hitRate() {
+        int requests = requestCount();
+        return requests == 0 ? 0.0 : hitCount / (double) requests;
+    }
+
     public int size() {
         return entries.size();
     }

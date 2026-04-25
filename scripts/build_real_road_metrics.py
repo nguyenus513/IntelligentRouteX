@@ -140,6 +140,11 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
 
     road_route_coverage = road_route_count / route_count if route_count else as_number(route_metrics.get("geometryCoverage"), 0.0)
     selected_route_polyline_coverage = selected_polyline_count / route_count if route_count else 0.0
+    route_vector_computed_count = int(as_number(budget_metrics.get("routeVectorComputedCount"), 0.0))
+    route_vector_reused_count = int(as_number(budget_metrics.get("routeVectorReusedCount"), 0.0))
+    route_vector_matrix_count = route_vector_computed_count + route_vector_reused_count
+    selected_route_matrix_coverage = min(1.0, route_vector_matrix_count / route_count) if route_count else 0.0
+    matrix_fallback_rate = as_number(metrics.get("routeFallbackRate"), 0.0)
 
     return {
         "schemaVersion": "real-road-dispatch-metrics/v1",
@@ -175,7 +180,12 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
         "avgRoadEta": sum(road_etas) / len(road_etas) if road_etas else 0.0,
         "maxRoadEta": max(road_etas) if road_etas else 0.0,
         "routeProposalPoolLatencyMs": as_number((artifact.get("stageLatencies") or {}).get("route-proposal-pool"), 0.0) if isinstance(artifact.get("stageLatencies"), dict) else 0.0,
+        "matrixPointCount": int(requested_points),
+        "matrixPairCount": int(requested_points * requested_points) if requested_points else 0,
+        "matrixCacheHitRate": as_number(budget_metrics.get("routeVectorCacheHitRate"), 0.0),
         "matrixLatencyMs": 0.0,
+        "matrixFallbackRate": matrix_fallback_rate,
+        "selectedRouteMatrixCoverage": selected_route_matrix_coverage,
         "planRepairLatencyMs": 0.0,
         "routeProposalCount": int(as_number(route_metrics.get("proposalCount"), 0.0)),
         "routeVectorGeometryCoverage": as_number(route_metrics.get("geometryCoverage"), 0.0),
@@ -208,6 +218,11 @@ def main() -> int:
         "avgNetworkDetourRatio",
         "maxNetworkDetourRatio",
         "routeProposalPoolLatencyMs",
+        "selectedRouteMatrixCoverage",
+        "matrixCacheHitRate",
+        "matrixFallbackRate",
+        "matrixPointCount",
+        "matrixPairCount",
     ):
         print(f"- {key}: {metrics.get(key)}")
     return 0

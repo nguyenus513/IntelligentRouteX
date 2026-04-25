@@ -81,6 +81,8 @@ class OsrmTableClientTest {
             assertEquals(1, calls[0]);
             assertEquals(1, cache.hitCount());
             assertEquals(1, cache.missCount());
+            assertEquals(2, cache.requestCount());
+            assertEquals(0.5, cache.hitRate(), 1e-9);
         } finally {
             server.stop(0);
         }

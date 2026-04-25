@@ -87,6 +87,42 @@ class RealRoadDispatchRailTest(unittest.TestCase):
         self.assertEqual("FAIL", verdict)
         self.assertIn("geo-generation-mode-not-road-aware", reasons)
 
+    def test_loop_three_gate_requires_matrix_coverage(self) -> None:
+        verdict, reasons = gate_module.gate_loop(3, {
+            "snapSuccessRate": 1.0,
+            "roadRouteCoverage": 1.0,
+            "selectedBadGeoPointCount": 0,
+            "visualStraightLineSelectedRouteCount": 0,
+            "selectedRoutePolylineCoverage": 1.0,
+            "syntheticFallbackRouteCount": 0,
+            "selectedRouteMatrixCoverage": 1.0,
+            "matrixFallbackRate": 0.0,
+            "matrixPointCount": 45,
+            "matrixPairCount": 2025,
+            "executedAssignmentCount": 5,
+        }, provider_ready=True)
+
+        self.assertEqual("PASS", verdict)
+        self.assertIn("loop-03-osrm-table-matrix-cache-pass", reasons)
+
+    def test_loop_three_gate_fails_missing_matrix_pairs(self) -> None:
+        verdict, reasons = gate_module.gate_loop(3, {
+            "snapSuccessRate": 1.0,
+            "roadRouteCoverage": 1.0,
+            "selectedBadGeoPointCount": 0,
+            "visualStraightLineSelectedRouteCount": 0,
+            "selectedRoutePolylineCoverage": 1.0,
+            "selectedRouteMatrixCoverage": 0.2,
+            "matrixFallbackRate": 0.0,
+            "matrixPointCount": 0,
+            "matrixPairCount": 0,
+            "executedAssignmentCount": 5,
+        }, provider_ready=True)
+
+        self.assertEqual("FAIL", verdict)
+        self.assertIn("selected-route-matrix-coverage-below-0.95", reasons)
+        self.assertIn("matrix-point-count-missing", reasons)
+
     def test_build_metrics_counts_visual_road_polylines(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -130,17 +166,17 @@ class RealRoadDispatchRailTest(unittest.TestCase):
 
     def test_unimplemented_loop_writes_evidence_gap(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            loop_dir = Path(temp_dir) / "loop-03"
+            loop_dir = Path(temp_dir) / "loop-04"
             loop_dir.mkdir(parents=True)
             manifest = loop_dir / "loop_manifest.json"
-            manifest.write_text(json.dumps({"loop": 3}), encoding="utf-8")
+            manifest.write_text(json.dumps({"loop": 4}), encoding="utf-8")
 
-            verdict, reasons = rail_module.run_unimplemented_loop(loop_dir, 3, manifest)
+            verdict, reasons = rail_module.run_unimplemented_loop(loop_dir, 4, manifest)
 
             self.assertEqual("EVIDENCE_GAP", verdict)
             self.assertTrue((loop_dir / "metrics.json").exists())
             self.assertTrue((loop_dir / "routePlanQualityLoopReport.md").exists())
-            self.assertIn("loop-03-osrm-table-matrix-cache-implementation-not-yet-wired", reasons)
+            self.assertIn("loop-04-road-native-sequence-optimizer-implementation-not-yet-wired", reasons)
 
 
 if __name__ == "__main__":
