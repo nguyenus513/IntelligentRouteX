@@ -532,6 +532,14 @@ def route_path_d(projected_points: Sequence[str]) -> str:
     return "M " + first + " " + " ".join(f"L {point}" for point in rest)
 
 
+def route_focus_class(rank: object) -> str:
+    try:
+        value = int(rank)
+    except (TypeError, ValueError):
+        value = 0
+    return f"route-focus-{value}" if value > 0 else "route-focus-unknown"
+
+
 def background_tile(tile_evidence: dict) -> Optional[dict]:
     preferred = ("osm-raster", "tomtom-raster-basic")
     by_provider = {str(row.get("provider")): row for row in tile_evidence.get("tiles", []) if isinstance(row, dict)}
@@ -582,6 +590,11 @@ def render_svg(cell: dict, max_routes: int, max_orders: int, max_drivers: int, t
         parts.append(f"<rect x='0' y='0' width='{width}' height='{height}' fill='url(#grid)' rx='28'/>")
     if flow_tile:
         parts.append(f"<image href='{html.escape(str(flow_tile.get('visualPath')))}' x='0' y='0' width='{width}' height='{height}' preserveAspectRatio='xMidYMid slice' opacity='0.30'/>")
+    selected_order_to_route = {
+        order_id: int(route.get("rank", 1))
+        for route in routes
+        for order_id in route.get("orderIds", [])
+    }
     for order in cell.get("orders", []):
         order_id = str(order.get("orderId"))
         if order_id not in shown_order_ids:
@@ -591,24 +604,27 @@ def render_svg(cell: dict, max_routes: int, max_orders: int, max_drivers: int, t
         active = order_id in selected_order_ids
         opacity = "0.92" if active else "0.18"
         active_class = " selected-order" if active else ""
+        focus_class = f" {route_focus_class(selected_order_to_route.get(order_id))}" if active else ""
         status_class = " order-pending"
-        parts.append(f"<line x1='{px:.1f}' y1='{py:.1f}' x2='{dx:.1f}' y2='{dy:.1f}' class='order-link playback-order{active_class}' style='opacity:{opacity}'/>")
-        parts.append(f"<circle cx='{px:.1f}' cy='{py:.1f}' r='{7 if active else 4}' class='pickup playback-order{active_class}{status_class}' style='opacity:{opacity}'><title>{html.escape(order_id)} pickup</title></circle>")
-        parts.append(f"<rect x='{dx - 5:.1f}' y='{dy - 5:.1f}' width='{10 if active else 7}' height='{10 if active else 7}' class='dropoff playback-order{active_class}{status_class}' style='opacity:{opacity}'><title>{html.escape(order_id)} dropoff</title></rect>")
-        parts.append(f"<text x='{px + 8:.1f}' y='{py - 8:.1f}' class='point-label playback-order'>{html.escape(order_id)} P</text>")
-        parts.append(f"<text x='{dx + 8:.1f}' y='{dy + 14:.1f}' class='point-label playback-order'>{html.escape(order_id)} D</text>")
+        parts.append(f"<line x1='{px:.1f}' y1='{py:.1f}' x2='{dx:.1f}' y2='{dy:.1f}' class='order-link playback-order{active_class}{focus_class}' style='opacity:{opacity}'/>")
+        parts.append(f"<circle cx='{px:.1f}' cy='{py:.1f}' r='{7 if active else 4}' class='pickup playback-order{active_class}{focus_class}{status_class}' style='opacity:{opacity}'><title>{html.escape(order_id)} pickup</title></circle>")
+        parts.append(f"<rect x='{dx - 5:.1f}' y='{dy - 5:.1f}' width='{10 if active else 7}' height='{10 if active else 7}' class='dropoff playback-order{active_class}{focus_class}{status_class}' style='opacity:{opacity}'><title>{html.escape(order_id)} dropoff</title></rect>")
+        parts.append(f"<text x='{px + 8:.1f}' y='{py - 8:.1f}' class='point-label playback-order{focus_class}'>{html.escape(order_id)} P</text>")
+        parts.append(f"<text x='{dx + 8:.1f}' y='{dy + 14:.1f}' class='point-label playback-order{focus_class}'>{html.escape(order_id)} D</text>")
     for driver in cell.get("drivers", []):
         driver_id = str(driver.get("driverId"))
         if driver_id not in shown_driver_ids:
             continue
         x, y = project(*geo(driver.get("currentLocation", {})), box, width, height)
         active = driver_id in selected_driver_ids
+        route_rank = next((int(route.get("rank", 1)) for route in routes if route.get("driverId") == driver_id), 0)
         active_class = " selected-driver" if active else ""
-        parts.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='62' class='driver-radius playback-driver{active_class}'/>")
+        focus_class = f" {route_focus_class(route_rank)}" if active else ""
+        parts.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='62' class='driver-radius playback-driver{active_class}{focus_class}'/>")
         triangle = f"{x:.1f},{y - 12:.1f} {x - 11:.1f},{y + 10:.1f} {x + 11:.1f},{y + 10:.1f}"
-        parts.append(f"<polygon points='{triangle}' class='driver-triangle playback-driver{active_class}'><title>{html.escape(driver_id)}</title></polygon>")
+        parts.append(f"<polygon points='{triangle}' class='driver-triangle playback-driver{active_class}{focus_class}'><title>{html.escape(driver_id)}</title></polygon>")
         if active:
-            parts.append(f"<text x='{x + 14:.1f}' y='{y - 15:.1f}' class='driver-label'>{html.escape(driver_id)}</text>")
+            parts.append(f"<text x='{x + 14:.1f}' y='{y - 15:.1f}' class='driver-label{focus_class}'>{html.escape(driver_id)}</text>")
     for route_index, route in enumerate(routes, start=1):
         route_color = color(int(route.get("rank", 1)))
         path_points = []
@@ -617,12 +633,9 @@ def render_svg(cell: dict, max_routes: int, max_orders: int, max_drivers: int, t
             path_points.append(f"{x:.1f},{y:.1f}")
         path_d = route_path_d(path_points)
         if len(path_points) > 1:
-            parts.append(f"<path id='route-path-{route_index}' d='{path_d}' class='playback-route' fill='none' stroke='{route_color}' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round' marker-end='url(#arrow)' opacity='0.82'><title>{html.escape(str(route.get('driverId')))} -> {html.escape(', '.join(route.get('orderIds', [])))}</title></path>")
-            parts.append(f"<polygon class='moving-driver playback-execute' points='0,-10 -9,8 9,8' fill='{route_color}'><animateMotion dur='7s' repeatCount='indefinite' rotate='auto'><mpath href='#route-path-{route_index}'/></animateMotion></polygon>")
-        for sequence, point in enumerate(route.get("path", [])[1:], start=1):
-            x, y = project(float(point.get("lat", 0.0)), float(point.get("lon", 0.0)), box, width, height)
-            parts.append(f"<circle cx='{x:.1f}' cy='{y:.1f}' r='10' fill='{route_color}' class='route-step playback-execute'/><text x='{x:.1f}' y='{y + 4:.1f}' class='route-step-label playback-execute'>{sequence}</text>")
-            parts.append(f"<text x='{x + 12:.1f}' y='{y + 3:.1f}' class='point-label route-label playback-execute'>Step {sequence}: {html.escape(str(point.get('id')))}</text>")
+            focus_class = route_focus_class(route.get("rank"))
+            parts.append(f"<path id='route-path-{route_index}' d='{path_d}' class='playback-route {focus_class}' fill='none' stroke='{route_color}' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round' marker-end='url(#arrow)' opacity='0.82'><title>{html.escape(str(route.get('driverId')))} -> {html.escape(', '.join(route.get('orderIds', [])))}</title></path>")
+            parts.append(f"<polygon class='moving-driver playback-execute {focus_class}' points='0,-10 -9,8 9,8' fill='{route_color}'><animateMotion dur='7s' repeatCount='indefinite' rotate='auto'><mpath href='#route-path-{route_index}'/></animateMotion></polygon>")
     parts.append("</svg>")
     return "\n".join(parts)
 
@@ -679,6 +692,20 @@ def render_route_cards(cell: dict, max_routes: int, max_drivers: int) -> str:
     return "\n".join(cards)
 
 
+def render_driver_lens(cell: dict, max_routes: int, max_drivers: int) -> str:
+    buttons = []
+    for route in visible_routes(cell, max_routes, max_drivers):
+        rank = int(route.get("rank", 1))
+        order_count = len(route.get("orderIds", []))
+        buttons.append(
+            f"<button class='driver-lens-button' data-focus-route='{rank}' style='--route-color:{color(rank)}'>"
+            f"<b>#{rank} {html.escape(str(route.get('driverId')))}</b>"
+            f"<span>{order_count} đơn · {html.escape(' -> '.join(route.get('orderIds', [])))}</span>"
+            "</button>"
+        )
+    return "\n".join(buttons)
+
+
 def render_tile_evidence(tile_evidence: dict) -> str:
     status = html.escape(str(tile_evidence.get("status", "missing")))
     source = html.escape(str(tile_evidence.get("sourceArtifact", "")) or "n/a")
@@ -719,6 +746,7 @@ def render_playback_script() -> str:
       let current = 0;
       let timer = null;
       const label = document.querySelector('[data-playback-label]');
+      const focusButtons = Array.from(document.querySelectorAll('[data-focus-route]'));
       const setStep = (index) => {
         current = Math.max(0, Math.min(index, steps.length - 1));
         document.body.dataset.playbackStep = steps[current];
@@ -727,6 +755,10 @@ def render_playback_script() -> str:
           node.classList.toggle('complete', idx < current);
         });
         if (label) label.textContent = `${current + 1}/${steps.length} ${steps[current]}`;
+      };
+      const setFocus = (route) => {
+        document.body.dataset.focusRoute = route || 'all';
+        focusButtons.forEach((node) => node.classList.toggle('active', node.dataset.focusRoute === route));
       };
       const stop = () => { if (timer) window.clearInterval(timer); timer = null; };
       const play = () => {
@@ -740,7 +772,17 @@ def render_playback_script() -> str:
       document.querySelector('[data-play]')?.addEventListener('click', play);
       document.querySelector('[data-restart]')?.addEventListener('click', () => { stop(); setStep(0); });
       document.querySelectorAll('[data-step]').forEach((node, idx) => node.addEventListener('click', () => { stop(); setStep(idx); }));
+      focusButtons.forEach((node) => node.addEventListener('click', () => setFocus(node.dataset.focusRoute)));
+      document.querySelector('[data-show-all-routes]')?.addEventListener('click', () => setFocus('all'));
+      const labelButton = document.querySelector('[data-toggle-labels]');
+      labelButton?.addEventListener('click', () => {
+        const next = document.body.dataset.showLabels === 'true' ? 'false' : 'true';
+        document.body.dataset.showLabels = next;
+        labelButton.textContent = next === 'true' ? 'Hide labels' : 'Show labels';
+      });
       setStep(0);
+      setFocus('1');
+      document.body.dataset.showLabels = 'false';
       window.setTimeout(play, 500);
     })();
     </script>
@@ -773,7 +815,8 @@ def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_driver
             f"<div><span>Geometry</span><b>{fmt_number(cell.get('geometryCoverage'))}</b></div>"
             f"<div><span>Utility</span><b>{fmt_number(cell.get('robustUtilityAverage'))}</b></div>"
             "</div>"
-            "<div class='playback-controls'><button data-play>Play realtime turn</button><button data-restart>Restart</button><span data-playback-label>1/5 orders</span></div>"
+            "<div class='playback-controls'><button data-play>Play realtime turn</button><button data-restart>Restart</button><button data-show-all-routes>Show all routes</button><button data-toggle-labels>Show labels</button><span data-playback-label>1/5 orders</span></div>"
+            f"<div class='driver-lens'>{render_driver_lens(cell, max_routes, max_drivers)}</div>"
             "<div class='visual-grid'>"
             f"<div>{render_svg(cell, max_routes, max_orders, max_drivers, tile_evidence)}</div>"
             "<aside class='timeline'><h3>Quy trình ghép đơn</h3>"
@@ -825,6 +868,12 @@ def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_driver
     .playback-controls { display:flex; gap:10px; align-items:center; margin:4px 0 18px; }
     .playback-controls button { border:0; border-radius:999px; padding:11px 16px; background:#17201b; color:white; font-weight:800; cursor:pointer; }
     .playback-controls span { color:var(--green); font-weight:900; letter-spacing:0.04em; text-transform:uppercase; }
+    .driver-lens { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:10px; margin:0 0 18px; }
+    .driver-lens-button { border:1px solid var(--line); border-left:6px solid var(--route-color); border-radius:18px; background:white; color:var(--ink); padding:12px; text-align:left; cursor:pointer; box-shadow:0 10px 26px rgba(42,65,51,0.08); }
+    .driver-lens-button b, .driver-lens-button span { display:block; }
+    .driver-lens-button span { margin-top:4px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .driver-lens-button.active { background:#17201b; color:white; transform:translateY(-1px); }
+    .driver-lens-button.active span { color:#d8eee5; }
     .playback-order, .playback-driver, .playback-route, .playback-execute { transition: opacity 360ms ease, filter 360ms ease, transform 360ms ease; }
     body[data-playback-step='orders'] .playback-driver, body[data-playback-step='orders'] .playback-route, body[data-playback-step='orders'] .playback-execute { opacity:0.04 !important; }
     body[data-playback-step='orders'] .selected-order { filter: drop-shadow(0 0 6px rgba(15,139,104,0.55)); }
@@ -834,6 +883,23 @@ def render_html(payload: dict, max_routes: int, max_orders: int = 20, max_driver
     body[data-playback-step='routes'] .playback-execute { opacity:0.18 !important; }
     body[data-playback-step='select'] .selected-driver, body[data-playback-step='select'] .playback-route { opacity:1 !important; filter: drop-shadow(0 0 10px rgba(111,231,183,0.7)); }
     body[data-playback-step='execute'] .playback-execute { opacity:1 !important; filter: drop-shadow(0 0 10px rgba(232,93,117,0.65)); }
+    body:not([data-focus-route='all']) .playback-route,
+    body:not([data-focus-route='all']) .moving-driver,
+    body:not([data-focus-route='all']) .selected-order,
+    body:not([data-focus-route='all']) .selected-driver,
+    body:not([data-focus-route='all']) .driver-label { opacity:0.10 !important; filter:none !important; }
+    body[data-focus-route='1'] .route-focus-1,
+    body[data-focus-route='2'] .route-focus-2,
+    body[data-focus-route='3'] .route-focus-3,
+    body[data-focus-route='4'] .route-focus-4,
+    body[data-focus-route='5'] .route-focus-5 { opacity:1 !important; filter:drop-shadow(0 0 12px rgba(15,139,104,0.48)) !important; }
+    body[data-focus-route='1'] path.route-focus-1,
+    body[data-focus-route='2'] path.route-focus-2,
+    body[data-focus-route='3'] path.route-focus-3,
+    body[data-focus-route='4'] path.route-focus-4,
+    body[data-focus-route='5'] path.route-focus-5 { stroke-width:7; }
+    body:not([data-show-labels='true']) .point-label,
+    body:not([data-show-labels='true']) .route-label { display:none; }
     .tile-evidence { margin:0 auto 26px; max-width:1420px; background:rgba(255,255,255,0.78); border:1px solid rgba(35,60,45,0.14); border-radius:28px; padding:24px; box-shadow:0 16px 48px rgba(42,65,51,0.09); }
     .tile-evidence p { color:var(--muted); line-height:1.45; }
     .tile-evidence table { width:100%; border-collapse:collapse; overflow:hidden; border-radius:18px; background:white; }
