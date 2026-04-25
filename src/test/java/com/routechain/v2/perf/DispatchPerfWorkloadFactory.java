@@ -78,10 +78,12 @@ public final class DispatchPerfWorkloadFactory {
             int cluster = index / 4;
             int offset = index % 4;
             GeoPoint hotspot = HCM_HOTSPOTS.get(cluster % HCM_HOTSPOTS.size());
-            double pickupLat = hotspot.latitude() + (offset - 1.5) * 0.00045;
-            double pickupLon = hotspot.longitude() + (offset % 2 == 0 ? -0.00035 : 0.00035);
-            double dropLat = hotspot.latitude() + profile.dropOffset() + (offset - 1.5) * 0.00055;
-            double dropLon = hotspot.longitude() + profile.dropOffset() + (offset % 2 == 0 ? -0.00045 : 0.00045);
+            double corridorLat = (offset - 1.5) * 0.00105;
+            double sideStreetLon = (offset % 2 == 0 ? -0.00075 : 0.00075);
+            double pickupLat = hotspot.latitude() + corridorLat;
+            double pickupLon = hotspot.longitude() + sideStreetLon;
+            double dropLat = hotspot.latitude() + profile.dropOffset() + (offset - 1.5) * 0.00125;
+            double dropLon = hotspot.longitude() + profile.dropOffset() + (offset % 2 == 0 ? -0.00100 : 0.00100);
             Instant readyAt = profile.decisionTime().plusSeconds((offset % profile.readyBucketSpan()) * profile.readyStepSeconds());
             orders.add(new Order(
                     "order-" + index,

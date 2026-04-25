@@ -219,6 +219,16 @@ def geo(point: dict) -> Tuple[float, float]:
     return float(point.get("latitude", 0.0)), float(point.get("longitude", 0.0))
 
 
+def haversine_meters(from_lat: float, from_lon: float, to_lat: float, to_lon: float) -> float:
+    radius_meters = 6_371_000.0
+    from_phi = math.radians(from_lat)
+    to_phi = math.radians(to_lat)
+    delta_phi = math.radians(to_lat - from_lat)
+    delta_lambda = math.radians(to_lon - from_lon)
+    a = math.sin(delta_phi / 2.0) ** 2 + math.cos(from_phi) * math.cos(to_phi) * math.sin(delta_lambda / 2.0) ** 2
+    return 2.0 * radius_meters * math.asin(math.sqrt(a))
+
+
 def osrm_base_url() -> str:
     return (os.environ.get("IRX_ROUTING_BASE_URL") or os.environ.get("IRX_OSRM_BASE_URL") or "http://127.0.0.1:5000").rstrip("/")
 
@@ -619,6 +629,53 @@ def background_tile(tile_evidence: dict) -> Optional[dict]:
     return None
 
 
+def lon_lat_to_tile_fraction(lat: float, lon: float, zoom: int) -> Tuple[float, float]:
+    lat_rad = math.radians(max(min(lat, 85.05112878), -85.05112878))
+    scale = 2 ** zoom
+    x = (lon + 180.0) / 360.0 * scale
+    y = (1.0 - math.log(math.tan(lat_rad) + (1.0 / math.cos(lat_rad))) / math.pi) / 2.0 * scale
+    return x, y
+
+
+def tile_url(z: int, x: int, y: int) -> str:
+    return f"https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+
+
+def render_osm_tile_mosaic(box: Tuple[float, float, float, float], width: int, height: int) -> str:
+    min_lat, max_lat, min_lon, max_lon = box
+    span_lat_m = haversine_meters(min_lat, min_lon, max_lat, min_lon)
+    span_lon_m = haversine_meters(min_lat, min_lon, min_lat, max_lon)
+    zoom = 14 if max(span_lat_m, span_lon_m) <= 6000 else 13 if max(span_lat_m, span_lon_m) <= 15000 else 12
+    min_x, max_y = lon_lat_to_tile_fraction(min_lat, min_lon, zoom)
+    max_x, min_y = lon_lat_to_tile_fraction(max_lat, max_lon, zoom)
+    x0 = math.floor(min(min_x, max_x))
+    x1 = math.floor(max(min_x, max_x))
+    y0 = math.floor(min(min_y, max_y))
+    y1 = math.floor(max(min_y, max_y))
+    if (x1 - x0 + 1) * (y1 - y0 + 1) > 36:
+        zoom = max(10, zoom - 1)
+        min_x, max_y = lon_lat_to_tile_fraction(min_lat, min_lon, zoom)
+        max_x, min_y = lon_lat_to_tile_fraction(max_lat, max_lon, zoom)
+        x0 = math.floor(min(min_x, max_x))
+        x1 = math.floor(max(min_x, max_x))
+        y0 = math.floor(min(min_y, max_y))
+        y1 = math.floor(max(min_y, max_y))
+    denom_x = max(abs(max_x - min_x), 1e-9)
+    denom_y = max(abs(max_y - min_y), 1e-9)
+    images = []
+    for x in range(x0, x1 + 1):
+        for y in range(y0, y1 + 1):
+            left = (x - min_x) / denom_x * width
+            right = (x + 1 - min_x) / denom_x * width
+            top = (y - min_y) / denom_y * height
+            bottom = (y + 1 - min_y) / denom_y * height
+            images.append(
+                f"<image href='{tile_url(zoom, x, y)}' x='{left:.1f}' y='{top:.1f}' "
+                f"width='{right - left:.1f}' height='{bottom - top:.1f}' preserveAspectRatio='none' opacity='0.72'/>"
+            )
+    return "\n".join(images)
+
+
 def traffic_tile(tile_evidence: dict) -> Optional[dict]:
     for row in tile_evidence.get("tiles", []):
         if row.get("provider") == "tomtom-traffic-flow" and row.get("imageAvailable") and row.get("visualPath"):
@@ -646,17 +703,14 @@ def render_svg(cell: dict, max_routes: int, max_orders: int, max_drivers: int, t
     selected_order_ids = {order_id for route in routes for order_id in route.get("orderIds", [])}
     selected_driver_ids = {route.get("driverId") for route in routes}
     tile_evidence = tile_evidence or {}
-    base_tile = background_tile(tile_evidence)
     flow_tile = traffic_tile(tile_evidence)
     parts = [
         f"<svg viewBox='0 0 {width} {height}' class='map' role='img' aria-label='Dispatch visual map'>",
         "<defs><pattern id='grid' width='42' height='42' patternUnits='userSpaceOnUse'><path d='M 42 0 L 0 0 0 42' fill='none' stroke='#d9e7e0' stroke-width='1'/></pattern><marker id='arrow' markerWidth='10' markerHeight='10' refX='8' refY='3' orient='auto'><path d='M0,0 L0,6 L9,3 z' fill='#17201b'/></marker></defs>",
     ]
-    if base_tile:
-        parts.append(f"<image href='{html.escape(str(base_tile.get('visualPath')))}' x='0' y='0' width='{width}' height='{height}' preserveAspectRatio='xMidYMid slice' opacity='0.48'/>")
-        parts.append(f"<rect x='0' y='0' width='{width}' height='{height}' fill='rgba(251,247,239,0.42)' rx='28'/>")
-    else:
-        parts.append(f"<rect x='0' y='0' width='{width}' height='{height}' fill='url(#grid)' rx='28'/>")
+    parts.append(f"<rect x='0' y='0' width='{width}' height='{height}' fill='url(#grid)' rx='28'/>")
+    parts.append(render_osm_tile_mosaic(box, width, height))
+    parts.append(f"<rect x='0' y='0' width='{width}' height='{height}' fill='rgba(251,247,239,0.30)' rx='28'/>")
     if flow_tile:
         parts.append(f"<image href='{html.escape(str(flow_tile.get('visualPath')))}' x='0' y='0' width='{width}' height='{height}' preserveAspectRatio='xMidYMid slice' opacity='0.30'/>")
     selected_order_to_route = {
