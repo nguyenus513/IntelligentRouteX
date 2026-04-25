@@ -197,6 +197,13 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
     zigzag_risk_count = bad_road_route_count + weak_road_route_count
     selected_dominated_route_count = 0
     road_quality_score = 1.0 - (zigzag_risk_count / route_count) if route_count else 0.0
+    selected_bundle_counts = [
+        int(as_number(metrics.get("selectedBundleSize2Count"), 0.0)),
+        int(as_number(metrics.get("selectedBundleSize3Count"), 0.0)),
+        int(as_number(metrics.get("selectedBundleSize4Count"), 0.0)),
+        int(as_number(metrics.get("selectedBundleSize5Count"), 0.0)),
+    ]
+    selected_bundle_size_2_to_5_count = sum(selected_bundle_counts)
 
     return {
         "schemaVersion": "real-road-dispatch-metrics/v1",
@@ -222,9 +229,11 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
         "selectedBundleSize3Count": int(as_number(metrics.get("selectedBundleSize3Count"), 0.0)),
         "selectedBundleSize4Count": int(as_number(metrics.get("selectedBundleSize4Count"), 0.0)),
         "selectedBundleSize5Count": int(as_number(metrics.get("selectedBundleSize5Count"), 0.0)),
+        "selectedBundleSize2To5Count": selected_bundle_size_2_to_5_count,
         "coveredOrderCount": int(as_number(metrics.get("coveredOrderCount"), 0.0)),
         "baselineCoveredOrderCount": int(as_number(metrics.get("coveredOrderCount"), 0.0)),
         "executedAssignmentCount": int(as_number(metrics.get("executedAssignmentCount"), 0.0)),
+        "baselineExecutedAssignmentCount": int(as_number(metrics.get("executedAssignmentCount"), 0.0)),
         "badRoadRouteCount": bad_road_route_count,
         "weakRoadRouteCount": weak_road_route_count,
         "zigzagRiskCount": zigzag_risk_count,

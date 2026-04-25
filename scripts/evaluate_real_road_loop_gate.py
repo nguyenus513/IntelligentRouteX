@@ -17,7 +17,7 @@ def write_json(path: Path, payload: Dict[str, Any]) -> None:
 
 def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -> Tuple[str, List[str]]:
     reasons: List[str] = []
-    if loop not in (1, 2, 3, 4, 5):
+    if loop not in (1, 2, 3, 4, 5, 6):
         return "EVIDENCE_GAP", [f"loop-{loop:02d}-implementation-not-yet-wired"]
 
     if float(metrics.get("snapSuccessRate", 0.0)) < 0.95:
@@ -68,6 +68,15 @@ def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -
             reasons.append("max-network-detour-ratio-above-1.65")
         if float(metrics.get("roadQualityScore", 0.0)) < 0.95:
             reasons.append("road-quality-score-below-0.95")
+    if loop == 6:
+        if int(metrics.get("coveredOrderCount", 0)) < int(metrics.get("baselineCoveredOrderCount", 0)):
+            reasons.append("covered-order-count-regressed")
+        if int(metrics.get("executedAssignmentCount", 0)) < int(metrics.get("baselineExecutedAssignmentCount", 0)):
+            reasons.append("executed-assignment-count-regressed")
+        if float(metrics.get("roadQualityScore", 0.0)) < 0.95:
+            reasons.append("selected-road-quality-score-below-0.95")
+        if int(metrics.get("selectedBundleSize2To5Count", 0)) < int(metrics.get("executedAssignmentCount", 0)):
+            reasons.append("selected-bundle-size-outside-2-to-5")
 
     if reasons:
         return "FAIL", reasons
@@ -83,6 +92,7 @@ def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -
         3: "loop-03-osrm-table-matrix-cache-pass",
         4: "loop-04-road-native-sequence-optimizer-pass",
         5: "loop-05-road-route-quality-classifier-pass",
+        6: "loop-06-ortools-road-native-objective-pass",
     }[loop]
     return "PASS", [pass_reason]
 
