@@ -244,6 +244,18 @@ def proposal_path_points(proposal: dict, orders: Dict[str, dict], drivers: Dict[
             lat, lon = geo(driver.get("currentLocation", {}))
             leg_points.append({"id": proposal.get("driverId"), "kind": "driver", "lat": lat, "lon": lon})
         for leg in proposal.get("legs", []) or []:
+            polyline = leg.get("polyline", []) if isinstance(leg, dict) else []
+            if polyline:
+                for index, point in enumerate(polyline):
+                    if not isinstance(point, dict):
+                        continue
+                    leg_points.append({
+                        "id": f"{leg.get('fromStopId')}->{leg.get('toStopId')}:{index}",
+                        "kind": str(leg.get("geometryKind", "polyline")),
+                        "lat": float(point.get("latitude", 0.0)),
+                        "lon": float(point.get("longitude", 0.0)),
+                    })
+                continue
             for field in ("fromStopId", "toStopId"):
                 point = route_stop_point(str(leg.get(field, "")), orders)
                 if point:

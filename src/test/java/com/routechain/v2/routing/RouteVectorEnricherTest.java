@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RouteVectorEnricherTest {
@@ -46,6 +47,9 @@ class RouteVectorEnricherTest {
         assertTrue(enriched.legCount() > 0);
         assertTrue(enriched.totalDistanceMeters() > 0.0);
         assertFalse(enriched.legs().isEmpty());
+        assertEquals("synthetic", enriched.legs().getFirst().routingProvider());
+        assertEquals("synthetic-straight-line", enriched.legs().getFirst().geometryKind());
+        assertEquals(2, enriched.legs().getFirst().polyline().size());
     }
 
     @Test
@@ -76,7 +80,8 @@ class RouteVectorEnricherTest {
 
         RouteProposal enriched = enricher.enrich("trace-single-stop", proposal, context);
 
-        assertFalse(enriched.geometryAvailable());
+        assertTrue(enriched.geometryAvailable());
+        assertTrue(enriched.legs().stream().allMatch(leg -> !leg.polyline().isEmpty()));
         assertTrue(Files.isRegularFile(feedbackDir.resolve("decision-stage").resolve("route_leg_vector_trace").resolve("trace-single-stop-proposal-single-stop.json")));
         assertTrue(Files.isRegularFile(feedbackDir.resolve("decision-stage").resolve("route_vector_summary_trace").resolve("trace-single-stop-proposal-single-stop.json")));
     }

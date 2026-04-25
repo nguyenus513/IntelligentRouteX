@@ -11,12 +11,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class RouteVectorEnricher {
-    private final BestPathRouter bestPathRouter;
+    private final RoutingProvider routingProvider;
     private final DecisionStageLogger decisionStageLogger;
     private final HarvestRecorder harvestRecorder;
 
     public RouteVectorEnricher(BestPathRouter bestPathRouter, DecisionStageLogger decisionStageLogger, HarvestRecorder harvestRecorder) {
-        this.bestPathRouter = bestPathRouter;
+        this(new SyntheticRoutingProvider(bestPathRouter), decisionStageLogger, harvestRecorder);
+    }
+
+    public RouteVectorEnricher(RoutingProvider routingProvider, DecisionStageLogger decisionStageLogger, HarvestRecorder harvestRecorder) {
+        this.routingProvider = routingProvider;
         this.decisionStageLogger = decisionStageLogger;
         this.harvestRecorder = harvestRecorder;
     }
@@ -59,7 +63,7 @@ public final class RouteVectorEnricher {
         List<LegRouteVector> legs = new ArrayList<>();
         double corridorPreferenceTotal = 0.0;
         for (int index = 0; index < stops.size() - 1; index++) {
-            BestPathResult result = bestPathRouter.route(new BestPathRequest(
+            RoutingRouteResult result = routingProvider.route(new BestPathRequest(
                     stops.get(index),
                     stops.get(index + 1),
                     context.corridorSignature(proposal.bundleId()),
