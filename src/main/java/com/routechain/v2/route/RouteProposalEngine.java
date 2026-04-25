@@ -260,32 +260,73 @@ public final class RouteProposalEngine {
                                          double startingPickupEtaMinutes) {
         double totalMinutes = startingPickupEtaMinutes;
         List<String> degradeReasons = new ArrayList<>();
-        for (int index = 0; index < stopOrder.size(); index++) {
-            Order current = context.order(stopOrder.get(index));
-            if (current == null) {
-                continue;
-            }
-            EtaEstimate serviceEta = etaLegCache.getOrEstimate(
+        List<Order> pickupOrders = stopOrder.stream()
+                .map(context::order)
+                .filter(Objects::nonNull)
+                .toList();
+        if (pickupOrders.isEmpty()) {
+            return new RouteProjection(totalMinutes, List.of());
+        }
+        for (int index = 0; index < pickupOrders.size() - 1; index++) {
+            Order current = pickupOrders.get(index);
+            Order next = pickupOrders.get(index + 1);
+            EtaEstimate pickupTransitionEta = etaLegCache.getOrEstimate(
                     current.pickupPoint(),
-                    current.dropoffPoint(),
-                    "route-proposal-service",
-                    current.orderId() + "-service");
-            totalMinutes += serviceEta.etaMinutes();
-            degradeReasons.addAll(serviceEta.degradeReasons());
-            if (index < stopOrder.size() - 1) {
-                Order next = context.order(stopOrder.get(index + 1));
-                if (next != null) {
-                    EtaEstimate transitionEta = etaLegCache.getOrEstimate(
-                            current.dropoffPoint(),
-                            next.pickupPoint(),
-                            "route-proposal-transition",
-                            current.orderId() + "->" + next.orderId());
-                    totalMinutes += transitionEta.etaMinutes();
-                    degradeReasons.addAll(transitionEta.degradeReasons());
-                }
+                    next.pickupPoint(),
+                    "route-proposal-pickup-transition",
+                    current.orderId() + ":pickup->" + next.orderId() + ":pickup");
+            totalMinutes += pickupTransitionEta.etaMinutes();
+            degradeReasons.addAll(pickupTransitionEta.degradeReasons());
+        }
+        List<Order> deliveryOrders = deliveryOrder(pickupOrders, etaLegCache);
+        Order lastPickup = pickupOrders.getLast();
+        for (int index = 0; index < deliveryOrders.size(); index++) {
+            Order currentDelivery = deliveryOrders.get(index);
+            EtaEstimate deliveryEta;
+            if (index == 0) {
+                deliveryEta = etaLegCache.getOrEstimate(
+                        lastPickup.pickupPoint(),
+                        currentDelivery.dropoffPoint(),
+                        "route-proposal-first-delivery",
+                        lastPickup.orderId() + ":pickup->" + currentDelivery.orderId() + ":dropoff");
+            } else {
+                Order previousDelivery = deliveryOrders.get(index - 1);
+                deliveryEta = etaLegCache.getOrEstimate(
+                        previousDelivery.dropoffPoint(),
+                        currentDelivery.dropoffPoint(),
+                        "route-proposal-delivery-transition",
+                        previousDelivery.orderId() + ":dropoff->" + currentDelivery.orderId() + ":dropoff");
             }
+            totalMinutes += deliveryEta.etaMinutes();
+            degradeReasons.addAll(deliveryEta.degradeReasons());
         }
         return new RouteProjection(totalMinutes, degradeReasons.stream().distinct().toList());
+    }
+
+    private List<Order> deliveryOrder(List<Order> pickupOrders, EtaLegCache etaLegCache) {
+        if (pickupOrders.size() <= 1) {
+            return List.copyOf(pickupOrders);
+        }
+        List<Order> remaining = new ArrayList<>(pickupOrders);
+        List<Order> ordered = new ArrayList<>(pickupOrders.size());
+        Order lastPickup = pickupOrders.getLast();
+        while (!remaining.isEmpty()) {
+            Order fromOrder = ordered.isEmpty() ? lastPickup : ordered.getLast();
+            boolean fromPickup = ordered.isEmpty();
+            Order next = remaining.stream()
+                    .min(Comparator.comparingDouble((Order candidate) -> etaLegCache.getOrEstimate(
+                                    fromPickup ? fromOrder.pickupPoint() : fromOrder.dropoffPoint(),
+                                    candidate.dropoffPoint(),
+                                    "route-proposal-delivery-order",
+                                    (fromPickup ? fromOrder.orderId() + ":pickup" : fromOrder.orderId() + ":dropoff")
+                                            + "->" + candidate.orderId() + ":dropoff")
+                            .etaMinutes())
+                            .thenComparing(Order::orderId))
+                    .orElse(remaining.getFirst());
+            ordered.add(next);
+            remaining.remove(next);
+        }
+        return List.copyOf(ordered);
     }
 
     private record RouteProjection(

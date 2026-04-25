@@ -8,6 +8,7 @@ import com.routechain.v2.route.RouteProposal;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public final class RouteVectorEnricher {
@@ -116,6 +117,10 @@ public final class RouteVectorEnricher {
 
     private List<RouteStop> toRouteStops(RouteProposal proposal, DispatchCandidateContext context) {
         List<RouteStop> stops = new ArrayList<>();
+        List<Order> pickupOrders = proposal.stopOrder().stream()
+                .map(context::order)
+                .filter(java.util.Objects::nonNull)
+                .toList();
         for (String stopOrderId : proposal.stopOrder()) {
             Order order = context.order(stopOrderId);
             if (order == null) {
@@ -128,6 +133,8 @@ public final class RouteVectorEnricher {
                     order.orderId().equals(proposal.anchorOrderId()) ? "pickup-anchor" : "pickup",
                     context.corridorSignature(proposal.bundleId()),
                     proposal.projectedPickupEtaMinutes()));
+        }
+        for (Order order : deliveryOrder(pickupOrders)) {
             stops.add(new RouteStop(
                     order.orderId() + ":dropoff",
                     order.dropoffPoint().latitude(),
@@ -137,6 +144,36 @@ public final class RouteVectorEnricher {
                     proposal.projectedCompletionEtaMinutes()));
         }
         return List.copyOf(stops);
+    }
+
+    private List<Order> deliveryOrder(List<Order> pickupOrders) {
+        if (pickupOrders.size() <= 1) {
+            return List.copyOf(pickupOrders);
+        }
+        List<Order> remaining = new ArrayList<>(pickupOrders);
+        List<Order> ordered = new ArrayList<>(pickupOrders.size());
+        Order lastPickup = pickupOrders.getLast();
+        while (!remaining.isEmpty()) {
+            Order fromOrder = ordered.isEmpty() ? lastPickup : ordered.getLast();
+            boolean fromPickup = ordered.isEmpty();
+            Order next = remaining.stream()
+                    .min(Comparator.comparingDouble((Order candidate) -> distanceSquared(
+                                    fromPickup ? fromOrder.pickupPoint().latitude() : fromOrder.dropoffPoint().latitude(),
+                                    fromPickup ? fromOrder.pickupPoint().longitude() : fromOrder.dropoffPoint().longitude(),
+                                    candidate.dropoffPoint().latitude(),
+                                    candidate.dropoffPoint().longitude()))
+                            .thenComparing(Order::orderId))
+                    .orElse(remaining.getFirst());
+            ordered.add(next);
+            remaining.remove(next);
+        }
+        return List.copyOf(ordered);
+    }
+
+    private double distanceSquared(double fromLat, double fromLon, double toLat, double toLon) {
+        double deltaLat = fromLat - toLat;
+        double deltaLon = fromLon - toLon;
+        return (deltaLat * deltaLat) + (deltaLon * deltaLon);
     }
 
     private RouteVectorSummary summarize(RouteProposal proposal,

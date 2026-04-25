@@ -53,6 +53,44 @@ class RouteVectorEnricherTest {
     }
 
     @Test
+    void multiOrderRouteVisitsAllPickupsBeforeDeliveryLegs() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        DispatchCandidateContext context = RouteTestFixtures.candidateContext(properties);
+        String bundleId = context.bundleIds().stream()
+                .filter(id -> context.bundle(id).orderIds().size() >= 3)
+                .findFirst()
+                .orElseThrow();
+        List<String> stopOrder = context.bundle(bundleId).orderIds().stream().limit(3).toList();
+        RouteProposal proposal = new RouteProposal(
+                "route-proposal/v1",
+                "proposal-pickups-before-dropoffs",
+                bundleId,
+                stopOrder.getFirst(),
+                context.availableDrivers().getFirst().driverId(),
+                RouteProposalSource.HEURISTIC_FAST,
+                stopOrder,
+                4.0,
+                18.0,
+                0.7,
+                true,
+                List.of(),
+                List.of());
+        RouteVectorEnricher enricher = new RouteVectorEnricher(
+                new BestPathRouter(new SyntheticRoadGraphProvider(), new RouteCostFunction()),
+                new DecisionStageLogger(properties));
+
+        RouteProposal enriched = enricher.enrich("trace-pickups-before-dropoffs", proposal, context);
+        List<String> legTransitions = enriched.legs().stream()
+                .map(leg -> leg.fromStopId() + "->" + leg.toStopId())
+                .toList();
+
+        assertEquals(stopOrder.size() * 2 - 1, enriched.legCount());
+        assertEquals(stopOrder.get(0) + ":pickup->" + stopOrder.get(1) + ":pickup", legTransitions.get(0));
+        assertEquals(stopOrder.get(1) + ":pickup->" + stopOrder.get(2) + ":pickup", legTransitions.get(1));
+        assertTrue(legTransitions.subList(2, legTransitions.size()).stream().allMatch(transition -> transition.contains(":dropoff")));
+    }
+
+    @Test
     void emitsTraceFamiliesEvenWhenRouteHasSingleStop() throws Exception {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         Path feedbackDir = Files.createTempDirectory("route-vector-feedback");
