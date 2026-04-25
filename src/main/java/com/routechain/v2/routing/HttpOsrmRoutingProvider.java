@@ -51,19 +51,49 @@ public final class HttpOsrmRoutingProvider implements RoutingProvider {
 
     @Override
     public RoutingSnapResult snap(RouteStop stop) {
-        return new RoutingSnapResult(
-                "routing-snap-result/v1",
-                providerId(),
-                "OSRM_NEAREST_PENDING",
-                stop.latitude(),
-                stop.longitude(),
-                stop.latitude(),
-                stop.longitude(),
-                0.0,
-                0.75,
-                stop.stopId(),
-                stop.stopId(),
-                List.of("osrm-nearest-not-yet-integrated"));
+        try {
+            HttpRequest httpRequest = HttpRequest.newBuilder(buildNearestUri(stop))
+                    .timeout(readTimeout)
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                return snapFallback(stop, "osrm-nearest-http-" + response.statusCode());
+            }
+            JsonNode root = objectMapper.readTree(response.body());
+            String code = root.path("code").asText("Ok");
+            if (!"Ok".equalsIgnoreCase(code)) {
+                return snapFallback(stop, "osrm-nearest-code-" + safeReason(code));
+            }
+            JsonNode waypoint = root.path("waypoints").path(0);
+            JsonNode location = waypoint.path("location");
+            if (!location.isArray() || location.size() < 2) {
+                return snapFallback(stop, "osrm-nearest-location-missing");
+            }
+            double snappedLongitude = location.path(0).asDouble(stop.longitude());
+            double snappedLatitude = location.path(1).asDouble(stop.latitude());
+            double distance = waypoint.path("distance").asDouble(0.0);
+            return new RoutingSnapResult(
+                    "routing-snap-result/v1",
+                    providerId(),
+                    "SNAPPED",
+                    stop.latitude(),
+                    stop.longitude(),
+                    snappedLatitude,
+                    snappedLongitude,
+                    distance,
+                    clamp(1.0 - (distance / 100.0)),
+                    waypoint.path("name").asText(stop.stopId()),
+                    waypoint.path("hint").asText(stop.stopId()),
+                    List.of());
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return snapFallback(stop, "osrm-nearest-interrupted");
+        } catch (IOException exception) {
+            return snapFallback(stop, "osrm-nearest-io-" + safeReason(exception.getClass().getSimpleName()));
+        } catch (RuntimeException exception) {
+            return snapFallback(stop, "osrm-nearest-runtime-" + safeReason(exception.getClass().getSimpleName()));
+        }
     }
 
     @Override
@@ -149,6 +179,27 @@ public final class HttpOsrmRoutingProvider implements RoutingProvider {
                 request.toStop().latitude());
         String query = "overview=full&geometries=geojson&steps=false&annotations=false";
         return baseUri.resolve("route/v1/driving/" + encodePath(coordinates) + "?" + query);
+    }
+
+    private URI buildNearestUri(RouteStop stop) {
+        String coordinates = "%s,%s".formatted(stop.longitude(), stop.latitude());
+        return baseUri.resolve("nearest/v1/driving/" + encodePath(coordinates) + "?number=1");
+    }
+
+    private RoutingSnapResult snapFallback(RouteStop stop, String reason) {
+        return new RoutingSnapResult(
+                "routing-snap-result/v1",
+                providerId(),
+                "FALLBACK_RAW_POINT",
+                stop.latitude(),
+                stop.longitude(),
+                stop.latitude(),
+                stop.longitude(),
+                0.0,
+                0.0,
+                stop.stopId(),
+                stop.stopId(),
+                List.of(reason));
     }
 
     private List<RoutePolylinePoint> polyline(JsonNode route) {

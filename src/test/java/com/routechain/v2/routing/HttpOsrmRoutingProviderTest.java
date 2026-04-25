@@ -50,4 +50,37 @@ class HttpOsrmRoutingProviderTest {
             server.stop(0);
         }
     }
+
+    @Test
+    void parsesOsrmNearestSnap() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/nearest/v1/driving/106.0,10.0", exchange -> {
+            byte[] body = ("""
+                    {"code":"Ok","waypoints":[{"name":"Pasteur","hint":"edge-1","distance":12.5,"location":[106.0001,10.0002]}]}
+                    """).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+        try {
+            RoutingProvider fallback = new SyntheticRoutingProvider(new BestPathRouter(new SyntheticRoadGraphProvider(), new RouteCostFunction()));
+            HttpOsrmRoutingProvider provider = new HttpOsrmRoutingProvider(
+                    "http://127.0.0.1:" + server.getAddress().getPort(),
+                    Duration.ofSeconds(1),
+                    Duration.ofSeconds(1),
+                    new RouteCostFunction(),
+                    fallback);
+
+            RoutingSnapResult result = provider.snap(new RouteStop("point-1", 10.0, 106.0, "pickup", "zone", 0.0));
+
+            assertEquals("SNAPPED", result.status());
+            assertEquals(10.0002, result.snappedLatitude(), 1e-9);
+            assertEquals(106.0001, result.snappedLongitude(), 1e-9);
+            assertEquals(12.5, result.snapDistanceMeters(), 1e-9);
+            assertTrue(result.degradeReasons().isEmpty());
+        } finally {
+            server.stop(0);
+        }
+    }
 }
