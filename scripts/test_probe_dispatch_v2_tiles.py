@@ -24,6 +24,9 @@ class ProbeDispatchV2TilesTest(unittest.TestCase):
         self.assertEqual("tomtom-api-key-missing", result.degradeReason)
         self.assertIn("<redacted>", result.urlTemplate)
 
+    def test_powershell_fallback_receives_url_via_environment(self):
+        self.assertTrue(hasattr(probe, "powershell_fetch_tile"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,7 @@ import argparse
 import json
 import math
 import os
+import subprocess
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
@@ -141,6 +142,24 @@ def fetch_tile(
         return failed(provider, tile, output_root, started, "tile-fetch-timeout", None, attribution)
     except URLError as exception:
         reason = getattr(exception, "reason", exception)
+        if provider.startswith("tomtom-") and "CERTIFICATE_VERIFY_FAILED" in str(reason) and os.name == "nt":
+            try:
+                byte_count = powershell_fetch_tile(url, target, user_agent, timeout_seconds)
+                return TileFetchResult(
+                    provider,
+                    tile,
+                    safe_url_template(provider),
+                    "FETCHED",
+                    200,
+                    byte_count,
+                    str(target),
+                    False,
+                    int((time.perf_counter() - started) * 1000),
+                    "python-ssl-fallback-powershell",
+                    attribution,
+                )
+            except RuntimeError as fallback_error:
+                return failed(provider, tile, output_root, started, f"tile-fetch-unavailable:{fallback_error}", None, attribution)
         return failed(provider, tile, output_root, started, f"tile-fetch-unavailable:{reason}", None, attribution)
     except OSError as exception:
         return failed(provider, tile, output_root, started, f"tile-fetch-io-error:{exception}", None, attribution)
@@ -184,6 +203,32 @@ def skipped(provider: str, tile: TileId, output_root: Path, reason: str, attribu
         reason,
         attribution,
     )
+
+
+def powershell_fetch_tile(url: str, target: Path, user_agent: str, timeout_seconds: float) -> int:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env["PROBE_TILE_URL"] = url
+    env["PROBE_TILE_OUT"] = str(target)
+    env["PROBE_TILE_UA"] = user_agent
+    env["PROBE_TILE_TIMEOUT"] = str(max(1, int(timeout_seconds)))
+    command = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        "$ProgressPreference='SilentlyContinue'; "
+        "Invoke-WebRequest -Uri $env:PROBE_TILE_URL -OutFile $env:PROBE_TILE_OUT "
+        "-TimeoutSec $env:PROBE_TILE_TIMEOUT -Headers @{ 'User-Agent'=$env:PROBE_TILE_UA }; "
+        "$item=Get-Item $env:PROBE_TILE_OUT; Write-Output $item.Length",
+    ]
+    completed = subprocess.run(command, env=env, capture_output=True, text=True, timeout=timeout_seconds + 10)
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "powershell-fetch-failed").strip().splitlines()[-1]
+        raise RuntimeError(detail)
+    try:
+        return int((completed.stdout or "0").strip().splitlines()[-1])
+    except (ValueError, IndexError) as exception:
+        raise RuntimeError("powershell-fetch-invalid-byte-count") from exception
 
 
 def build_report(payload: dict) -> str:
