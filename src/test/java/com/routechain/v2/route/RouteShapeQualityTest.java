@@ -43,6 +43,14 @@ class RouteShapeQualityTest {
     }
 
     @Test
+    void differentDriverRouteDoesNotDominateEvenWithSameOrderSet() {
+        RouteProposal cleanDifferentDriver = proposal("clean", List.of("order-2", "order-1"), 2100.0, 1800.0, 18, 0.64, 0.70, "driver-2");
+        RouteProposal zigzag = proposal("zigzag", List.of("order-1", "order-2"), 2500.0, 2100.0, 28, 0.22, 1.0, "driver-1");
+
+        assertTrue(!RouteShapeQuality.dominates(cleanDifferentDriver, zigzag));
+    }
+
+    @Test
     void classifiesHighDetourRouteAsWeakShapeEvenWhenStraightEnough() {
         RouteProposal proposal = proposal("detour", List.of("order-1", "order-2"), 2500.0, 2100.0, 13, 0.61, 0.50, 1400.0);
 
@@ -70,6 +78,17 @@ class RouteShapeQualityTest {
                                    int turnCount,
                                    double straightnessScore,
                                    double congestionScore,
+                                   String driverId) {
+        return proposal(proposalId, stopOrder, routeCost, travelTimeSeconds, turnCount, straightnessScore, congestionScore, Math.max(1.0, routeCost * straightnessScore * 0.90), driverId);
+    }
+
+    private RouteProposal proposal(String proposalId,
+                                   List<String> stopOrder,
+                                   double routeCost,
+                                   double travelTimeSeconds,
+                                   int turnCount,
+                                   double straightnessScore,
+                                   double congestionScore,
                                    double legDirectDistanceMeters) {
         return new RouteProposal(
                 "route-proposal/v1",
@@ -77,6 +96,64 @@ class RouteShapeQualityTest {
                 "bundle-1",
                 stopOrder.getFirst(),
                 "driver-1",
+                RouteProposalSource.HEURISTIC_SAFE,
+                stopOrder,
+                4.0,
+                20.0,
+                0.8,
+                true,
+                List.of(),
+                List.of(),
+                2,
+                routeCost,
+                travelTimeSeconds,
+                routeCost,
+                0.7,
+                0.3,
+                turnCount,
+                0,
+                congestionScore,
+                straightnessScore,
+                true,
+                List.of(new com.routechain.v2.routing.LegRouteVector(
+                        "route-leg-vector/v1",
+                        "a",
+                        "b",
+                        0.0,
+                        0.01,
+                        0.0,
+                        0.0,
+                        0.0,
+                        legDirectDistanceMeters,
+                        travelTimeSeconds,
+                        6.0,
+                        0.7,
+                        0.3,
+                        turnCount,
+                        0,
+                        0,
+                        0,
+                        straightnessScore,
+                        congestionScore,
+                        0.1,
+                        routeCost)));
+    }
+
+    private RouteProposal proposal(String proposalId,
+                                   List<String> stopOrder,
+                                   double routeCost,
+                                   double travelTimeSeconds,
+                                   int turnCount,
+                                   double straightnessScore,
+                                   double congestionScore,
+                                   double legDirectDistanceMeters,
+                                   String driverId) {
+        return new RouteProposal(
+                "route-proposal/v1",
+                proposalId,
+                "bundle-1",
+                stopOrder.getFirst(),
+                driverId,
                 RouteProposalSource.HEURISTIC_SAFE,
                 stopOrder,
                 4.0,

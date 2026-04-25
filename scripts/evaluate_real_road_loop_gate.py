@@ -17,7 +17,7 @@ def write_json(path: Path, payload: Dict[str, Any]) -> None:
 
 def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -> Tuple[str, List[str]]:
     reasons: List[str] = []
-    if loop not in (1, 2, 3, 4):
+    if loop not in (1, 2, 3, 4, 5):
         return "EVIDENCE_GAP", [f"loop-{loop:02d}-implementation-not-yet-wired"]
 
     if float(metrics.get("snapSuccessRate", 0.0)) < 0.95:
@@ -59,6 +59,15 @@ def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -
             reasons.append("covered-order-count-regressed")
         if int(metrics.get("selectedSingleOrderCount", 0)) > 0:
             reasons.append("selected-single-order-remains-in-visual-case")
+    if loop == 5:
+        if int(metrics.get("badRoadRouteCount", 0)) > 0:
+            reasons.append("bad-road-route-selected")
+        if int(metrics.get("selectedDominatedRouteCount", 0)) > 0:
+            reasons.append("selected-route-dominated-within-same-driver-order-set")
+        if float(metrics.get("maxNetworkDetourRatio", 0.0)) > 1.65:
+            reasons.append("max-network-detour-ratio-above-1.65")
+        if float(metrics.get("roadQualityScore", 0.0)) < 0.95:
+            reasons.append("road-quality-score-below-0.95")
 
     if reasons:
         return "FAIL", reasons
@@ -73,6 +82,7 @@ def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -
         2: "loop-02-road-aware-generator-pass",
         3: "loop-03-osrm-table-matrix-cache-pass",
         4: "loop-04-road-native-sequence-optimizer-pass",
+        5: "loop-05-road-route-quality-classifier-pass",
     }[loop]
     return "PASS", [pass_reason]
 

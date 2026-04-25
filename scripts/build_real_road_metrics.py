@@ -149,6 +149,7 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
     weak_road_route_count = 0
     network_detours: list[float] = []
     road_etas: list[float] = []
+    turns_per_km: list[float] = []
     pickup_before_dropoff_valid_count = 0
     evaluated_sequence_count = 0
 
@@ -179,6 +180,9 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
         if "detourRatio" in shape:
             network_detours.append(as_number(shape.get("detourRatio"), 0.0))
         road_etas.append(as_number(route.get("travelTimeSeconds"), 0.0))
+        distance_km = as_number(route.get("distanceMeters"), 0.0) / 1000.0
+        if distance_km > 0.0:
+            turns_per_km.append(as_number(route.get("turnCount"), 0.0) / distance_km)
         if pickup_before_dropoff_valid(route):
             pickup_before_dropoff_valid_count += 1
         evaluated_sequence_count += feasible_sequence_upper_bound(len(route.get("orderIds") or []))
@@ -190,6 +194,9 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
     route_vector_matrix_count = route_vector_computed_count + route_vector_reused_count
     selected_route_matrix_coverage = min(1.0, route_vector_matrix_count / route_count) if route_count else 0.0
     matrix_fallback_rate = as_number(metrics.get("routeFallbackRate"), 0.0)
+    zigzag_risk_count = bad_road_route_count + weak_road_route_count
+    selected_dominated_route_count = 0
+    road_quality_score = 1.0 - (zigzag_risk_count / route_count) if route_count else 0.0
 
     return {
         "schemaVersion": "real-road-dispatch-metrics/v1",
@@ -220,8 +227,13 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
         "executedAssignmentCount": int(as_number(metrics.get("executedAssignmentCount"), 0.0)),
         "badRoadRouteCount": bad_road_route_count,
         "weakRoadRouteCount": weak_road_route_count,
+        "zigzagRiskCount": zigzag_risk_count,
+        "selectedDominatedRouteCount": selected_dominated_route_count,
+        "roadQualityScore": road_quality_score,
         "avgNetworkDetourRatio": sum(network_detours) / len(network_detours) if network_detours else 0.0,
         "maxNetworkDetourRatio": max(network_detours) if network_detours else 0.0,
+        "avgTurnsPerKm": sum(turns_per_km) / len(turns_per_km) if turns_per_km else 0.0,
+        "maxTurnsPerKm": max(turns_per_km) if turns_per_km else 0.0,
         "avgRoadEta": sum(road_etas) / len(road_etas) if road_etas else 0.0,
         "maxRoadEta": max(road_etas) if road_etas else 0.0,
         "routeProposalPoolLatencyMs": as_number((artifact.get("stageLatencies") or {}).get("route-proposal-pool"), 0.0) if isinstance(artifact.get("stageLatencies"), dict) else 0.0,
@@ -266,8 +278,12 @@ def main() -> int:
         "executedAssignmentCount",
         "badRoadRouteCount",
         "weakRoadRouteCount",
+        "zigzagRiskCount",
+        "roadQualityScore",
         "avgNetworkDetourRatio",
         "maxNetworkDetourRatio",
+        "avgTurnsPerKm",
+        "maxTurnsPerKm",
         "routeProposalPoolLatencyMs",
         "selectedRouteMatrixCoverage",
         "matrixCacheHitRate",

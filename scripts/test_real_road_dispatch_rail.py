@@ -160,6 +160,41 @@ class RealRoadDispatchRailTest(unittest.TestCase):
         self.assertEqual("FAIL", verdict)
         self.assertIn("pickup-before-dropoff-invalid", reasons)
 
+    def test_loop_five_gate_requires_clean_road_quality(self) -> None:
+        verdict, reasons = gate_module.gate_loop(5, {
+            "snapSuccessRate": 1.0,
+            "roadRouteCoverage": 1.0,
+            "selectedBadGeoPointCount": 0,
+            "visualStraightLineSelectedRouteCount": 0,
+            "selectedRoutePolylineCoverage": 1.0,
+            "syntheticFallbackRouteCount": 0,
+            "badRoadRouteCount": 0,
+            "selectedDominatedRouteCount": 0,
+            "maxNetworkDetourRatio": 1.2,
+            "roadQualityScore": 1.0,
+            "executedAssignmentCount": 5,
+        }, provider_ready=True)
+
+        self.assertEqual("PASS", verdict)
+        self.assertIn("loop-05-road-route-quality-classifier-pass", reasons)
+
+    def test_loop_five_gate_fails_bad_selected_route(self) -> None:
+        verdict, reasons = gate_module.gate_loop(5, {
+            "snapSuccessRate": 1.0,
+            "roadRouteCoverage": 1.0,
+            "selectedBadGeoPointCount": 0,
+            "visualStraightLineSelectedRouteCount": 0,
+            "selectedRoutePolylineCoverage": 1.0,
+            "badRoadRouteCount": 1,
+            "selectedDominatedRouteCount": 0,
+            "maxNetworkDetourRatio": 1.2,
+            "roadQualityScore": 0.8,
+            "executedAssignmentCount": 5,
+        }, provider_ready=True)
+
+        self.assertEqual("FAIL", verdict)
+        self.assertIn("bad-road-route-selected", reasons)
+
     def test_build_metrics_counts_visual_road_polylines(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -244,17 +279,17 @@ class RealRoadDispatchRailTest(unittest.TestCase):
 
     def test_unimplemented_loop_writes_evidence_gap(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            loop_dir = Path(temp_dir) / "loop-05"
+            loop_dir = Path(temp_dir) / "loop-06"
             loop_dir.mkdir(parents=True)
             manifest = loop_dir / "loop_manifest.json"
-            manifest.write_text(json.dumps({"loop": 5}), encoding="utf-8")
+            manifest.write_text(json.dumps({"loop": 6}), encoding="utf-8")
 
-            verdict, reasons = rail_module.run_unimplemented_loop(loop_dir, 5, manifest)
+            verdict, reasons = rail_module.run_unimplemented_loop(loop_dir, 6, manifest)
 
             self.assertEqual("EVIDENCE_GAP", verdict)
             self.assertTrue((loop_dir / "metrics.json").exists())
             self.assertTrue((loop_dir / "routePlanQualityLoopReport.md").exists())
-            self.assertIn("loop-05-road-route-quality-classifier-implementation-not-yet-wired", reasons)
+            self.assertIn("loop-06-ortools-road-native-objective-implementation-not-yet-wired", reasons)
 
 
 if __name__ == "__main__":

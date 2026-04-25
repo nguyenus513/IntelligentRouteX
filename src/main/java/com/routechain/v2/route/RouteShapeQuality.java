@@ -95,6 +95,9 @@ public final class RouteShapeQuality {
         if (candidate == null || dominated == null || !candidate.geometryAvailable() || !dominated.geometryAvailable()) {
             return false;
         }
+        if (!candidate.driverId().equals(dominated.driverId())) {
+            return false;
+        }
         if (!sameOrderSet(candidate, dominated)) {
             return false;
         }
