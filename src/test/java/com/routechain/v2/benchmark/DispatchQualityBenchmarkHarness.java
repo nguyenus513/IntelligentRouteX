@@ -923,6 +923,10 @@ public final class DispatchQualityBenchmarkHarness {
                 "dispatchV2.routing.provider",
                 "IRX_ROUTING_PROVIDER",
                 properties.getRouting().getProvider()));
+        properties.getRouting().setBaseUrl(configuredValue(
+                "dispatchV2.routing.baseUrl",
+                "IRX_ROUTING_BASE_URL",
+                properties.getRouting().getBaseUrl()));
         properties.getRouting().setRefineLimitPerTick(configuredInt(
                 "dispatchV2.routing.refineLimitPerTick",
                 "IRX_ROUTING_REFINE_LIMIT_PER_TICK",

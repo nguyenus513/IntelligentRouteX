@@ -197,6 +197,7 @@ public class RouteChainDispatchV2Properties {
 
     public static final class Routing {
         private String provider = "synthetic";
+        private String baseUrl = "http://127.0.0.1:5000";
         private int refineLimitPerTick = 24;
         private Duration connectTimeout = Duration.ofSeconds(2);
         private Duration readTimeout = Duration.ofSeconds(5);
@@ -207,6 +208,14 @@ public class RouteChainDispatchV2Properties {
 
         public void setProvider(String provider) {
             this.provider = provider;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
         }
 
         public int getRefineLimitPerTick() {

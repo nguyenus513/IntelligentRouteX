@@ -269,24 +269,8 @@ def proposal_path_points(proposal: dict, orders: Dict[str, dict], drivers: Dict[
     return dedupe_adjacent_points(points)
 
 
-def tomtom_key() -> str:
-    value = os.environ.get("IRX_TOMTOM_API_KEY") or os.environ.get("TOMTOM_API_KEY") or ""
-    if value.strip():
-        return value.strip()
-    env_path = REPO_ROOT / ".env"
-    if not env_path.exists():
-        return ""
-    for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        if line.startswith("TOMTOM_API_KEY="):
-            return line.partition("=")[2].strip().strip('"')
-    return ""
-
-
-def tomtom_route_overlay(proposal: dict, orders: Dict[str, dict], drivers: Dict[str, dict]) -> Tuple[List[dict], dict]:
-    key = tomtom_key()
-    if not key:
-        return [], {"status": "missing", "reason": "tomtom-key-missing"}
-    base_url = (os.environ.get("IRX_TOMTOM_BASE_URL") or "https://api.tomtom.com").rstrip("/")
+def osrm_route_overlay(proposal: dict, orders: Dict[str, dict], drivers: Dict[str, dict]) -> Tuple[List[dict], dict]:
+    base_url = (os.environ.get("IRX_ROUTING_BASE_URL") or os.environ.get("IRX_OSRM_BASE_URL") or "http://127.0.0.1:5000").rstrip("/")
     stop_points = proposal_path_points({**proposal, "legs": []}, orders, drivers)
     if len(stop_points) < 2:
         return [], {"status": "missing", "reason": "not-enough-stops"}
@@ -294,35 +278,30 @@ def tomtom_route_overlay(proposal: dict, orders: Dict[str, dict], drivers: Dict[
     call_count = 0
     fallback_count = 0
     for left, right in zip(stop_points, stop_points[1:]):
-        locations = f"{left['lat']},{left['lon']}:{right['lat']},{right['lon']}"
-        query = urllib.parse.urlencode({
-            "routeRepresentation": "polyline",
-            "travelMode": "car",
-            "computeTravelTimeFor": "all",
-            "key": key,
-        })
-        url = f"{base_url}/routing/1/calculateRoute/{locations}/json?{query}"
+        coordinates = f"{left['lon']},{left['lat']};{right['lon']},{right['lat']}"
+        query = urllib.parse.urlencode({"overview": "full", "geometries": "geojson", "steps": "false"})
+        url = f"{base_url}/route/v1/driving/{coordinates}?{query}"
         call_count += 1
         try:
             with urllib.request.urlopen(url, timeout=8) as response:
                 body = json.loads(response.read().decode("utf-8"))
-            points = body.get("routes", [{}])[0].get("legs", [{}])[0].get("points", [])
-            if not points:
+            coordinates = body.get("routes", [{}])[0].get("geometry", {}).get("coordinates", [])
+            if not coordinates:
                 raise ValueError("empty-points")
-            for index, point in enumerate(points):
+            for index, point in enumerate(coordinates):
                 overlay.append({
-                    "id": f"tomtom:{left['id']}->{right['id']}:{index}",
-                    "kind": "tomtom-road-overlay",
-                    "lat": float(point.get("latitude", 0.0)),
-                    "lon": float(point.get("longitude", 0.0)),
+                    "id": f"osrm:{left['id']}->{right['id']}:{index}",
+                    "kind": "osrm-road-overlay",
+                    "lat": float(point[1]),
+                    "lon": float(point[0]),
                 })
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, KeyError, IndexError, json.JSONDecodeError):
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, KeyError, IndexError, TypeError, json.JSONDecodeError):
             fallback_count += 1
             overlay.extend([left, right])
     status = "ready" if overlay and fallback_count == 0 else "partial" if overlay else "missing"
     return dedupe_adjacent_points(overlay), {
         "status": status,
-        "provider": "tomtom-routing",
+        "provider": "osrm-routing",
         "callCount": call_count,
         "fallbackCount": fallback_count,
     }
@@ -423,7 +402,7 @@ def build_visual_cell(cell: VisualCell) -> dict:
     selected_routes = []
     for rank, proposal in enumerate(selected, start=1):
         order_ids = [str(order_id) for order_id in proposal.get("stopOrder", [])]
-        road_overlay_path, road_overlay_status = tomtom_route_overlay(proposal, orders, drivers)
+        road_overlay_path, road_overlay_status = osrm_route_overlay(proposal, orders, drivers)
         visual_path = road_overlay_path if road_overlay_path else proposal_path_points(proposal, orders, drivers)
         selected_routes.append({
             "rank": rank,
