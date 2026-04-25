@@ -25,7 +25,7 @@ LOOP_NAMES = {
     8: "visual-road-evidence-closure",
 }
 
-IMPLEMENTED_LOOPS = {1, 2, 3, 4, 5, 6}
+IMPLEMENTED_LOOPS = {1, 2, 3, 4, 5, 6, 7, 8}
 
 PRESETS = {
     "preset:smoke": {"matrix": "standard-v1", "scenarios": "dense-bundle-20x5", "size": "XS"},
@@ -208,6 +208,73 @@ def run_loop_6(loop_dir: Path, args: argparse.Namespace, preset: Dict[str, str],
     return run_benchmark_visual_metrics(loop_dir, args, preset, manifest_path, 6)
 
 
+def run_loop_7(loop_dir: Path, args: argparse.Namespace, preset: Dict[str, str], manifest_path: Path) -> Tuple[str, List[str]]:
+    return run_benchmark_visual_metrics(loop_dir, args, preset, manifest_path, 7)
+
+
+def write_final_closure_report(output_root: Path, loop_dir: Path, metrics: Dict[str, Any], gate: Dict[str, Any], args: argparse.Namespace) -> None:
+    verdict = str(gate.get("verdict", "FAIL"))
+    final_verdict = "PASS" if verdict == "PASS" else verdict
+    lines = [
+        "# Real Road Dispatch Final Closure Report",
+        "",
+        f"FINAL_VERDICT = {final_verdict}",
+        "",
+        f"Generated at: {datetime.now(timezone.utc).isoformat()}",
+        f"Profile: {args.profile}",
+        f"Routing provider: {args.routing_provider}",
+        f"Matrix preset: {args.matrix}",
+        "",
+        "## Closure Scope",
+        "",
+        "This report closes the rail for the executed benchmark preset. A smoke preset is not a full production certification matrix.",
+        "",
+        "## Metrics",
+        "",
+    ]
+    for key in (
+        "snapSuccessRate",
+        "roadRouteCoverage",
+        "syntheticFallbackRouteCount",
+        "coveredOrderCount",
+        "executedAssignmentCount",
+        "badRoadRouteCount",
+        "weakRoadRouteCount",
+        "roadQualityScore",
+        "maxNetworkDetourRatio",
+        "avgTurnsPerKm",
+        "selectedRoutePolylineCoverage",
+        "visualStraightLineSelectedRouteCount",
+        "pickupBeforeDropoffValid",
+        "repairAction",
+        "planScore",
+    ):
+        lines.append(f"- `{key}`: {metrics.get(key)}")
+    lines.extend([
+        "",
+        "## Gate",
+        "",
+        f"- Verdict: `{verdict}`",
+        f"- Reasons: `{gate.get('reasons', [])}`",
+        "",
+        "## Evidence",
+        "",
+        f"- Loop report: `{loop_dir / 'routePlanQualityLoopReport.md'}`",
+        f"- Visual HTML: `{loop_dir / 'visual' / 'dispatch_visual_evidence.html'}`",
+        f"- Visual JSON: `{loop_dir / 'visual' / 'dispatch_visual_evidence.json'}`",
+    ])
+    (output_root / "final_closure_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def run_loop_8(loop_dir: Path, args: argparse.Namespace, preset: Dict[str, str], manifest_path: Path) -> Tuple[str, List[str]]:
+    verdict, reasons = run_benchmark_visual_metrics(loop_dir, args, preset, manifest_path, 8)
+    output_root = Path(args.output_root)
+    metrics = read_json(loop_dir / "metrics.json")
+    gate = read_json(loop_dir / "gate_result.json")
+    write_final_closure_report(output_root, loop_dir, metrics, gate, args)
+    return verdict, reasons
+
+
 def run_unimplemented_loop(loop_dir: Path, loop: int, manifest_path: Path) -> Tuple[str, List[str]]:
     reasons = [f"loop-{loop:02d}-{LOOP_NAMES.get(loop, 'unknown')}-implementation-not-yet-wired"]
     metrics_path = loop_dir / "metrics.json"
@@ -247,6 +314,10 @@ def run_loop(loop: int, args: argparse.Namespace, preset: Dict[str, str]) -> Tup
             verdict, reasons = run_loop_5(loop_dir, args, preset, manifest_path)
         elif loop == 6:
             verdict, reasons = run_loop_6(loop_dir, args, preset, manifest_path)
+        elif loop == 7:
+            verdict, reasons = run_loop_7(loop_dir, args, preset, manifest_path)
+        elif loop == 8:
+            verdict, reasons = run_loop_8(loop_dir, args, preset, manifest_path)
         else:
             verdict, reasons = run_unimplemented_loop(loop_dir, loop, manifest_path)
     else:

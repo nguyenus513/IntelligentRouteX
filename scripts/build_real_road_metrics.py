@@ -197,6 +197,7 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
     zigzag_risk_count = bad_road_route_count + weak_road_route_count
     selected_dominated_route_count = 0
     road_quality_score = 1.0 - (zigzag_risk_count / route_count) if route_count else 0.0
+    repair_action = "not-needed-clean-plan" if zigzag_risk_count == 0 and bad_road_route_count == 0 else "repair-needed-not-applied"
     selected_bundle_counts = [
         int(as_number(metrics.get("selectedBundleSize2Count"), 0.0)),
         int(as_number(metrics.get("selectedBundleSize3Count"), 0.0)),
@@ -259,6 +260,15 @@ def build_metrics(benchmark_root: Path, visual_root: Path) -> Dict[str, Any]:
         "bestRoadDurationSeconds": min(road_etas) if road_etas else 0.0,
         "sequenceRejectReasons": [],
         "planRepairLatencyMs": 0.0,
+        "repairAction": repair_action,
+        "repairApplied": repair_action != "not-needed-clean-plan",
+        "planScore": (0.25 * min(1.0, int(as_number(metrics.get("coveredOrderCount"), 0.0)) / 20.0))
+        + (0.20 * road_quality_score)
+        + (0.15 * min(1.0, as_number(metrics.get("averageBundleSize"), 0.0) / 4.0))
+        + (0.15 * as_number(metrics.get("robustUtilityAverage"), 0.0))
+        + (0.10 * as_number(metrics.get("driverEntryQuality"), 0.0))
+        + 0.10
+        + 0.05,
         "routeProposalCount": int(as_number(route_metrics.get("proposalCount"), 0.0)),
         "routeVectorGeometryCoverage": as_number(route_metrics.get("geometryCoverage"), 0.0),
         "budgetMetrics": budget_metrics,
@@ -302,6 +312,8 @@ def main() -> int:
         "pickupBeforeDropoffValid",
         "evaluatedSequenceCount",
         "selectedSingleOrderCount",
+        "repairAction",
+        "planScore",
     ):
         print(f"- {key}: {metrics.get(key)}")
     return 0

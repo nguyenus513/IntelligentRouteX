@@ -232,6 +232,54 @@ class RealRoadDispatchRailTest(unittest.TestCase):
         self.assertEqual("FAIL", verdict)
         self.assertIn("selected-bundle-size-outside-2-to-5", reasons)
 
+    def test_loop_seven_gate_accepts_clean_noop_repair(self) -> None:
+        verdict, reasons = gate_module.gate_loop(7, {
+            "snapSuccessRate": 1.0,
+            "roadRouteCoverage": 1.0,
+            "selectedBadGeoPointCount": 0,
+            "visualStraightLineSelectedRouteCount": 0,
+            "selectedRoutePolylineCoverage": 1.0,
+            "coveredOrderCount": 20,
+            "baselineCoveredOrderCount": 20,
+            "executedAssignmentCount": 5,
+            "baselineExecutedAssignmentCount": 5,
+            "badRoadRouteCount": 0,
+            "planRepairLatencyMs": 0.0,
+            "repairAction": "not-needed-clean-plan",
+        }, provider_ready=True)
+
+        self.assertEqual("PASS", verdict)
+        self.assertIn("loop-07-road-aware-plan-repair-pass", reasons)
+
+    def test_loop_eight_gate_closes_clean_visual_evidence(self) -> None:
+        verdict, reasons = gate_module.gate_loop(8, {
+            "snapSuccessRate": 1.0,
+            "roadRouteCoverage": 1.0,
+            "selectedBadGeoPointCount": 0,
+            "visualStraightLineSelectedRouteCount": 0,
+            "selectedRoutePolylineCoverage": 1.0,
+            "syntheticFallbackRouteCount": 0,
+            "badRoadRouteCount": 0,
+            "maxNetworkDetourRatio": 1.2,
+            "pickupBeforeDropoffValid": True,
+            "executedAssignmentCount": 5,
+        }, provider_ready=True)
+
+        self.assertEqual("PASS", verdict)
+        self.assertIn("loop-08-visual-road-evidence-closure-pass", reasons)
+
+    def test_final_closure_report_contains_final_verdict(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            loop_dir = root / "loop-08"
+            loop_dir.mkdir(parents=True)
+            args = type("Args", (), {"profile": "dispatch-v2-full-adaptive", "routing_provider": "osrm", "matrix": "preset:smoke"})()
+
+            rail_module.write_final_closure_report(root, loop_dir, {"coveredOrderCount": 20}, {"verdict": "PASS", "reasons": []}, args)
+
+            report = (root / "final_closure_report.md").read_text(encoding="utf-8")
+            self.assertIn("FINAL_VERDICT = PASS", report)
+
     def test_build_metrics_counts_visual_road_polylines(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -316,17 +364,17 @@ class RealRoadDispatchRailTest(unittest.TestCase):
 
     def test_unimplemented_loop_writes_evidence_gap(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            loop_dir = Path(temp_dir) / "loop-07"
+            loop_dir = Path(temp_dir) / "loop-09"
             loop_dir.mkdir(parents=True)
             manifest = loop_dir / "loop_manifest.json"
-            manifest.write_text(json.dumps({"loop": 7}), encoding="utf-8")
+            manifest.write_text(json.dumps({"loop": 9}), encoding="utf-8")
 
-            verdict, reasons = rail_module.run_unimplemented_loop(loop_dir, 7, manifest)
+            verdict, reasons = rail_module.run_unimplemented_loop(loop_dir, 9, manifest)
 
             self.assertEqual("EVIDENCE_GAP", verdict)
             self.assertTrue((loop_dir / "metrics.json").exists())
             self.assertTrue((loop_dir / "routePlanQualityLoopReport.md").exists())
-            self.assertIn("loop-07-road-aware-plan-repair-implementation-not-yet-wired", reasons)
+            self.assertIn("loop-09-unknown-implementation-not-yet-wired", reasons)
 
 
 if __name__ == "__main__":

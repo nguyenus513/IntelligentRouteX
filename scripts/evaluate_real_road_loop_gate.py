@@ -17,7 +17,7 @@ def write_json(path: Path, payload: Dict[str, Any]) -> None:
 
 def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -> Tuple[str, List[str]]:
     reasons: List[str] = []
-    if loop not in (1, 2, 3, 4, 5, 6):
+    if loop not in (1, 2, 3, 4, 5, 6, 7, 8):
         return "EVIDENCE_GAP", [f"loop-{loop:02d}-implementation-not-yet-wired"]
 
     if float(metrics.get("snapSuccessRate", 0.0)) < 0.95:
@@ -77,6 +77,26 @@ def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -
             reasons.append("selected-road-quality-score-below-0.95")
         if int(metrics.get("selectedBundleSize2To5Count", 0)) < int(metrics.get("executedAssignmentCount", 0)):
             reasons.append("selected-bundle-size-outside-2-to-5")
+    if loop == 7:
+        if int(metrics.get("coveredOrderCount", 0)) < int(metrics.get("baselineCoveredOrderCount", 0)):
+            reasons.append("covered-order-count-regressed")
+        if int(metrics.get("executedAssignmentCount", 0)) < int(metrics.get("baselineExecutedAssignmentCount", 0)):
+            reasons.append("executed-assignment-count-regressed")
+        if int(metrics.get("badRoadRouteCount", 0)) > 0:
+            reasons.append("bad-road-route-remains-after-repair")
+        if float(metrics.get("planRepairLatencyMs", 0.0)) > 250.0:
+            reasons.append("plan-repair-latency-above-budget")
+        if not metrics.get("repairAction"):
+            reasons.append("repair-action-missing")
+    if loop == 8:
+        if int(metrics.get("badRoadRouteCount", 0)) > 0:
+            reasons.append("bad-road-route-selected")
+        if int(metrics.get("syntheticFallbackRouteCount", 0)) > 0:
+            reasons.append("synthetic-fallback-selected-route")
+        if float(metrics.get("maxNetworkDetourRatio", 0.0)) > 1.65:
+            reasons.append("max-network-detour-ratio-above-1.65")
+        if not bool(metrics.get("pickupBeforeDropoffValid", False)):
+            reasons.append("pickup-before-dropoff-invalid")
 
     if reasons:
         return "FAIL", reasons
@@ -93,6 +113,8 @@ def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -
         4: "loop-04-road-native-sequence-optimizer-pass",
         5: "loop-05-road-route-quality-classifier-pass",
         6: "loop-06-ortools-road-native-objective-pass",
+        7: "loop-07-road-aware-plan-repair-pass",
+        8: "loop-08-visual-road-evidence-closure-pass",
     }[loop]
     return "PASS", [pass_reason]
 
