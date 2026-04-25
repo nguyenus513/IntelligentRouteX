@@ -25,7 +25,7 @@ LOOP_NAMES = {
     8: "visual-road-evidence-closure",
 }
 
-IMPLEMENTED_LOOPS = {1}
+IMPLEMENTED_LOOPS = {1, 2}
 
 PRESETS = {
     "preset:smoke": {"matrix": "standard-v1", "scenarios": "dense-bundle-20x5", "size": "XS"},
@@ -111,7 +111,7 @@ def update_rail_state(output_root: Path, loop: int, verdict: str, reasons: List[
     write_json(output_root / "rail_state.json", state)
 
 
-def run_loop_1(loop_dir: Path, args: argparse.Namespace, preset: Dict[str, str], manifest_path: Path) -> Tuple[str, List[str]]:
+def run_benchmark_visual_metrics(loop_dir: Path, args: argparse.Namespace, preset: Dict[str, str], manifest_path: Path, loop: int) -> Tuple[str, List[str]]:
     benchmark_root = loop_dir / "benchmark"
     visual_root = loop_dir / "visual"
     env = env_for_routing(args.routing_provider)
@@ -161,7 +161,7 @@ def run_loop_1(loop_dir: Path, args: argparse.Namespace, preset: Dict[str, str],
         sys.executable,
         str(REPO_ROOT / "scripts" / "evaluate_real_road_loop_gate.py"),
         "--loop",
-        "1",
+        str(loop),
         "--metrics",
         str(metrics_path),
         "--output",
@@ -182,6 +182,14 @@ def run_loop_1(loop_dir: Path, args: argparse.Namespace, preset: Dict[str, str],
     ])
     gate = read_json(gate_path)
     return str(gate.get("verdict", "FAIL")), list(gate.get("reasons", []))
+
+
+def run_loop_1(loop_dir: Path, args: argparse.Namespace, preset: Dict[str, str], manifest_path: Path) -> Tuple[str, List[str]]:
+    return run_benchmark_visual_metrics(loop_dir, args, preset, manifest_path, 1)
+
+
+def run_loop_2(loop_dir: Path, args: argparse.Namespace, preset: Dict[str, str], manifest_path: Path) -> Tuple[str, List[str]]:
+    return run_benchmark_visual_metrics(loop_dir, args, preset, manifest_path, 2)
 
 
 def run_unimplemented_loop(loop_dir: Path, loop: int, manifest_path: Path) -> Tuple[str, List[str]]:
@@ -211,7 +219,12 @@ def run_loop(loop: int, args: argparse.Namespace, preset: Dict[str, str]) -> Tup
     loop_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = write_loop_manifest(loop_dir, loop, args, preset)
     if loop in IMPLEMENTED_LOOPS:
-        verdict, reasons = run_loop_1(loop_dir, args, preset, manifest_path)
+        if loop == 1:
+            verdict, reasons = run_loop_1(loop_dir, args, preset, manifest_path)
+        elif loop == 2:
+            verdict, reasons = run_loop_2(loop_dir, args, preset, manifest_path)
+        else:
+            verdict, reasons = run_unimplemented_loop(loop_dir, loop, manifest_path)
     else:
         verdict, reasons = run_unimplemented_loop(loop_dir, loop, manifest_path)
     status = "PASS" if verdict == "PASS" else "BLOCKED"

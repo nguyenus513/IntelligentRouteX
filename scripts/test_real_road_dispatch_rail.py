@@ -50,6 +50,43 @@ class RealRoadDispatchRailTest(unittest.TestCase):
         self.assertEqual("FAIL", verdict)
         self.assertIn("selected-route-rendered-as-straight-line", reasons)
 
+    def test_loop_two_gate_requires_road_aware_generation(self) -> None:
+        verdict, reasons = gate_module.gate_loop(2, {
+            "geoGenerationMode": "road-aware",
+            "snapSuccessRate": 1.0,
+            "routableOrderRate": 1.0,
+            "roadRouteCoverage": 1.0,
+            "selectedBadGeoPointCount": 0,
+            "badGeoPointCount": 0,
+            "visualStraightLineSelectedRouteCount": 0,
+            "selectedRoutePolylineCoverage": 1.0,
+            "syntheticFallbackRouteCount": 0,
+            "coveredOrderCount": 20,
+            "baselineCoveredOrderCount": 20,
+            "executedAssignmentCount": 5,
+        }, provider_ready=True)
+
+        self.assertEqual("PASS", verdict)
+        self.assertIn("loop-02-road-aware-generator-pass", reasons)
+
+    def test_loop_two_gate_fails_legacy_generation(self) -> None:
+        verdict, reasons = gate_module.gate_loop(2, {
+            "geoGenerationMode": "legacy-synthetic",
+            "snapSuccessRate": 1.0,
+            "routableOrderRate": 1.0,
+            "roadRouteCoverage": 1.0,
+            "selectedBadGeoPointCount": 0,
+            "badGeoPointCount": 0,
+            "visualStraightLineSelectedRouteCount": 0,
+            "selectedRoutePolylineCoverage": 1.0,
+            "coveredOrderCount": 20,
+            "baselineCoveredOrderCount": 20,
+            "executedAssignmentCount": 5,
+        }, provider_ready=True)
+
+        self.assertEqual("FAIL", verdict)
+        self.assertIn("geo-generation-mode-not-road-aware", reasons)
+
     def test_build_metrics_counts_visual_road_polylines(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -93,17 +130,17 @@ class RealRoadDispatchRailTest(unittest.TestCase):
 
     def test_unimplemented_loop_writes_evidence_gap(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            loop_dir = Path(temp_dir) / "loop-02"
+            loop_dir = Path(temp_dir) / "loop-03"
             loop_dir.mkdir(parents=True)
             manifest = loop_dir / "loop_manifest.json"
-            manifest.write_text(json.dumps({"loop": 2}), encoding="utf-8")
+            manifest.write_text(json.dumps({"loop": 3}), encoding="utf-8")
 
-            verdict, reasons = rail_module.run_unimplemented_loop(loop_dir, 2, manifest)
+            verdict, reasons = rail_module.run_unimplemented_loop(loop_dir, 3, manifest)
 
             self.assertEqual("EVIDENCE_GAP", verdict)
             self.assertTrue((loop_dir / "metrics.json").exists())
             self.assertTrue((loop_dir / "routePlanQualityLoopReport.md").exists())
-            self.assertIn("loop-02-road-aware-generator-implementation-not-yet-wired", reasons)
+            self.assertIn("loop-03-osrm-table-matrix-cache-implementation-not-yet-wired", reasons)
 
 
 if __name__ == "__main__":

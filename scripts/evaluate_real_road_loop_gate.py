@@ -17,7 +17,7 @@ def write_json(path: Path, payload: Dict[str, Any]) -> None:
 
 def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -> Tuple[str, List[str]]:
     reasons: List[str] = []
-    if loop != 1:
+    if loop not in (1, 2):
         return "EVIDENCE_GAP", [f"loop-{loop:02d}-implementation-not-yet-wired"]
 
     if float(metrics.get("snapSuccessRate", 0.0)) < 0.95:
@@ -32,6 +32,15 @@ def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -
         reasons.append("selected-route-polyline-coverage-below-0.95")
     if int(metrics.get("executedAssignmentCount", 0)) <= 0:
         reasons.append("no-executed-assignments")
+    if loop == 2:
+        if metrics.get("geoGenerationMode") != "road-aware":
+            reasons.append("geo-generation-mode-not-road-aware")
+        if float(metrics.get("routableOrderRate", 0.0)) < 0.95:
+            reasons.append("routable-order-rate-below-0.95")
+        if int(metrics.get("badGeoPointCount", 0)) > 0:
+            reasons.append("bad-geo-point-count-non-zero")
+        if int(metrics.get("coveredOrderCount", 0)) < int(metrics.get("baselineCoveredOrderCount", 0)):
+            reasons.append("covered-order-count-regressed")
 
     if reasons:
         return "FAIL", reasons
@@ -41,7 +50,8 @@ def gate_loop(loop: int, metrics: Dict[str, Any], provider_ready: bool = True) -
         soft_limits.append("synthetic-fallback-route-observed")
     if soft_limits:
         return "PASS_WITH_LIMITS", soft_limits
-    return "PASS", ["loop-01-road-route-evidence-pass"]
+    pass_reason = "loop-02-road-aware-generator-pass" if loop == 2 else "loop-01-road-route-evidence-pass"
+    return "PASS", [pass_reason]
 
 
 def main() -> int:

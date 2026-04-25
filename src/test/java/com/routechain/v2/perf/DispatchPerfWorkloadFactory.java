@@ -21,6 +21,8 @@ public final class DispatchPerfWorkloadFactory {
             new GeoPoint(10.8016, 106.7147),
             new GeoPoint(10.8411, 106.8098),
             new GeoPoint(10.7626, 106.6601));
+    private static final RoadAwareOrderGenerator ROAD_AWARE_ORDER_GENERATOR = new RoadAwareOrderGenerator();
+    private static final RoadAwareDriverGenerator ROAD_AWARE_DRIVER_GENERATOR = new RoadAwareDriverGenerator();
 
     private DispatchPerfWorkloadFactory() {
     }
@@ -35,10 +37,10 @@ public final class DispatchPerfWorkloadFactory {
         Random random = new Random(workloadSize.seed());
         ScenarioWorldProfile effectiveProfile = profile == null ? ScenarioWorldProfile.NORMAL_CLEAR : profile;
         List<Order> orders = effectiveProfile == ScenarioWorldProfile.DENSE_BUNDLE_DEMO
-                ? denseBundleDemoOrders(workloadSize.orderCount(), effectiveProfile)
+                ? ROAD_AWARE_ORDER_GENERATOR.generate(workloadSize.orderCount(), effectiveProfile)
                 : orders(workloadSize.orderCount(), random, effectiveProfile);
         List<Driver> drivers = effectiveProfile == ScenarioWorldProfile.DENSE_BUNDLE_DEMO
-                ? denseBundleDemoDrivers(workloadSize.driverCount())
+                ? ROAD_AWARE_DRIVER_GENERATOR.generate(workloadSize.driverCount())
                 : drivers(workloadSize.driverCount(), random, effectiveProfile);
         return new DispatchV2Request(
                 "dispatch-v2-request/v1",
@@ -71,42 +73,6 @@ public final class DispatchPerfWorkloadFactory {
         return List.copyOf(orders);
     }
 
-
-    private static List<Order> denseBundleDemoOrders(int orderCount, ScenarioWorldProfile profile) {
-        List<Order> orders = new ArrayList<>(orderCount);
-        for (int index = 0; index < orderCount; index++) {
-            int cluster = index / 4;
-            int offset = index % 4;
-            GeoPoint hotspot = HCM_HOTSPOTS.get(cluster % HCM_HOTSPOTS.size());
-            double corridorLat = (offset - 1.5) * 0.00105;
-            double sideStreetLon = (offset % 2 == 0 ? -0.00075 : 0.00075);
-            double pickupLat = hotspot.latitude() + corridorLat;
-            double pickupLon = hotspot.longitude() + sideStreetLon;
-            double dropLat = hotspot.latitude() + profile.dropOffset() + (offset - 1.5) * 0.00125;
-            double dropLon = hotspot.longitude() + profile.dropOffset() + (offset % 2 == 0 ? -0.00100 : 0.00100);
-            Instant readyAt = profile.decisionTime().plusSeconds((offset % profile.readyBucketSpan()) * profile.readyStepSeconds());
-            orders.add(new Order(
-                    "order-" + index,
-                    new GeoPoint(pickupLat, pickupLon),
-                    new GeoPoint(dropLat, dropLon),
-                    readyAt.minusSeconds(300),
-                    readyAt,
-                    profile.baseReadyWindowMinutes() + (offset % profile.readyWindowSpread()),
-                    index % profile.priorityInterval() == 0));
-        }
-        return List.copyOf(orders);
-    }
-
-    private static List<Driver> denseBundleDemoDrivers(int driverCount) {
-        List<Driver> drivers = new ArrayList<>(driverCount);
-        for (int index = 0; index < driverCount; index++) {
-            GeoPoint hotspot = HCM_HOTSPOTS.get(index % HCM_HOTSPOTS.size());
-            drivers.add(new Driver(
-                    "driver-" + index,
-                    new GeoPoint(hotspot.latitude() - 0.0012, hotspot.longitude() - 0.0012)));
-        }
-        return List.copyOf(drivers);
-    }
     private static List<Driver> drivers(int driverCount, Random random, ScenarioWorldProfile profile) {
         List<Driver> drivers = new ArrayList<>(driverCount);
         for (int index = 0; index < driverCount; index++) {
