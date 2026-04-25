@@ -189,6 +189,11 @@ public final class DispatchRouteProposalService {
                 .map(RouteValueScoringOutcome::candidate)
                 .toList());
         List<RouteProposalCandidate> retained = routeProposalPruner.prune(scored);
+        List<RouteProposalCandidate> roadRefined = retained.stream()
+                .map(candidate -> enrichCandidate(request.traceId(), candidate, context, null, weatherBucket, trafficBucket, "road-refinement"))
+                .map(candidate -> routeValueScorer.score(request.traceId(), candidate, context).candidate())
+                .toList();
+        retained = routeProposalPruner.prune(roadRefined);
         List<RouteProposal> routeProposals = retained.stream().map(RouteProposalCandidate::proposal).toList();
         decisionStageLogger.writeFamily("route_selection_trace", request.traceId(), "route-proposal-pool", java.util.Map.of(
                 "generatedProposalIds", generated.stream().map(candidate -> candidate.proposal().proposalId()).toList(),
@@ -307,7 +312,17 @@ public final class DispatchRouteProposalService {
                                                    RouteVectorCache routeVectorCache,
                                                    String weatherBucket,
                                                    String trafficBucket) {
-        RouteProposal enrichedProposal = routeVectorEnricher.enrich(traceId, candidate.proposal(), context, routeVectorCache, weatherBucket, trafficBucket);
+        return enrichCandidate(traceId, candidate, context, routeVectorCache, weatherBucket, trafficBucket, "pool-enrichment");
+    }
+
+    private RouteProposalCandidate enrichCandidate(String traceId,
+                                                   RouteProposalCandidate candidate,
+                                                   DispatchCandidateContext context,
+                                                   RouteVectorCache routeVectorCache,
+                                                   String weatherBucket,
+                                                   String trafficBucket,
+                                                   String routingIntent) {
+        RouteProposal enrichedProposal = routeVectorEnricher.enrich(traceId, candidate.proposal(), context, routeVectorCache, weatherBucket, trafficBucket, routingIntent);
         return new RouteProposalCandidate(
                 enrichedProposal,
                 candidate.tupleKey(),

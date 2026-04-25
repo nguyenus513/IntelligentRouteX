@@ -77,6 +77,7 @@ import com.routechain.v2.route.RouteProposalPruner;
 import com.routechain.v2.route.RouteProposalValidator;
 import com.routechain.v2.route.RouteValueScorer;
 import com.routechain.v2.routing.BestPathRouter;
+import com.routechain.v2.routing.BudgetedRoutingProvider;
 import com.routechain.v2.routing.HttpTomTomRoutingProvider;
 import com.routechain.v2.routing.RoadGraphProvider;
 import com.routechain.v2.routing.RouteCostFunction;
@@ -706,13 +707,14 @@ public class DispatchV2Configuration {
                                     RouteCostFunction routeCostFunction) {
         RoutingProvider syntheticProvider = new SyntheticRoutingProvider(bestPathRouter);
         if ("tomtom".equalsIgnoreCase(properties.getRouting().getProvider())) {
-            return new HttpTomTomRoutingProvider(
+            RoutingProvider tomTomProvider = new HttpTomTomRoutingProvider(
                     properties.getTraffic().getBaseUrl(),
                     properties.getTraffic().getApiKey(),
-                    properties.getTraffic().getConnectTimeout(),
-                    properties.getTraffic().getReadTimeout(),
+                    properties.getRouting().getConnectTimeout(),
+                    properties.getRouting().getReadTimeout(),
                     routeCostFunction,
                     syntheticProvider);
+            return new BudgetedRoutingProvider(tomTomProvider, syntheticProvider, properties.getRouting().getRefineLimitPerTick());
         }
         return syntheticProvider;
     }

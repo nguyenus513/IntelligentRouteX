@@ -142,8 +142,10 @@ public final class HttpTomTomRoutingProvider implements RoutingProvider {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return fallback("tomtom-routing-interrupted", request);
-        } catch (IOException | RuntimeException exception) {
-            return fallback("tomtom-routing-unavailable", request);
+        } catch (IOException exception) {
+            return fallback("tomtom-routing-io-" + safeReason(exception.getClass().getSimpleName()), request);
+        } catch (RuntimeException exception) {
+            return fallback("tomtom-routing-runtime-" + safeReason(exception.getClass().getSimpleName()), request);
         }
     }
 
@@ -218,5 +220,12 @@ public final class HttpTomTomRoutingProvider implements RoutingProvider {
 
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private String safeReason(String value) {
+        if (value == null || value.isBlank()) {
+            return "unknown";
+        }
+        return value.toLowerCase().replaceAll("[^a-z0-9-]", "-");
     }
 }

@@ -923,6 +923,18 @@ public final class DispatchQualityBenchmarkHarness {
                 "dispatchV2.routing.provider",
                 "IRX_ROUTING_PROVIDER",
                 properties.getRouting().getProvider()));
+        properties.getRouting().setRefineLimitPerTick(configuredInt(
+                "dispatchV2.routing.refineLimitPerTick",
+                "IRX_ROUTING_REFINE_LIMIT_PER_TICK",
+                properties.getRouting().getRefineLimitPerTick()));
+        properties.getRouting().setConnectTimeout(configuredDurationMillis(
+                "dispatchV2.routing.connectTimeoutMs",
+                "IRX_ROUTING_CONNECT_TIMEOUT_MS",
+                properties.getRouting().getConnectTimeout()));
+        properties.getRouting().setReadTimeout(configuredDurationMillis(
+                "dispatchV2.routing.readTimeoutMs",
+                "IRX_ROUTING_READ_TIMEOUT_MS",
+                properties.getRouting().getReadTimeout()));
         properties.setEnabled(true);
         properties.setMlEnabled(false);
         properties.setSelectorOrtoolsEnabled(false);
@@ -1906,6 +1918,31 @@ public final class DispatchQualityBenchmarkHarness {
             return envValue;
         }
         return defaultValue;
+    }
+
+    private static int configuredInt(String propertyName, String envName, int defaultValue) {
+        String value = configuredValue(propertyName, envName, "");
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException exception) {
+            return defaultValue;
+        }
+    }
+
+    private static java.time.Duration configuredDurationMillis(String propertyName, String envName, java.time.Duration defaultValue) {
+        String value = configuredValue(propertyName, envName, "");
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            long millis = Long.parseLong(value.trim());
+            return millis > 0 ? java.time.Duration.ofMillis(millis) : defaultValue;
+        } catch (NumberFormatException exception) {
+            return defaultValue;
+        }
     }
 
     private static List<String> parseStages(String rawValue) {

@@ -39,6 +39,16 @@ public final class RouteVectorEnricher {
                                 RouteVectorCache cache,
                                 String weatherBucket,
                                 String trafficBucket) {
+        return enrich(traceId, proposal, context, cache, weatherBucket, trafficBucket, "pool-enrichment");
+    }
+
+    public RouteProposal enrich(String traceId,
+                                RouteProposal proposal,
+                                DispatchCandidateContext context,
+                                RouteVectorCache cache,
+                                String weatherBucket,
+                                String trafficBucket,
+                                String routingIntent) {
         if (cache != null) {
             RouteVectorCache.Entry cached = cache.get(proposal, context, weatherBucket, trafficBucket);
             if (cached != null) {
@@ -68,7 +78,8 @@ public final class RouteVectorEnricher {
                     stops.get(index + 1),
                     context.corridorSignature(proposal.bundleId()),
                     "synthetic",
-                    15));
+                    15,
+                    routingIntent));
             legs.add(result.legVector());
             corridorPreferenceTotal += result.corridorPreferenceScore();
         }

@@ -197,6 +197,9 @@ public class RouteChainDispatchV2Properties {
 
     public static final class Routing {
         private String provider = "synthetic";
+        private int refineLimitPerTick = 24;
+        private Duration connectTimeout = Duration.ofSeconds(2);
+        private Duration readTimeout = Duration.ofSeconds(5);
 
         public String getProvider() {
             return provider;
@@ -204,6 +207,30 @@ public class RouteChainDispatchV2Properties {
 
         public void setProvider(String provider) {
             this.provider = provider;
+        }
+
+        public int getRefineLimitPerTick() {
+            return refineLimitPerTick;
+        }
+
+        public void setRefineLimitPerTick(int refineLimitPerTick) {
+            this.refineLimitPerTick = refineLimitPerTick;
+        }
+
+        public Duration getConnectTimeout() {
+            return connectTimeout;
+        }
+
+        public void setConnectTimeout(Duration connectTimeout) {
+            this.connectTimeout = connectTimeout;
+        }
+
+        public Duration getReadTimeout() {
+            return readTimeout;
+        }
+
+        public void setReadTimeout(Duration readTimeout) {
+            this.readTimeout = readTimeout;
         }
     }
 
