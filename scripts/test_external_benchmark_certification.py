@@ -21,6 +21,7 @@ def load_module(name: str, filename: str):
 support = load_module("external_benchmark_support", "external_benchmark_support.py")
 solomon = load_module("parse_solomon_vrptw", "parse_solomon_vrptw.py")
 li_lim = load_module("parse_li_lim_pdptw", "parse_li_lim_pdptw.py")
+adapter = load_module("external_benchmark_dispatch_adapter", "external_benchmark_dispatch_adapter.py")
 runner = load_module("run_external_benchmark_certification", "run_external_benchmark_certification.py")
 
 
@@ -111,6 +112,22 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
             self.assertEqual("EVIDENCE_GAP", row["verdict"])
             self.assertIn("instance-data-missing", row["verdictReasons"])
 
+    def test_dispatch_adapter_preserves_benchmark_constraint_profile(self) -> None:
+        instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
+        dispatch_case = adapter.ExternalBenchmarkToDispatchCaseAdapter().adapt(instance)
+
+        self.assertEqual("dispatch-v2-external-benchmark", dispatch_case.constraint_profile.mode)
+        self.assertEqual("benchmark-matrix", dispatch_case.constraint_profile.distance_source)
+        self.assertTrue(dispatch_case.constraint_profile.enforce_capacity)
+        self.assertTrue(dispatch_case.constraint_profile.enforce_time_windows)
+        self.assertTrue(dispatch_case.constraint_profile.enforce_pickup_before_dropoff)
+
+    def test_runner_uses_dispatch_adapter_for_our_dispatch_v2(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            row = runner.run_instance("solomon", "C101", "our-dispatch-v2", Path(temp_dir), 20.0, 30_000)
+
+            self.assertEqual("external-benchmark-dispatch-adapter-v1", row["solverImplementation"])
+            self.assertTrue(Path(row["solutionPath"]).exists())
     def test_runner_writes_report_for_smoke_suite(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             code = runner.main_args if hasattr(runner, "main_args") else None

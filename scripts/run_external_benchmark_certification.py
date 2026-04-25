@@ -6,7 +6,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
-from external_benchmark_support import check_solution, ortools_baseline_solution, simple_baseline_solution, verdict
+from external_benchmark_dispatch_adapter import DispatchV2ExternalBenchmarkSolver
+from external_benchmark_support import check_solution, ortools_baseline_solution, verdict
 from parse_li_lim_pdptw import parse_li_lim
 from parse_solomon_vrptw import parse_solomon
 
@@ -80,14 +81,14 @@ def build_solution(normalized: Dict[str, Any], solver: str, time_limit_ms: int) 
         }
     if solver == "ortools-baseline":
         return ortools_baseline_solution(normalized, time_limit_ms, solver)
-    return simple_baseline_solution(normalized, solver)
+    return DispatchV2ExternalBenchmarkSolver().solve(normalized, time_limit_ms, solver)
 
 
 def solver_implementation(solver: str, solution: Dict[str, Any]) -> str:
     if solver == "ortools-baseline" and not solution.get("evidenceGapReason"):
         return "python-ortools-routing-baseline"
     if solver == "our-dispatch-v2":
-        return "deterministic-normalized-baseline"
+        return solution.get("solverImplementation", "external-benchmark-dispatch-adapter-v1")
     return solver
 
 
@@ -204,7 +205,7 @@ def markdown(rows: List[Dict[str, Any]]) -> str:
         "## Scope Note",
         "",
         "`official` data may come from vetted raw mirrors when direct SINTEF assets are blocked by browser challenges; inspect `benchmarks/external/official/download_manifest.json` for provenance.",
-        "`our-dispatch-v2` is still the deterministic normalized baseline path until `ExternalBenchmarkToDispatchCaseAdapter` is wired into the real Dispatch V2 runtime.",
+        "`our-dispatch-v2` uses `ExternalBenchmarkToDispatchCaseAdapter` in benchmark-native mode. It preserves capacity, time-window, pickup/dropoff, and benchmark matrix constraints that the food-delivery Java domain cannot yet express losslessly.",
         "",
         "## Verdict Reasons",
         "",

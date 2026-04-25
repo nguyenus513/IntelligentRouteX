@@ -24,7 +24,7 @@ This rail evaluates Dispatch V2 against academic benchmark instances without OSR
 
 The rail now supports fixture smoke data and official-format smoke data. Direct SINTEF asset downloads can be blocked by browser challenges in terminal environments, so `scripts/download_external_benchmarks.py --allow-mirror` records the primary SINTEF URL and the raw mirror actually used in `benchmarks/external/official/download_manifest.json`.
 
-`ortools-baseline` runs Python OR-Tools Routing as an independent baseline. `our-dispatch-v2` is still the deterministic normalized baseline path until `ExternalBenchmarkToDispatchCaseAdapter` is wired into the real Dispatch V2 runtime.
+`ortools-baseline` runs Python OR-Tools Routing as an independent baseline. `our-dispatch-v2` now runs through `ExternalBenchmarkToDispatchCaseAdapter` in benchmark-native mode, preserving benchmark matrix, capacity, time-window, and pickup/dropoff constraints that the current food-delivery Java domain cannot represent losslessly yet.
 
 ## Commands
 
@@ -34,9 +34,19 @@ python scripts/run_external_benchmark_certification.py --suite li-lim --preset p
 python scripts/run_external_benchmark_certification.py --suite solomon --preset preset:smoke --solver ortools-baseline --data-source official --mode benchmark-native --time-limit 75s
 ```
 
-For current Dispatch V2 adapter readiness checks:
+For Dispatch V2 external benchmark adapter checks:
 
 ```bash
 python scripts/run_external_benchmark_certification.py --suite li-lim --preset preset:smoke --solver our-dispatch-v2 --data-source official --mode benchmark-native --time-limit 30s
 python scripts/run_external_benchmark_certification.py --suite solomon --preset preset:smoke --solver our-dispatch-v2 --data-source official --mode benchmark-native --time-limit 30s
 ```
+## Current Smoke Result
+
+With official-format smoke data and `75s` per instance, `our-dispatch-v2` via `external-benchmark-dispatch-adapter-v1` is feasible on all 6 smoke instances:
+
+- Solomon `C101`: `PASS`.
+- Solomon `R101`, `RC101`: `PASS_WITH_LIMITS` because vehicle count is above best-known.
+- Li-Lim `LC101`: `PASS`.
+- Li-Lim `LR101`, `LRC101`: `PASS_WITH_LIMITS` because vehicle count is above best-known.
+
+This certifies feasibility for the external adapter path, not full academic optimality and not the Java 12-stage food-delivery runtime.
