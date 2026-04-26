@@ -40,6 +40,24 @@ class DispatchBenchmarkCertificationSuiteTest(unittest.TestCase):
         self.assertIn("E-hcm-road-native", {row["stage"] for row in result["results"]})
         self.assertIn(result["finalVerdict"], {"PASS", "PASS_WITH_LIMITS", "FAIL"})
 
+    def test_mdrplib_row_uses_official_smoke_data_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            row = runner.mdrp_row("mdrp-smoke-low", "low", Path(temp_dir))
+
+        self.assertIn(row["verdict"], {"PASS_WITH_LIMITS", "EVIDENCE_GAP"})
+        if row["verdict"] != "EVIDENCE_GAP":
+            self.assertEqual(0, row["pickupBeforeReadyTimeViolation"])
+            self.assertEqual(0, row["courierShiftViolation"])
+
+    def test_icaps_row_uses_official_smoke_data_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            row = runner.icaps_row("icaps-case-1", Path(temp_dir))
+
+        self.assertIn(row["verdict"], {"PASS_WITH_LIMITS", "EVIDENCE_GAP"})
+        if row["verdict"] != "EVIDENCE_GAP":
+            self.assertEqual(0, row["timeWindowViolationCount"])
+            self.assertEqual(0, row["activeRouteCorruptionCount"])
+
 
 if __name__ == "__main__":
     unittest.main()

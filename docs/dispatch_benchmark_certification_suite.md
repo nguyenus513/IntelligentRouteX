@@ -14,7 +14,7 @@ This suite is the top-level certification rail for Dispatch V2 routing, pickup/d
 
 ## Levels
 
-- `smoke`: smallest evidence-producing run. Runs Solomon/Li-Lim smoke, Homberger 200 placeholders, MDRP smoke placeholders, ICAPS smoke placeholders, one DPDP stress case, and HCM `normal-clear/S/full-system`.
+- `smoke`: smallest evidence-producing run. Runs Solomon/Li-Lim smoke, Homberger 200 evidence checks, MDRPLib public smoke data, ICAPS DPDP public smoke data, one DPDP stress case, and HCM `normal-clear/S/full-system`.
 - `core`: expands academic core, all Homberger sizes, MDRP 10 placeholder slots, ICAPS 5 placeholder slots, DPDP stress matrix, and HCM `S,M` mode comparison.
 - `full`: same as core plus HCM `L` size.
 
@@ -27,13 +27,14 @@ This suite is the top-level certification rail for Dispatch V2 routing, pickup/d
 
 ## Current Known Gaps
 
-- Homberger official data is not present under `benchmarks/external/official/homberger/`.
-- MDRPLib official data and parser/checker are not present.
-- ICAPS DPDP official data and rolling-horizon checker are not present.
+- Homberger official data is not present under `benchmarks/external/official/homberger/`; SINTEF direct download is commonly blocked by browser challenge, so the suite keeps this as `EVIDENCE_GAP` until official `.txt` files are placed there.
+- MDRPLib smoke data is downloaded from Grubhub `mdrplib` public instances and checked with a deterministic structural meal-delivery baseline. This is evidence, but not yet a production rolling optimizer, so rows stay `PASS_WITH_LIMITS`.
+- ICAPS DPDP smoke data is downloaded from Huawei Noah/Xingtian DPDP competition benchmark files and checked structurally for factory references, time rollover, pickup/dropoff order, and active-route corruption. Route capacity timeline solving is not yet implemented, so rows stay `PASS_WITH_LIMITS`.
 - HCM full-system currently uses `GreedRL runtimeMode=lite` when native Windows Torch is blocked by Windows Application Control.
 
 ## Command
 
 ```powershell
+python scripts/download_certification_benchmark_data.py --groups mdrplib,icaps,homberger
 python scripts/run_dispatch_benchmark_certification_suite.py --level smoke --solver our-dispatch-v2 --time-limit 30s --output-root artifacts/benchmark/certification-suite
 ```

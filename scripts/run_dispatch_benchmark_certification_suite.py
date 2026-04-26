@@ -6,6 +6,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
+from parse_icaps_dpdp import evaluate_icaps_instance
+from parse_mdrplib import evaluate_mdrplib_instance
 from run_external_benchmark_certification import parse_time_limit, run_instance
 
 
@@ -102,15 +104,42 @@ def homberger_row(instance: str, output_root: Path, solver: str, time_limit_ms: 
     return academic_row("gehring-homberger-scale", "solomon", instance, solver, output_root, time_limit_ms)
 
 
-def mdrp_row(instance: str, demand_split: str) -> Dict[str, Any]:
-    root = REPO_ROOT / "benchmarks" / "external" / "official" / "mdrplib"
-    if not root.exists() or not any(root.iterdir()):
+def mdrp_row(instance: str, demand_split: str, output_root: Path) -> Dict[str, Any]:
+    root = REPO_ROOT / "benchmarks" / "external" / "official" / "mdrplib" / instance
+    required = ["couriers.txt", "orders.txt", "restaurants.txt", "instance_characteristics.txt"]
+    missing = [filename for filename in required if not (root / filename).exists()]
+    if missing:
         row = evidence_gap_row("food-delivery", "grubhub-mdrplib", "mdrplib-official-data-missing")
-    else:
-        row = evidence_gap_row("food-delivery", "grubhub-mdrplib", "mdrplib-parser-not-implemented")
-    row["instance"] = instance
-    row["demandSplit"] = demand_split
-    return row
+        row["instance"] = instance
+        row["demandSplit"] = demand_split
+        row["missingFiles"] = missing
+        return row
+    metrics = evaluate_mdrplib_instance(root)
+    metrics_path = output_root / "mdrplib" / instance / "metrics.json"
+    write_json(metrics_path, metrics)
+    return {
+        "rail": "food-delivery",
+        "suite": "grubhub-mdrplib",
+        "instance": instance,
+        "solver": "deterministic-meal-delivery-baseline",
+        "feasible": metrics["verdict"] != "FAIL",
+        "demandSplit": demand_split,
+        "orderCount": metrics["orderCount"],
+        "servedOrderCount": metrics["servedOrderCount"],
+        "unservedOrderCount": metrics["unservedOrderCount"],
+        "servedOrderRate": metrics["servedOrderRate"],
+        "lateOrderRate": metrics["lateOrderRate"],
+        "pickupBeforeReadyTimeViolation": metrics["pickupBeforeReadyTimeViolation"],
+        "courierShiftViolation": metrics["courierShiftViolation"],
+        "foodOnVehicleHardViolation": metrics["foodOnVehicleHardViolation"],
+        "avgFoodOnVehicleTime": metrics["avgFoodOnVehicleTime"],
+        "maxDelay": metrics["maxDelay"],
+        "courierUtilization": metrics["courierUtilization"],
+        "runtimeMs": 0,
+        "verdict": metrics["verdict"],
+        "verdictReasons": metrics["verdictReasons"],
+        "metricsPath": str(metrics_path),
+    }
 
 
 def generated_dpdp_row(rail: str, suite: str, order_count: int, tick_count: int, case_name: str = "generated") -> Dict[str, Any]:
@@ -147,6 +176,46 @@ def generated_dpdp_row(rail: str, suite: str, order_count: int, tick_count: int,
         "runtimeMs": runtime_ms,
         "verdict": "PASS" if feasible else "FAIL",
         "verdictReasons": [] if feasible else ["generated-dpdp-feasibility-failed"],
+    }
+
+
+def icaps_row(instance: str, output_root: Path) -> Dict[str, Any]:
+    root = REPO_ROOT / "benchmarks" / "external" / "official" / "icaps-dpdp"
+    instance_root = root / instance
+    factory_info = root / "factory_info.csv"
+    if not factory_info.exists() or not instance_root.exists():
+        row = evidence_gap_row("dynamic-dispatch", "icaps-dpdp", "icaps-official-data-missing")
+        row["instance"] = instance
+        row["missingFiles"] = [str(path) for path in (factory_info, instance_root) if not path.exists()]
+        return row
+    try:
+        metrics = evaluate_icaps_instance(instance_root, factory_info)
+    except ValueError as exc:
+        row = evidence_gap_row("dynamic-dispatch", "icaps-dpdp", "icaps-parser-input-invalid")
+        row["instance"] = instance
+        row["verdictReasons"] = [str(exc)]
+        return row
+    metrics_path = output_root / "icaps-dpdp" / instance / "metrics.json"
+    write_json(metrics_path, metrics)
+    return {
+        "rail": "dynamic-dispatch",
+        "suite": "icaps-dpdp",
+        "instance": instance,
+        "solver": "structural-rolling-horizon-baseline",
+        "feasible": metrics["feasible"],
+        "orderCount": metrics["orderCount"],
+        "vehicleCount": metrics["vehicleCount"],
+        "servedOrderCount": metrics["servedOrderCount"],
+        "capacityViolationCount": metrics["capacityViolationCount"],
+        "timeWindowViolationCount": metrics["timeWindowViolationCount"],
+        "pickupBeforeDropoffViolationCount": metrics["pickupBeforeDropoffViolationCount"],
+        "activeRouteCorruptionCount": metrics["activeRouteCorruptionCount"],
+        "vehicleStateContinuityViolation": metrics["vehicleStateContinuityViolation"],
+        "totalTardiness": metrics["totalTardiness"],
+        "runtimeMs": 0,
+        "verdict": metrics["verdict"],
+        "verdictReasons": metrics["verdictReasons"],
+        "metricsPath": str(metrics_path),
     }
 
 
@@ -217,7 +286,7 @@ def markdown(rows: Sequence[Dict[str, Any]], final_verdict: str) -> str:
                 reasons=", ".join(row.get("verdictReasons", [])),
             )
         )
-    lines.extend(["", "## Notes", "", "- Academic rows use benchmark-native distance/time conventions.", "- Missing official datasets are reported as EVIDENCE_GAP, not silently replaced.", "- HCM road-native uses full-system E2E artifacts by scenario/mode.", "- GreedRL lite runtime is accepted only as PASS_WITH_LIMITS evidence."])
+    lines.extend(["", "## Notes", "", "- Academic rows use benchmark-native distance/time conventions.", "- Missing official datasets are reported as EVIDENCE_GAP, not silently replaced. Use `scripts/download_certification_benchmark_data.py` to fetch public MDRPLib and ICAPS smoke data.", "- HCM road-native uses full-system E2E artifacts by scenario/mode.", "- GreedRL lite runtime is accepted only as PASS_WITH_LIMITS evidence."])
     return "\n".join(lines) + "\n"
 
 
@@ -240,12 +309,10 @@ def run_suite(solver: str, time_limit_ms: int, output_root: Path, level: str = "
     if level in {"core", "full"}:
         mdrp_instances.extend((f"mdrp-core-{index}", MDRP_DEMAND_SPLITS[index % len(MDRP_DEMAND_SPLITS)]) for index in range(4, 11))
     for instance, split in mdrp_instances:
-        rows.append(stage_row("C-food-delivery-official", mdrp_row(instance, split)))
+        rows.append(stage_row("C-food-delivery-official", mdrp_row(instance, split, output_root)))
     icaps_count = 2 if level == "smoke" else 5
     for index in range(1, icaps_count + 1):
-        row = evidence_gap_row("dynamic-dispatch", "icaps-dpdp", "icaps-official-data-missing")
-        row["instance"] = f"icaps-case-{index}"
-        rows.append(stage_row("D-dynamic-official", row))
+        rows.append(stage_row("D-dynamic-official", icaps_row(f"icaps-case-{index}", output_root)))
     stress_cases = ("low",) if level == "smoke" else tuple(DPDP_STRESS_CASES.keys())
     for case_name in stress_cases:
         orders, ticks = DPDP_STRESS_CASES[case_name]
