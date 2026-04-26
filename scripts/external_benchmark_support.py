@@ -95,7 +95,12 @@ def simple_baseline_solution(instance: Dict[str, Any], solver: str = "our-dispat
     return {"schemaVersion": "external-benchmark-solution/v1", "solver": solver, "routes": [route]}
 
 
-def ortools_baseline_solution(instance: Dict[str, Any], time_limit_ms: int, solver: str = "ortools-baseline") -> Dict[str, Any]:
+def ortools_baseline_solution(
+    instance: Dict[str, Any],
+    time_limit_ms: int,
+    solver: str = "ortools-baseline",
+    vehicle_fixed_cost: Optional[int] = None,
+) -> Dict[str, Any]:
     try:
         from ortools.constraint_solver import pywrapcp, routing_enums_pb2
     except Exception as exception:  # pragma: no cover - depends on optional local package.
@@ -123,6 +128,8 @@ def ortools_baseline_solution(instance: Dict[str, Any], time_limit_ms: int, solv
 
     distance_callback_index = routing.RegisterTransitCallback(distance_callback)
     routing.SetArcCostEvaluatorOfAllVehicles(distance_callback_index)
+    if vehicle_fixed_cost is not None and vehicle_fixed_cost > 0:
+        routing.SetFixedCostOfAllVehicles(vehicle_fixed_cost)
 
     def time_callback(from_index: int, to_index: int) -> int:
         from_node = manager.IndexToNode(from_index)

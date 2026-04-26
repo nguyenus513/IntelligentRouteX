@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 
 def load_module(name: str, filename: str):
     path = Path(__file__).resolve().parent / filename
@@ -22,6 +24,7 @@ support = load_module("external_benchmark_support", "external_benchmark_support.
 solomon = load_module("parse_solomon_vrptw", "parse_solomon_vrptw.py")
 li_lim = load_module("parse_li_lim_pdptw", "parse_li_lim_pdptw.py")
 adapter = load_module("external_benchmark_dispatch_adapter", "external_benchmark_dispatch_adapter.py")
+consolidation = load_module("academic_global_consolidation", "academic_global_consolidation.py")
 runner = load_module("run_external_benchmark_certification", "run_external_benchmark_certification.py")
 
 
@@ -126,7 +129,7 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             row = runner.run_instance("solomon", "C101", "our-dispatch-v2", Path(temp_dir), 20.0, 30_000)
 
-            self.assertEqual("external-benchmark-dispatch-adapter-v1", row["solverImplementation"])
+            self.assertEqual("external-benchmark-dispatch-adapter-v2", row["solverImplementation"])
             self.assertTrue(Path(row["solutionPath"]).exists())
     def test_runner_writes_report_for_smoke_suite(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -154,7 +157,19 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 30_000, "our-dispatch-v2")
 
         self.assertEqual(["feasible", "vehicle-count", "distance"], solution["objectivePolicy"]["order"])
-        self.assertIn("route-consolidation-optimizer-pending", solution["objectivePolicy"]["implementationStatus"])
+        self.assertEqual("academic-consolidation-enabled", solution["objectivePolicy"]["implementationStatus"])
+        self.assertGreater(solution["objectivePolicy"]["vehicleFixedCost"], 0)
+
+    def test_global_consolidator_eliminates_mergeable_route(self) -> None:
+        instance = solomon.parse_solomon(Path("benchmarks/external/solomon/fixtures/C101.txt"))
+        instance["vehicleCount"] = 2
+        solution = {"schemaVersion": "external-benchmark-solution/v1", "solver": "unit", "routes": [["0", "1", "0"], ["0", "2", "3", "0"]]}
+
+        result = consolidation.GlobalRouteConsolidator().consolidate(instance, solution)
+
+        self.assertTrue(result.after_metrics["feasible"])
+        self.assertEqual(1, result.after_metrics["vehicleCount"])
+        self.assertEqual(1, result.trace.accepted_moves)
 
 
 if __name__ == "__main__":

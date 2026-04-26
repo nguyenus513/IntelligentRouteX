@@ -113,7 +113,7 @@ def academic_row(rail: str, suite: str, instance: str, solver: str, output_root:
 
 def homberger_time_limit_ms(instance: str, requested_time_limit_ms: int) -> int:
     if "_10_" in instance:
-        return max(requested_time_limit_ms, 90_000)
+        return max(requested_time_limit_ms, 120_000)
     if "_8_" in instance:
         return max(requested_time_limit_ms, 75_000)
     return requested_time_limit_ms
