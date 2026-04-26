@@ -57,6 +57,9 @@ class DispatchBenchmarkCertificationSuiteTest(unittest.TestCase):
         if row["verdict"] != "EVIDENCE_GAP":
             self.assertEqual(0, row["timeWindowViolationCount"])
             self.assertEqual(0, row["activeRouteCorruptionCount"])
+            self.assertEqual(0, row["vehicleStateContinuityViolation"])
+            self.assertGreaterEqual(row["routeStabilityScore"], 0.99)
+            self.assertIn("maxReplanLatencyMs", row)
 
 
 if __name__ == "__main__":

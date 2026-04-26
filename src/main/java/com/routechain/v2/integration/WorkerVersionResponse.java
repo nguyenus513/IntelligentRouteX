@@ -1,7 +1,9 @@
 package com.routechain.v2.integration;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record WorkerVersionResponse(
         String schemaVersion,
         String worker,
@@ -35,5 +37,7 @@ public record WorkerVersionResponse(
         @JsonProperty("modelLoaded")
         boolean modelLoaded,
         @JsonProperty("warmupDone")
-        boolean warmupDone) {
+        boolean warmupDone,
+        @JsonProperty("runtimeMode")
+        String runtimeMode) {
 }

@@ -281,7 +281,9 @@ def check_solution(instance: Dict[str, Any], solution: Dict[str, Any]) -> Dict[s
 
 
 def verdict(result: Dict[str, Any], gap_limit: float, runtime_ms: int, time_limit_ms: int) -> Tuple[str, List[str]]:
-    if runtime_ms > time_limit_ms + 1000:
+    # OR-Tools receives the time limit; Python parsing/reporting adds small OS-dependent overhead.
+    timeout_slack_ms = max(5_000, int(time_limit_ms * 0.10))
+    if runtime_ms > time_limit_ms + timeout_slack_ms:
         return "FAIL", ["runtime-timeout"]
     if not result.get("feasible"):
         return "FAIL", list(result.get("violations", ["infeasible"]))

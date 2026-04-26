@@ -27,14 +27,15 @@ This suite is the top-level certification rail for Dispatch V2 routing, pickup/d
 
 ## Current Known Gaps
 
-- Homberger official data is not present under `benchmarks/external/official/homberger/`; SINTEF direct download is commonly blocked by browser challenge, so the suite keeps this as `EVIDENCE_GAP` until official `.txt` files are placed there.
+- Homberger rows now parse and solve directly from `benchmarks/external/official/homberger/*.txt`; SINTEF direct download is commonly blocked by browser challenge, so the suite keeps rows as `EVIDENCE_GAP` until official files are placed there.
 - MDRPLib smoke data is downloaded from Grubhub `mdrplib` public instances and checked with a deterministic structural meal-delivery baseline. This is evidence, but not yet a production rolling optimizer, so rows stay `PASS_WITH_LIMITS`.
-- ICAPS DPDP smoke data is downloaded from Huawei Noah/Xingtian DPDP competition benchmark files and checked structurally for factory references, time rollover, pickup/dropoff order, and active-route corruption. Route capacity timeline solving is not yet implemented, so rows stay `PASS_WITH_LIMITS`.
-- HCM full-system currently uses `GreedRL runtimeMode=lite` when native Windows Torch is blocked by Windows Application Control.
+- ICAPS DPDP smoke data is downloaded from Huawei Noah/Xingtian DPDP competition benchmark files and checked by a deterministic rolling-horizon baseline with vehicle state continuity, active-route commitment, replan latency, route stability, tardiness, and hard violation metrics. It remains `PASS_WITH_LIMITS` because it is a baseline checker, not the production dynamic optimizer.
+- HCM full-system currently uses a running GreedRL worker process with `runtimeMode=lite`. `scripts/check_greedrl_native_runtime.py` now probes the native adapter separately; if it passes, restart the GreedRL worker without `IRX_GREEDRL_RUNTIME_MODE=lite` and rerun full-system E2E.
 
 ## Command
 
 ```powershell
 python scripts/download_certification_benchmark_data.py --groups mdrplib,icaps,homberger
+python scripts/check_greedrl_native_runtime.py --output artifacts/benchmark/full-system-e2e/greedrl_native_runtime_report.json
 python scripts/run_dispatch_benchmark_certification_suite.py --level smoke --solver our-dispatch-v2 --time-limit 30s --output-root artifacts/benchmark/certification-suite
 ```

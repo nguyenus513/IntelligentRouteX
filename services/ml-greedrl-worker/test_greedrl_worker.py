@@ -163,7 +163,7 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
                 ready, reason, _manifest, _runtime_manifest, _version_payload = greedrl_app._readiness()
 
             self.assertFalse(ready)
-            self.assertEqual("warmup-failed", reason)
+            self.assertTrue(reason.startswith("warmup-failed"), reason)
 
     def test_runtime_manifest_missing_provenance_is_not_ready(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

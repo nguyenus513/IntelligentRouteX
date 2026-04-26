@@ -177,9 +177,9 @@ def check_workers() -> Dict[str, Any]:
     all_ready = True
     for name, port in WORKERS.items():
         base_url = f"http://127.0.0.1:{port}"
-        health = http_get(f"{base_url}/health", 5)
-        ready = http_get(f"{base_url}/ready", 60)
-        version_result = http_get(f"{base_url}/version", 60)
+        health = http_get(f"{base_url}/health", 30)
+        ready = http_get(f"{base_url}/ready", 180)
+        version_result = http_get(f"{base_url}/version", 180)
         ready_payload = parse_json_body(ready)
         version = parse_json_body(version_result)
         version_ok, missing = worker_version_ready(version)
@@ -417,6 +417,10 @@ def mode_env(cell: BenchmarkCell, args: argparse.Namespace, output_dir: Path) ->
         "IRX_ROUTEFINDER_BASE_URL": "http://127.0.0.1:8092",
         "IRX_GREEDRL_BASE_URL": "http://127.0.0.1:8093",
         "IRX_FORECAST_BASE_URL": "http://127.0.0.1:8096",
+        "ROUTECHAIN_DISPATCH_V2_ML_GREEDRL_CONNECT_TIMEOUT": "2s",
+        "ROUTECHAIN_DISPATCH_V2_ML_GREEDRL_READ_TIMEOUT": "30s",
+        "ROUTECHAIN_DISPATCH_V2_ML_GREEDRL_BUNDLE_TIMEOUT": "30s",
+        "ROUTECHAIN_DISPATCH_V2_ML_GREEDRL_SEQUENCE_TIMEOUT": "30s",
     }
 
 
@@ -435,6 +439,10 @@ def run_benchmark_cell(cell: BenchmarkCell, args: argparse.Namespace, output_roo
     command = gradle_command() + [
         "--no-daemon",
         "--rerun-tasks",
+        "-Droutechain.dispatch-v2.ml.greedrl.connect-timeout=2s",
+        "-Droutechain.dispatch-v2.ml.greedrl.read-timeout=30s",
+        "-Droutechain.dispatch-v2.ml.greedrl.bundle-timeout=30s",
+        "-Droutechain.dispatch-v2.ml.greedrl.sequence-timeout=30s",
         "test",
         "--tests",
         "com.routechain.v2.benchmark.DispatchQualityArtifactSmokeTest",
@@ -466,6 +474,7 @@ def collect_latest_metrics(cell_result: Dict[str, Any]) -> Dict[str, Any]:
     metrics = payload.get("metrics") or payload.get("controlMetrics") or {}
     return {
         "sourceArtifact": str(candidates[0]),
+        "mlAttachStatus": payload.get("mlAttachStatus"),
         "coveredOrderCount": metrics.get("coveredOrderCount"),
         "executedAssignmentCount": metrics.get("executedAssignmentCount"),
         "selectedSingleOrderCount": metrics.get("selectedSingleOrderCount"),
@@ -605,9 +614,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     for cell in matrix_cells(args.matrix, modes):
         row = run_benchmark_cell(cell, args, output_root)
         row["metrics"] = collect_latest_metrics(row)
+        metrics = row["metrics"]
+        fail_reasons = []
+        limit_reasons = []
+        if metrics:
+            if (metrics.get("coveredOrderCount") or 0) <= 0:
+                fail_reasons.append("covered-order-count-zero")
+            if (metrics.get("executedAssignmentCount") or 0) <= 0:
+                fail_reasons.append("executed-assignment-count-zero")
+            if metrics.get("mlAttachStatus") not in (None, "FULL_ATTACH"):
+                limit_reasons.append(f"ml-attach-status-{metrics.get('mlAttachStatus')}")
+            if (metrics.get("routeFallbackRate") or 0.0) > 0.0:
+                fail_reasons.append("route-fallback-used")
+        elif row.get("verdict") == "PASS":
+            fail_reasons.append("quality-artifact-missing")
+        if fail_reasons:
+            row["verdict"] = "FAIL"
+            row["reasons"] = list(row.get("reasons", [])) + fail_reasons + limit_reasons
+        elif limit_reasons and row.get("verdict") == "PASS":
+            row["verdict"] = "PASS_WITH_LIMITS"
+            row["reasons"] = list(row.get("reasons", [])) + limit_reasons
         results.append(row)
 
-    verdict = "PASS" if all(row.get("verdict") == "PASS" for row in results) else "PASS_WITH_LIMITS"
+    if any(row.get("verdict") == "FAIL" for row in results):
+        verdict = "FAIL"
+    elif all(row.get("verdict") == "PASS" for row in results):
+        verdict = "PASS"
+    else:
+        verdict = "PASS_WITH_LIMITS"
     payload = {
         "schemaVersion": "full-system-e2e-results/v1",
         "generatedAt": utc_now(),

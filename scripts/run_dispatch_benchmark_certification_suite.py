@@ -8,7 +8,9 @@ from typing import Any, Dict, List, Sequence
 
 from parse_icaps_dpdp import evaluate_icaps_instance
 from parse_mdrplib import evaluate_mdrplib_instance
-from run_external_benchmark_certification import parse_time_limit, run_instance
+from parse_solomon_vrptw import parse_solomon
+from run_external_benchmark_certification import build_solution, parse_time_limit, run_instance
+from external_benchmark_support import check_solution, verdict as external_verdict
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -95,13 +97,52 @@ def academic_row(rail: str, suite: str, instance: str, solver: str, output_root:
 def homberger_row(instance: str, output_root: Path, solver: str, time_limit_ms: int) -> Dict[str, Any]:
     candidates = [
         REPO_ROOT / "benchmarks" / "external" / "official" / "homberger" / f"{instance}.txt",
+        REPO_ROOT / "benchmarks" / "external" / "official" / "homberger" / f"{instance.upper()}.TXT",
         REPO_ROOT / "benchmarks" / "external" / "homberger" / "fixtures" / f"{instance}.txt",
     ]
-    if not any(path.exists() for path in candidates):
+    source_path = next((path for path in candidates if path.exists()), None)
+    if source_path is None:
         row = evidence_gap_row("gehring-homberger-scale", "homberger-vrptw", "homberger-official-instance-missing")
         row["instance"] = instance
+        row["expectedPaths"] = [str(path) for path in candidates[:2]]
         return row
-    return academic_row("gehring-homberger-scale", "solomon", instance, solver, output_root, time_limit_ms)
+    started = time.perf_counter()
+    normalized = parse_solomon(source_path)
+    normalized["benchmarkFamily"] = "homberger"
+    normalized_path = output_root / "homberger" / "normalized" / f"{instance}.json"
+    write_json(normalized_path, normalized)
+    solution = build_solution(normalized, solver, time_limit_ms)
+    runtime_ms = int((time.perf_counter() - started) * 1000)
+    solution_path = output_root / "homberger" / "solutions" / solver / f"{instance}.json"
+    write_json(solution_path, solution)
+    if solution.get("evidenceGapReason"):
+        row = evidence_gap_row("gehring-homberger-scale", "homberger-vrptw", solution["evidenceGapReason"])
+        row.update({"instance": instance, "runtimeMs": runtime_ms, "normalizedPath": str(normalized_path), "solutionPath": str(solution_path)})
+        return row
+    checked = check_solution(normalized, solution)
+    cell_verdict, reasons = external_verdict(checked, 20.0, runtime_ms, time_limit_ms)
+    return {
+        "rail": "gehring-homberger-scale",
+        "suite": "homberger-vrptw",
+        "instance": instance,
+        "solver": solver,
+        "feasible": checked["feasible"],
+        "vehicleCount": checked["vehicleCount"],
+        "bestKnownVehicleCount": normalized.get("bestKnown", {}).get("vehicleCount"),
+        "totalDistance": checked["totalDistance"],
+        "bestKnownDistance": normalized.get("bestKnown", {}).get("objective"),
+        "objectiveGapPercent": checked["objectiveGapPercent"],
+        "servedRequestCount": checked["servedRequestCount"],
+        "unservedRequestCount": checked["unservedRequestCount"],
+        "capacityViolationCount": checked["capacityViolationCount"],
+        "timeWindowViolationCount": checked["timeWindowViolationCount"],
+        "pickupBeforeDropoffViolationCount": checked["pickupBeforeDropoffViolationCount"],
+        "runtimeMs": runtime_ms,
+        "verdict": cell_verdict,
+        "verdictReasons": reasons,
+        "normalizedPath": str(normalized_path),
+        "solutionPath": str(solution_path),
+    }
 
 
 def mdrp_row(instance: str, demand_split: str, output_root: Path) -> Dict[str, Any]:
@@ -201,7 +242,7 @@ def icaps_row(instance: str, output_root: Path) -> Dict[str, Any]:
         "rail": "dynamic-dispatch",
         "suite": "icaps-dpdp",
         "instance": instance,
-        "solver": "structural-rolling-horizon-baseline",
+        "solver": "deterministic-rolling-horizon-baseline",
         "feasible": metrics["feasible"],
         "orderCount": metrics["orderCount"],
         "vehicleCount": metrics["vehicleCount"],
@@ -212,7 +253,11 @@ def icaps_row(instance: str, output_root: Path) -> Dict[str, Any]:
         "activeRouteCorruptionCount": metrics["activeRouteCorruptionCount"],
         "vehicleStateContinuityViolation": metrics["vehicleStateContinuityViolation"],
         "totalTardiness": metrics["totalTardiness"],
-        "runtimeMs": 0,
+        "replanCount": metrics.get("replanCount"),
+        "maxReplanLatencyMs": metrics.get("maxReplanLatencyMs"),
+        "routeStabilityScore": metrics.get("routeStabilityScore"),
+        "driverScheduleChangeCount": metrics.get("driverScheduleChangeCount"),
+        "runtimeMs": metrics.get("runtimeMs", 0),
         "verdict": metrics["verdict"],
         "verdictReasons": metrics["verdictReasons"],
         "metricsPath": str(metrics_path),

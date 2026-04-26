@@ -64,6 +64,16 @@ def _worker_compile_mode() -> str:
     return _env_text("IRX_GREEDRL_WORKER_COMPILE_MODE", "IRX_ML_WORKER_COMPILE_MODE", default="eager")
 
 
+def _runtime_adapter_timeout_seconds() -> float:
+    raw = _env_text("IRX_GREEDRL_RUNTIME_ADAPTER_TIMEOUT_SECONDS", default="")
+    if raw:
+        try:
+            return max(1.0, float(raw))
+        except ValueError:
+            pass
+    return 10.0 if _lite_runtime_enabled() else 90.0
+
+
 def _lite_runtime_enabled() -> bool:
     return os.getenv("IRX_GREEDRL_RUNTIME_MODE", "").strip().lower() == "lite"
 
@@ -310,17 +320,19 @@ def _runtime_env(runtime_manifest: dict, artifact_path: Path) -> dict[str, str]:
         module_root = _runtime_module_root(runtime_manifest, artifact_path)
         env["PYTHONPATH"] = str(module_root) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         return env
-    env["PYTHONHOME"] = str(runtime_root)
     module_root = _runtime_module_root(runtime_manifest, artifact_path)
     env["PYTHONPATH"] = str(module_root) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    env["PATH"] = os.pathsep.join(
-        [
-            str(runtime_root),
-            str(runtime_root / "Scripts"),
-            os.environ.get("SystemRoot", r"C:\Windows") + r"\System32",
-            os.environ.get("SystemRoot", r"C:\Windows"),
-        ]
-    )
+    path_parts = [
+        str(runtime_root),
+        str(runtime_root / "Scripts"),
+        os.environ.get("SystemRoot", r"C:\Windows") + r"\System32",
+        os.environ.get("SystemRoot", r"C:\Windows"),
+    ]
+    if (runtime_root / "pyvenv.cfg").exists():
+        env["VIRTUAL_ENV"] = str(runtime_root)
+    else:
+        env["PYTHONHOME"] = str(runtime_root)
+    env["PATH"] = os.pathsep.join(path_parts)
     return env
 
 
@@ -329,14 +341,14 @@ def _run_runtime_adapter(runtime_manifest: dict,
                          action: str,
                          payload: dict | None = None,
                          *,
-                         timeout_seconds: float = 5.0) -> dict:
+                         timeout_seconds: float | None = None) -> dict:
     completed = subprocess.run(
         [str(_runtime_python(runtime_manifest, artifact_path)), str(_runtime_adapter_path(runtime_manifest, artifact_path)), "--runtime-manifest", str(artifact_path)],
         input=json.dumps({"action": action, "payload": payload or {}}),
         text=True,
         capture_output=True,
         env=_runtime_env(runtime_manifest, artifact_path),
-        timeout=timeout_seconds,
+        timeout=timeout_seconds if timeout_seconds is not None else _runtime_adapter_timeout_seconds(),
         check=False,
     )
     if completed.returncode != 0:
@@ -500,8 +512,8 @@ def _readiness() -> tuple[bool, str, dict | None, dict | None, dict]:
         return False, "model-version-mismatch", manifest_entry, runtime_manifest, version_payload
     try:
         _ensure_runtime_ready(manifest_entry, runtime_manifest, artifact_path, loaded_model_fingerprint)
-    except Exception:
-        return False, "warmup-failed", manifest_entry, runtime_manifest, version_payload
+    except Exception as exc:
+        return False, f"warmup-failed:{type(exc).__name__}:{exc}", manifest_entry, runtime_manifest, version_payload
     return True, "", manifest_entry, runtime_manifest, _version_payload(
         manifest_entry,
         artifact_path=artifact_path,
