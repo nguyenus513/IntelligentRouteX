@@ -40,6 +40,10 @@ class FullSystemE2ETest(unittest.TestCase):
         self.assertEqual("false", env["ROUTECHAIN_DISPATCH_V2_ML_ROUTEFINDER_ENABLED"])
         self.assertEqual("false", env["ROUTECHAIN_DISPATCH_V2_ML_GREEDRL_ENABLED"])
         self.assertEqual("false", env["ROUTECHAIN_DISPATCH_V2_ML_FORECAST_ENABLED"])
+        properties = runner.no_heavy_ml_system_properties(cell)
+        self.assertIn("-Droutechain.dispatch-v2.ml.routefinder.enabled=false", properties)
+        self.assertIn("-Droutechain.dispatch-v2.ml.greedrl.enabled=false", properties)
+        self.assertIn("-Droutechain.dispatch-v2.ml.forecast.enabled=false", properties)
 
     def test_benchmark_cell_artifact_path_includes_size(self) -> None:
         cell = runner.BenchmarkCell("normal-clear", "M", "full-system")
@@ -51,12 +55,18 @@ class FullSystemE2ETest(unittest.TestCase):
             routing_provider="osrm",
             cell_timeout="1s",
         )
-        original_run = runner.subprocess.run
+        original_popen = runner.subprocess.Popen
         try:
-            runner.subprocess.run = lambda *a, **k: type("Completed", (), {"returncode": 0})()
+            class FakeProcess:
+                pid = 12345
+
+                def wait(self, timeout=None):
+                    return 0
+
+            runner.subprocess.Popen = lambda *a, **k: FakeProcess()
             row = runner.run_benchmark_cell(cell, args, Path("root"))
         finally:
-            runner.subprocess.run = original_run
+            runner.subprocess.Popen = original_popen
 
         self.assertTrue(row["artifactRoot"].endswith("mode-comparison\\full-system\\normal-clear\\M") or row["artifactRoot"].endswith("mode-comparison/full-system/normal-clear/M"))
 
@@ -70,17 +80,27 @@ class FullSystemE2ETest(unittest.TestCase):
             routing_provider="osrm",
             cell_timeout="1s",
         )
-        original_run = runner.subprocess.run
+        original_popen = runner.subprocess.Popen
+        original_terminate = runner.terminate_process_tree
         try:
-            def timeout_run(*args, **kwargs):
-                raise runner.subprocess.TimeoutExpired(args[0], kwargs.get("timeout", 1))
-            runner.subprocess.run = timeout_run
+            terminated = []
+
+            class TimeoutProcess:
+                pid = 54321
+
+                def wait(self, timeout=None):
+                    raise runner.subprocess.TimeoutExpired("gradle", timeout or 1)
+
+            runner.subprocess.Popen = lambda *a, **k: TimeoutProcess()
+            runner.terminate_process_tree = lambda process_id: terminated.append(process_id)
             row = runner.run_benchmark_cell(cell, args, Path("root"))
         finally:
-            runner.subprocess.run = original_run
+            runner.subprocess.Popen = original_popen
+            runner.terminate_process_tree = original_terminate
 
         self.assertEqual("FAIL", row["verdict"])
         self.assertIn("benchmark-cell-timeout", row["reasons"])
+        self.assertEqual([54321], terminated)
 
     def test_osrm_ready_from_route_probe_when_health_missing(self) -> None:
         calls = []

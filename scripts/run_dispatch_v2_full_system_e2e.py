@@ -392,6 +392,33 @@ def gradle_command() -> List[str]:
     return [str(REPO_ROOT / "gradlew.bat")] if os.name == "nt" else [str(REPO_ROOT / "gradlew")]
 
 
+def no_heavy_ml_system_properties(cell: BenchmarkCell) -> List[str]:
+    if cell.mode != "no-heavy-ml":
+        return []
+    return [
+        "-Droutechain.dispatch-v2.ml.routefinder.enabled=false",
+        "-Droutechain.dispatch-v2.ml.greedrl.enabled=false",
+        "-Droutechain.dispatch-v2.ml.forecast.enabled=false",
+        "-Droutechain.dispatch-v2.compute.adaptive.routefinder-max-tuples-per-dispatch=0",
+        "-Droutechain.dispatch-v2.compute.adaptive.forecast-enabled-in-hot-path-by-default=false",
+    ]
+
+
+def terminate_process_tree(process_id: int) -> None:
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(process_id), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return
+    try:
+        os.kill(process_id, 9)
+    except OSError:
+        return
+
+
 def mode_env(cell: BenchmarkCell, args: argparse.Namespace, output_dir: Path) -> Dict[str, str]:
     decision = "llm-authoritative"
     baseline = "C"
@@ -443,6 +470,7 @@ def run_benchmark_cell(cell: BenchmarkCell, args: argparse.Namespace, output_roo
         "-Droutechain.dispatch-v2.ml.greedrl.read-timeout=30s",
         "-Droutechain.dispatch-v2.ml.greedrl.bundle-timeout=30s",
         "-Droutechain.dispatch-v2.ml.greedrl.sequence-timeout=30s",
+        *no_heavy_ml_system_properties(cell),
         "test",
         "--tests",
         "com.routechain.v2.benchmark.DispatchQualityArtifactSmokeTest",
@@ -450,16 +478,18 @@ def run_benchmark_cell(cell: BenchmarkCell, args: argparse.Namespace, output_roo
     env = os.environ.copy()
     env.update(mode_env(cell, args, mode_dir))
     started = time.perf_counter()
+    process: subprocess.Popen[str] | None = None
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             command,
             cwd=REPO_ROOT,
             env=env,
             text=True,
-            check=False,
-            timeout=parse_duration_seconds(args.cell_timeout),
         )
+        return_code = process.wait(timeout=parse_duration_seconds(args.cell_timeout))
     except subprocess.TimeoutExpired:
+        if process is not None:
+            terminate_process_tree(process.pid)
         return {
             "scenario": cell.scenario,
             "size": cell.size,
@@ -474,11 +504,11 @@ def run_benchmark_cell(cell: BenchmarkCell, args: argparse.Namespace, output_roo
         "scenario": cell.scenario,
         "size": cell.size,
         "mode": cell.mode,
-        "returnCode": completed.returncode,
+        "returnCode": return_code,
         "runtimeMs": int((time.perf_counter() - started) * 1000),
         "artifactRoot": str(mode_dir),
-        "verdict": "PASS" if completed.returncode == 0 else "FAIL",
-        "reasons": [] if completed.returncode == 0 else ["gradle-benchmark-failed"],
+        "verdict": "PASS" if return_code == 0 else "FAIL",
+        "reasons": [] if return_code == 0 else ["gradle-benchmark-failed"],
     }
 
 
