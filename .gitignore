@@ -10,12 +10,16 @@ __pycache__/
 $buildDir/
 .env
 .env.*
+.android-sdk/
+.android-sdk-*.zip
+.android-sdk-tmp/
 functions/lib/
 functions/node_modules/
 android/routefood-app/.gradle/
 android/routefood-app/build/
 android/routefood-app/app/build/
 android/routefood-app/app/google-services.json
+android/routefood-app/local.properties
 data/bronze/
 data/silver/
 data/gold/
