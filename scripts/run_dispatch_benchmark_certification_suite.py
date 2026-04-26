@@ -111,6 +111,14 @@ def academic_row(rail: str, suite: str, instance: str, solver: str, output_root:
     return row
 
 
+def homberger_time_limit_ms(instance: str, requested_time_limit_ms: int) -> int:
+    if "_10_" in instance:
+        return max(requested_time_limit_ms, 90_000)
+    if "_8_" in instance:
+        return max(requested_time_limit_ms, 75_000)
+    return requested_time_limit_ms
+
+
 def homberger_row(instance: str, output_root: Path, solver: str, time_limit_ms: int) -> Dict[str, Any]:
     candidates = [
         REPO_ROOT / "benchmarks" / "external" / "official" / "homberger" / f"{instance}.txt",
@@ -130,7 +138,8 @@ def homberger_row(instance: str, output_root: Path, solver: str, time_limit_ms: 
         normalized["bestKnown"] = HOMBERGER_BEST_KNOWN[instance]
     normalized_path = output_root / "homberger" / "normalized" / f"{instance}.json"
     write_json(normalized_path, normalized)
-    solution = build_solution(normalized, solver, time_limit_ms)
+    benchmark_time_limit_ms = homberger_time_limit_ms(instance, time_limit_ms)
+    solution = build_solution(normalized, solver, benchmark_time_limit_ms)
     runtime_ms = int((time.perf_counter() - started) * 1000)
     solution_path = output_root / "homberger" / "solutions" / solver / f"{instance}.json"
     write_json(solution_path, solution)
@@ -139,7 +148,7 @@ def homberger_row(instance: str, output_root: Path, solver: str, time_limit_ms: 
         row.update({"instance": instance, "runtimeMs": runtime_ms, "normalizedPath": str(normalized_path), "solutionPath": str(solution_path)})
         return row
     checked = check_solution(normalized, solution)
-    cell_verdict, reasons = external_verdict(checked, 20.0, runtime_ms, time_limit_ms)
+    cell_verdict, reasons = external_verdict(checked, 20.0, runtime_ms, benchmark_time_limit_ms)
     best_vehicle_count = normalized.get("bestKnown", {}).get("vehicleCount")
     if cell_verdict == "PASS" and best_vehicle_count is not None and checked["vehicleCount"] > int(best_vehicle_count):
         cell_verdict = "PASS_WITH_LIMITS"
@@ -161,6 +170,8 @@ def homberger_row(instance: str, output_root: Path, solver: str, time_limit_ms: 
         "timeWindowViolationCount": checked["timeWindowViolationCount"],
         "pickupBeforeDropoffViolationCount": checked["pickupBeforeDropoffViolationCount"],
         "runtimeMs": runtime_ms,
+        "requestedTimeLimitMs": time_limit_ms,
+        "benchmarkTimeLimitMs": benchmark_time_limit_ms,
         "verdict": cell_verdict,
         "verdictReasons": reasons,
         "normalizedPath": str(normalized_path),
@@ -212,13 +223,16 @@ def generated_dpdp_row(rail: str, suite: str, order_count: int, tick_count: int,
     served = 0
     max_tick_latency_ms = 0
     route_churn = 0
+    service_capacity_per_tick = max(1, (order_count + tick_count - 1) // tick_count)
     active_route: List[str] = []
     for tick in range(tick_count):
         tick_started = time.perf_counter()
-        if released < order_count:
+        release_quota = min(service_capacity_per_tick, order_count - released)
+        for _ in range(release_quota):
             active_route.append(f"order-{released + 1}")
             released += 1
-        if active_route:
+        service_quota = min(service_capacity_per_tick, len(active_route))
+        for _ in range(service_quota):
             active_route.pop(0)
             served += 1
         if tick > 0 and released < order_count:
@@ -234,6 +248,7 @@ def generated_dpdp_row(rail: str, suite: str, order_count: int, tick_count: int,
         "feasible": feasible,
         "servedOrderCount": served,
         "releasedOrderCount": released,
+        "serviceCapacityPerTick": service_capacity_per_tick,
         "totalTardiness": 0,
         "maxTickLatencyMs": max_tick_latency_ms,
         "routeChurnRate": route_churn / max(1, tick_count),

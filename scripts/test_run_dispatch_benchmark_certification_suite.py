@@ -81,7 +81,7 @@ class DispatchBenchmarkCertificationSuiteTest(unittest.TestCase):
     def test_main_emit_scorecard_writes_scorecard_outputs(self) -> None:
         original_run_suite = runner.run_suite
         try:
-            runner.run_suite = lambda solver, time_limit_ms, output_root, level: {
+            runner.run_suite = lambda solver, time_limit_ms, output_root, level, **kwargs: {
                 "schemaVersion": "dispatch-benchmark-certification-suite/v1",
                 "level": level,
                 "solver": solver,
