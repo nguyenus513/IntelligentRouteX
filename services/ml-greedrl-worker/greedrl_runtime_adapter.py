@@ -204,9 +204,20 @@ def _dispatch(action: str, payload: Dict[str, Any], runtime_manifest: Dict[str, 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime-manifest", required=True)
+    parser.add_argument("--serve", action="store_true")
     args = parser.parse_args()
-    request = json.loads(sys.stdin.read() or "{}")
     runtime_manifest = _load_runtime_manifest(Path(args.runtime_manifest))
+    if args.serve:
+        for line in sys.stdin:
+            try:
+                request = json.loads(line or "{}")
+                response = _dispatch(request.get("action", ""), request.get("payload") or {}, runtime_manifest)
+            except Exception as exc:
+                response = {"error": f"{type(exc).__name__}:{exc}"}
+            sys.stdout.write(json.dumps(response) + "\n")
+            sys.stdout.flush()
+        return 0
+    request = json.loads(sys.stdin.read() or "{}")
     sys.stdout.write(json.dumps(_dispatch(request.get("action", ""), request.get("payload") or {}, runtime_manifest)))
     return 0
 

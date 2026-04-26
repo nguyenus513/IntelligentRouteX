@@ -55,7 +55,9 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
     def tearDown(self) -> None:
         greedrl_app.MANIFEST_PATH = self._original_manifest_path
         greedrl_app.RUNTIME_CACHE["fingerprint"] = None
+        greedrl_app.RUNTIME_CACHE.pop("pendingFingerprint", None)
         greedrl_app.RUNTIME_DEVICE_AUDIT.clear()
+        greedrl_app._stop_persistent_runtime_adapter()
 
     def test_missing_local_model_path_is_not_ready(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -86,7 +88,7 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
             manifest_path = self._write_manifest(temp_root, fingerprint=fingerprint)
             greedrl_app.MANIFEST_PATH = manifest_path
 
-            def fake_adapter(runtime_manifest, artifact_path, action, payload=None, timeout_seconds=5.0):
+            def fake_adapter(runtime_manifest, artifact_path, _fingerprint, action, payload=None):
                 self.assertEqual(bundle_python.resolve(), greedrl_app._runtime_python(runtime_manifest, artifact_path))
                 if action == "self-check":
                     return {"ok": True}
@@ -95,7 +97,7 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
                 return {"bundleProposals": [], "sequenceProposals": [{"stopOrder": ["order-1", "order-2"]}]}
 
             with patch.dict(os.environ, {"IRX_GREEDRL_RUNTIME_PYTHON": str(bundle_python)}), patch.object(
-                    greedrl_app, "_run_runtime_adapter", side_effect=fake_adapter):
+                    greedrl_app, "_run_model_runtime_adapter", side_effect=fake_adapter):
                 ready, reason, _manifest, _runtime_manifest, _version_payload = greedrl_app._readiness()
 
             self.assertTrue(ready)
@@ -224,7 +226,7 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
             manifest_path = self._write_manifest(temp_root, fingerprint=fingerprint)
             greedrl_app.MANIFEST_PATH = manifest_path
 
-            def fake_adapter(runtime_manifest, artifact_path, action, payload=None, timeout_seconds=5.0):
+            def fake_adapter(runtime_manifest, artifact_path, _fingerprint, action, payload=None):
                 if action == "self-check":
                     return {
                         "ok": True,
@@ -237,7 +239,7 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
                     return {"bundleProposals": [{"family": "COMPACT_CLIQUE"}], "sequenceProposals": []}
                 return {"bundleProposals": [], "sequenceProposals": [{"stopOrder": ["order-1", "order-2"]}]}
 
-            with patch.object(greedrl_app, "_run_runtime_adapter", side_effect=fake_adapter), patch.object(
+            with patch.object(greedrl_app, "_run_model_runtime_adapter", side_effect=fake_adapter), patch.object(
                 socket.socket, "connect", side_effect=AssertionError("network should not be used")
             ):
                 ready, reason, _manifest, runtime_manifest, version_payload = greedrl_app._readiness()
@@ -259,6 +261,42 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
             self.assertEqual("eager", version_payload["compileMode"])
             self.assertTrue(version_payload["modelLoaded"])
             self.assertTrue(version_payload["warmupDone"])
+
+    def test_response_uses_model_runtime_adapter_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            _model_root, _runtime_manifest_path, fingerprint = self._write_materialized_model(temp_root)
+            manifest_path = self._write_manifest(temp_root, fingerprint=fingerprint)
+            greedrl_app.MANIFEST_PATH = manifest_path
+            actions: list[str] = []
+
+            def fake_adapter(_runtime_manifest, _artifact_path, _fingerprint, action, payload=None):
+                actions.append(action)
+                if action == "self-check":
+                    return {"ok": True, "device": "cpu", "requestedDevice": "cpu", "gpuAcceleration": False}
+                if action == "bundle-propose":
+                    return {"bundleProposals": [{"family": "COMPACT_CLIQUE", "orderIds": ["order-1"]}], "sequenceProposals": []}
+                return {"bundleProposals": [], "sequenceProposals": [{"stopOrder": ["order-1", "order-2"]}]}
+
+            payload = {
+                "schemaVersion": "greedrl-request/v1",
+                "traceId": "test-response",
+                "payload": {
+                    "workingOrderIds": ["order-1", "order-2"],
+                    "prioritizedOrderIds": ["order-1"],
+                    "supportScoreByOrder": {"order-1": 0.8, "order-2": 0.7},
+                    "bundleMaxSize": 2,
+                    "maxProposals": 1,
+                },
+            }
+
+            with patch.object(greedrl_app, "_run_model_runtime_adapter", side_effect=fake_adapter), patch.object(
+                greedrl_app, "_run_runtime_adapter", side_effect=AssertionError("subprocess adapter should not be used")
+            ):
+                response = greedrl_app._response(payload, "bundle-propose")
+
+        self.assertFalse(response["fallbackUsed"])
+        self.assertEqual(["self-check", "bundle-propose", "sequence-propose", "bundle-propose"], actions)
 
     def _write_materialized_model(self, temp_root: Path) -> tuple[Path, Path, str]:
         model_root = temp_root / "services" / "models" / "materialized" / "greedrl"

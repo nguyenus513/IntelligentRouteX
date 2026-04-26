@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import time
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,7 @@ PROMOTED_RUNTIME_MANIFEST_SCHEMA_VERSION = "greedrl-runtime-manifest/v1"
 MATERIALIZATION_METADATA_SCHEMA_VERSION = "greedrl-materialization/v1"
 RUNTIME_CACHE: dict[str, Any] = {"fingerprint": None}
 RUNTIME_DEVICE_AUDIT: dict[str, Any] = {}
+RUNTIME_ADAPTER_PROCESS: dict[str, Any] = {"fingerprint": None, "process": None, "lock": threading.Lock()}
 
 app = FastAPI(title="ml-greedrl-worker")
 
@@ -73,6 +75,10 @@ def _runtime_adapter_timeout_seconds() -> float:
         except ValueError:
             pass
     return 10.0 if _lite_runtime_enabled() else 90.0
+
+
+def _persistent_runtime_enabled() -> bool:
+    return os.getenv("IRX_GREEDRL_PERSISTENT_ADAPTER", "true").strip().lower() not in {"0", "false", "no"}
 
 
 def _lite_runtime_enabled() -> bool:
@@ -368,6 +374,102 @@ def _run_runtime_adapter(runtime_manifest: dict,
     return response
 
 
+def _stop_persistent_runtime_adapter() -> None:
+    with RUNTIME_ADAPTER_PROCESS["lock"]:
+        process = RUNTIME_ADAPTER_PROCESS.get("process")
+        RUNTIME_ADAPTER_PROCESS["process"] = None
+        RUNTIME_ADAPTER_PROCESS["fingerprint"] = None
+    if process is None:
+        return
+    try:
+        process.terminate()
+        process.wait(timeout=2)
+    except Exception:
+        try:
+            process.kill()
+        except Exception:
+            pass
+
+
+def _persistent_process_alive(process: subprocess.Popen | None) -> bool:
+    return process is not None and process.poll() is None and process.stdin is not None and process.stdout is not None
+
+
+def _persistent_runtime_adapter_process(runtime_manifest: dict,
+                                        artifact_path: Path,
+                                        loaded_model_fingerprint: str) -> subprocess.Popen:
+    if not _persistent_runtime_enabled():
+        raise RuntimeError("persistent-runtime-disabled")
+    with RUNTIME_ADAPTER_PROCESS["lock"]:
+        process = RUNTIME_ADAPTER_PROCESS.get("process")
+        if RUNTIME_ADAPTER_PROCESS.get("fingerprint") == loaded_model_fingerprint and _persistent_process_alive(process):
+            return process
+        if process is not None:
+            try:
+                process.terminate()
+                process.wait(timeout=2)
+            except Exception:
+                try:
+                    process.kill()
+                except Exception:
+                    pass
+        process = subprocess.Popen(
+            [
+                str(_runtime_python(runtime_manifest, artifact_path)),
+                str(_runtime_adapter_path(runtime_manifest, artifact_path)),
+                "--runtime-manifest",
+                str(artifact_path),
+                "--serve",
+            ],
+            text=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=_runtime_env(runtime_manifest, artifact_path),
+        )
+        RUNTIME_ADAPTER_PROCESS["process"] = process
+        RUNTIME_ADAPTER_PROCESS["fingerprint"] = loaded_model_fingerprint
+        return process
+
+
+def _run_persistent_runtime_adapter(runtime_manifest: dict,
+                                    artifact_path: Path,
+                                    loaded_model_fingerprint: str,
+                                    action: str,
+                                    payload: dict | None = None) -> dict:
+    process = _persistent_runtime_adapter_process(runtime_manifest, artifact_path, loaded_model_fingerprint)
+    lock = RUNTIME_ADAPTER_PROCESS["lock"]
+    with lock:
+        if not _persistent_process_alive(process):
+            RUNTIME_ADAPTER_PROCESS["process"] = None
+            RUNTIME_ADAPTER_PROCESS["fingerprint"] = None
+            raise RuntimeError("persistent-runtime-adapter-exited")
+        assert process.stdin is not None
+        assert process.stdout is not None
+        process.stdin.write(json.dumps({"action": action, "payload": payload or {}}) + "\n")
+        process.stdin.flush()
+        response_line = process.stdout.readline()
+    if not response_line:
+        _stop_persistent_runtime_adapter()
+        raise RuntimeError("persistent-runtime-adapter-empty-response")
+    response = json.loads(response_line)
+    if not isinstance(response, dict):
+        raise ValueError("runtime-adapter-malformed-response")
+    if response.get("error"):
+        raise RuntimeError(str(response["error"]))
+    return response
+
+
+def _run_model_runtime_adapter(runtime_manifest: dict,
+                               artifact_path: Path,
+                               loaded_model_fingerprint: str,
+                               action: str,
+                               payload: dict | None = None) -> dict:
+    if _persistent_runtime_enabled():
+        return _run_persistent_runtime_adapter(runtime_manifest, artifact_path, loaded_model_fingerprint, action, payload)
+    return _run_runtime_adapter(runtime_manifest, artifact_path, action, payload)
+
+
 def _runtime_device_audit(runtime_manifest: dict, artifact_path: Path) -> dict[str, Any]:
     requested_device = _env_text("IRX_GREEDRL_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu")
     normalized = requested_device.lower()
@@ -433,20 +535,22 @@ def _warmup(manifest_entry: dict, runtime_manifest: dict, artifact_path: Path) -
     payload = _request_payload(warmup.get("payload", {}))
     if not payload:
         raise ValueError("warmup-payload-missing")
-    bundle_proposals = _run_runtime_adapter(runtime_manifest, artifact_path, "bundle-propose", payload).get("bundleProposals")
+    loaded_model_fingerprint = RUNTIME_CACHE.get("pendingFingerprint", "")
+    bundle_proposals = _run_model_runtime_adapter(runtime_manifest, artifact_path, loaded_model_fingerprint, "bundle-propose", payload).get("bundleProposals")
     if not bundle_proposals:
         raise ValueError("bundle-warmup-empty")
     sequence_payload = dict(payload)
     if not sequence_payload.get("orderIds") and bundle_proposals:
         sequence_payload["orderIds"] = bundle_proposals[0].get("orderIds", [])
-    if not _run_runtime_adapter(runtime_manifest, artifact_path, "sequence-propose", sequence_payload).get("sequenceProposals"):
+    if not _run_model_runtime_adapter(runtime_manifest, artifact_path, loaded_model_fingerprint, "sequence-propose", sequence_payload).get("sequenceProposals"):
         raise ValueError("sequence-warmup-empty")
 
 
 def _ensure_runtime_ready(manifest_entry: dict, runtime_manifest: dict, artifact_path: Path, loaded_model_fingerprint: str) -> None:
     if RUNTIME_CACHE.get("fingerprint") == loaded_model_fingerprint:
         return
-    self_check = _run_runtime_adapter(runtime_manifest, artifact_path, "self-check")
+    RUNTIME_CACHE["pendingFingerprint"] = loaded_model_fingerprint
+    self_check = _run_model_runtime_adapter(runtime_manifest, artifact_path, loaded_model_fingerprint, "self-check")
     if not self_check.get("ok"):
         raise RuntimeError("runtime-self-check-failed")
     RUNTIME_DEVICE_AUDIT.clear()
@@ -459,6 +563,7 @@ def _ensure_runtime_ready(manifest_entry: dict, runtime_manifest: dict, artifact
     RUNTIME_DEVICE_AUDIT.update(adapter_device_audit or _runtime_device_audit(runtime_manifest, artifact_path))
     _warmup(manifest_entry, runtime_manifest, artifact_path)
     RUNTIME_CACHE["fingerprint"] = loaded_model_fingerprint
+    RUNTIME_CACHE.pop("pendingFingerprint", None)
 
 
 def _readiness() -> tuple[bool, str, dict | None, dict | None, dict]:
@@ -621,7 +726,13 @@ def _response(payload: dict, action: str) -> dict:
     if not ready or manifest_entry is None or runtime_manifest is None:
         return _fallback_response(reason, payload, manifest_entry, started_at)
     try:
-        runtime_response = _run_runtime_adapter(runtime_manifest, _artifact_path(manifest_entry), action, _request_payload(payload))
+        runtime_response = _run_model_runtime_adapter(
+            runtime_manifest,
+            _artifact_path(manifest_entry),
+            version_payload.get("loadedModelFingerprint", ""),
+            action,
+            _request_payload(payload),
+        )
     except Exception:
         return _fallback_response("greedrl-inference-failed", payload, manifest_entry, started_at)
     return {
