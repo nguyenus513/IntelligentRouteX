@@ -333,7 +333,7 @@ def hcm_row(scenario: str, size: str, mode: str) -> Dict[str, Any]:
     }
 
 
-def markdown(rows: Sequence[Dict[str, Any]], final_verdict: str) -> str:
+def markdown(rows: Sequence[Dict[str, Any]], final_verdict: str, *, external_only: bool = False) -> str:
     lines = [
         "# Dispatch Benchmark Certification Suite",
         "",
@@ -356,7 +356,19 @@ def markdown(rows: Sequence[Dict[str, Any]], final_verdict: str) -> str:
                 reasons=", ".join(row.get("verdictReasons", [])),
             )
         )
-    lines.extend(["", "## Notes", "", "- Academic rows use benchmark-native distance/time conventions.", "- Missing official datasets are reported as EVIDENCE_GAP, not silently replaced. Use `scripts/download_certification_benchmark_data.py` to fetch public MDRPLib and ICAPS smoke data.", "- HCM road-native uses full-system E2E artifacts by scenario/mode.", "- GreedRL lite runtime is accepted only as PASS_WITH_LIMITS evidence."])
+    notes = [
+        "",
+        "## Notes",
+        "",
+        "- Academic rows use benchmark-native distance/time conventions.",
+        "- Missing official datasets are reported as EVIDENCE_GAP, not silently replaced. Use `scripts/download_certification_benchmark_data.py` to fetch public MDRPLib and ICAPS smoke data.",
+    ]
+    if external_only:
+        notes.append("- External-only mode excludes HCM road-native/internal benchmark artifacts.")
+    else:
+        notes.append("- HCM road-native uses full-system E2E artifacts by scenario/mode.")
+    notes.append("- GreedRL lite runtime is accepted only as PASS_WITH_LIMITS evidence.")
+    lines.extend(notes)
     return "\n".join(lines) + "\n"
 
 
@@ -366,7 +378,7 @@ def academic_instances(level: str) -> Dict[str, List[str]]:
     return ACADEMIC_CORE
 
 
-def run_suite(solver: str, time_limit_ms: int, output_root: Path, level: str = "smoke") -> Dict[str, Any]:
+def run_suite(solver: str, time_limit_ms: int, output_root: Path, level: str = "smoke", *, external_only: bool = False) -> Dict[str, Any]:
     rows: List[Dict[str, Any]] = []
     for suite, instances in academic_instances(level).items():
         for instance in instances:
@@ -387,16 +399,18 @@ def run_suite(solver: str, time_limit_ms: int, output_root: Path, level: str = "
     for case_name in stress_cases:
         orders, ticks = DPDP_STRESS_CASES[case_name]
         rows.append(stage_row("D-dynamic-stress", generated_dpdp_row("dynamic-stress", "dpdp-stress", orders, ticks, case_name)))
-    hcm_scenarios = ("normal-clear",) if level == "smoke" else HCM_SCENARIOS
-    hcm_modes = ("full-system",) if level == "smoke" else HCM_MODES
-    for scenario in hcm_scenarios:
-        for size in HCM_SIZES_BY_LEVEL[level]:
-            for mode in hcm_modes:
-                rows.append(stage_row("E-hcm-road-native", hcm_row(scenario, size, mode)))
+    if not external_only:
+        hcm_scenarios = ("normal-clear",) if level == "smoke" else HCM_SCENARIOS
+        hcm_modes = ("full-system",) if level == "smoke" else HCM_MODES
+        for scenario in hcm_scenarios:
+            for size in HCM_SIZES_BY_LEVEL[level]:
+                for mode in hcm_modes:
+                    rows.append(stage_row("E-hcm-road-native", hcm_row(scenario, size, mode)))
     final_verdict = certification_verdict(rows)
     return {
         "schemaVersion": "dispatch-benchmark-certification-suite/v1",
         "level": level,
+        "externalOnly": external_only,
         "solver": solver,
         "results": rows,
         "verdictCounts": verdict_counts(rows),
@@ -410,12 +424,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--level", choices=("smoke", "core", "full"), default="smoke")
     parser.add_argument("--time-limit", default="30s")
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
+    parser.add_argument("--external-only", action="store_true", help="Run only community/public benchmark suites and exclude HCM/internal artifacts.")
     parser.add_argument("--emit-scorecard", action="store_true", help="Write certification_scorecard.json and .md after the suite report.")
     args = parser.parse_args(argv)
     output_root = Path(args.output_root)
-    result = run_suite(args.solver, parse_time_limit(args.time_limit), output_root, args.level)
+    result = run_suite(args.solver, parse_time_limit(args.time_limit), output_root, args.level, external_only=args.external_only)
     write_json(output_root / "certification_suite_results.json", result)
-    (output_root / "certification_suite_report.md").write_text(markdown(result["results"], result["finalVerdict"]), encoding="utf-8")
+    (output_root / "certification_suite_report.md").write_text(markdown(result["results"], result["finalVerdict"], external_only=args.external_only), encoding="utf-8")
     if args.emit_scorecard:
         from build_certification_scorecard import write_scorecard
 
