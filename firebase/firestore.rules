@@ -1,0 +1,65 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return signedIn() && request.auth.token.role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if signedIn() && request.auth.uid == userId
+        && !request.resource.data.keys().hasAny(['role', 'isBlocked']);
+      allow update: if signedIn() && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isBlocked']);
+      allow delete: if isAdmin();
+
+      match /recommendations/{recommendationId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow write: if isAdmin();
+      }
+    }
+
+    match /drivers/{driverId} {
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    match /restaurants/{restaurantId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+
+      match /menu_items/{itemId} {
+        allow read: if signedIn();
+        allow write: if isAdmin();
+      }
+    }
+
+    match /orders/{orderId} {
+      allow read: if signedIn()
+        && (resource.data.userId == request.auth.uid
+          || resource.data.assignedDriverUid == request.auth.uid
+          || isAdmin());
+      allow create, update, delete: if false;
+    }
+
+    match /assignments/{assignmentId} {
+      allow read: if signedIn()
+        && (resource.data.driverUid == request.auth.uid || isAdmin());
+      allow create, update, delete: if false;
+    }
+
+    match /traffic_hotspots/{hotspotId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

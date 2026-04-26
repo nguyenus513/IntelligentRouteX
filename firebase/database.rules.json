@@ -1,0 +1,13 @@
+{
+  "rules": {
+    "driver_locations": {
+      "$driverId": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.token.role == 'driver' && auth.uid == newData.child('uid').val()",
+        ".validate": "newData.hasChildren(['uid', 'lat', 'lng', 'updatedAt'])"
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}
