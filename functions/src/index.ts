@@ -1,4 +1,5 @@
 import {initializeApp} from "firebase-admin/app";
+import {getAuth} from "firebase-admin/auth";
 import {getFirestore, FieldValue} from "firebase-admin/firestore";
 import {getDatabase} from "firebase-admin/database";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
@@ -8,6 +9,7 @@ initializeApp();
 
 const firestore = getFirestore();
 const realtimeDatabase = getDatabase();
+const auth = getAuth();
 
 type Role = "user" | "driver" | "admin";
 
@@ -46,6 +48,47 @@ function requireNumber(value: unknown, fieldName: string): number {
   }
   return value;
 }
+
+function requireRoleValue(value: unknown): Role {
+  const role = requireString(value, "role");
+  if (role !== "user" && role !== "driver" && role !== "admin") {
+    throw new HttpsError("invalid-argument", "role must be user, driver, or admin.");
+  }
+  return role;
+}
+
+export const bootstrapDemoRole = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const role = requireRoleValue(request.data?.role);
+
+  await auth.setCustomUserClaims(uid, {role});
+  await firestore.collection("users").doc(uid).set({
+    uid,
+    role,
+    displayName: request.auth?.token.name ?? null,
+    email: request.auth?.token.email ?? null,
+    avatarUrl: request.auth?.token.picture ?? null,
+    isBlocked: false,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp()
+  }, {merge: true});
+
+  if (role === "driver") {
+    await firestore.collection("drivers").doc(uid).set({
+      uid,
+      name: request.auth?.token.name ?? "RouteFood Driver",
+      vehicleType: "bike",
+      rating: 5,
+      online: false,
+      currentAssignmentId: null,
+      capacity: 1,
+      status: "offline",
+      updatedAt: FieldValue.serverTimestamp()
+    }, {merge: true});
+  }
+
+  return {uid, role};
+});
 
 export const createUserOrder = onCall(async (request) => {
   const uid = requireRole(request, "user");
