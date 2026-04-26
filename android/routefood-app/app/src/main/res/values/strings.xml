@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RouteFood</string>
+    <string name="login_title">Welcome back</string>
+    <string name="register_title">Create your RouteFood account</string>
+    <string name="select_role_title">Choose demo mode</string>
+    <string name="user_mode">User mode</string>
+    <string name="driver_mode">Driver mode</string>
+</resources>
