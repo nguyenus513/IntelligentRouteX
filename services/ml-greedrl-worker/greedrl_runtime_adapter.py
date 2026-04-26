@@ -15,6 +15,61 @@ def _lite_runtime_enabled() -> bool:
     return os.getenv("IRX_GREEDRL_RUNTIME_MODE", "").strip().lower() == "lite"
 
 
+def _requested_device() -> str:
+    return os.getenv("IRX_GREEDRL_WORKER_DEVICE", os.getenv("IRX_ML_WORKER_DEVICE", "cpu")).strip() or "cpu"
+
+
+def _strict_device_enabled() -> bool:
+    return os.getenv("IRX_GREEDRL_STRICT_DEVICE", os.getenv("IRX_ML_STRICT_DEVICE", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def _device_audit() -> Dict[str, Any]:
+    requested = _requested_device()
+    normalized = requested.lower()
+    if normalized in {"auto", "gpu", "cuda"}:
+        requested = "cuda:0"
+        normalized = requested
+    if not normalized.startswith("cuda"):
+        return {
+            "device": "cpu",
+            "requestedDevice": requested,
+            "gpuAcceleration": False,
+            "gpuAccelerationReason": "cpu-selected",
+        }
+    try:
+        import torch
+
+        cuda_available = bool(hasattr(torch, "cuda") and torch.cuda.is_available())
+    except Exception as exc:
+        if _strict_device_enabled():
+            raise RuntimeError(f"greedrl-cuda-probe-failed:{type(exc).__name__}:{exc}") from exc
+        return {
+            "device": "cpu",
+            "requestedDevice": requested,
+            "gpuAcceleration": False,
+            "gpuAccelerationReason": "cuda-requested-but-torch-probe-failed-fallback-cpu",
+        }
+    if cuda_available:
+        return {
+            "device": requested,
+            "requestedDevice": requested,
+            "gpuAcceleration": True,
+            "gpuAccelerationReason": "cuda-available",
+        }
+    if _strict_device_enabled():
+        raise RuntimeError("greedrl-cuda-requested-but-unavailable")
+    return {
+        "device": "cpu",
+        "requestedDevice": requested,
+        "gpuAcceleration": False,
+        "gpuAccelerationReason": "cuda-requested-but-unavailable-fallback-cpu",
+    }
+
+
 def _import_runtime_modules() -> None:
     if _lite_runtime_enabled():
         return
@@ -132,7 +187,7 @@ def _sequence_proposals(payload: Dict[str, Any], runtime_manifest: Dict[str, Any
 
 def _self_check() -> Dict[str, Any]:
     _import_runtime_modules()
-    return {"ok": True, "runtimeMode": "lite" if _lite_runtime_enabled() else "native"}
+    return {"ok": True, "runtimeMode": "lite" if _lite_runtime_enabled() else "native", **_device_audit()}
 
 
 def _dispatch(action: str, payload: Dict[str, Any], runtime_manifest: Dict[str, Any]) -> Dict[str, Any]:

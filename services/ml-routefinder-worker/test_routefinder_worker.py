@@ -165,12 +165,24 @@ class RouteFinderWorkerReadyTest(unittest.TestCase):
             self.assertEqual("HF_CHECKPOINT_PROMOTION", version_payload["materializationMode"])
             self.assertEqual(fingerprint, version_payload["loadedModelFingerprint"])
             self.assertEqual("cpu", version_payload["device"])
+            self.assertEqual("cpu", version_payload["requestedDevice"])
+            self.assertFalse(version_payload["gpuAcceleration"])
+            self.assertEqual("cpu-selected", version_payload["gpuAccelerationReason"])
             self.assertEqual("fp32", version_payload["dtype"])
             self.assertEqual(0, version_payload["gpuMemoryAllocatedMb"])
             self.assertEqual(1, version_payload["batchSize"])
             self.assertEqual("eager", version_payload["compileMode"])
             self.assertTrue(version_payload["modelLoaded"])
             self.assertTrue(version_payload["warmupDone"])
+
+    def test_cuda_request_does_not_fake_gpu_backend(self) -> None:
+        with patch.dict(os.environ, {"IRX_ROUTEFINDER_WORKER_DEVICE": "cuda:0"}):
+            audit = routefinder_app._worker_version_audit(model_loaded=True, warmup_done=True)
+
+        self.assertEqual("cpu", audit["device"])
+        self.assertEqual("cuda:0", audit["requestedDevice"])
+        self.assertFalse(audit["gpuAcceleration"])
+        self.assertEqual("routefinder-json-heuristic-has-no-gpu-backend", audit["gpuAccelerationReason"])
 
     def _write_materialized_model(self, temp_root: Path) -> tuple[Path, Path, str]:
         model_root = temp_root / "services" / "models" / "materialized" / "routefinder"

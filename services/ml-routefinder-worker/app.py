@@ -42,7 +42,8 @@ def _env_int(*keys: str, default: int = 0) -> int:
 
 
 def _worker_device() -> str:
-    return _env_text("IRX_ROUTEFINDER_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu")
+    requested = _env_text("IRX_ROUTEFINDER_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu")
+    return "cpu" if requested.lower() in {"auto", "gpu", "cuda", "cuda:0"} else requested
 
 
 def _worker_dtype() -> str:
@@ -62,8 +63,13 @@ def _worker_compile_mode() -> str:
 
 
 def _worker_version_audit(*, model_loaded: bool, warmup_done: bool) -> dict:
+    requested_device = _env_text("IRX_ROUTEFINDER_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu")
+    gpu_requested = requested_device.lower() in {"auto", "gpu", "cuda", "cuda:0"} or requested_device.lower().startswith("cuda")
     return {
         "device": _worker_device(),
+        "requestedDevice": requested_device,
+        "gpuAcceleration": False,
+        "gpuAccelerationReason": "routefinder-json-heuristic-has-no-gpu-backend" if gpu_requested else "cpu-selected",
         "dtype": _worker_dtype(),
         "gpuMemoryAllocatedMb": _worker_gpu_memory_allocated_mb(),
         "batchSize": _worker_batch_size(),

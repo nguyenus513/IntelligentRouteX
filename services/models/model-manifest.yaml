@@ -13,7 +13,7 @@ workers:
     materialization_mode: LOCAL_PACKAGE_PROMOTION
     ready_requires_local_load: true
     offline_boot_supported: true
-    loaded_model_fingerprint: sha256:68e8c3c5457fc3fc951ae8efe265394d98ef2a86b5d6501c06b38cab09e8bb66
+    loaded_model_fingerprint: sha256:c97c3fe984d471ac12f58ab59e2e6a6d2ccd5aec7a3a34eb98c460ce634973eb
     source_repository: https://huggingface.co/Cainiao-AI/GreedRL
     source_ref: 2d5d3bde195dbb5f602908fe42170ffd3ee25c75
     source_package_requirement: greedrl-community-edition

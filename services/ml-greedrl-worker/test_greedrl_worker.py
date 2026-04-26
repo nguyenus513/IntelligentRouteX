@@ -55,6 +55,7 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
     def tearDown(self) -> None:
         greedrl_app.MANIFEST_PATH = self._original_manifest_path
         greedrl_app.RUNTIME_CACHE["fingerprint"] = None
+        greedrl_app.RUNTIME_DEVICE_AUDIT.clear()
 
     def test_missing_local_model_path_is_not_ready(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -118,6 +119,27 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
                 str((runtime_manifest_path.parent / "runtime" / "build-lib").resolve()),
                 env["PYTHONPATH"],
             )
+
+    def test_runtime_device_audit_detects_cuda_from_runtime_python(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            _model_root, runtime_manifest_path, _fingerprint = self._write_materialized_model(temp_root)
+            runtime_manifest = json.loads(runtime_manifest_path.read_text(encoding="utf-8"))
+
+            class Completed:
+                returncode = 0
+                stdout = '{"cudaAvailable": true}'
+                stderr = ""
+
+            with patch.dict(os.environ, {"IRX_GREEDRL_WORKER_DEVICE": "cuda:0"}), patch.object(
+                greedrl_app.subprocess, "run", return_value=Completed()
+            ):
+                audit = greedrl_app._runtime_device_audit(runtime_manifest, runtime_manifest_path)
+
+        self.assertEqual("cuda:0", audit["device"])
+        self.assertEqual("cuda:0", audit["requestedDevice"])
+        self.assertTrue(audit["gpuAcceleration"])
+        self.assertEqual("cuda-available", audit["gpuAccelerationReason"])
 
     def test_fingerprint_mismatch_is_not_ready(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -204,7 +226,13 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
 
             def fake_adapter(runtime_manifest, artifact_path, action, payload=None, timeout_seconds=5.0):
                 if action == "self-check":
-                    return {"ok": True}
+                    return {
+                        "ok": True,
+                        "device": "cuda:0",
+                        "requestedDevice": "cuda:0",
+                        "gpuAcceleration": True,
+                        "gpuAccelerationReason": "cuda-available",
+                    }
                 if action == "bundle-propose":
                     return {"bundleProposals": [{"family": "COMPACT_CLIQUE"}], "sequenceProposals": []}
                 return {"bundleProposals": [], "sequenceProposals": [{"stopOrder": ["order-1", "order-2"]}]}
@@ -221,7 +249,10 @@ class GreedRlWorkerReadyTest(unittest.TestCase):
             self.assertEqual(str(runtime_manifest_path), version_payload["localArtifactPath"])
             self.assertEqual("LOCAL_PACKAGE_PROMOTION", version_payload["materializationMode"])
             self.assertEqual(fingerprint, version_payload["loadedModelFingerprint"])
-            self.assertEqual("cpu", version_payload["device"])
+            self.assertEqual("cuda:0", version_payload["device"])
+            self.assertEqual("cuda:0", version_payload["requestedDevice"])
+            self.assertTrue(version_payload["gpuAcceleration"])
+            self.assertEqual("cuda-available", version_payload["gpuAccelerationReason"])
             self.assertEqual("fp32", version_payload["dtype"])
             self.assertEqual(0, version_payload["gpuMemoryAllocatedMb"])
             self.assertEqual(1, version_payload["batchSize"])

@@ -30,6 +30,7 @@ RUNTIME_CACHE: dict[str, Any] = {
     "fingerprint": None,
     "snapshot_dir": None,
     "pipeline": None,
+    "device": None,
 }
 
 app = FastAPI(title="ml-forecast-worker")
@@ -56,7 +57,7 @@ def _env_int(*keys: str, default: int = 0) -> int:
 
 
 def _worker_device() -> str:
-    return _env_text("IRX_FORECAST_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu")
+    return _resolved_worker_device()["device"]
 
 
 def _worker_dtype() -> str:
@@ -64,7 +65,16 @@ def _worker_dtype() -> str:
 
 
 def _worker_gpu_memory_allocated_mb() -> int:
-    return _env_int("IRX_FORECAST_WORKER_GPU_MEMORY_ALLOCATED_MB", "IRX_ML_WORKER_GPU_MEMORY_ALLOCATED_MB", default=0)
+    configured = _env_int("IRX_FORECAST_WORKER_GPU_MEMORY_ALLOCATED_MB", "IRX_ML_WORKER_GPU_MEMORY_ALLOCATED_MB", default=0)
+    if configured > 0:
+        return configured
+    try:
+        torch_module = importlib.import_module("torch")
+        if hasattr(torch_module, "cuda") and torch_module.cuda.is_available():
+            return int(torch_module.cuda.memory_allocated() / (1024 * 1024))
+    except Exception:
+        return 0
+    return 0
 
 
 def _worker_batch_size() -> int:
@@ -76,14 +86,68 @@ def _worker_compile_mode() -> str:
 
 
 def _worker_version_audit(*, model_loaded: bool, warmup_done: bool) -> dict:
+    device_resolution = _resolved_worker_device()
     return {
-        "device": _worker_device(),
+        "device": device_resolution["device"],
+        "requestedDevice": device_resolution["requestedDevice"],
+        "deviceResolvedFrom": device_resolution["source"],
+        "gpuAcceleration": device_resolution["gpuAcceleration"],
+        "gpuAccelerationReason": device_resolution["reason"],
         "dtype": _worker_dtype(),
         "gpuMemoryAllocatedMb": _worker_gpu_memory_allocated_mb(),
         "batchSize": _worker_batch_size(),
         "compileMode": _worker_compile_mode(),
         "modelLoaded": model_loaded,
         "warmupDone": warmup_done,
+    }
+
+
+def _torch_cuda_available() -> bool:
+    try:
+        torch_module = importlib.import_module("torch")
+        return bool(hasattr(torch_module, "cuda") and torch_module.cuda.is_available())
+    except Exception:
+        return False
+
+
+def _requested_worker_device() -> tuple[str, str]:
+    for key in ("IRX_FORECAST_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE"):
+        value = os.getenv(key, "").strip()
+        if value:
+            return value, key
+    return "cpu", "default"
+
+
+def _resolved_worker_device() -> dict[str, Any]:
+    requested, source = _requested_worker_device()
+    normalized = requested.lower()
+    if normalized in {"auto", "gpu", "cuda"}:
+        requested = "cuda:0"
+        normalized = requested
+    if normalized.startswith("cuda"):
+        if _torch_cuda_available():
+            return {
+                "device": requested,
+                "requestedDevice": requested,
+                "source": source,
+                "gpuAcceleration": True,
+                "reason": "cuda-available",
+            }
+        if _env_text("IRX_FORECAST_STRICT_DEVICE", "IRX_ML_STRICT_DEVICE", default="").lower() in {"1", "true", "yes"}:
+            raise RuntimeError("forecast-cuda-requested-but-unavailable")
+        return {
+            "device": "cpu",
+            "requestedDevice": requested,
+            "source": source,
+            "gpuAcceleration": False,
+            "reason": "cuda-requested-but-unavailable-fallback-cpu",
+        }
+    return {
+        "device": "cpu",
+        "requestedDevice": requested,
+        "source": source,
+        "gpuAcceleration": False,
+        "reason": "cpu-selected",
     }
 
 
@@ -266,7 +330,8 @@ def _import_runtime_dependencies():
 def _load_pipeline_from_snapshot(snapshot_dir: Path):
     _set_deterministic_seed()
     chronos_module, _pandas = _import_runtime_dependencies()
-    return chronos_module.Chronos2Pipeline.from_pretrained(str(snapshot_dir), device_map="cpu")
+    device = _resolved_worker_device()["device"]
+    return chronos_module.Chronos2Pipeline.from_pretrained(str(snapshot_dir), device_map=device)
 
 
 def _ensure_loaded_pipeline(runtime_manifest: dict, artifact_path: Path, loaded_model_fingerprint: str):
@@ -278,6 +343,7 @@ def _ensure_loaded_pipeline(runtime_manifest: dict, artifact_path: Path, loaded_
             cached_pipeline is not None
             and cached_fingerprint == loaded_model_fingerprint
             and cached_snapshot_dir == snapshot_dir
+            and RUNTIME_CACHE.get("device") == _resolved_worker_device()["device"]
     ):
         return cached_pipeline
     if not snapshot_dir.exists():
@@ -286,6 +352,7 @@ def _ensure_loaded_pipeline(runtime_manifest: dict, artifact_path: Path, loaded_
     RUNTIME_CACHE["fingerprint"] = loaded_model_fingerprint
     RUNTIME_CACHE["snapshot_dir"] = snapshot_dir
     RUNTIME_CACHE["pipeline"] = pipeline
+    RUNTIME_CACHE["device"] = _resolved_worker_device()["device"]
     return pipeline
 
 

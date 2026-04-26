@@ -20,6 +20,7 @@ MATERIALIZATION_METADATA_NAME = "materialization-metadata.json"
 PROMOTED_RUNTIME_MANIFEST_SCHEMA_VERSION = "greedrl-runtime-manifest/v1"
 MATERIALIZATION_METADATA_SCHEMA_VERSION = "greedrl-materialization/v1"
 RUNTIME_CACHE: dict[str, Any] = {"fingerprint": None}
+RUNTIME_DEVICE_AUDIT: dict[str, Any] = {}
 
 app = FastAPI(title="ml-greedrl-worker")
 
@@ -45,7 +46,7 @@ def _env_int(*keys: str, default: int = 0) -> int:
 
 
 def _worker_device() -> str:
-    return _env_text("IRX_GREEDRL_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu")
+    return str(RUNTIME_DEVICE_AUDIT.get("device") or _env_text("IRX_GREEDRL_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu"))
 
 
 def _worker_dtype() -> str:
@@ -81,6 +82,12 @@ def _lite_runtime_enabled() -> bool:
 def _worker_version_audit(*, model_loaded: bool, warmup_done: bool) -> dict:
     return {
         "device": _worker_device(),
+        "requestedDevice": RUNTIME_DEVICE_AUDIT.get(
+            "requestedDevice",
+            _env_text("IRX_GREEDRL_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu"),
+        ),
+        "gpuAcceleration": bool(RUNTIME_DEVICE_AUDIT.get("gpuAcceleration", False)),
+        "gpuAccelerationReason": RUNTIME_DEVICE_AUDIT.get("gpuAccelerationReason", "runtime-not-checked"),
         "dtype": _worker_dtype(),
         "gpuMemoryAllocatedMb": _worker_gpu_memory_allocated_mb(),
         "batchSize": _worker_batch_size(),
@@ -312,6 +319,7 @@ def _version_payload(manifest_entry: dict | None,
 
 def _runtime_env(runtime_manifest: dict, artifact_path: Path) -> dict[str, str]:
     env = dict(**os.environ)
+    env.setdefault("IRX_GREEDRL_WORKER_DEVICE", _env_text("IRX_GREEDRL_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu"))
     runtime_python = _runtime_python(runtime_manifest, artifact_path)
     runtime_root = _runtime_root(runtime_python)
     for key in ("VIRTUAL_ENV", "CONDA_PREFIX", "CONDA_DEFAULT_ENV", "PIP_REQUIRE_VIRTUALENV"):
@@ -360,6 +368,66 @@ def _run_runtime_adapter(runtime_manifest: dict,
     return response
 
 
+def _runtime_device_audit(runtime_manifest: dict, artifact_path: Path) -> dict[str, Any]:
+    requested_device = _env_text("IRX_GREEDRL_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu")
+    normalized = requested_device.lower()
+    if normalized in {"auto", "gpu", "cuda"}:
+        requested_device = "cuda:0"
+        normalized = requested_device
+    if not normalized.startswith("cuda"):
+        return {
+            "device": "cpu",
+            "requestedDevice": requested_device,
+            "gpuAcceleration": False,
+            "gpuAccelerationReason": "cpu-selected",
+        }
+    probe = """
+import json
+try:
+    import torch
+    available = bool(hasattr(torch, 'cuda') and torch.cuda.is_available())
+    print(json.dumps({'cudaAvailable': available}))
+except Exception as exc:
+    print(json.dumps({'cudaAvailable': False, 'error': type(exc).__name__ + ':' + str(exc)}))
+"""
+    completed = subprocess.run(
+        [str(_runtime_python(runtime_manifest, artifact_path)), "-c", probe],
+        text=True,
+        capture_output=True,
+        env=_runtime_env(runtime_manifest, artifact_path),
+        timeout=min(10.0, _runtime_adapter_timeout_seconds()),
+        check=False,
+    )
+    if completed.returncode != 0:
+        if _env_text("IRX_GREEDRL_STRICT_DEVICE", "IRX_ML_STRICT_DEVICE", default="").lower() in {"1", "true", "yes"}:
+            raise RuntimeError(completed.stderr.strip() or "greedrl-cuda-probe-failed")
+        return {
+            "device": "cpu",
+            "requestedDevice": requested_device,
+            "gpuAcceleration": False,
+            "gpuAccelerationReason": "cuda-requested-but-probe-failed-fallback-cpu",
+        }
+    try:
+        payload = json.loads(completed.stdout.strip() or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+    if payload.get("cudaAvailable"):
+        return {
+            "device": requested_device,
+            "requestedDevice": requested_device,
+            "gpuAcceleration": True,
+            "gpuAccelerationReason": "cuda-available",
+        }
+    if _env_text("IRX_GREEDRL_STRICT_DEVICE", "IRX_ML_STRICT_DEVICE", default="").lower() in {"1", "true", "yes"}:
+        raise RuntimeError("greedrl-cuda-requested-but-unavailable")
+    return {
+        "device": "cpu",
+        "requestedDevice": requested_device,
+        "gpuAcceleration": False,
+        "gpuAccelerationReason": "cuda-requested-but-unavailable-fallback-cpu",
+    }
+
+
 def _warmup(manifest_entry: dict, runtime_manifest: dict, artifact_path: Path) -> None:
     warmup = manifest_entry.get("startup_warmup_request", {})
     payload = _request_payload(warmup.get("payload", {}))
@@ -378,8 +446,17 @@ def _warmup(manifest_entry: dict, runtime_manifest: dict, artifact_path: Path) -
 def _ensure_runtime_ready(manifest_entry: dict, runtime_manifest: dict, artifact_path: Path, loaded_model_fingerprint: str) -> None:
     if RUNTIME_CACHE.get("fingerprint") == loaded_model_fingerprint:
         return
-    if not _run_runtime_adapter(runtime_manifest, artifact_path, "self-check").get("ok"):
+    self_check = _run_runtime_adapter(runtime_manifest, artifact_path, "self-check")
+    if not self_check.get("ok"):
         raise RuntimeError("runtime-self-check-failed")
+    RUNTIME_DEVICE_AUDIT.clear()
+    adapter_device_audit = {key: value for key, value in self_check.items() if key in {
+        "device",
+        "requestedDevice",
+        "gpuAcceleration",
+        "gpuAccelerationReason",
+    }}
+    RUNTIME_DEVICE_AUDIT.update(adapter_device_audit or _runtime_device_audit(runtime_manifest, artifact_path))
     _warmup(manifest_entry, runtime_manifest, artifact_path)
     RUNTIME_CACHE["fingerprint"] = loaded_model_fingerprint
 

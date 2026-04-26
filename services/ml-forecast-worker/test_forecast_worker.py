@@ -73,6 +73,7 @@ class ForecastWorkerReadyTest(unittest.TestCase):
         forecast_app.RUNTIME_CACHE["fingerprint"] = None
         forecast_app.RUNTIME_CACHE["snapshot_dir"] = None
         forecast_app.RUNTIME_CACHE["pipeline"] = None
+        forecast_app.RUNTIME_CACHE["device"] = None
 
     def test_missing_local_model_path_is_not_ready(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -191,12 +192,85 @@ class ForecastWorkerReadyTest(unittest.TestCase):
             self.assertEqual("HF_SNAPSHOT_PROMOTION", version_payload["materializationMode"])
             self.assertEqual(fingerprint, version_payload["loadedModelFingerprint"])
             self.assertEqual("cpu", version_payload["device"])
+            self.assertEqual("cpu", version_payload["requestedDevice"])
+            self.assertFalse(version_payload["gpuAcceleration"])
+            self.assertEqual("cpu-selected", version_payload["gpuAccelerationReason"])
             self.assertEqual("fp32", version_payload["dtype"])
             self.assertEqual(0, version_payload["gpuMemoryAllocatedMb"])
             self.assertEqual(1, version_payload["batchSize"])
             self.assertEqual("eager", version_payload["compileMode"])
             self.assertTrue(version_payload["modelLoaded"])
             self.assertTrue(version_payload["warmupDone"])
+
+    def test_cuda_request_loads_pipeline_on_cuda_when_available(self) -> None:
+        calls: list[tuple[str, str]] = []
+
+        class FakeChronosPipeline:
+            @staticmethod
+            def from_pretrained(snapshot_dir: str, device_map: str):
+                calls.append((snapshot_dir, device_map))
+                return object()
+
+        class FakeChronosModule:
+            Chronos2Pipeline = FakeChronosPipeline
+
+        def fake_import(name: str):
+            if name == "torch":
+                class FakeCuda:
+                    @staticmethod
+                    def is_available() -> bool:
+                        return True
+
+                    @staticmethod
+                    def memory_allocated() -> int:
+                        return 2 * 1024 * 1024
+
+                class FakeTorch:
+                    cuda = FakeCuda()
+
+                    @staticmethod
+                    def manual_seed(_seed: int) -> None:
+                        return None
+
+                return FakeTorch
+            if name == "chronos":
+                return FakeChronosModule
+            if name == "pandas":
+                return object()
+            raise AssertionError(f"unexpected import: {name}")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            snapshot_dir = Path(temp_dir)
+            with patch.dict(os.environ, {"IRX_FORECAST_WORKER_DEVICE": "cuda:0"}), patch.object(
+                forecast_app.importlib, "import_module", side_effect=fake_import
+            ):
+                pipeline = forecast_app._load_pipeline_from_snapshot(snapshot_dir)
+                audit = forecast_app._worker_version_audit(model_loaded=True, warmup_done=True)
+
+        self.assertIsNotNone(pipeline)
+        self.assertEqual([(str(snapshot_dir), "cuda:0")], calls)
+        self.assertEqual("cuda:0", audit["device"])
+        self.assertTrue(audit["gpuAcceleration"])
+        self.assertEqual(2, audit["gpuMemoryAllocatedMb"])
+
+    def test_cuda_request_falls_back_to_cpu_when_unavailable(self) -> None:
+        class FakeCuda:
+            @staticmethod
+            def is_available() -> bool:
+                return False
+
+        class FakeTorch:
+            cuda = FakeCuda()
+
+        with patch.dict(os.environ, {"IRX_FORECAST_WORKER_DEVICE": "cuda:0"}), patch.object(
+            forecast_app.importlib, "import_module", return_value=FakeTorch
+        ):
+            audit = forecast_app._worker_version_audit(model_loaded=False, warmup_done=False)
+
+        self.assertEqual("cpu", audit["device"])
+        self.assertEqual("cuda:0", audit["requestedDevice"])
+        self.assertFalse(audit["gpuAcceleration"])
+        self.assertEqual("cuda-requested-but-unavailable-fallback-cpu", audit["gpuAccelerationReason"])
 
     def _write_materialized_model(self, temp_root: Path) -> tuple[Path, Path, str]:
         model_root = temp_root / "services" / "models" / "materialized" / "chronos-2"
