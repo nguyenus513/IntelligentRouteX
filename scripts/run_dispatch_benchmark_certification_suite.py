@@ -31,6 +31,23 @@ HOMBERGER_SCALE = {
     "800": ["C1_8_1", "R1_8_1", "RC1_8_1"],
     "1000": ["C1_10_1", "R1_10_1", "RC1_10_1"],
 }
+HOMBERGER_BEST_KNOWN = {
+    "C1_2_1": {"vehicleCount": 20, "objective": 2704.57, "source": "SINTEF Homberger 200 customers"},
+    "R1_2_1": {"vehicleCount": 20, "objective": 4784.11, "source": "SINTEF Homberger 200 customers"},
+    "RC1_2_1": {"vehicleCount": 18, "objective": 3602.80, "source": "SINTEF Homberger 200 customers"},
+    "C1_4_1": {"vehicleCount": 40, "objective": 7152.02, "source": "SINTEF Homberger 400 customers"},
+    "R1_4_1": {"vehicleCount": 40, "objective": 10372.31, "source": "SINTEF Homberger 400 customers"},
+    "RC1_4_1": {"vehicleCount": 36, "objective": 8571.32, "source": "SINTEF Homberger 400 customers"},
+    "C1_6_1": {"vehicleCount": 60, "objective": 14095.64, "source": "SINTEF Homberger 600 customers"},
+    "R1_6_1": {"vehicleCount": 59, "objective": 21394.95, "source": "SINTEF Homberger 600 customers"},
+    "RC1_6_1": {"vehicleCount": 55, "objective": 16982.86, "source": "SINTEF Homberger 600 customers"},
+    "C1_8_1": {"vehicleCount": 80, "objective": 25030.36, "source": "SINTEF Homberger 800 customers"},
+    "R1_8_1": {"vehicleCount": 80, "objective": 36767.92, "source": "SINTEF Homberger 800 customers"},
+    "RC1_8_1": {"vehicleCount": 72, "objective": 30464.65, "source": "SINTEF Homberger 800 customers"},
+    "C1_10_1": {"vehicleCount": 100, "objective": 42478.95, "source": "SINTEF Homberger 1000 customers"},
+    "R1_10_1": {"vehicleCount": 100, "objective": 53380.18, "source": "SINTEF Homberger 1000 customers"},
+    "RC1_10_1": {"vehicleCount": 90, "objective": 45830.62, "source": "SINTEF Homberger 1000 customers"},
+}
 MDRP_DEMAND_SPLITS = ("low", "medium", "high")
 DPDP_STRESS_CASES = {
     "low": (12, 16),
@@ -109,6 +126,8 @@ def homberger_row(instance: str, output_root: Path, solver: str, time_limit_ms: 
     started = time.perf_counter()
     normalized = parse_solomon(source_path)
     normalized["benchmarkFamily"] = "homberger"
+    if instance in HOMBERGER_BEST_KNOWN:
+        normalized["bestKnown"] = HOMBERGER_BEST_KNOWN[instance]
     normalized_path = output_root / "homberger" / "normalized" / f"{instance}.json"
     write_json(normalized_path, normalized)
     solution = build_solution(normalized, solver, time_limit_ms)
@@ -121,6 +140,10 @@ def homberger_row(instance: str, output_root: Path, solver: str, time_limit_ms: 
         return row
     checked = check_solution(normalized, solution)
     cell_verdict, reasons = external_verdict(checked, 20.0, runtime_ms, time_limit_ms)
+    best_vehicle_count = normalized.get("bestKnown", {}).get("vehicleCount")
+    if cell_verdict == "PASS" and best_vehicle_count is not None and checked["vehicleCount"] > int(best_vehicle_count):
+        cell_verdict = "PASS_WITH_LIMITS"
+        reasons = ["vehicle-count-above-best-known"]
     return {
         "rail": "gehring-homberger-scale",
         "suite": "homberger-vrptw",

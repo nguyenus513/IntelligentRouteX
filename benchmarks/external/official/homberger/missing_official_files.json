@@ -1,23 +1,83 @@
 {
-  "missingFiles": [
-    "C1_2_1.txt",
-    "R1_2_1.txt",
-    "RC1_2_1.txt",
-    "C1_4_1.txt",
-    "R1_4_1.txt",
-    "RC1_4_1.txt",
-    "C1_6_1.txt",
-    "R1_6_1.txt",
-    "RC1_6_1.txt",
-    "C1_8_1.txt",
-    "R1_8_1.txt",
-    "RC1_8_1.txt",
-    "C1_10_1.txt",
-    "R1_10_1.txt",
-    "RC1_10_1.txt"
-  ],
+  "missingFiles": [],
   "policy": "official-only",
-  "presentFiles": [],
+  "presentFiles": [
+    {
+      "bytes": 14222,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\C1_2_1.txt",
+      "sha256": "sha256:b0352e8c02428c8404c5cb18b81195f285410311c725a8b8f1ee34c619e1c751"
+    },
+    {
+      "bytes": 14222,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\R1_2_1.txt",
+      "sha256": "sha256:bf13ca27d85efac8218d908b45ff164ad848d8b15d0c170c9572b22caababdf1"
+    },
+    {
+      "bytes": 14223,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\RC1_2_1.txt",
+      "sha256": "sha256:adbf41192345f3f559a75819e5b0d4273017fec73d0be2764882343a036e42f2"
+    },
+    {
+      "bytes": 28222,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\C1_4_1.txt",
+      "sha256": "sha256:8ffba283e6cbc49b4fc0482e30785e99ff81455ba0cbca3e3ece34e85b7fa496"
+    },
+    {
+      "bytes": 28222,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\R1_4_1.txt",
+      "sha256": "sha256:0f4517e2106d917f9e8a9ccab6e8d92ffbc09effcc735222d5265c4208b5c4b7"
+    },
+    {
+      "bytes": 28223,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\RC1_4_1.txt",
+      "sha256": "sha256:774b5f3030a31b217eb9eb52a789ee2be228b1dc03aaecdb2d6f0c01f70a3623"
+    },
+    {
+      "bytes": 42222,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\C1_6_1.txt",
+      "sha256": "sha256:ba461c8109973c73ffdaf7cf2d840ae8ec34ff89f7b346a949721f0d732c82d8"
+    },
+    {
+      "bytes": 42222,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\R1_6_1.txt",
+      "sha256": "sha256:bf98fcc4fc9cef040c256be0c63b6dcff66ce9a60ec2dcafc19433e89447b6f5"
+    },
+    {
+      "bytes": 42223,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\RC1_6_1.txt",
+      "sha256": "sha256:eeea2e9b41c7164cdea79bbb4f8b8d5e4d3964755aca4b1980d242edb45568f8"
+    },
+    {
+      "bytes": 56222,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\C1_8_1.txt",
+      "sha256": "sha256:d0092f724c1a7351c906478d99e8fc92b593183259ad90c2db6c58613627d44c"
+    },
+    {
+      "bytes": 56222,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\R1_8_1.txt",
+      "sha256": "sha256:ef327de727b36bfc99f201ee6a5aa6145920214a1b6b4b2a49601475410b37b3"
+    },
+    {
+      "bytes": 56223,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\RC1_8_1.txt",
+      "sha256": "sha256:30868d1a4601946445b5cc11547ac1f16d297d27202cadf95af843cf1c6d0380"
+    },
+    {
+      "bytes": 70223,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\C1_10_1.txt",
+      "sha256": "sha256:71212f0276856362239cd696673d2bc31f83c8561dc784260b495718ac852aff"
+    },
+    {
+      "bytes": 70223,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\R1_10_1.txt",
+      "sha256": "sha256:4fdd2a2f4d369724ba3d7f038a4a709ebd095b48fc7a5ba6829a191d10b6a8fa"
+    },
+    {
+      "bytes": 70224,
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\RC1_10_1.txt",
+      "sha256": "sha256:2595ef62630050a5bc331ec25a63ebf4ec03b843bdb3dd479459007d43245cfe"
+    }
+  ],
   "schemaVersion": "homberger-official-data-gap/v1",
-  "verdict": "EVIDENCE_GAP"
+  "verdict": "PASS"
 }

@@ -21,6 +21,6 @@
     "R1_2_1.txt",
     "RC1_2_1.txt"
   ],
-  "reason": "Direct automated download is often blocked by Cloudflare/browser challenge. Place official .txt files under benchmarks/external/official/homberger/.",
+  "reason": "Official SINTEF zip files are downloaded when available. If the site blocks automated access, place official .txt files under benchmarks/external/official/homberger/.",
   "source": "SINTEF Gehring & Homberger VRPTW benchmark pages"
 }

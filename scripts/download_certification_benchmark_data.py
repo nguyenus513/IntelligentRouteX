@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import urllib.request
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -34,7 +35,7 @@ ICAPS_CORE_INSTANCES = {
 
 HOMBERGER_DOWNLOAD_NOTES = {
     "source": "SINTEF Gehring & Homberger VRPTW benchmark pages",
-    "reason": "Direct automated download is often blocked by Cloudflare/browser challenge. Place official .txt files under benchmarks/external/official/homberger/.",
+    "reason": "Official SINTEF zip files are downloaded when available. If the site blocks automated access, place official .txt files under benchmarks/external/official/homberger/.",
     "expectedSmokeFiles": ["C1_2_1.txt", "R1_2_1.txt", "RC1_2_1.txt"],
     "expectedCoreFiles": [
         "C1_2_1.txt", "R1_2_1.txt", "RC1_2_1.txt",
@@ -43,6 +44,14 @@ HOMBERGER_DOWNLOAD_NOTES = {
         "C1_8_1.txt", "R1_8_1.txt", "RC1_8_1.txt",
         "C1_10_1.txt", "R1_10_1.txt", "RC1_10_1.txt",
     ],
+}
+
+HOMBERGER_ZIP_URLS = {
+    "200": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/200/homberger_200_customer_instances.zip",
+    "400": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/400/homberger_400_customer_instances.zip",
+    "600": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/600/homberger_600_customer_instances.zip",
+    "800": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/800/homberger_800_customer_instances.zip",
+    "1000": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/1000/homberger_1000_customer_instances.zip",
 }
 
 
@@ -66,6 +75,15 @@ def file_entry(path: Path, url: str | None = None) -> dict[str, Any]:
 def download_text(url: str, path: Path) -> dict[str, Any]:
     path.parent.mkdir(parents=True, exist_ok=True)
     with urllib.request.urlopen(url, timeout=60) as response:
+        payload = response.read()
+    path.write_bytes(payload)
+    return {"url": url, "path": str(path), "bytes": len(payload), "sha256": sha256_bytes(payload)}
+
+
+def download_binary(url: str, path: Path) -> dict[str, Any]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    request = urllib.request.Request(url, headers={"User-Agent": "IntelligentRouteX certification downloader"})
+    with urllib.request.urlopen(request, timeout=120) as response:
         payload = response.read()
     path.write_bytes(payload)
     return {"url": url, "path": str(path), "bytes": len(payload), "sha256": sha256_bytes(payload)}
@@ -124,6 +142,41 @@ def write_homberger_manifest(root: Path) -> dict[str, Any]:
     }
 
 
+def download_homberger(root: Path, level: str) -> dict[str, Any]:
+    homberger_root = root / "homberger"
+    archive_root = homberger_root / "archives"
+    homberger_root.mkdir(parents=True, exist_ok=True)
+    expected = HOMBERGER_DOWNLOAD_NOTES["expectedSmokeFiles"] if level == "smoke" else HOMBERGER_DOWNLOAD_NOTES["expectedCoreFiles"]
+    expected_by_upper = {filename.upper(): filename for filename in expected}
+    required_sizes = ["200"] if level == "smoke" else ["200", "400", "600", "800", "1000"]
+    archives: list[dict[str, Any]] = []
+    extracted: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    for size in required_sizes:
+        url = HOMBERGER_ZIP_URLS[size]
+        archive_path = archive_root / Path(url).name
+        try:
+            archives.append({"benchmark": "homberger-vrptw", "size": size, **download_binary(url, archive_path)})
+            with zipfile.ZipFile(archive_path) as archive:
+                for member in archive.namelist():
+                    if not member.lower().endswith(".txt"):
+                        continue
+                    member_name = Path(member).name.upper()
+                    if member_name not in expected_by_upper:
+                        continue
+                    target_name = expected_by_upper[member_name]
+                    target_path = homberger_root / target_name
+                    target_path.write_bytes(archive.read(member))
+                    extracted.append({"benchmark": "homberger-vrptw", "size": size, "archiveMember": member, **file_entry(target_path, url)})
+        except Exception as exception:
+            failures.append({"benchmark": "homberger-vrptw", "size": size, "url": url, "error": str(exception)})
+    manifest = write_homberger_manifest(root)
+    manifest["archives"] = archives
+    manifest["extractedFiles"] = extracted
+    manifest["downloadFailures"] = failures
+    return manifest
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Download public/official benchmark data used by the certification suite.")
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
@@ -144,7 +197,7 @@ def main() -> int:
     if "icaps" in groups:
         manifest["entries"].extend(download_icaps(root, ICAPS_SMOKE_INSTANCES if args.level == "smoke" else ICAPS_CORE_INSTANCES))
     if "homberger" in groups:
-        manifest["entries"].append(write_homberger_manifest(root))
+        manifest["entries"].append(download_homberger(root, args.level))
     write_json(root / "download_manifest.json", manifest)
     print(root / "download_manifest.json")
     return 0

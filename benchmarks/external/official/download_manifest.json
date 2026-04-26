@@ -1,212 +1,50 @@
 {
   "entries": [
     {
-      "benchmark": "mdrplib",
-      "bytes": 2505,
-      "instance": "mdrp-smoke-low",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-low\\couriers.txt",
-      "sha256": "sha256:9d6426710d4c0db7491e873957581f4abae55d6a229a2876dd60a3ccdc42430e",
-      "sourceInstance": "0o100t100s1p100",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/0o100t100s1p100/couriers.txt"
-    },
-    {
-      "benchmark": "mdrplib",
-      "bytes": 13574,
-      "instance": "mdrp-smoke-low",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-low\\orders.txt",
-      "sha256": "sha256:f712b17ce955eaf3051e3a60d58262a59bb96cbd505cb4dc721b24ddb6d527cc",
-      "sourceInstance": "0o100t100s1p100",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/0o100t100s1p100/orders.txt"
-    },
-    {
-      "benchmark": "mdrplib",
-      "bytes": 1658,
-      "instance": "mdrp-smoke-low",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-low\\restaurants.txt",
-      "sha256": "sha256:731b80cd67d1e4280dee614b38b028a596d33cea2ae995ffb8a8b680a12b0356",
-      "sourceInstance": "0o100t100s1p100",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/0o100t100s1p100/restaurants.txt"
-    },
-    {
-      "benchmark": "mdrplib",
-      "bytes": 2181,
-      "instance": "mdrp-smoke-low",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-low\\instance_characteristics.txt",
-      "sha256": "sha256:88094267eb34c9d300b5e2e0f2bb4c26ed980ddfa6f0607f17f3a2752a7baeae",
-      "sourceInstance": "0o100t100s1p100",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/0o100t100s1p100/instance_characteristics.txt"
-    },
-    {
-      "benchmark": "mdrplib",
-      "bytes": 4148,
-      "instance": "mdrp-smoke-medium",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-medium\\couriers.txt",
-      "sha256": "sha256:a1cd6fb808e00ff15b711ef9ced335d54bf7e75b4200c47998ebcf59b6f1f76b",
-      "sourceInstance": "5r50t75s1p100",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/5r50t75s1p100/couriers.txt"
-    },
-    {
-      "benchmark": "mdrplib",
-      "bytes": 38567,
-      "instance": "mdrp-smoke-medium",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-medium\\orders.txt",
-      "sha256": "sha256:1ec5adb255a0ce673afda5920a80da53acdf591958e74ae7d295a1fe5055046b",
-      "sourceInstance": "5r50t75s1p100",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/5r50t75s1p100/orders.txt"
-    },
-    {
-      "benchmark": "mdrplib",
-      "bytes": 1745,
-      "instance": "mdrp-smoke-medium",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-medium\\restaurants.txt",
-      "sha256": "sha256:1c855b3e6704526b2087a6685a344e96813c6ed46737f42958a4e330b6e4f423",
-      "sourceInstance": "5r50t75s1p100",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/5r50t75s1p100/restaurants.txt"
-    },
-    {
-      "benchmark": "mdrplib",
-      "bytes": 2182,
-      "instance": "mdrp-smoke-medium",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-medium\\instance_characteristics.txt",
-      "sha256": "sha256:2f897c84bd172e52def4e29e4712ccacadb9e372dade3b3375be290d25e12566",
-      "sourceInstance": "5r50t75s1p100",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/5r50t75s1p100/instance_characteristics.txt"
-    },
-    {
-      "benchmark": "mdrplib",
-      "bytes": 5506,
-      "instance": "mdrp-smoke-high",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-high\\couriers.txt",
-      "sha256": "sha256:c2049722f357ba2ac5dcb9658925c75fd7b587f263eb929d061b397163ef905c",
-      "sourceInstance": "9r50t75s2p125",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/9r50t75s2p125/couriers.txt"
-    },
-    {
-      "benchmark": "mdrplib",
-      "bytes": 25192,
-      "instance": "mdrp-smoke-high",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-high\\orders.txt",
-      "sha256": "sha256:a196663a8b5b7d4dedaedc7e153450df124979c88d7f6f2d181466917fae6de9",
-      "sourceInstance": "9r50t75s2p125",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/9r50t75s2p125/orders.txt"
-    },
-    {
-      "benchmark": "mdrplib",
-      "bytes": 2032,
-      "instance": "mdrp-smoke-high",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-high\\restaurants.txt",
-      "sha256": "sha256:c75ea609dc23202a7c74c56fc40f92b7175caaba13bcc04c1d51ea3b011b0f95",
-      "sourceInstance": "9r50t75s2p125",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/9r50t75s2p125/restaurants.txt"
-    },
-    {
-      "benchmark": "mdrplib",
-      "bytes": 2181,
-      "instance": "mdrp-smoke-high",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-high\\instance_characteristics.txt",
-      "sha256": "sha256:aafd66c6295550fe4dcd3176e945e0225f75deec3fc59e024c21c8ebadca5792",
-      "sourceInstance": "9r50t75s2p125",
-      "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/9r50t75s2p125/instance_characteristics.txt"
-    },
-    {
-      "benchmark": "icaps-dpdp",
-      "bytes": 8162,
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\factory_info.csv",
-      "sha256": "sha256:ed0f987404c09c0bf562212478784f29e29ce41f52cebbb277e1e219dd9a81e4",
-      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/factory_info.csv"
-    },
-    {
-      "benchmark": "icaps-dpdp",
-      "bytes": 5828,
-      "instance": "icaps-case-1",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-1\\50_1.csv",
-      "sha256": "sha256:585c8060ddaaf6ae09ef473ea7524e17bcc2cf1393105f26e035a079026e3149",
-      "sourceInstance": "instance_1",
-      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_1/50_1.csv"
-    },
-    {
-      "benchmark": "icaps-dpdp",
-      "bytes": 115,
-      "instance": "icaps-case-1",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-1\\vehicle_info_5.csv",
-      "sha256": "sha256:48b5d211ec606d25f37280f8c115c21ec2de1a7680c905bdc6fcf02ee9c15430",
-      "sourceInstance": "instance_1",
-      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_1/vehicle_info_5.csv"
-    },
-    {
-      "benchmark": "icaps-dpdp",
-      "bytes": 5823,
-      "instance": "icaps-case-2",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-2\\50_2.csv",
-      "sha256": "sha256:821e18a3388d0e93b79f6b2c8a6158a84a9ae443c289546cda58120a93b889e1",
-      "sourceInstance": "instance_2",
-      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_2/50_2.csv"
-    },
-    {
-      "benchmark": "icaps-dpdp",
-      "bytes": 115,
-      "instance": "icaps-case-2",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-2\\vehicle_info_5.csv",
-      "sha256": "sha256:48b5d211ec606d25f37280f8c115c21ec2de1a7680c905bdc6fcf02ee9c15430",
-      "sourceInstance": "instance_2",
-      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_2/vehicle_info_5.csv"
-    },
-    {
-      "benchmark": "icaps-dpdp",
-      "bytes": 5814,
-      "instance": "icaps-case-3",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-3\\50_3.csv",
-      "sha256": "sha256:4cf3b10bf5c198cbdfb1a4169948e56d51f4d502299a26584e26b4aee17ce03d",
-      "sourceInstance": "instance_3",
-      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_3/50_3.csv"
-    },
-    {
-      "benchmark": "icaps-dpdp",
-      "bytes": 115,
-      "instance": "icaps-case-3",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-3\\vehicle_info_5.csv",
-      "sha256": "sha256:48b5d211ec606d25f37280f8c115c21ec2de1a7680c905bdc6fcf02ee9c15430",
-      "sourceInstance": "instance_3",
-      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_3/vehicle_info_5.csv"
-    },
-    {
-      "benchmark": "icaps-dpdp",
-      "bytes": 5815,
-      "instance": "icaps-case-4",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-4\\50_4.csv",
-      "sha256": "sha256:7aa498dc8d9ccfc203fe4f15a07868efb7eaba9e402b88fa7ae5fea39fa7beda",
-      "sourceInstance": "instance_4",
-      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_4/50_4.csv"
-    },
-    {
-      "benchmark": "icaps-dpdp",
-      "bytes": 115,
-      "instance": "icaps-case-4",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-4\\vehicle_info_5.csv",
-      "sha256": "sha256:48b5d211ec606d25f37280f8c115c21ec2de1a7680c905bdc6fcf02ee9c15430",
-      "sourceInstance": "instance_4",
-      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_4/vehicle_info_5.csv"
-    },
-    {
-      "benchmark": "icaps-dpdp",
-      "bytes": 5819,
-      "instance": "icaps-case-5",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-5\\50_5.csv",
-      "sha256": "sha256:8dea81615c650af39ea9e0eb179448b3ede9e935c854847584c85844221eb172",
-      "sourceInstance": "instance_5",
-      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_5/50_5.csv"
-    },
-    {
-      "benchmark": "icaps-dpdp",
-      "bytes": 115,
-      "instance": "icaps-case-5",
-      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-5\\vehicle_info_5.csv",
-      "sha256": "sha256:48b5d211ec606d25f37280f8c115c21ec2de1a7680c905bdc6fcf02ee9c15430",
-      "sourceInstance": "instance_5",
-      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_5/vehicle_info_5.csv"
-    },
-    {
+      "archives": [
+        {
+          "benchmark": "homberger-vrptw",
+          "bytes": 172162,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\archives\\homberger_200_customer_instances.zip",
+          "sha256": "sha256:79092cc627135f370a6381b0c64afc8403e4d4ff74afa8808d28d208ac784571",
+          "size": "200",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/200/homberger_200_customer_instances.zip"
+        },
+        {
+          "benchmark": "homberger-vrptw",
+          "bytes": 330106,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\archives\\homberger_400_customer_instances.zip",
+          "sha256": "sha256:669e9e7c6fe3513b2c62028d17b67aa5829d94cf2b379f362c8c71236e6a366c",
+          "size": "400",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/400/homberger_400_customer_instances.zip"
+        },
+        {
+          "benchmark": "homberger-vrptw",
+          "bytes": 497241,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\archives\\homberger_600_customer_instances.zip",
+          "sha256": "sha256:df4c40d2191f7e854c46f5422a89055bae93fb1f880692181ee8ee7bf629636b",
+          "size": "600",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/600/homberger_600_customer_instances.zip"
+        },
+        {
+          "benchmark": "homberger-vrptw",
+          "bytes": 665429,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\archives\\homberger_800_customer_instances.zip",
+          "sha256": "sha256:19cad076841f8bf6e8d05ee4d5c56ef2925dacfce64495e003d65bfc6d8545aa",
+          "size": "800",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/800/homberger_800_customer_instances.zip"
+        },
+        {
+          "benchmark": "homberger-vrptw",
+          "bytes": 835533,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\archives\\homberger_1000_customer_instances.zip",
+          "sha256": "sha256:2e96845ee870ef21f833a216a79866e812232d3d922db3e14c30790f06780a81",
+          "size": "1000",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/1000/homberger_1000_customer_instances.zip"
+        }
+      ],
       "benchmark": "homberger-vrptw",
+      "downloadFailures": [],
       "expectedCoreFiles": [
         "C1_2_1.txt",
         "R1_2_1.txt",
@@ -229,15 +67,152 @@
         "R1_2_1.txt",
         "RC1_2_1.txt"
       ],
-      "missingCount": 15,
+      "extractedFiles": [
+        {
+          "archiveMember": "C1_2_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 14222,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\C1_2_1.txt",
+          "sha256": "sha256:b0352e8c02428c8404c5cb18b81195f285410311c725a8b8f1ee34c619e1c751",
+          "size": "200",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/200/homberger_200_customer_instances.zip"
+        },
+        {
+          "archiveMember": "R1_2_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 14222,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\R1_2_1.txt",
+          "sha256": "sha256:bf13ca27d85efac8218d908b45ff164ad848d8b15d0c170c9572b22caababdf1",
+          "size": "200",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/200/homberger_200_customer_instances.zip"
+        },
+        {
+          "archiveMember": "RC1_2_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 14223,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\RC1_2_1.txt",
+          "sha256": "sha256:adbf41192345f3f559a75819e5b0d4273017fec73d0be2764882343a036e42f2",
+          "size": "200",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/200/homberger_200_customer_instances.zip"
+        },
+        {
+          "archiveMember": "C1_4_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 28222,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\C1_4_1.txt",
+          "sha256": "sha256:8ffba283e6cbc49b4fc0482e30785e99ff81455ba0cbca3e3ece34e85b7fa496",
+          "size": "400",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/400/homberger_400_customer_instances.zip"
+        },
+        {
+          "archiveMember": "R1_4_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 28222,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\R1_4_1.txt",
+          "sha256": "sha256:0f4517e2106d917f9e8a9ccab6e8d92ffbc09effcc735222d5265c4208b5c4b7",
+          "size": "400",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/400/homberger_400_customer_instances.zip"
+        },
+        {
+          "archiveMember": "RC1_4_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 28223,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\RC1_4_1.txt",
+          "sha256": "sha256:774b5f3030a31b217eb9eb52a789ee2be228b1dc03aaecdb2d6f0c01f70a3623",
+          "size": "400",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/400/homberger_400_customer_instances.zip"
+        },
+        {
+          "archiveMember": "C1_6_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 42222,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\C1_6_1.txt",
+          "sha256": "sha256:ba461c8109973c73ffdaf7cf2d840ae8ec34ff89f7b346a949721f0d732c82d8",
+          "size": "600",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/600/homberger_600_customer_instances.zip"
+        },
+        {
+          "archiveMember": "R1_6_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 42222,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\R1_6_1.txt",
+          "sha256": "sha256:bf98fcc4fc9cef040c256be0c63b6dcff66ce9a60ec2dcafc19433e89447b6f5",
+          "size": "600",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/600/homberger_600_customer_instances.zip"
+        },
+        {
+          "archiveMember": "RC1_6_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 42223,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\RC1_6_1.txt",
+          "sha256": "sha256:eeea2e9b41c7164cdea79bbb4f8b8d5e4d3964755aca4b1980d242edb45568f8",
+          "size": "600",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/600/homberger_600_customer_instances.zip"
+        },
+        {
+          "archiveMember": "C1_8_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 56222,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\C1_8_1.txt",
+          "sha256": "sha256:d0092f724c1a7351c906478d99e8fc92b593183259ad90c2db6c58613627d44c",
+          "size": "800",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/800/homberger_800_customer_instances.zip"
+        },
+        {
+          "archiveMember": "R1_8_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 56222,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\R1_8_1.txt",
+          "sha256": "sha256:ef327de727b36bfc99f201ee6a5aa6145920214a1b6b4b2a49601475410b37b3",
+          "size": "800",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/800/homberger_800_customer_instances.zip"
+        },
+        {
+          "archiveMember": "RC1_8_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 56223,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\RC1_8_1.txt",
+          "sha256": "sha256:30868d1a4601946445b5cc11547ac1f16d297d27202cadf95af843cf1c6d0380",
+          "size": "800",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/800/homberger_800_customer_instances.zip"
+        },
+        {
+          "archiveMember": "C1_10_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 70223,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\C1_10_1.txt",
+          "sha256": "sha256:71212f0276856362239cd696673d2bc31f83c8561dc784260b495718ac852aff",
+          "size": "1000",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/1000/homberger_1000_customer_instances.zip"
+        },
+        {
+          "archiveMember": "R1_10_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 70223,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\R1_10_1.txt",
+          "sha256": "sha256:4fdd2a2f4d369724ba3d7f038a4a709ebd095b48fc7a5ba6829a191d10b6a8fa",
+          "size": "1000",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/1000/homberger_1000_customer_instances.zip"
+        },
+        {
+          "archiveMember": "RC1_10_1.TXT",
+          "benchmark": "homberger-vrptw",
+          "bytes": 70224,
+          "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\RC1_10_1.txt",
+          "sha256": "sha256:2595ef62630050a5bc331ec25a63ebf4ec03b843bdb3dd479459007d43245cfe",
+          "size": "1000",
+          "url": "https://www.sintef.no/globalassets/project/top/vrptw/homberger/1000/homberger_1000_customer_instances.zip"
+        }
+      ],
+      "missingCount": 0,
       "missingPath": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\missing_official_files.json",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\README.download.json",
       "policy": "official-only",
-      "reason": "Direct automated download is often blocked by Cloudflare/browser challenge. Place official .txt files under benchmarks/external/official/homberger/.",
+      "reason": "Official SINTEF zip files are downloaded when available. If the site blocks automated access, place official .txt files under benchmarks/external/official/homberger/.",
       "source": "SINTEF Gehring & Homberger VRPTW benchmark pages"
     }
   ],
-  "generatedAt": "2026-04-26T11:57:19.392213+00:00",
+  "generatedAt": "2026-04-26T13:43:40.885894+00:00",
   "level": "core",
   "schemaVersion": "certification-benchmark-download-manifest/v2"
 }
