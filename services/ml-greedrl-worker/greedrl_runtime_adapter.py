@@ -1,6 +1,7 @@
 import argparse
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -10,7 +11,13 @@ def _load_runtime_manifest(path: Path) -> Dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _lite_runtime_enabled() -> bool:
+    return os.getenv("IRX_GREEDRL_RUNTIME_MODE", "").strip().lower() == "lite"
+
+
 def _import_runtime_modules() -> None:
+    if _lite_runtime_enabled():
+        return
     __import__("greedrl")
     __import__("greedrl_c")
 
@@ -81,7 +88,11 @@ def _bundle_proposals(payload: Dict[str, Any], runtime_manifest: Dict[str, Any])
                     order_id for order_id in order_ids if order_id in payload.get("acceptedBoundaryOrderIds", [])
                 ],
                 "boundaryCross": any(order_id in payload.get("acceptedBoundaryOrderIds", []) for order_id in order_ids),
-                "traceReasons": ["greedrl-bundle-proposal", "signature:{0}".format("|".join(order_ids))],
+                "traceReasons": [
+                    "greedrl-bundle-proposal",
+                    "greedrl-lite-runtime" if _lite_runtime_enabled() else "greedrl-native-runtime",
+                    "signature:{0}".format("|".join(order_ids)),
+                ],
                 "_score": _score_bundle(order_ids, payload, runtime_manifest),
             }
         )
@@ -109,7 +120,11 @@ def _sequence_proposals(payload: Dict[str, Any], runtime_manifest: Dict[str, Any
         {
             "stopOrder": sequence,
             "sequenceScore": float(sequence_config.get("baseScore", 0.7)) - index * float(sequence_config.get("decayPerAlternative", 0.05)),
-            "traceReasons": ["greedrl-sequence-proposal", "signature:{0}".format(">".join(sequence))],
+            "traceReasons": [
+                "greedrl-sequence-proposal",
+                "greedrl-lite-runtime" if _lite_runtime_enabled() else "greedrl-native-runtime",
+                "signature:{0}".format(">".join(sequence)),
+            ],
         }
         for index, sequence in enumerate(unique[:max_sequences])
     ]
@@ -117,7 +132,7 @@ def _sequence_proposals(payload: Dict[str, Any], runtime_manifest: Dict[str, Any
 
 def _self_check() -> Dict[str, Any]:
     _import_runtime_modules()
-    return {"ok": True}
+    return {"ok": True, "runtimeMode": "lite" if _lite_runtime_enabled() else "native"}
 
 
 def _dispatch(action: str, payload: Dict[str, Any], runtime_manifest: Dict[str, Any]) -> Dict[str, Any]:

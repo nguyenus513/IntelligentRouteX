@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -63,6 +64,10 @@ def _worker_compile_mode() -> str:
     return _env_text("IRX_GREEDRL_WORKER_COMPILE_MODE", "IRX_ML_WORKER_COMPILE_MODE", default="eager")
 
 
+def _lite_runtime_enabled() -> bool:
+    return os.getenv("IRX_GREEDRL_RUNTIME_MODE", "").strip().lower() == "lite"
+
+
 def _worker_version_audit(*, model_loaded: bool, warmup_done: bool) -> dict:
     return {
         "device": _worker_device(),
@@ -70,6 +75,7 @@ def _worker_version_audit(*, model_loaded: bool, warmup_done: bool) -> dict:
         "gpuMemoryAllocatedMb": _worker_gpu_memory_allocated_mb(),
         "batchSize": _worker_batch_size(),
         "compileMode": _worker_compile_mode(),
+        "runtimeMode": "lite" if _lite_runtime_enabled() else "native",
         "modelLoaded": model_loaded,
         "warmupDone": warmup_done,
     }
@@ -220,6 +226,8 @@ def _validate_runtime_manifest(runtime_manifest: dict) -> str:
 
 
 def _runtime_python(runtime_manifest: dict, artifact_path: Path) -> Path:
+    if _lite_runtime_enabled():
+        return Path(sys.executable).resolve()
     override = os.getenv("IRX_GREEDRL_RUNTIME_PYTHON", "").strip()
     if override:
         return Path(override).expanduser().resolve()
@@ -298,6 +306,10 @@ def _runtime_env(runtime_manifest: dict, artifact_path: Path) -> dict[str, str]:
     runtime_root = _runtime_root(runtime_python)
     for key in ("VIRTUAL_ENV", "CONDA_PREFIX", "CONDA_DEFAULT_ENV", "PIP_REQUIRE_VIRTUALENV"):
         env.pop(key, None)
+    if _lite_runtime_enabled():
+        module_root = _runtime_module_root(runtime_manifest, artifact_path)
+        env["PYTHONPATH"] = str(module_root) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        return env
     env["PYTHONHOME"] = str(runtime_root)
     module_root = _runtime_module_root(runtime_manifest, artifact_path)
     env["PYTHONPATH"] = str(module_root) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
@@ -341,9 +353,13 @@ def _warmup(manifest_entry: dict, runtime_manifest: dict, artifact_path: Path) -
     payload = _request_payload(warmup.get("payload", {}))
     if not payload:
         raise ValueError("warmup-payload-missing")
-    if not _run_runtime_adapter(runtime_manifest, artifact_path, "bundle-propose", payload).get("bundleProposals"):
+    bundle_proposals = _run_runtime_adapter(runtime_manifest, artifact_path, "bundle-propose", payload).get("bundleProposals")
+    if not bundle_proposals:
         raise ValueError("bundle-warmup-empty")
-    if not _run_runtime_adapter(runtime_manifest, artifact_path, "sequence-propose", payload).get("sequenceProposals"):
+    sequence_payload = dict(payload)
+    if not sequence_payload.get("orderIds") and bundle_proposals:
+        sequence_payload["orderIds"] = bundle_proposals[0].get("orderIds", [])
+    if not _run_runtime_adapter(runtime_manifest, artifact_path, "sequence-propose", sequence_payload).get("sequenceProposals"):
         raise ValueError("sequence-warmup-empty")
 
 
@@ -413,14 +429,14 @@ def _readiness() -> tuple[bool, str, dict | None, dict | None, dict]:
                 materialization_mode=materialization_mode,
                 loaded_model_fingerprint=loaded_model_fingerprint,
             )
-        if loaded_model_fingerprint != expected_fingerprint:
+        if loaded_model_fingerprint != expected_fingerprint and not _lite_runtime_enabled():
             return False, "loaded-model-fingerprint-mismatch", manifest_entry, None, _version_payload(
                 manifest_entry,
                 artifact_path=artifact_path,
                 materialization_mode=materialization_mode,
                 loaded_model_fingerprint=loaded_model_fingerprint,
             )
-        if metadata.get("loadedModelFingerprint") != loaded_model_fingerprint:
+        if metadata.get("loadedModelFingerprint") != loaded_model_fingerprint and not _lite_runtime_enabled():
             return False, "materialization-metadata-mismatch", manifest_entry, None, _version_payload(
                 manifest_entry,
                 artifact_path=artifact_path,

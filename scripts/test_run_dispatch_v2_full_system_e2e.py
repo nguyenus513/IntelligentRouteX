@@ -1,0 +1,84 @@
+﻿from __future__ import annotations
+
+import argparse
+import importlib.util
+import sys
+import unittest
+from pathlib import Path
+
+MODULE_PATH = Path(__file__).resolve().parent / "run_dispatch_v2_full_system_e2e.py"
+SPEC = importlib.util.spec_from_file_location("run_dispatch_v2_full_system_e2e", MODULE_PATH)
+runner = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = runner
+assert SPEC.loader is not None
+SPEC.loader.exec_module(runner)
+
+
+class FullSystemE2ETest(unittest.TestCase):
+    def test_matrix_core_maps_missing_scenarios_to_supported_pack(self) -> None:
+        cells = runner.matrix_cells("preset:core", ["full-system"])
+        scenarios = [cell.scenario for cell in cells]
+        self.assertIn("forecast-heavy", scenarios)
+        self.assertIn("dense-bundle-20x5", scenarios)
+
+    def test_parse_modes_rejects_unknown_mode(self) -> None:
+        with self.assertRaises(ValueError):
+            runner.parse_modes("full-system,bad-mode")
+
+    def test_osrm_ready_from_route_probe_when_health_missing(self) -> None:
+        calls = []
+        original = runner.http_get
+        try:
+            def fake_get(url, timeout_seconds=5.0):
+                calls.append(url)
+                if url.endswith("/health"):
+                    return runner.HttpResult(False, 404, 1, "", "not found")
+                return runner.HttpResult(True, 200, 1, '{"code":"Ok"}')
+            runner.http_get = fake_get
+            result = runner.check_osrm("http://127.0.0.1:5000")
+        finally:
+            runner.http_get = original
+        self.assertTrue(result["ready"])
+        self.assertEqual("Ok", result["routeProbe"]["code"])
+
+    def test_llm_fallback_records_second_model(self) -> None:
+        original = runner.http_post_json
+        try:
+            def fake_post(url, payload, headers, timeout_seconds=20.0):
+                self.assertEqual("json_schema", payload["text"]["format"]["type"])
+                if payload["model"] == "cx/gpt-5.5":
+                    return runner.HttpResult(False, 404, 1, "", "missing")
+                return runner.HttpResult(True, 200, 1, '{"id":"resp_1","output":[]}')
+            runner.http_post_json = fake_post
+            env_key = "IRX_TEST_LLM_KEY"
+            import os
+            os.environ[env_key] = "test"
+            result = runner.check_llm("http://provider/v1", ("cx/gpt-5.5", "cx/gpt-5.4"), env_key)
+        finally:
+            runner.http_post_json = original
+        self.assertTrue(result["ready"])
+        self.assertEqual("cx/gpt-5.4", result["modelUsed"])
+        self.assertTrue(result["modelResolutionFallbackUsed"])
+
+    def test_preflight_blocks_when_workers_are_not_attached(self) -> None:
+        original_workers = runner.check_workers
+        original_osrm = runner.check_osrm
+        original_llm = runner.check_llm
+        try:
+            runner.check_workers = lambda: {"ready": False, "workers": []}
+            runner.check_osrm = lambda base_url: {"ready": True}
+            runner.check_llm = lambda base_url, models, api_key_env: {"ready": True}
+            args = argparse.Namespace(llm="on", llm_base_url="http://provider/v1", llm_model="cx/gpt-5.5", llm_fallback_model="cx/gpt-5.4", llm_api_key_env="KEY")
+            result = runner.run_preflight(args)
+        finally:
+            runner.check_workers = original_workers
+            runner.check_osrm = original_osrm
+            runner.check_llm = original_llm
+        self.assertEqual("LOCAL_ML_NOT_ATTACHED", result["verdict"])
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+
