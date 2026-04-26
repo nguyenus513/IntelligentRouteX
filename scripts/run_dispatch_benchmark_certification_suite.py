@@ -385,11 +385,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--level", choices=("smoke", "core", "full"), default="smoke")
     parser.add_argument("--time-limit", default="30s")
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
+    parser.add_argument("--emit-scorecard", action="store_true", help="Write certification_scorecard.json and .md after the suite report.")
     args = parser.parse_args(argv)
     output_root = Path(args.output_root)
     result = run_suite(args.solver, parse_time_limit(args.time_limit), output_root, args.level)
     write_json(output_root / "certification_suite_results.json", result)
     (output_root / "certification_suite_report.md").write_text(markdown(result["results"], result["finalVerdict"]), encoding="utf-8")
+    if args.emit_scorecard:
+        from build_certification_scorecard import write_scorecard
+
+        scorecard_json, scorecard_report = write_scorecard(output_root)
+        print(f"[CERTIFICATION SCORECARD JSON] {scorecard_json}")
+        print(f"[CERTIFICATION SCORECARD REPORT] {scorecard_report}")
     print(f"[CERTIFICATION SUITE JSON] {output_root / 'certification_suite_results.json'}")
     print(f"[CERTIFICATION SUITE REPORT] {output_root / 'certification_suite_report.md'}")
     return 1 if result["finalVerdict"] == "FAIL" else 0

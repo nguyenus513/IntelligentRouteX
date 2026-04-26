@@ -30,12 +30,26 @@ This suite is the top-level certification rail for Dispatch V2 routing, pickup/d
 - Homberger rows now parse and solve directly from `benchmarks/external/official/homberger/*.txt`; SINTEF direct download is commonly blocked by browser challenge, so the suite keeps rows as `EVIDENCE_GAP` until official files are placed there.
 - MDRPLib smoke data is downloaded from Grubhub `mdrplib` public instances and checked with a deterministic structural meal-delivery baseline. This is evidence, but not yet a production rolling optimizer, so rows stay `PASS_WITH_LIMITS`.
 - ICAPS DPDP smoke data is downloaded from Huawei Noah/Xingtian DPDP competition benchmark files and checked by a deterministic rolling-horizon baseline with vehicle state continuity, active-route commitment, replan latency, route stability, tardiness, and hard violation metrics. It remains `PASS_WITH_LIMITS` because it is a baseline checker, not the production dynamic optimizer.
-- HCM full-system currently uses a running GreedRL worker process with `runtimeMode=lite`. `scripts/check_greedrl_native_runtime.py` now probes the native adapter separately; if it passes, restart the GreedRL worker without `IRX_GREEDRL_RUNTIME_MODE=lite` and rerun full-system E2E.
+- HCM full-system smoke currently has GreedRL `runtimeMode=native` in the latest preflight artifact. Keep `scripts/check_greedrl_native_runtime.py` in the closure flow so future runs do not silently regress to lite or fallback runtime.
+
+
+## Unified Scorecard
+
+Use `--emit-scorecard` to add `certification_scorecard.json` and `certification_scorecard.md` beside the suite outputs. The scorecard does not replace the certification verdict; it groups evidence into feasibility, optimality, food-delivery quality, dynamic quality, road realism, and system reliability so the next blocker is explicit.
+
+The scorecard maps blockers to action lanes:
+
+- `data-closure`: missing official benchmark data, such as Homberger files.
+- `academic-global-consolidation`: vehicle-count or route-compression gap versus best known solutions.
+- `food-delivery-objective`: MDRPLib is still structural/baseline evidence rather than production optimizer quality.
+- `dynamic-replan-policy`: ICAPS evidence is still baseline rolling-horizon rather than full dynamic optimizer quality.
+- `road-native-quality`: HCM selected routes used road fallback or weak road evidence.
+- `worker-runtime-stability`: local ML/runtime attach is incomplete or GreedRL is still lite.
 
 ## Command
 
 ```powershell
 python scripts/download_certification_benchmark_data.py --groups mdrplib,icaps,homberger
 python scripts/check_greedrl_native_runtime.py --output artifacts/benchmark/full-system-e2e/greedrl_native_runtime_report.json
-python scripts/run_dispatch_benchmark_certification_suite.py --level smoke --solver our-dispatch-v2 --time-limit 30s --output-root artifacts/benchmark/certification-suite
+python scripts/run_dispatch_benchmark_certification_suite.py --level smoke --solver our-dispatch-v2 --time-limit 30s --output-root artifacts/benchmark/certification-suite --emit-scorecard
 ```
