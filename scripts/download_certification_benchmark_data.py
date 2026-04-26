@@ -14,11 +14,30 @@ DEFAULT_OUTPUT_ROOT = REPO_ROOT / "benchmarks" / "external" / "official"
 
 MDRPLIB_REPO = "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances"
 ICAPS_REPO = "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark"
+SOLOMON_ZIP_URL = "https://www.sintef.no/globalassets/project/top/vrptw/solomon/solomon-100.zip"
+LI_LIM_ZIP_URLS = {
+    "100": "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_100.zip",
+    "200": "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_200.zip",
+    "400": "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_400.zip",
+    "600": "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_600.zip",
+    "800": "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_800.zip",
+    "1000": "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_1000.zip",
+}
 
 MDRPLIB_SMOKE_INSTANCES = {
     "mdrp-smoke-low": "0o100t100s1p100",
     "mdrp-smoke-medium": "5r50t75s1p100",
     "mdrp-smoke-high": "9r50t75s2p125",
+}
+MDRPLIB_CORE_INSTANCES = {
+    **MDRPLIB_SMOKE_INSTANCES,
+    "mdrp-core-4": "1o50t75s1p100",
+    "mdrp-core-5": "2o50t100s1p100",
+    "mdrp-core-6": "3r50t75s2p100",
+    "mdrp-core-7": "4o100t75s1p125",
+    "mdrp-core-8": "5r50t75s1p100",
+    "mdrp-core-9": "6o100t100s2p125",
+    "mdrp-core-10": "7r50t100s2p125",
 }
 MDRPLIB_REQUIRED_FILES = ("couriers.txt", "orders.txt", "restaurants.txt", "instance_characteristics.txt")
 
@@ -89,10 +108,11 @@ def download_binary(url: str, path: Path) -> dict[str, Any]:
     return {"url": url, "path": str(path), "bytes": len(payload), "sha256": sha256_bytes(payload)}
 
 
-def download_mdrplib(root: Path, instances: Iterable[str]) -> list[dict[str, Any]]:
+def download_mdrplib(root: Path, instances: Iterable[str], *, level: str) -> list[dict[str, Any]]:
+    source_map = MDRPLIB_SMOKE_INSTANCES if level == "smoke" else MDRPLIB_CORE_INSTANCES
     entries: list[dict[str, Any]] = []
     for local_name in instances:
-        source_name = MDRPLIB_SMOKE_INSTANCES[local_name]
+        source_name = source_map[local_name]
         for filename in MDRPLIB_REQUIRED_FILES:
             url = f"{MDRPLIB_REPO}/{source_name}/{filename}"
             target = root / "mdrplib" / local_name / filename
@@ -100,6 +120,62 @@ def download_mdrplib(root: Path, instances: Iterable[str]) -> list[dict[str, Any
             entry.update({"benchmark": "mdrplib", "instance": local_name, "sourceInstance": source_name})
             entries.append(entry)
     return entries
+
+
+def extract_selected_zip_members(url: str, archive_path: Path, output_dir: Path, selected_names: set[str] | None = None) -> dict[str, Any]:
+    archive = download_binary(url, archive_path)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    extracted: list[dict[str, Any]] = []
+    with zipfile.ZipFile(archive_path) as zip_file:
+        for member in zip_file.namelist():
+            filename = Path(member).name
+            if not filename or not filename.lower().endswith(".txt"):
+                continue
+            if selected_names is not None and filename.upper() not in selected_names:
+                continue
+            target = output_dir / filename.upper().replace(".TXT", ".txt")
+            target.write_bytes(zip_file.read(member))
+            extracted.append(file_entry(target, url))
+    return {"archive": archive, "extractedFiles": extracted, "extractedCount": len(extracted)}
+
+
+def download_solomon(root: Path) -> dict[str, Any]:
+    selected = {"C101.TXT", "C201.TXT", "R101.TXT", "R201.TXT", "RC101.TXT", "RC201.TXT"}
+    return {"benchmark": "solomon-vrptw", **extract_selected_zip_members(
+        SOLOMON_ZIP_URL,
+        root / "archives" / "solomon-100.zip",
+        root / "solomon",
+        selected,
+    )}
+
+
+def download_li_lim(root: Path, level: str) -> dict[str, Any]:
+    required_core = {"LC101.TXT", "LC201.TXT", "LR101.TXT", "LR201.TXT", "LRC101.TXT", "LRC201.TXT"}
+    sizes = ("100",) if level == "smoke" else tuple(LI_LIM_ZIP_URLS.keys())
+    extracted: list[dict[str, Any]] = []
+    archives: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    output_dir = root / "li-lim-pdptw"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for size in sizes:
+        url = LI_LIM_ZIP_URLS[size]
+        archive_path = root / "archives" / f"pdp_{size}.zip"
+        try:
+            archive = download_binary(url, archive_path)
+            archives.append(archive)
+            with zipfile.ZipFile(archive_path) as zip_file:
+                for member in zip_file.namelist():
+                    filename = Path(member).name
+                    if not filename or not filename.lower().endswith(".txt"):
+                        continue
+                    if level == "smoke" and filename.upper() not in required_core:
+                        continue
+                    target = output_dir / filename.upper().replace(".TXT", ".txt")
+                    target.write_bytes(zip_file.read(member))
+                    extracted.append(file_entry(target, url))
+        except Exception as exc:
+            failures.append({"size": size, "url": url, "error": str(exc)})
+    return {"benchmark": "li-lim-pdptw", "archives": archives, "extractedFiles": extracted, "extractedCount": len(extracted), "downloadFailures": failures}
 
 
 def download_icaps(root: Path, instances: dict[str, tuple[str, str, str]]) -> list[dict[str, Any]]:
@@ -180,7 +256,7 @@ def download_homberger(root: Path, level: str) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Download public/official benchmark data used by the certification suite.")
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
-    parser.add_argument("--groups", default="mdrplib,icaps,homberger", help="Comma-separated: mdrplib,icaps,homberger")
+    parser.add_argument("--groups", default="solomon,li-lim,mdrplib,icaps,homberger", help="Comma-separated: solomon,li-lim,mdrplib,icaps,homberger")
     parser.add_argument("--level", choices=("smoke", "core"), default="smoke")
     args = parser.parse_args()
 
@@ -192,8 +268,12 @@ def main() -> int:
         "level": args.level,
         "entries": [],
     }
+    if "solomon" in groups:
+        manifest["entries"].append(download_solomon(root))
+    if "li-lim" in groups:
+        manifest["entries"].append(download_li_lim(root, args.level))
     if "mdrplib" in groups:
-        manifest["entries"].extend(download_mdrplib(root, MDRPLIB_SMOKE_INSTANCES.keys()))
+        manifest["entries"].extend(download_mdrplib(root, MDRPLIB_SMOKE_INSTANCES.keys() if args.level == "smoke" else MDRPLIB_CORE_INSTANCES.keys(), level=args.level))
     if "icaps" in groups:
         manifest["entries"].extend(download_icaps(root, ICAPS_SMOKE_INSTANCES if args.level == "smoke" else ICAPS_CORE_INSTANCES))
     if "homberger" in groups:

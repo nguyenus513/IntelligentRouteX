@@ -1,0 +1,210 @@
+{
+  "schemaVersion": "mdrplib-core-mapping/v1",
+  "mapping": {
+    "mdrp-core-4": "1o50t75s1p100",
+    "mdrp-core-5": "2o50t100s1p100",
+    "mdrp-core-6": "3r50t75s2p100",
+    "mdrp-core-7": "4o100t75s1p125",
+    "mdrp-core-8": "5r50t75s1p100",
+    "mdrp-core-9": "6o100t100s2p125",
+    "mdrp-core-10": "7r50t100s2p125"
+  },
+  "results": [
+    {
+      "local": "mdrp-core-4",
+      "source": "1o50t75s1p100",
+      "file": "couriers.txt",
+      "status": "downloaded",
+      "bytes": 1178
+    },
+    {
+      "local": "mdrp-core-4",
+      "source": "1o50t75s1p100",
+      "file": "orders.txt",
+      "status": "downloaded",
+      "bytes": 7171
+    },
+    {
+      "local": "mdrp-core-4",
+      "source": "1o50t75s1p100",
+      "file": "restaurants.txt",
+      "status": "downloaded",
+      "bytes": 1279
+    },
+    {
+      "local": "mdrp-core-4",
+      "source": "1o50t75s1p100",
+      "file": "instance_characteristics.txt",
+      "status": "downloaded",
+      "bytes": 2179
+    },
+    {
+      "local": "mdrp-core-5",
+      "source": "2o50t100s1p100",
+      "file": "couriers.txt",
+      "status": "downloaded",
+      "bytes": 2315
+    },
+    {
+      "local": "mdrp-core-5",
+      "source": "2o50t100s1p100",
+      "file": "orders.txt",
+      "status": "downloaded",
+      "bytes": 9565
+    },
+    {
+      "local": "mdrp-core-5",
+      "source": "2o50t100s1p100",
+      "file": "restaurants.txt",
+      "status": "downloaded",
+      "bytes": 1810
+    },
+    {
+      "local": "mdrp-core-5",
+      "source": "2o50t100s1p100",
+      "file": "instance_characteristics.txt",
+      "status": "downloaded",
+      "bytes": 2182
+    },
+    {
+      "local": "mdrp-core-6",
+      "source": "3r50t75s2p100",
+      "file": "couriers.txt",
+      "status": "downloaded",
+      "bytes": 2789
+    },
+    {
+      "local": "mdrp-core-6",
+      "source": "3r50t75s2p100",
+      "file": "orders.txt",
+      "status": "downloaded",
+      "bytes": 13054
+    },
+    {
+      "local": "mdrp-core-6",
+      "source": "3r50t75s2p100",
+      "file": "restaurants.txt",
+      "status": "downloaded",
+      "bytes": 1145
+    },
+    {
+      "local": "mdrp-core-6",
+      "source": "3r50t75s2p100",
+      "file": "instance_characteristics.txt",
+      "status": "downloaded",
+      "bytes": 2181
+    },
+    {
+      "local": "mdrp-core-7",
+      "source": "4o100t75s1p125",
+      "file": "couriers.txt",
+      "status": "downloaded",
+      "bytes": 4152
+    },
+    {
+      "local": "mdrp-core-7",
+      "source": "4o100t75s1p125",
+      "file": "orders.txt",
+      "status": "downloaded",
+      "bytes": 32288
+    },
+    {
+      "local": "mdrp-core-7",
+      "source": "4o100t75s1p125",
+      "file": "restaurants.txt",
+      "status": "downloaded",
+      "bytes": 2301
+    },
+    {
+      "local": "mdrp-core-7",
+      "source": "4o100t75s1p125",
+      "file": "instance_characteristics.txt",
+      "status": "downloaded",
+      "bytes": 2183
+    },
+    {
+      "local": "mdrp-core-8",
+      "source": "5r50t75s1p100",
+      "file": "couriers.txt",
+      "status": "downloaded",
+      "bytes": 4148
+    },
+    {
+      "local": "mdrp-core-8",
+      "source": "5r50t75s1p100",
+      "file": "orders.txt",
+      "status": "downloaded",
+      "bytes": 38567
+    },
+    {
+      "local": "mdrp-core-8",
+      "source": "5r50t75s1p100",
+      "file": "restaurants.txt",
+      "status": "downloaded",
+      "bytes": 1745
+    },
+    {
+      "local": "mdrp-core-8",
+      "source": "5r50t75s1p100",
+      "file": "instance_characteristics.txt",
+      "status": "downloaded",
+      "bytes": 2182
+    },
+    {
+      "local": "mdrp-core-9",
+      "source": "6o100t100s2p125",
+      "file": "couriers.txt",
+      "status": "downloaded",
+      "bytes": 6228
+    },
+    {
+      "local": "mdrp-core-9",
+      "source": "6o100t100s2p125",
+      "file": "orders.txt",
+      "status": "downloaded",
+      "bytes": 49334
+    },
+    {
+      "local": "mdrp-core-9",
+      "source": "6o100t100s2p125",
+      "file": "restaurants.txt",
+      "status": "downloaded",
+      "bytes": 4251
+    },
+    {
+      "local": "mdrp-core-9",
+      "source": "6o100t100s2p125",
+      "file": "instance_characteristics.txt",
+      "status": "downloaded",
+      "bytes": 2182
+    },
+    {
+      "local": "mdrp-core-10",
+      "source": "7r50t100s2p125",
+      "file": "couriers.txt",
+      "status": "downloaded",
+      "bytes": 5271
+    },
+    {
+      "local": "mdrp-core-10",
+      "source": "7r50t100s2p125",
+      "file": "orders.txt",
+      "status": "downloaded",
+      "bytes": 46404
+    },
+    {
+      "local": "mdrp-core-10",
+      "source": "7r50t100s2p125",
+      "file": "restaurants.txt",
+      "status": "downloaded",
+      "bytes": 1907
+    },
+    {
+      "local": "mdrp-core-10",
+      "source": "7r50t100s2p125",
+      "file": "instance_characteristics.txt",
+      "status": "downloaded",
+      "bytes": 2182
+    }
+  ]
+}
