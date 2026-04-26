@@ -1,0 +1,23 @@
+{
+  "missingFiles": [
+    "C1_2_1.txt",
+    "R1_2_1.txt",
+    "RC1_2_1.txt",
+    "C1_4_1.txt",
+    "R1_4_1.txt",
+    "RC1_4_1.txt",
+    "C1_6_1.txt",
+    "R1_6_1.txt",
+    "RC1_6_1.txt",
+    "C1_8_1.txt",
+    "R1_8_1.txt",
+    "RC1_8_1.txt",
+    "C1_10_1.txt",
+    "R1_10_1.txt",
+    "RC1_10_1.txt"
+  ],
+  "policy": "official-only",
+  "presentFiles": [],
+  "schemaVersion": "homberger-official-data-gap/v1",
+  "verdict": "EVIDENCE_GAP"
+}

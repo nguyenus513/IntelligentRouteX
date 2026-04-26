@@ -264,15 +264,17 @@ def icaps_row(instance: str, output_root: Path) -> Dict[str, Any]:
     }
 
 
-def latest_dispatch_quality(root: Path, mode: str, scenario: str) -> Path | None:
-    candidates = sorted(root.glob(f"mode-comparison/{mode}/{scenario}/dispatch-quality*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+def latest_dispatch_quality(root: Path, mode: str, scenario: str, size: str) -> Path | None:
+    candidates = sorted(root.glob(f"mode-comparison/{mode}/{scenario}/{size}/dispatch-quality*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+    if not candidates:
+        candidates = sorted(root.glob(f"mode-comparison/{mode}/{scenario}/dispatch-quality*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
     return candidates[0] if candidates else None
 
 
 def hcm_row(scenario: str, size: str, mode: str) -> Dict[str, Any]:
     root = REPO_ROOT / "artifacts" / "benchmark" / "full-system-e2e"
     preflight_path = root / "preflight_result.json"
-    latest_quality = latest_dispatch_quality(root, mode, scenario)
+    latest_quality = latest_dispatch_quality(root, mode, scenario, size)
     if not preflight_path.exists() or latest_quality is None:
         row = evidence_gap_row("local-realistic", "hcm-road-native-food-delivery", "full-system-e2e-artifact-missing")
         row["instance"] = f"{scenario}/{size}/{mode}"

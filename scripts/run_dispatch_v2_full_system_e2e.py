@@ -399,7 +399,7 @@ def mode_env(cell: BenchmarkCell, args: argparse.Namespace, output_dir: Path) ->
         decision = "legacy"
     if cell.mode == "ortools-baseline":
         baseline = "B"
-    return {
+    env = {
         "DISPATCH_QUALITY_BASELINES": baseline,
         "DISPATCH_QUALITY_SIZE": cell.size,
         "DISPATCH_QUALITY_SCENARIO_PACK": cell.scenario,
@@ -422,20 +422,20 @@ def mode_env(cell: BenchmarkCell, args: argparse.Namespace, output_dir: Path) ->
         "ROUTECHAIN_DISPATCH_V2_ML_GREEDRL_BUNDLE_TIMEOUT": "30s",
         "ROUTECHAIN_DISPATCH_V2_ML_GREEDRL_SEQUENCE_TIMEOUT": "30s",
     }
+    if cell.mode == "no-heavy-ml":
+        env.update({
+            "ROUTECHAIN_DISPATCH_V2_ML_ROUTEFINDER_ENABLED": "false",
+            "ROUTECHAIN_DISPATCH_V2_ML_GREEDRL_ENABLED": "false",
+            "ROUTECHAIN_DISPATCH_V2_ML_FORECAST_ENABLED": "false",
+            "ROUTECHAIN_DISPATCH_V2_COMPUTE_ADAPTIVE_ROUTEFINDER_MAX_TUPLES_PER_DISPATCH": "0",
+            "ROUTECHAIN_DISPATCH_V2_COMPUTE_ADAPTIVE_FORECAST_ENABLED_IN_HOT_PATH_BY_DEFAULT": "false",
+        })
+    return env
 
 
 def run_benchmark_cell(cell: BenchmarkCell, args: argparse.Namespace, output_root: Path) -> Dict[str, Any]:
-    mode_dir = output_root / "mode-comparison" / cell.mode / cell.scenario
+    mode_dir = output_root / "mode-comparison" / cell.mode / cell.scenario / cell.size
     mode_dir.mkdir(parents=True, exist_ok=True)
-    if cell.mode == "no-heavy-ml":
-        return {
-            "scenario": cell.scenario,
-            "size": cell.size,
-            "mode": cell.mode,
-            "verdict": "EVIDENCE_GAP",
-            "reasons": ["per-worker-disable-not-supported-by-dispatch-quality-harness"],
-        }
-
     command = gradle_command() + [
         "--no-daemon",
         "--rerun-tasks",
@@ -450,7 +450,26 @@ def run_benchmark_cell(cell: BenchmarkCell, args: argparse.Namespace, output_roo
     env = os.environ.copy()
     env.update(mode_env(cell, args, mode_dir))
     started = time.perf_counter()
-    completed = subprocess.run(command, cwd=REPO_ROOT, env=env, text=True, check=False)
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            env=env,
+            text=True,
+            check=False,
+            timeout=parse_duration_seconds(args.cell_timeout),
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "scenario": cell.scenario,
+            "size": cell.size,
+            "mode": cell.mode,
+            "returnCode": None,
+            "runtimeMs": int((time.perf_counter() - started) * 1000),
+            "artifactRoot": str(mode_dir),
+            "verdict": "FAIL",
+            "reasons": ["benchmark-cell-timeout"],
+        }
     return {
         "scenario": cell.scenario,
         "size": cell.size,
@@ -570,6 +589,17 @@ def parse_modes(raw: str) -> List[str]:
     return modes
 
 
+def parse_duration_seconds(raw: str) -> int:
+    value = raw.strip().lower()
+    if value.endswith("ms"):
+        return max(1, int(float(value[:-2]) / 1000.0))
+    if value.endswith("s"):
+        return max(1, int(float(value[:-1])))
+    if value.endswith("m"):
+        return max(1, int(float(value[:-1]) * 60))
+    return max(1, int(float(value)))
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Run Dispatch V2 full-system E2E evaluation.")
     parser.add_argument("--matrix", choices=("preset:smoke", "preset:core"), default="preset:smoke")
@@ -586,6 +616,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--llm-model", default="cx/gpt-5.5")
     parser.add_argument("--llm-fallback-model", default="cx/gpt-5.4")
     parser.add_argument("--llm-api-key-env", default=os.environ.get("ROUTECHAIN_DECISION_LLM_API_KEY_ENV", "OPENAI_API_KEY"))
+    parser.add_argument("--cell-timeout", default="12m")
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args(argv)
 

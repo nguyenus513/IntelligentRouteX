@@ -25,6 +25,63 @@ class FullSystemE2ETest(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner.parse_modes("full-system,bad-mode")
 
+    def test_no_heavy_ml_mode_disables_heavy_workers(self) -> None:
+        cell = runner.BenchmarkCell("normal-clear", "S", "no-heavy-ml")
+        args = argparse.Namespace(
+            prompt_family="v3",
+            profile="dispatch-v2-full-adaptive",
+            llm_model="cx/gpt-5.5",
+            llm_base_url="http://provider/v1",
+            routing_provider="osrm",
+        )
+
+        env = runner.mode_env(cell, args, Path("out"))
+
+        self.assertEqual("false", env["ROUTECHAIN_DISPATCH_V2_ML_ROUTEFINDER_ENABLED"])
+        self.assertEqual("false", env["ROUTECHAIN_DISPATCH_V2_ML_GREEDRL_ENABLED"])
+        self.assertEqual("false", env["ROUTECHAIN_DISPATCH_V2_ML_FORECAST_ENABLED"])
+
+    def test_benchmark_cell_artifact_path_includes_size(self) -> None:
+        cell = runner.BenchmarkCell("normal-clear", "M", "full-system")
+        args = argparse.Namespace(
+            prompt_family="v3",
+            profile="dispatch-v2-full-adaptive",
+            llm_model="cx/gpt-5.5",
+            llm_base_url="http://provider/v1",
+            routing_provider="osrm",
+            cell_timeout="1s",
+        )
+        original_run = runner.subprocess.run
+        try:
+            runner.subprocess.run = lambda *a, **k: type("Completed", (), {"returncode": 0})()
+            row = runner.run_benchmark_cell(cell, args, Path("root"))
+        finally:
+            runner.subprocess.run = original_run
+
+        self.assertTrue(row["artifactRoot"].endswith("mode-comparison\\full-system\\normal-clear\\M") or row["artifactRoot"].endswith("mode-comparison/full-system/normal-clear/M"))
+
+    def test_benchmark_cell_timeout_returns_fail_reason(self) -> None:
+        cell = runner.BenchmarkCell("normal-clear", "S", "full-system")
+        args = argparse.Namespace(
+            prompt_family="v3",
+            profile="dispatch-v2-full-adaptive",
+            llm_model="cx/gpt-5.5",
+            llm_base_url="http://provider/v1",
+            routing_provider="osrm",
+            cell_timeout="1s",
+        )
+        original_run = runner.subprocess.run
+        try:
+            def timeout_run(*args, **kwargs):
+                raise runner.subprocess.TimeoutExpired(args[0], kwargs.get("timeout", 1))
+            runner.subprocess.run = timeout_run
+            row = runner.run_benchmark_cell(cell, args, Path("root"))
+        finally:
+            runner.subprocess.run = original_run
+
+        self.assertEqual("FAIL", row["verdict"])
+        self.assertIn("benchmark-cell-timeout", row["reasons"])
+
     def test_osrm_ready_from_route_probe_when_health_missing(self) -> None:
         calls = []
         original = runner.http_get

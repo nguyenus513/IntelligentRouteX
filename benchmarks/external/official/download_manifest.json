@@ -5,6 +5,7 @@
       "bytes": 2505,
       "instance": "mdrp-smoke-low",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-low\\couriers.txt",
+      "sha256": "sha256:9d6426710d4c0db7491e873957581f4abae55d6a229a2876dd60a3ccdc42430e",
       "sourceInstance": "0o100t100s1p100",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/0o100t100s1p100/couriers.txt"
     },
@@ -13,6 +14,7 @@
       "bytes": 13574,
       "instance": "mdrp-smoke-low",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-low\\orders.txt",
+      "sha256": "sha256:f712b17ce955eaf3051e3a60d58262a59bb96cbd505cb4dc721b24ddb6d527cc",
       "sourceInstance": "0o100t100s1p100",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/0o100t100s1p100/orders.txt"
     },
@@ -21,6 +23,7 @@
       "bytes": 1658,
       "instance": "mdrp-smoke-low",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-low\\restaurants.txt",
+      "sha256": "sha256:731b80cd67d1e4280dee614b38b028a596d33cea2ae995ffb8a8b680a12b0356",
       "sourceInstance": "0o100t100s1p100",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/0o100t100s1p100/restaurants.txt"
     },
@@ -29,6 +32,7 @@
       "bytes": 2181,
       "instance": "mdrp-smoke-low",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-low\\instance_characteristics.txt",
+      "sha256": "sha256:88094267eb34c9d300b5e2e0f2bb4c26ed980ddfa6f0607f17f3a2752a7baeae",
       "sourceInstance": "0o100t100s1p100",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/0o100t100s1p100/instance_characteristics.txt"
     },
@@ -37,6 +41,7 @@
       "bytes": 4148,
       "instance": "mdrp-smoke-medium",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-medium\\couriers.txt",
+      "sha256": "sha256:a1cd6fb808e00ff15b711ef9ced335d54bf7e75b4200c47998ebcf59b6f1f76b",
       "sourceInstance": "5r50t75s1p100",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/5r50t75s1p100/couriers.txt"
     },
@@ -45,6 +50,7 @@
       "bytes": 38567,
       "instance": "mdrp-smoke-medium",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-medium\\orders.txt",
+      "sha256": "sha256:1ec5adb255a0ce673afda5920a80da53acdf591958e74ae7d295a1fe5055046b",
       "sourceInstance": "5r50t75s1p100",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/5r50t75s1p100/orders.txt"
     },
@@ -53,6 +59,7 @@
       "bytes": 1745,
       "instance": "mdrp-smoke-medium",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-medium\\restaurants.txt",
+      "sha256": "sha256:1c855b3e6704526b2087a6685a344e96813c6ed46737f42958a4e330b6e4f423",
       "sourceInstance": "5r50t75s1p100",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/5r50t75s1p100/restaurants.txt"
     },
@@ -61,6 +68,7 @@
       "bytes": 2182,
       "instance": "mdrp-smoke-medium",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-medium\\instance_characteristics.txt",
+      "sha256": "sha256:2f897c84bd172e52def4e29e4712ccacadb9e372dade3b3375be290d25e12566",
       "sourceInstance": "5r50t75s1p100",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/5r50t75s1p100/instance_characteristics.txt"
     },
@@ -69,6 +77,7 @@
       "bytes": 5506,
       "instance": "mdrp-smoke-high",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-high\\couriers.txt",
+      "sha256": "sha256:c2049722f357ba2ac5dcb9658925c75fd7b587f263eb929d061b397163ef905c",
       "sourceInstance": "9r50t75s2p125",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/9r50t75s2p125/couriers.txt"
     },
@@ -77,6 +86,7 @@
       "bytes": 25192,
       "instance": "mdrp-smoke-high",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-high\\orders.txt",
+      "sha256": "sha256:a196663a8b5b7d4dedaedc7e153450df124979c88d7f6f2d181466917fae6de9",
       "sourceInstance": "9r50t75s2p125",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/9r50t75s2p125/orders.txt"
     },
@@ -85,6 +95,7 @@
       "bytes": 2032,
       "instance": "mdrp-smoke-high",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-high\\restaurants.txt",
+      "sha256": "sha256:c75ea609dc23202a7c74c56fc40f92b7175caaba13bcc04c1d51ea3b011b0f95",
       "sourceInstance": "9r50t75s2p125",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/9r50t75s2p125/restaurants.txt"
     },
@@ -93,6 +104,7 @@
       "bytes": 2181,
       "instance": "mdrp-smoke-high",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\mdrplib\\mdrp-smoke-high\\instance_characteristics.txt",
+      "sha256": "sha256:aafd66c6295550fe4dcd3176e945e0225f75deec3fc59e024c21c8ebadca5792",
       "sourceInstance": "9r50t75s2p125",
       "url": "https://raw.githubusercontent.com/grubhub/mdrplib/master/public_instances/9r50t75s2p125/instance_characteristics.txt"
     },
@@ -100,6 +112,7 @@
       "benchmark": "icaps-dpdp",
       "bytes": 8162,
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\factory_info.csv",
+      "sha256": "sha256:ed0f987404c09c0bf562212478784f29e29ce41f52cebbb277e1e219dd9a81e4",
       "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/factory_info.csv"
     },
     {
@@ -107,6 +120,7 @@
       "bytes": 5828,
       "instance": "icaps-case-1",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-1\\50_1.csv",
+      "sha256": "sha256:585c8060ddaaf6ae09ef473ea7524e17bcc2cf1393105f26e035a079026e3149",
       "sourceInstance": "instance_1",
       "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_1/50_1.csv"
     },
@@ -115,6 +129,7 @@
       "bytes": 115,
       "instance": "icaps-case-1",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-1\\vehicle_info_5.csv",
+      "sha256": "sha256:48b5d211ec606d25f37280f8c115c21ec2de1a7680c905bdc6fcf02ee9c15430",
       "sourceInstance": "instance_1",
       "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_1/vehicle_info_5.csv"
     },
@@ -123,6 +138,7 @@
       "bytes": 5823,
       "instance": "icaps-case-2",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-2\\50_2.csv",
+      "sha256": "sha256:821e18a3388d0e93b79f6b2c8a6158a84a9ae443c289546cda58120a93b889e1",
       "sourceInstance": "instance_2",
       "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_2/50_2.csv"
     },
@@ -131,20 +147,97 @@
       "bytes": 115,
       "instance": "icaps-case-2",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-2\\vehicle_info_5.csv",
+      "sha256": "sha256:48b5d211ec606d25f37280f8c115c21ec2de1a7680c905bdc6fcf02ee9c15430",
       "sourceInstance": "instance_2",
       "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_2/vehicle_info_5.csv"
     },
     {
+      "benchmark": "icaps-dpdp",
+      "bytes": 5814,
+      "instance": "icaps-case-3",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-3\\50_3.csv",
+      "sha256": "sha256:4cf3b10bf5c198cbdfb1a4169948e56d51f4d502299a26584e26b4aee17ce03d",
+      "sourceInstance": "instance_3",
+      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_3/50_3.csv"
+    },
+    {
+      "benchmark": "icaps-dpdp",
+      "bytes": 115,
+      "instance": "icaps-case-3",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-3\\vehicle_info_5.csv",
+      "sha256": "sha256:48b5d211ec606d25f37280f8c115c21ec2de1a7680c905bdc6fcf02ee9c15430",
+      "sourceInstance": "instance_3",
+      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_3/vehicle_info_5.csv"
+    },
+    {
+      "benchmark": "icaps-dpdp",
+      "bytes": 5815,
+      "instance": "icaps-case-4",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-4\\50_4.csv",
+      "sha256": "sha256:7aa498dc8d9ccfc203fe4f15a07868efb7eaba9e402b88fa7ae5fea39fa7beda",
+      "sourceInstance": "instance_4",
+      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_4/50_4.csv"
+    },
+    {
+      "benchmark": "icaps-dpdp",
+      "bytes": 115,
+      "instance": "icaps-case-4",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-4\\vehicle_info_5.csv",
+      "sha256": "sha256:48b5d211ec606d25f37280f8c115c21ec2de1a7680c905bdc6fcf02ee9c15430",
+      "sourceInstance": "instance_4",
+      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_4/vehicle_info_5.csv"
+    },
+    {
+      "benchmark": "icaps-dpdp",
+      "bytes": 5819,
+      "instance": "icaps-case-5",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-5\\50_5.csv",
+      "sha256": "sha256:8dea81615c650af39ea9e0eb179448b3ede9e935c854847584c85844221eb172",
+      "sourceInstance": "instance_5",
+      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_5/50_5.csv"
+    },
+    {
+      "benchmark": "icaps-dpdp",
+      "bytes": 115,
+      "instance": "icaps-case-5",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\icaps-dpdp\\icaps-case-5\\vehicle_info_5.csv",
+      "sha256": "sha256:48b5d211ec606d25f37280f8c115c21ec2de1a7680c905bdc6fcf02ee9c15430",
+      "sourceInstance": "instance_5",
+      "url": "https://raw.githubusercontent.com/huawei-noah/xingtian/master/simulator/dpdp_competition/benchmark/instance_5/vehicle_info_5.csv"
+    },
+    {
       "benchmark": "homberger-vrptw",
+      "expectedCoreFiles": [
+        "C1_2_1.txt",
+        "R1_2_1.txt",
+        "RC1_2_1.txt",
+        "C1_4_1.txt",
+        "R1_4_1.txt",
+        "RC1_4_1.txt",
+        "C1_6_1.txt",
+        "R1_6_1.txt",
+        "RC1_6_1.txt",
+        "C1_8_1.txt",
+        "R1_8_1.txt",
+        "RC1_8_1.txt",
+        "C1_10_1.txt",
+        "R1_10_1.txt",
+        "RC1_10_1.txt"
+      ],
       "expectedSmokeFiles": [
         "C1_2_1.txt",
         "R1_2_1.txt",
         "RC1_2_1.txt"
       ],
+      "missingCount": 15,
+      "missingPath": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\missing_official_files.json",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\homberger\\README.download.json",
+      "policy": "official-only",
       "reason": "Direct automated download is often blocked by Cloudflare/browser challenge. Place official .txt files under benchmarks/external/official/homberger/.",
       "source": "SINTEF Gehring & Homberger VRPTW benchmark pages"
     }
   ],
-  "schemaVersion": "certification-benchmark-download-manifest/v1"
+  "generatedAt": "2026-04-26T11:57:19.392213+00:00",
+  "level": "core",
+  "schemaVersion": "certification-benchmark-download-manifest/v2"
 }

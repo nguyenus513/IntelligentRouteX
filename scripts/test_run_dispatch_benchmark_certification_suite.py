@@ -61,6 +61,22 @@ class DispatchBenchmarkCertificationSuiteTest(unittest.TestCase):
             self.assertGreaterEqual(row["routeStabilityScore"], 0.99)
             self.assertIn("maxReplanLatencyMs", row)
 
+    def test_latest_dispatch_quality_prefers_size_specific_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            old_dir = root / "mode-comparison" / "full-system" / "normal-clear"
+            size_dir = old_dir / "M"
+            old_dir.mkdir(parents=True)
+            size_dir.mkdir(parents=True)
+            old = old_dir / "dispatch-quality-old.json"
+            size_specific = size_dir / "dispatch-quality-size.json"
+            old.write_text("{}", encoding="utf-8")
+            size_specific.write_text("{}", encoding="utf-8")
+
+            selected = runner.latest_dispatch_quality(root, "full-system", "normal-clear", "M")
+
+        self.assertEqual(size_specific, selected)
+
 
     def test_main_emit_scorecard_writes_scorecard_outputs(self) -> None:
         original_run_suite = runner.run_suite

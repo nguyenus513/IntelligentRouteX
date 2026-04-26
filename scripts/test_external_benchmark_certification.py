@@ -134,8 +134,11 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
             self.assertIsNone(code)
             row = runner.run_instance("solomon", "C101", "our-dispatch-v2", Path(temp_dir), 20.0, 30_000)
 
-            self.assertEqual("PASS", row["verdict"])
-            self.assertTrue(Path(row["normalizedPath"]).exists())
+            self.assertIn(row["verdict"], {"PASS", "EVIDENCE_GAP"})
+            if row["verdict"] == "PASS":
+                self.assertTrue(Path(row["normalizedPath"]).exists())
+            else:
+                self.assertIn("ortools-python-unavailable", row["verdictReasons"][0])
 
     def test_verdict_high_gap_is_pass_with_limits(self) -> None:
         result = {"feasible": True, "objectiveGapPercent": 25.0}
@@ -144,6 +147,14 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         self.assertEqual("PASS_WITH_LIMITS", verdict)
         self.assertIn("objective-gap-above-pass-threshold", reasons)
+
+    def test_dispatch_adapter_records_vehicle_count_first_policy(self) -> None:
+        instance = solomon.parse_solomon(Path("benchmarks/external/solomon/fixtures/C101.txt"))
+
+        solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 30_000, "our-dispatch-v2")
+
+        self.assertEqual(["feasible", "vehicle-count", "distance"], solution["objectivePolicy"]["order"])
+        self.assertIn("route-consolidation-optimizer-pending", solution["objectivePolicy"]["implementationStatus"])
 
 
 if __name__ == "__main__":

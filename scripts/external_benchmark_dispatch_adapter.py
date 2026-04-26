@@ -79,4 +79,8 @@ class DispatchV2ExternalBenchmarkSolver:
             "enforcePickupBeforeDropoff": dispatch_case.constraint_profile.enforce_pickup_before_dropoff,
             "objectiveOrder": list(dispatch_case.constraint_profile.objective_order),
         }
+        solution["objectivePolicy"] = {
+            "order": list(dispatch_case.constraint_profile.objective_order),
+            "implementationStatus": "declared-for-certification; route-consolidation-optimizer-pending",
+        }
         return solution

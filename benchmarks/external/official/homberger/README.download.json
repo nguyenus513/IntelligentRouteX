@@ -1,4 +1,21 @@
 {
+  "expectedCoreFiles": [
+    "C1_2_1.txt",
+    "R1_2_1.txt",
+    "RC1_2_1.txt",
+    "C1_4_1.txt",
+    "R1_4_1.txt",
+    "RC1_4_1.txt",
+    "C1_6_1.txt",
+    "R1_6_1.txt",
+    "RC1_6_1.txt",
+    "C1_8_1.txt",
+    "R1_8_1.txt",
+    "RC1_8_1.txt",
+    "C1_10_1.txt",
+    "R1_10_1.txt",
+    "RC1_10_1.txt"
+  ],
   "expectedSmokeFiles": [
     "C1_2_1.txt",
     "R1_2_1.txt",
