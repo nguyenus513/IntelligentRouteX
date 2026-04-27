@@ -26,6 +26,7 @@ li_lim = load_module("parse_li_lim_pdptw", "parse_li_lim_pdptw.py")
 adapter = load_module("external_benchmark_dispatch_adapter", "external_benchmark_dispatch_adapter.py")
 consolidation = load_module("academic_global_consolidation", "academic_global_consolidation.py")
 runner = load_module("run_external_benchmark_certification", "run_external_benchmark_certification.py")
+max_quality = load_module("run_academic_max_quality", "run_academic_max_quality.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -170,6 +171,21 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertTrue(result.after_metrics["feasible"])
         self.assertEqual(1, result.after_metrics["vehicleCount"])
         self.assertEqual(1, result.trace.accepted_moves)
+
+    def test_academic_max_quality_collects_valid_route_pool(self) -> None:
+        instance = solomon.parse_solomon(Path("benchmarks/external/solomon/fixtures/C101.txt"))
+        solution = {"schemaVersion": "external-benchmark-solution/v1", "solver": "unit", "routes": [["0", "1", "2", "3", "0"]]}
+        evaluated = max_quality.evaluate_solution(instance, solution, "unit")
+
+        pool = max_quality.collect_route_pool(instance, [evaluated])
+
+        self.assertEqual(1, len(pool))
+        self.assertTrue(pool[0]["capacityFeasible"])
+        self.assertTrue(pool[0]["timeWindowFeasible"])
+        self.assertEqual(["1", "2", "3"], pool[0]["customerSet"])
+
+    def test_academic_max_quality_duration_parser_accepts_minutes(self) -> None:
+        self.assertEqual(1_800_000, max_quality.parse_duration_ms("30m"))
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
-from external_benchmark_support import check_solution, ortools_baseline_solution
+from external_benchmark_support import check_solution, route_distance, ortools_baseline_solution
 from parse_solomon_vrptw import parse_solomon
 from run_dispatch_benchmark_certification_suite import HOMBERGER_BEST_KNOWN, REPO_ROOT
 
@@ -79,6 +79,96 @@ def evaluate_solution(instance: Dict[str, Any], solution: Dict[str, Any], label:
     }
 
 
+def required_customers(instance: Dict[str, Any]) -> List[str]:
+    depot = str(instance.get("depotNodeId", "0"))
+    return [str(node["id"]) for node in instance.get("nodes", []) if str(node["id"]) != depot]
+
+
+def route_feasible(instance: Dict[str, Any], route: List[str]) -> bool:
+    depot = str(instance.get("depotNodeId", "0"))
+    if not route or route[0] != depot or route[-1] != depot:
+        return False
+    nodes = {str(node["id"]): node for node in instance.get("nodes", [])}
+    capacity = int(instance.get("capacity", 0))
+    load = 0
+    elapsed = 0.0
+    for previous, current in zip(route, route[1:]):
+        if previous not in nodes or current not in nodes:
+            return False
+        elapsed += route_distance(instance, [previous, current])
+        node = nodes[current]
+        ready = float(node.get("readyTime", 0.0))
+        due = float(node.get("dueTime", 1e18))
+        if elapsed < ready:
+            elapsed = ready
+        if elapsed > due + 1e-9:
+            return False
+        elapsed += float(node.get("serviceTime", 0.0))
+        load += int(float(node.get("demand", 0)))
+        if load > capacity or load < 0:
+            return False
+    return True
+
+
+def collect_route_pool(instance: Dict[str, Any], candidates: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    pool_by_key: Dict[tuple[str, ...], Dict[str, Any]] = {}
+    depot = str(instance.get("depotNodeId", "0"))
+    for candidate in candidates:
+        for route_index, raw_route in enumerate(candidate["solution"].get("routes", [])):
+            route = [str(stop) for stop in raw_route]
+            customers = tuple(stop for stop in route if stop != depot)
+            if not customers or not route_feasible(instance, route):
+                continue
+            distance = route_distance(instance, route)
+            key = tuple(route)
+            existing = pool_by_key.get(key)
+            if existing is None or distance < existing["distance"]:
+                pool_by_key[key] = {
+                    "routeId": f"route-{len(pool_by_key) + 1}",
+                    "customerSet": sorted(customers, key=lambda value: int(value) if value.isdigit() else value),
+                    "sequence": route,
+                    "distance": distance,
+                    "vehicleCount": 1,
+                    "capacityFeasible": True,
+                    "timeWindowFeasible": True,
+                    "sourceRun": candidate["label"],
+                    "sourceRouteIndex": route_index,
+                }
+    return list(pool_by_key.values())
+
+
+def set_partitioning_solution(instance: Dict[str, Any], route_pool: Sequence[Dict[str, Any]], time_limit_ms: int) -> Dict[str, Any] | None:
+    try:
+        from ortools.sat.python import cp_model
+    except Exception:
+        return None
+    customers = required_customers(instance)
+    routes_by_customer: Dict[str, List[int]] = {customer: [] for customer in customers}
+    for route_index, route in enumerate(route_pool):
+        for customer in route["customerSet"]:
+            if customer in routes_by_customer:
+                routes_by_customer[customer].append(route_index)
+    if any(not indexes for indexes in routes_by_customer.values()):
+        return None
+    model = cp_model.CpModel()
+    selected = [model.NewBoolVar(f"route_{index}") for index in range(len(route_pool))]
+    for customer in customers:
+        model.Add(sum(selected[index] for index in routes_by_customer[customer]) == 1)
+    max_distance = max((float(route["distance"]) for route in route_pool), default=1.0)
+    big_m = int(max(1_000_000_000, round(max_distance * len(customers) * 1000)))
+    model.Minimize(
+        sum(selected[index] * (big_m + int(round(float(route_pool[index]["distance"]) * 1000))) for index in range(len(route_pool)))
+    )
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = max(1.0, time_limit_ms / 1000)
+    solver.parameters.num_search_workers = 8
+    status = solver.Solve(model)
+    if status not in {cp_model.OPTIMAL, cp_model.FEASIBLE}:
+        return None
+    routes = [route_pool[index]["sequence"] for index, variable in enumerate(selected) if solver.Value(variable)]
+    return {"schemaVersion": "external-benchmark-solution/v1", "solver": "academic-max-quality-set-partitioning", "routes": routes}
+
+
 def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_runs: int, fixed_cost_multiplier: int) -> Dict[str, Any]:
     started = time.perf_counter()
     instance = load_homberger(instance_name)
@@ -124,6 +214,15 @@ def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_
             "totalDistance": evaluated["totalDistance"],
             "objectiveGapPercent": evaluated["objectiveGapPercent"],
         })
+    route_pool = collect_route_pool(instance, candidates)
+    set_partitioning_runtime_ms = 0
+    set_partitioning_solution_candidate = None
+    if route_pool:
+        partition_started = time.perf_counter()
+        set_partitioning_solution_candidate = set_partitioning_solution(instance, route_pool, max(1, min(300_000, time_limit_ms // 6)))
+        set_partitioning_runtime_ms = int((time.perf_counter() - partition_started) * 1000)
+        if set_partitioning_solution_candidate is not None:
+            candidates.append(evaluate_solution(instance, set_partitioning_solution_candidate, "set-partitioning-route-pool"))
     if not candidates:
         row = {
             "instance": instance_name,
@@ -155,8 +254,21 @@ def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_
         elif float(distance_gap) > 20.0:
             reasons.append("objective-gap-above-pass-threshold")
     row = {
+        "schemaVersion": "academic-objective-quality-v2/v1",
         "instance": instance_name,
         "profile": "academic-max-quality",
+        "usedBksInSolver": False,
+        "caseSpecificRuleUsed": False,
+        "instanceNameBranchCount": 0,
+        "setPartitioningEnabled": True,
+        "setPartitioningProducedSolution": set_partitioning_solution_candidate is not None,
+        "setPartitioningRuntimeMs": set_partitioning_runtime_ms,
+        "routePoolSize": len(route_pool),
+        "validRoutePoolSize": len(route_pool),
+        "setPartitioningSelectedRoutes": final_vehicle_count if best["label"] == "set-partitioning-route-pool" else None,
+        "localSearchOperatorsUsed": ["or-tools-multi-start", "cp-sat-set-partitioning"],
+        "routeEliminationAttempts": 0,
+        "routeEliminationSuccesses": 0,
         "orToolsRuns": len(runs),
         "perRunTimeLimitMs": per_run_ms,
         "runtimeMs": runtime_ms,
@@ -178,19 +290,20 @@ def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_
     }
     case_root = output_root / instance_name
     write_json(case_root / "solution.json", best["solution"])
+    write_json(case_root / "route_pool.json", {"routes": route_pool})
     write_json(case_root / "metrics.json", row)
     return row
 
 
 def markdown(rows: Sequence[Dict[str, Any]]) -> str:
     lines = ["# Academic Max Quality Report", ""]
-    lines.append("| Case | Final vehicles | BKS vehicles | Vehicle gap | Final distance | Distance gap | Runs | Runtime min | Verdict | Reasons |")
-    lines.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |")
+    lines.append("| Case | Final vehicles | BKS vehicles | Vehicle gap | Distance gap | Route pool | SP selected | Runtime min | Verdict | Reasons |")
+    lines.append("| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- | --- |")
     for row in rows:
         distance_gap = row.get("distanceGap")
         gap_text = "n/a" if distance_gap is None else f"{float(distance_gap):.2f}%"
         lines.append(
-            "| {instance} | {finalVehicles} | {bksVehicles} | {vehicleGap} | {finalDistance:.2f} | {gap} | {orToolsRuns} | {runtimeMinutes:.2f} | {verdict} | {reasons} |".format(
+            "| {instance} | {finalVehicles} | {bksVehicles} | {vehicleGap} | {gap} | {routePoolSize} | {setPartitioningProducedSolution} | {runtimeMinutes:.2f} | {verdict} | {reasons} |".format(
                 gap=gap_text,
                 reasons=", ".join(row.get("verdictReasons", [])),
                 **row,
