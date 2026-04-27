@@ -27,6 +27,9 @@
             android:name=".feature.user.restaurant.RestaurantDetailActivity"
             android:exported="false" />
         <activity
+            android:name=".feature.driver.navigation.DriverNavigationActivity"
+            android:exported="false" />
+        <activity
             android:name=".feature.driver.DriverMainActivity"
             android:exported="false" />
         <activity

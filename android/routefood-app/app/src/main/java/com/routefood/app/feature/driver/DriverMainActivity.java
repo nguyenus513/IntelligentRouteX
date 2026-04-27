@@ -1,5 +1,6 @@
 package com.routefood.app.feature.driver;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -14,6 +15,7 @@ import com.routefood.app.data.model.GeoPoint;
 import com.routefood.app.data.model.Assignment;
 import com.routefood.app.data.repository.DriverRepository;
 import com.routefood.app.data.repository.RepositoryCallback;
+import com.routefood.app.feature.driver.navigation.DriverNavigationActivity;
 
 import java.util.HashMap;
 import java.util.List;
@@ -101,7 +103,19 @@ public class DriverMainActivity extends BaseActivity {
         if (activeAssignment == null) {
             return;
         }
-        driverRepository.acceptAssignment(activeAssignment.id(), simpleToast("Assignment accepted."));
+        driverRepository.acceptAssignment(activeAssignment.id(), new RepositoryCallback<>() {
+            @Override
+            public void onSuccess(Map<String, Object> value) {
+                Intent intent = new Intent(DriverMainActivity.this, DriverNavigationActivity.class);
+                intent.putExtra(DriverNavigationActivity.EXTRA_ASSIGNMENT_ID, activeAssignment.id());
+                startActivity(intent);
+            }
+
+            @Override
+            public void onError(Exception error) {
+                Toast.makeText(DriverMainActivity.this, error.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     private void rejectActiveAssignment() {

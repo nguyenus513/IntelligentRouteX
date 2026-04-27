@@ -10,6 +10,7 @@ initializeApp();
 const firestore = getFirestore();
 const realtimeDatabase = getDatabase();
 const auth = getAuth();
+const engineUrl = process.env.ENGINE_URL || "";
 
 type Role = "user" | "driver" | "admin";
 
@@ -289,6 +290,41 @@ export const advanceDemoOrder = onCall(async (request) => {
   return {orderId, status: nextStatus};
 });
 
+export const driverAdvanceAssignment = onCall(async (request) => {
+  const uid = requireRole(request, "driver");
+  const assignmentId = requireString(request.data?.assignmentId, "assignmentId");
+  const nextStatus = requireString(request.data?.nextStatus, "nextStatus");
+  const allowedStatuses = ["PICKING_UP", "DRIVER_TO_USER", "ARRIVING", "DELIVERED"];
+  if (!allowedStatuses.includes(nextStatus)) {
+    throw new HttpsError("invalid-argument", "Unsupported assignment status transition.");
+  }
+  const assignmentRef = firestore.collection("assignments").doc(assignmentId);
+  const assignment = await assignmentRef.get();
+  if (!assignment.exists || assignment.data()?.driverUid !== uid) {
+    throw new HttpsError("permission-denied", "Assignment is not available for this driver.");
+  }
+  const orderIds = Array.isArray(assignment.data()?.orderIds) ? assignment.data()?.orderIds : [];
+  for (const orderId of orderIds) {
+    if (typeof orderId === "string") {
+      await firestore.collection("orders").doc(orderId).set({
+        status: nextStatus,
+        updatedAt: FieldValue.serverTimestamp()
+      }, {merge: true});
+    }
+  }
+  await assignmentRef.set({
+    status: nextStatus === "DELIVERED" ? "completed" : nextStatus.toLowerCase(),
+    updatedAt: FieldValue.serverTimestamp(),
+    completedAt: nextStatus === "DELIVERED" ? FieldValue.serverTimestamp() : null
+  }, {merge: true});
+  await firestore.collection("drivers").doc(uid).set({
+    status: nextStatus === "DELIVERED" ? "idle" : nextStatus.toLowerCase(),
+    currentAssignmentId: nextStatus === "DELIVERED" ? null : assignmentId,
+    updatedAt: FieldValue.serverTimestamp()
+  }, {merge: true});
+  return {assignmentId, status: nextStatus};
+});
+
 export const dispatchOrder = onDocumentCreated("orders/{orderId}", async (event) => {
   const orderId = event.params.orderId;
   const order = event.data?.data();
@@ -301,6 +337,10 @@ export const dispatchOrder = onDocumentCreated("orders/{orderId}", async (event)
     dispatchRequestedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp()
   }, {merge: true});
+
+  if (await assignWithDispatchBackend(orderId, order)) {
+    return;
+  }
 
   const driverSnapshot = await firestore.collection("drivers")
     .where("online", "==", true)
@@ -364,6 +404,109 @@ export const dispatchOrder = onDocumentCreated("orders/{orderId}", async (event)
     updatedAt: FieldValue.serverTimestamp()
   }, {merge: true});
 });
+
+async function assignWithDispatchBackend(orderId: string, order: Record<string, unknown>): Promise<boolean> {
+  if (!engineUrl) {
+    return false;
+  }
+  try {
+    const driverSnapshot = await firestore.collection("drivers")
+      .where("online", "==", true)
+      .where("status", "==", "idle")
+      .limit(20)
+      .get();
+    if (driverSnapshot.empty) {
+      return false;
+    }
+
+    const request = {
+      schemaVersion: "dispatch-v2-request/v1",
+      traceId: `firebase-${orderId}-${Date.now()}`,
+      openOrders: [{
+        orderId,
+        pickupPoint: toRoutePoint(order.pickupLocation),
+        dropoffPoint: toRoutePoint(order.dropoffLocation),
+        createdAt: new Date().toISOString(),
+        readyAt: new Date().toISOString(),
+        promisedEtaMinutes: 35,
+        urgent: false
+      }],
+      availableDrivers: driverSnapshot.docs.map((driver) => ({
+        driverId: driver.id,
+        currentLocation: toRoutePoint(driver.data().lastLocation)
+      })),
+      regions: [{regionId: "hcm", name: "Ho Chi Minh City"}],
+      weatherProfile: "LIGHT_RAIN",
+      decisionTime: new Date().toISOString()
+    };
+
+    const response = await fetch(`${engineUrl.replace(/\/$/, "")}/api/dispatch/v2`, {
+      method: "POST",
+      headers: {"content-type": "application/json"},
+      body: JSON.stringify(request)
+    });
+    if (!response.ok) {
+      return false;
+    }
+    const result = await response.json() as {assignments?: Array<Record<string, unknown>>; degradeReasons?: string[]};
+    const assignment = result.assignments?.[0];
+    const driverId = typeof assignment?.driverId === "string" ? assignment.driverId : null;
+    if (!driverId) {
+      return false;
+    }
+    const assignmentRef = firestore.collection("assignments").doc();
+    const etaMin = Math.round(optionalNumber(assignment?.projectedCompletionEtaMinutes, 20));
+    await assignmentRef.set({
+      orderIds: [orderId],
+      driverId,
+      driverUid: driverId,
+      status: "assigned",
+      pickupSequence: [order.restaurantId],
+      dropoffSequence: [orderId],
+      route: [],
+      eta: {minutes: etaMin},
+      risk: "intelligent-route-x",
+      trafficProfile: "demo-hcm",
+      weatherProfile: "light_rain",
+      createdAt: FieldValue.serverTimestamp(),
+      traceId: request.traceId,
+      degradeReasons: result.degradeReasons ?? []
+    });
+    await firestore.collection("orders").doc(orderId).set({
+      status: "DRIVER_ASSIGNED",
+      assignedDriverId: driverId,
+      assignedDriverUid: driverId,
+      assignmentId: assignmentRef.id,
+      etaMin,
+      routeId: "engine-" + assignmentRef.id,
+      traceId: request.traceId,
+      updatedAt: FieldValue.serverTimestamp(),
+      degradeReasons: result.degradeReasons ?? []
+    }, {merge: true});
+    await firestore.collection("drivers").doc(driverId).set({
+      status: "assigned",
+      currentAssignmentId: assignmentRef.id,
+      updatedAt: FieldValue.serverTimestamp()
+    }, {merge: true});
+    return true;
+  } catch (error) {
+    await firestore.collection("orders").doc(orderId).set({
+      dispatchBackendError: String(error),
+      updatedAt: FieldValue.serverTimestamp()
+    }, {merge: true});
+    return false;
+  }
+}
+
+function toRoutePoint(value: unknown): {latitude: number; longitude: number} {
+  if (value && typeof (value as {latitude?: unknown}).latitude === "number" && typeof (value as {longitude?: unknown}).longitude === "number") {
+    return {latitude: (value as {latitude: number}).latitude, longitude: (value as {longitude: number}).longitude};
+  }
+  if (value && typeof (value as {lat?: unknown}).lat === "number" && typeof (value as {lng?: unknown}).lng === "number") {
+    return {latitude: (value as {lat: number}).lat, longitude: (value as {lng: number}).lng};
+  }
+  return {latitude: 10.7741, longitude: 106.7038};
+}
 
 function distanceMeters(fromLat: number, fromLng: number, toLat: number, toLng: number): number {
   const earthRadiusMeters = 6371000;

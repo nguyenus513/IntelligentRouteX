@@ -42,6 +42,14 @@ public class DriverRepository {
                 .addOnFailureListener(callback::onError);
     }
 
+    public void advanceAssignment(String assignmentId, String nextStatus, RepositoryCallback<Map<String, Object>> callback) {
+        Map<String, Object> payload = assignmentPayload(assignmentId);
+        payload.put("nextStatus", nextStatus);
+        functionsClient.call("driverAdvanceAssignment", payload)
+                .addOnSuccessListener(callback::onSuccess)
+                .addOnFailureListener(callback::onError);
+    }
+
     private Map<String, Object> assignmentPayload(String assignmentId) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("assignmentId", assignmentId);
