@@ -141,6 +141,60 @@ def score_ml_intelligence() -> Dict[str, Any]:
     return layer("mlIntelligence", 0.0, ["ml-community-benchmark-missing", "rl4co-not-integrated"], {"mlValueProven": False})
 
 
+def score_baseline_competitiveness(rows: Sequence[Dict[str, Any]], max_quality_root: Path) -> Dict[str, Any]:
+    academic_rows = [row for row in rows if row.get("stage") in {"A-academic-correctness", "B-scale"}]
+    max_quality_path = max_quality_root / "academic_max_quality_results.json"
+    max_quality_rows = read_json(max_quality_path).get("results", []) if max_quality_path.exists() else []
+    rows_with_bks = [row for row in academic_rows if row.get("bestKnownVehicleCount") is not None or row.get("bestKnownDistance") is not None]
+    pass_rows = [row for row in academic_rows if row.get("verdict") == "PASS"]
+    close_max_quality = [row for row in max_quality_rows if int(row.get("vehicleGap", 999)) <= 1]
+    bks_coverage = len(rows_with_bks) / max(1, len(academic_rows))
+    pass_rate = len(pass_rows) / max(1, len(academic_rows))
+    close_rate = len(close_max_quality) / max(1, len(max_quality_rows))
+    score = clamp(bks_coverage * 0.25 + pass_rate * 0.35 + close_rate * 0.40)
+    blockers = []
+    if pass_rate < 0.75:
+        blockers.append("strong-baseline-gap")
+    if close_rate < 0.75:
+        blockers.append("max-quality-not-close-to-bks")
+    blockers.append("pyvrp-hgs-baseline-not-integrated")
+    return layer("baselineCompetitiveness", score, blockers, {"bksCoverage": bks_coverage, "academicPassRate": pass_rate, "maxQualityCloseRate": close_rate})
+
+
+def score_evidence_depth(rows: Sequence[Dict[str, Any]], route_beauty_root: Path) -> Dict[str, Any]:
+    suite_names = {str(row.get("suite")) for row in rows}
+    expected = {"solomon", "li-lim", "homberger-vrptw", "grubhub-mdrplib", "icaps-dpdp", "dpdp-stress"}
+    route_beauty = route_beauty_root / "route_beauty_results.json"
+    covered = len(expected & suite_names) + (1 if route_beauty.exists() else 0)
+    total = len(expected) + 1
+    score = covered / total
+    blockers = []
+    if "grubhub-mdrplib" not in suite_names:
+        blockers.append("mdrplib-missing")
+    if "icaps-dpdp" not in suite_names:
+        blockers.append("icaps-missing")
+    if not route_beauty.exists():
+        blockers.append("route-beauty-missing")
+    blockers.append("svrpbench-not-integrated")
+    return layer("evidenceDepth", score, blockers, {"coveredBenchmarkFamilies": covered, "expectedBenchmarkFamilies": total, "suiteNames": sorted(suite_names)})
+
+
+def score_route_beauty_readiness(route_beauty_root: Path) -> Dict[str, Any]:
+    path = route_beauty_root / "route_beauty_results.json"
+    if not path.exists():
+        return layer("routeBeautyReadiness", 0.0, ["route-beauty-missing"], {})
+    result = read_json(path)
+    evaluated = int(result.get("evaluatedPairs", 0))
+    single_region_score = 0.5 if result.get("benchmarkFamily") == "dimacs-road-ny" else 0.25
+    pair_score = clamp(evaluated / 50.0)
+    score = clamp(single_region_score + pair_score * 0.5)
+    blockers = []
+    if evaluated < 50:
+        blockers.append("route-beauty-pair-count-low")
+    blockers.append("route-beauty-single-region-only")
+    return layer("routeBeautyReadiness", score, blockers, {"evaluatedPairs": evaluated, "regions": [result.get("benchmarkFamily", "unknown")]})
+
+
 def score_runtime_quality(rows: Sequence[Dict[str, Any]], max_quality_root: Path) -> Dict[str, Any]:
     runtimes = [float(row.get("runtimeMs", 0.0)) for row in rows if "runtimeMs" in row]
     avg_runtime = sum(runtimes) / max(1, len(runtimes))
@@ -166,6 +220,36 @@ def score_system_reliability(certification: Dict[str, Any]) -> Dict[str, Any]:
     if gap:
         blockers.append("evidence-gap")
     return layer("systemReliability", score, blockers, counts)
+
+
+ACTION_BY_BLOCKER = {
+    "vehicle-count-gap": "Add stronger ALNS/ejection-chain route generation and rerun Homberger R/RC max-quality.",
+    "ml-community-benchmark-missing": "Integrate RL4CO or an equivalent public ML routing benchmark with no-ML ablation.",
+    "rl4co-not-integrated": "Add RL4CO adapter and report ML gap versus heuristic/PyVRP baselines.",
+    "pyvrp-hgs-baseline-not-integrated": "Run PyVRP/HGS baselines for Solomon/Homberger and compare vehicle/distance gaps.",
+    "svrpbench-not-integrated": "Add SVRPBench stochastic VRP cases for robustness under delay/traffic uncertainty.",
+    "food-baseline-only": "Upgrade MDRPLib from structural baseline to optimizer quality with bundle/delay/utilization comparisons.",
+    "driver-quality-baseline-only": "Add driver fairness, utilization distribution, and baseline comparison on MDRPLib.",
+    "dynamic-baseline-only": "Upgrade ICAPS from structural rolling-horizon checks to optimizer-vs-baseline dynamic quality.",
+    "route-beauty-single-region-only": "Add DIMACS BAY/COL/FLA or OSRM OSM extracts for multi-region route-beauty evidence.",
+    "route-beauty-pair-count-low": "Increase route-beauty pair count to at least 50 per region.",
+}
+
+
+def build_action_plan(blockers: Sequence[str]) -> List[Dict[str, str]]:
+    priority = [
+        "ml-community-benchmark-missing",
+        "rl4co-not-integrated",
+        "pyvrp-hgs-baseline-not-integrated",
+        "vehicle-count-gap",
+        "food-baseline-only",
+        "dynamic-baseline-only",
+        "svrpbench-not-integrated",
+        "route-beauty-single-region-only",
+        "route-beauty-pair-count-low",
+    ]
+    ordered = [blocker for blocker in priority if blocker in blockers] + [blocker for blocker in blockers if blocker not in priority]
+    return [{"blocker": blocker, "recommendedAction": ACTION_BY_BLOCKER.get(blocker, "Investigate and add a targeted benchmark or baseline.")} for blocker in ordered]
 
 
 def score_academic(max_quality_root: Path, rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
@@ -226,10 +310,14 @@ def build_elite_scorecard(certification_root: Path, max_quality_root: Path, rout
         score_order_to_delivery(rows),
         score_dynamic_dispatch(rows),
         score_ml_intelligence(),
+        score_baseline_competitiveness(rows, max_quality_root),
+        score_evidence_depth(rows, route_beauty_root),
+        score_route_beauty_readiness(route_beauty_root),
         score_runtime_quality(rows, max_quality_root),
         score_system_reliability(certification),
     ]
     overall = sum(float(item["score"]) for item in layers) / max(1, len(layers))
+    blockers = sorted({blocker for item in layers for blocker in item.get("blockers", [])})
     return {
         "schemaVersion": "elite-food-dispatch-intelligence/v1",
         "sourceCertification": str(certification_path),
@@ -237,7 +325,8 @@ def build_elite_scorecard(certification_root: Path, max_quality_root: Path, rout
         "sourceRouteBeauty": str(route_beauty_root / "route_beauty_results.json"),
         "finalVerdict": final_verdict(layers),
         "overallScore": overall,
-        "mainBlockers": sorted({blocker for item in layers for blocker in item.get("blockers", [])}),
+        "mainBlockers": blockers,
+        "actionPlan": build_action_plan(blockers),
         "layers": layers,
     }
 
@@ -258,6 +347,9 @@ def markdown(scorecard: Dict[str, Any]) -> str:
     lines.extend(["", "## Main Blockers", ""])
     for blocker in scorecard.get("mainBlockers", []):
         lines.append(f"- `{blocker}`")
+    lines.extend(["", "## Action Plan", ""])
+    for item in scorecard.get("actionPlan", []):
+        lines.append(f"- `{item['blocker']}`: {item['recommendedAction']}")
     return "\n".join(lines) + "\n"
 
 

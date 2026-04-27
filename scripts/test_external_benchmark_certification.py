@@ -220,6 +220,12 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertEqual("EVIDENCE_GAP", scorecard["finalVerdict"])
         self.assertEqual("systemReliability", scorecard["layers"][0]["layer"])
 
+    def test_elite_scorecard_builds_action_plan_from_blockers(self) -> None:
+        plan = elite.build_action_plan(["vehicle-count-gap", "rl4co-not-integrated"])
+
+        self.assertEqual("rl4co-not-integrated", plan[0]["blocker"])
+        self.assertIn("RL4CO", plan[0]["recommendedAction"])
+
 
 if __name__ == "__main__":
     unittest.main()
