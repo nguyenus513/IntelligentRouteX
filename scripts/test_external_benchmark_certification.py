@@ -29,6 +29,7 @@ runner = load_module("run_external_benchmark_certification", "run_external_bench
 max_quality = load_module("run_academic_max_quality", "run_academic_max_quality.py")
 route_beauty = load_module("run_route_beauty_benchmark", "run_route_beauty_benchmark.py")
 elite = load_module("run_elite_food_dispatch_benchmark", "run_elite_food_dispatch_benchmark.py")
+route_condition = load_module("run_route_condition_benchmark", "run_route_condition_benchmark.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -225,6 +226,11 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         self.assertEqual("rl4co-not-integrated", plan[0]["blocker"])
         self.assertIn("RL4CO", plan[0]["recommendedAction"])
+
+    def test_route_condition_edge_factor_increases_cost(self) -> None:
+        factor = route_condition.edge_factor(1, 2, route_condition.PROFILES["storm-peak"])
+
+        self.assertGreater(factor, 1.0)
 
 
 if __name__ == "__main__":
