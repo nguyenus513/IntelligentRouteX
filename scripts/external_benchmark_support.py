@@ -100,6 +100,8 @@ def ortools_baseline_solution(
     time_limit_ms: int,
     solver: str = "ortools-baseline",
     vehicle_fixed_cost: Optional[int] = None,
+    first_solution_strategy: str = "PARALLEL_CHEAPEST_INSERTION",
+    local_search_metaheuristic: str = "GUIDED_LOCAL_SEARCH",
 ) -> Dict[str, Any]:
     try:
         from ortools.constraint_solver import pywrapcp, routing_enums_pb2
@@ -174,8 +176,18 @@ def ortools_baseline_solution(
         routing.solver().Add(time_dimension.CumulVar(pickup_index) <= time_dimension.CumulVar(delivery_index))
 
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-    search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
-    search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+    first_strategy = getattr(
+        routing_enums_pb2.FirstSolutionStrategy,
+        first_solution_strategy,
+        routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION,
+    )
+    local_strategy = getattr(
+        routing_enums_pb2.LocalSearchMetaheuristic,
+        local_search_metaheuristic,
+        routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH,
+    )
+    search_parameters.first_solution_strategy = first_strategy
+    search_parameters.local_search_metaheuristic = local_strategy
     search_parameters.time_limit.FromMilliseconds(max(1, time_limit_ms))
     search_parameters.log_search = False
     assignment = routing.SolveWithParameters(search_parameters)
