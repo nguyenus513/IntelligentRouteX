@@ -187,6 +187,20 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
     def test_academic_max_quality_duration_parser_accepts_minutes(self) -> None:
         self.assertEqual(1_800_000, max_quality.parse_duration_ms("30m"))
 
+    def test_academic_max_quality_has_no_case_specific_branching(self) -> None:
+        source = Path("scripts/run_academic_max_quality.py").read_text(encoding="utf-8")
+
+        forbidden_patterns = [
+            "if instance_name ==",
+            "if instance ==",
+            ".startswith(\"R1_10_1\")",
+            ".startswith('R1_10_1')",
+            ".startswith(\"RC1_10_1\")",
+            ".startswith('RC1_10_1')",
+        ]
+        for pattern in forbidden_patterns:
+            self.assertNotIn(pattern, source)
+
 
 if __name__ == "__main__":
     unittest.main()

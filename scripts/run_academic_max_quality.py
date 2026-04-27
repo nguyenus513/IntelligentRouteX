@@ -137,6 +137,110 @@ def collect_route_pool(instance: Dict[str, Any], candidates: Sequence[Dict[str, 
     return list(pool_by_key.values())
 
 
+def route_pool_source_counts(route_pool: Sequence[Dict[str, Any]]) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for route in route_pool:
+        source = str(route.get("sourceRun", "unknown"))
+        family = source.split("+")[0] if "+" in source else source
+        counts[family] = counts.get(family, 0) + 1
+    return counts
+
+
+def append_route_to_pool(instance: Dict[str, Any], route_pool: List[Dict[str, Any]], route: List[str], source: str) -> bool:
+    depot = str(instance.get("depotNodeId", "0"))
+    route = [str(stop) for stop in route]
+    customers = tuple(stop for stop in route if stop != depot)
+    if not customers or not route_feasible(instance, route):
+        return False
+    key = tuple(route)
+    if any(tuple(existing["sequence"]) == key for existing in route_pool):
+        return False
+    route_pool.append({
+        "routeId": f"route-{len(route_pool) + 1}",
+        "customerSet": sorted(customers, key=lambda value: int(value) if value.isdigit() else value),
+        "sequence": route,
+        "distance": route_distance(instance, route),
+        "vehicleCount": 1,
+        "capacityFeasible": True,
+        "timeWindowFeasible": True,
+        "sourceRun": source,
+        "sourceRouteIndex": -1,
+    })
+    return True
+
+
+def best_insert_position(instance: Dict[str, Any], route: List[str], customer: str) -> tuple[float, List[str]] | None:
+    best: tuple[float, List[str]] | None = None
+    base_distance = route_distance(instance, route)
+    for position in range(1, len(route)):
+        candidate = route[:position] + [customer] + route[position:]
+        if not route_feasible(instance, candidate):
+            continue
+        delta = route_distance(instance, candidate) - base_distance
+        if best is None or delta < best[0]:
+            best = (delta, candidate)
+    return best
+
+
+def regret_ordered_insertions(instance: Dict[str, Any], routes: List[List[str]], customers: List[str]) -> tuple[List[List[str]], bool]:
+    remaining = [str(customer) for customer in customers]
+    candidate_routes = [route[:] for route in routes]
+    while remaining:
+        ranked: List[tuple[float, float, str, int, List[str]]] = []
+        for customer in remaining:
+            insertions: List[tuple[float, int, List[str]]] = []
+            for route_index, route in enumerate(candidate_routes):
+                inserted = best_insert_position(instance, route, customer)
+                if inserted is not None:
+                    insertions.append((inserted[0], route_index, inserted[1]))
+            if not insertions:
+                return candidate_routes, False
+            insertions.sort(key=lambda item: item[0])
+            regret = insertions[1][0] - insertions[0][0] if len(insertions) > 1 else 1_000_000.0
+            ranked.append((-regret, insertions[0][0], customer, insertions[0][1], insertions[0][2]))
+        ranked.sort(key=lambda item: (item[0], item[1]))
+        _, _, selected_customer, selected_route_index, selected_route = ranked[0]
+        candidate_routes[selected_route_index] = selected_route
+        remaining.remove(selected_customer)
+    return candidate_routes, True
+
+
+def generate_route_elimination_candidates(
+    instance: Dict[str, Any],
+    seed_solution: Dict[str, Any],
+    route_pool: List[Dict[str, Any]],
+    max_attempts: int,
+) -> Dict[str, int]:
+    routes = [[str(stop) for stop in route] for route in seed_solution.get("routes", []) if len(route) > 2]
+    depot = str(instance.get("depotNodeId", "0"))
+    attempts = 0
+    successes = 0
+    generated_routes = 0
+    priorities = sorted(
+        range(len(routes)),
+        key=lambda index: (
+            len([stop for stop in routes[index] if stop != depot]),
+            route_distance(instance, routes[index]) / max(1, len(routes[index]) - 2),
+        ),
+    )
+    for route_index in priorities[:max_attempts]:
+        removed_customers = [stop for stop in routes[route_index] if stop != depot]
+        remaining_routes = [route[:] for index, route in enumerate(routes) if index != route_index]
+        attempts += 1
+        repaired_routes, feasible = regret_ordered_insertions(instance, remaining_routes, removed_customers)
+        if not feasible:
+            continue
+        candidate_solution = {"schemaVersion": "external-benchmark-solution/v1", "solver": "route-elimination-v3", "routes": repaired_routes}
+        checked = check_solution(instance, candidate_solution)
+        if not checked.get("feasible") or int(checked.get("vehicleCount", len(routes))) >= len(routes):
+            continue
+        successes += 1
+        for repaired in repaired_routes:
+            if append_route_to_pool(instance, route_pool, repaired, "route-elimination-v3"):
+                generated_routes += 1
+    return {"routeEliminationAttempts": attempts, "routeEliminationSuccesses": successes, "routeEliminationGeneratedRoutes": generated_routes}
+
+
 def set_partitioning_solution(instance: Dict[str, Any], route_pool: Sequence[Dict[str, Any]], time_limit_ms: int) -> Dict[str, Any] | None:
     try:
         from ortools.sat.python import cp_model
@@ -215,6 +319,15 @@ def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_
             "objectiveGapPercent": evaluated["objectiveGapPercent"],
         })
     route_pool = collect_route_pool(instance, candidates)
+    best_seed = min(candidates, key=lambda item: solution_key(item)) if candidates else None
+    operator_counts = {"routeEliminationAttempts": 0, "routeEliminationSuccesses": 0, "routeEliminationGeneratedRoutes": 0}
+    if best_seed is not None:
+        operator_counts = generate_route_elimination_candidates(
+            instance,
+            best_seed["solution"],
+            route_pool,
+            max_attempts=max(10, min(80, len(best_seed["solution"].get("routes", [])) // 2)),
+        )
     set_partitioning_runtime_ms = 0
     set_partitioning_solution_candidate = None
     if route_pool:
@@ -266,9 +379,19 @@ def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_
         "routePoolSize": len(route_pool),
         "validRoutePoolSize": len(route_pool),
         "setPartitioningSelectedRoutes": final_vehicle_count if best["label"] == "set-partitioning-route-pool" else None,
-        "localSearchOperatorsUsed": ["or-tools-multi-start", "cp-sat-set-partitioning"],
-        "routeEliminationAttempts": 0,
-        "routeEliminationSuccesses": 0,
+        "routePoolSourceCounts": route_pool_source_counts(route_pool),
+        "operatorSuccessCounts": {
+            "route-elimination-v3": operator_counts["routeEliminationSuccesses"],
+            "cp-sat-set-partitioning": 1 if set_partitioning_solution_candidate is not None else 0,
+        },
+        "objectiveMode": "vehicle-first-lexicographic",
+        "solverSawBestKnown": False,
+        "localSearchOperatorsUsed": ["or-tools-multi-start", "route-elimination-v3", "regret-insertion", "cp-sat-set-partitioning"],
+        "routeEliminationAttempts": operator_counts["routeEliminationAttempts"],
+        "routeEliminationSuccesses": operator_counts["routeEliminationSuccesses"],
+        "routeEliminationGeneratedRoutes": operator_counts["routeEliminationGeneratedRoutes"],
+        "ejectionChainAttempts": 0,
+        "ejectionChainSuccesses": 0,
         "orToolsRuns": len(runs),
         "perRunTimeLimitMs": per_run_ms,
         "runtimeMs": runtime_ms,
