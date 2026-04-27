@@ -32,6 +32,7 @@ elite = load_module("run_elite_food_dispatch_benchmark", "run_elite_food_dispatc
 route_condition = load_module("run_route_condition_benchmark", "run_route_condition_benchmark.py")
 traffic_route = load_module("run_community_traffic_route_benchmark", "run_community_traffic_route_benchmark.py")
 weather_route = load_module("run_community_weather_route_benchmark", "run_community_weather_route_benchmark.py")
+gap_plan = load_module("build_elite_gap_closure_plan", "build_elite_gap_closure_plan.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -255,6 +256,23 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         factor = weather_route.edge_weather_factor(1, 2, event)
 
         self.assertGreater(factor, 1.0)
+
+    def test_elite_gap_closure_plan_prioritizes_academic_quality(self) -> None:
+        scorecard = {
+            "finalVerdict": "PASS_WITH_LIMITS",
+            "overallScore": 0.85,
+            "mainBlockers": ["ml-value-not-proven", "vehicle-count-gap", "route-beauty-limits"],
+            "layers": [
+                {"layer": "academicRoutingQuality", "blockers": ["vehicle-count-gap"]},
+                {"layer": "mlIntelligence", "blockers": ["ml-value-not-proven"]},
+                {"layer": "roadRouteBeauty", "blockers": ["route-beauty-limits"]},
+            ],
+        }
+
+        plan = gap_plan.build_plan(scorecard)
+
+        self.assertEqual("academic-max-quality-v5", plan["nextRail"])
+        self.assertEqual([], plan["uncoveredBlockers"])
 
 
 if __name__ == "__main__":
