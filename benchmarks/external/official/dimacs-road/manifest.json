@@ -1,0 +1,19 @@
+{
+  "benchmarkFamily": "dimacs-road",
+  "files": [
+    {
+      "bytes": 3667907,
+      "filename": "USA-road-d.NY.gr.gz",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\dimacs-road\\USA-road-d.NY.gr.gz",
+      "url": "https://www.diag.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.NY.gr.gz"
+    },
+    {
+      "bytes": 2058598,
+      "filename": "USA-road-d.NY.co.gz",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\dimacs-road\\USA-road-d.NY.co.gz",
+      "url": "https://www.diag.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.NY.co.gz"
+    }
+  ],
+  "licenseNote": "Public DIMACS 9th Implementation Challenge road-network benchmark files; keep provenance with downloaded artifacts.",
+  "schemaVersion": "route-beauty-benchmark-data/v1"
+}

@@ -27,6 +27,7 @@ adapter = load_module("external_benchmark_dispatch_adapter", "external_benchmark
 consolidation = load_module("academic_global_consolidation", "academic_global_consolidation.py")
 runner = load_module("run_external_benchmark_certification", "run_external_benchmark_certification.py")
 max_quality = load_module("run_academic_max_quality", "run_academic_max_quality.py")
+route_beauty = load_module("run_route_beauty_benchmark", "run_route_beauty_benchmark.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -200,6 +201,15 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         ]
         for pattern in forbidden_patterns:
             self.assertNotIn(pattern, source)
+
+    def test_route_beauty_metrics_detect_straight_route(self) -> None:
+        coordinates = {1: (0.0, 0.0), 2: (1.0, 0.0), 3: (2.0, 0.0)}
+
+        metrics = route_beauty.route_shape_metrics([1, 2, 3], coordinates, 2.0)
+
+        self.assertTrue(metrics["routePolylinePresent"])
+        self.assertEqual(0, metrics["turnCount"])
+        self.assertAlmostEqual(1.0, metrics["straightnessScore"])
 
 
 if __name__ == "__main__":
