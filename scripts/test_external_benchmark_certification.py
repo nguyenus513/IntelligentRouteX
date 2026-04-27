@@ -33,6 +33,7 @@ route_condition = load_module("run_route_condition_benchmark", "run_route_condit
 traffic_route = load_module("run_community_traffic_route_benchmark", "run_community_traffic_route_benchmark.py")
 weather_route = load_module("run_community_weather_route_benchmark", "run_community_weather_route_benchmark.py")
 gap_plan = load_module("build_elite_gap_closure_plan", "build_elite_gap_closure_plan.py")
+closure_loop = load_module("run_elite_closure_loop", "run_elite_closure_loop.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -284,6 +285,13 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         self.assertEqual("academic-max-quality-v5", plan["nextRail"])
         self.assertEqual([], plan["uncoveredBlockers"])
+
+    def test_elite_closure_loop_defines_eight_phases(self) -> None:
+        loop_phases = closure_loop.phases("smoke", Path("artifacts/benchmark/test-loop"))
+
+        self.assertEqual(8, len(loop_phases))
+        self.assertEqual("academic-max-quality-v5", loop_phases[0].phase)
+        self.assertEqual("elite-scorecard-and-gap-plan", loop_phases[-1].phase)
 
 
 if __name__ == "__main__":
