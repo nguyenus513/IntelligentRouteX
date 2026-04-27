@@ -4,36 +4,30 @@
       "dataset": "metr-la",
       "displayName": "METR-LA",
       "expectedFiles": [
-        "METR-LA.npz",
-        "adj_mx.pkl"
+        "METR-LA.csv",
+        "adj_mx_METR-LA.pkl"
       ],
-      "manualNote": "Place METR-LA.npz and adj_mx.pkl in this directory if automatic download is unavailable.",
-      "missingFiles": [
-        "METR-LA.npz",
-        "adj_mx.pkl"
-      ],
+      "manualNote": "Place METR-LA.csv and adj_mx_METR-LA.pkl in this directory if automatic download is unavailable.",
+      "missingFiles": [],
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\traffic\\metr-la",
-      "ready": false,
-      "source": "DCRNN/METR-LA community traffic forecasting benchmark"
+      "ready": true,
+      "source": "Zenodo traffic speed benchmark mirror of METR-LA"
     },
     {
       "dataset": "pems-bay",
       "displayName": "PeMS-BAY",
       "expectedFiles": [
-        "PEMS-BAY.npz",
-        "adj_mx_bay.pkl"
+        "PEMS-BAY.csv",
+        "adj_mx_PEMS-BAY.pkl"
       ],
-      "manualNote": "Place PEMS-BAY.npz and adj_mx_bay.pkl in this directory if automatic download is unavailable.",
-      "missingFiles": [
-        "PEMS-BAY.npz",
-        "adj_mx_bay.pkl"
-      ],
+      "manualNote": "Place PEMS-BAY.csv and adj_mx_PEMS-BAY.pkl in this directory if automatic download is unavailable.",
+      "missingFiles": [],
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\traffic\\pems-bay",
-      "ready": false,
-      "source": "DCRNN/PeMS-BAY community traffic forecasting benchmark"
+      "ready": true,
+      "source": "Zenodo traffic speed benchmark mirror of PeMS-BAY"
     }
   ],
-  "finalVerdict": "EVIDENCE_GAP",
-  "readyDatasetCount": 0,
+  "finalVerdict": "PASS",
+  "readyDatasetCount": 2,
   "schemaVersion": "community-traffic-data/v1"
 }

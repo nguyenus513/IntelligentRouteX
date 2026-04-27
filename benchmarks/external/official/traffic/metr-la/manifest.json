@@ -2,15 +2,12 @@
   "dataset": "metr-la",
   "displayName": "METR-LA",
   "expectedFiles": [
-    "METR-LA.npz",
-    "adj_mx.pkl"
+    "METR-LA.csv",
+    "adj_mx_METR-LA.pkl"
   ],
-  "manualNote": "Place METR-LA.npz and adj_mx.pkl in this directory if automatic download is unavailable.",
-  "missingFiles": [
-    "METR-LA.npz",
-    "adj_mx.pkl"
-  ],
+  "manualNote": "Place METR-LA.csv and adj_mx_METR-LA.pkl in this directory if automatic download is unavailable.",
+  "missingFiles": [],
   "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\traffic\\metr-la",
-  "ready": false,
-  "source": "DCRNN/METR-LA community traffic forecasting benchmark"
+  "ready": true,
+  "source": "Zenodo traffic speed benchmark mirror of METR-LA"
 }

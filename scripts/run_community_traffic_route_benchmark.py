@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import pickle
@@ -21,8 +22,16 @@ def write_json(path: Path, payload: Dict[str, Any]) -> None:
 def dataset_paths(data_root: Path, dataset: str) -> tuple[Path, Path]:
     root = data_root / dataset
     if dataset == "metr-la":
+        csv_path = root / "METR-LA.csv"
+        csv_adj = root / "adj_mx_METR-LA.pkl"
+        if csv_path.exists() or csv_adj.exists():
+            return csv_path, csv_adj
         return root / "METR-LA.npz", root / "adj_mx.pkl"
     if dataset == "pems-bay":
+        csv_path = root / "PEMS-BAY.csv"
+        csv_adj = root / "adj_mx_PEMS-BAY.pkl"
+        if csv_path.exists() or csv_adj.exists():
+            return csv_path, csv_adj
         return root / "PEMS-BAY.npz", root / "adj_mx_bay.pkl"
     raise ValueError(f"Unsupported traffic dataset: {dataset}")
 
@@ -32,6 +41,17 @@ def load_speed_matrix(path: Path) -> Any:
         import numpy as np
     except Exception as exc:  # pragma: no cover
         raise RuntimeError(f"numpy unavailable: {exc}") from exc
+    if path.suffix.lower() == ".csv":
+        rows = []
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.reader(handle)
+            header = next(reader, None)
+            for row in reader:
+                if not row:
+                    continue
+                values = row[1:] if header and not header[0].replace(".", "", 1).isdigit() else row
+                rows.append([float(value) for value in values])
+        return np.asarray(rows, dtype=float)
     payload = np.load(path)
     if "data" in payload:
         data = payload["data"]
@@ -45,7 +65,7 @@ def load_speed_matrix(path: Path) -> Any:
 def load_adjacency(path: Path) -> tuple[list[str], Any]:
     with path.open("rb") as handle:
         payload = pickle.load(handle, encoding="latin1")
-    if isinstance(payload, tuple) and len(payload) >= 3:
+    if isinstance(payload, (list, tuple)) and len(payload) >= 3:
         sensor_ids, _, adjacency = payload[:3]
         return [str(item) for item in sensor_ids], adjacency
     if isinstance(payload, dict):
