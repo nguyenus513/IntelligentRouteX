@@ -182,27 +182,80 @@ def best_insert_position(instance: Dict[str, Any], route: List[str], customer: s
     return best
 
 
-def regret_ordered_insertions(instance: Dict[str, Any], routes: List[List[str]], customers: List[str]) -> tuple[List[List[str]], bool]:
+def ejection_insert_position(
+    instance: Dict[str, Any],
+    target_route: List[str],
+    customer: str,
+    other_routes: List[List[str]],
+    max_eject_candidates: int = 2,
+) -> tuple[float, List[str], List[List[str]]] | None:
+    best: tuple[float, List[str], List[List[str]]] | None = None
+    base_distance = route_distance(instance, target_route) + sum(route_distance(instance, route) for route in other_routes)
+    for position in range(1, len(target_route)):
+        inserted_route = target_route[:position] + [customer] + target_route[position:]
+        if route_feasible(instance, inserted_route):
+            delta = route_distance(instance, inserted_route) + sum(route_distance(instance, route) for route in other_routes) - base_distance
+            if best is None or delta < best[0]:
+                best = (delta, inserted_route, [route[:] for route in other_routes])
+            continue
+        ejection_candidates = [stop for stop in inserted_route[1:-1] if stop != customer][:max_eject_candidates]
+        for ejected in ejection_candidates:
+            repaired_target = [stop for stop in inserted_route if stop != ejected]
+            if not route_feasible(instance, repaired_target):
+                continue
+            for other_index, other_route in enumerate(other_routes):
+                ejected_insert = best_insert_position(instance, other_route, ejected)
+                if ejected_insert is None:
+                    continue
+                repaired_others = [route[:] for route in other_routes]
+                repaired_others[other_index] = ejected_insert[1]
+                delta = route_distance(instance, repaired_target) + sum(route_distance(instance, route) for route in repaired_others) - base_distance
+                if best is None or delta < best[0]:
+                    best = (delta, repaired_target, repaired_others)
+    return best
+
+
+def regret_ordered_insertions(
+    instance: Dict[str, Any],
+    routes: List[List[str]],
+    customers: List[str],
+    allow_ejection: bool = False,
+) -> tuple[List[List[str]], bool, int]:
     remaining = [str(customer) for customer in customers]
     candidate_routes = [route[:] for route in routes]
+    ejection_successes = 0
     while remaining:
-        ranked: List[tuple[float, float, str, int, List[str]]] = []
+        ranked: List[tuple[float, float, str, int, List[str], List[List[str]] | None]] = []
         for customer in remaining:
-            insertions: List[tuple[float, int, List[str]]] = []
+            insertions: List[tuple[float, int, List[str], List[List[str]] | None]] = []
             for route_index, route in enumerate(candidate_routes):
                 inserted = best_insert_position(instance, route, customer)
                 if inserted is not None:
-                    insertions.append((inserted[0], route_index, inserted[1]))
+                    insertions.append((inserted[0], route_index, inserted[1], None))
+                    continue
+                if allow_ejection:
+                    other_routes = [other[:] for other_index, other in enumerate(candidate_routes) if other_index != route_index]
+                    ejected = ejection_insert_position(instance, route, customer, other_routes)
+                    if ejected is not None:
+                        insertions.append((ejected[0], route_index, ejected[1], ejected[2]))
             if not insertions:
-                return candidate_routes, False
+                return candidate_routes, False, ejection_successes
             insertions.sort(key=lambda item: item[0])
             regret = insertions[1][0] - insertions[0][0] if len(insertions) > 1 else 1_000_000.0
-            ranked.append((-regret, insertions[0][0], customer, insertions[0][1], insertions[0][2]))
+            ranked.append((-regret, insertions[0][0], customer, insertions[0][1], insertions[0][2], insertions[0][3]))
         ranked.sort(key=lambda item: (item[0], item[1]))
-        _, _, selected_customer, selected_route_index, selected_route = ranked[0]
-        candidate_routes[selected_route_index] = selected_route
+        _, _, selected_customer, selected_route_index, selected_route, repaired_others = ranked[0]
+        if repaired_others is None:
+            candidate_routes[selected_route_index] = selected_route
+        else:
+            rebuilt: List[List[str]] = []
+            other_iterator = iter(repaired_others)
+            for route_index in range(len(candidate_routes)):
+                rebuilt.append(selected_route if route_index == selected_route_index else next(other_iterator))
+            candidate_routes = rebuilt
+            ejection_successes += 1
         remaining.remove(selected_customer)
-    return candidate_routes, True
+    return candidate_routes, True, ejection_successes
 
 
 def generate_route_elimination_candidates(
@@ -216,6 +269,8 @@ def generate_route_elimination_candidates(
     attempts = 0
     successes = 0
     generated_routes = 0
+    ejection_chain_attempts = 0
+    ejection_chain_successes = 0
     priorities = sorted(
         range(len(routes)),
         key=lambda index: (
@@ -227,7 +282,10 @@ def generate_route_elimination_candidates(
         removed_customers = [stop for stop in routes[route_index] if stop != depot]
         remaining_routes = [route[:] for index, route in enumerate(routes) if index != route_index]
         attempts += 1
-        repaired_routes, feasible = regret_ordered_insertions(instance, remaining_routes, removed_customers)
+        repaired_routes, feasible, ejection_successes = regret_ordered_insertions(instance, remaining_routes, removed_customers)
+        if not feasible:
+            ejection_chain_attempts += 1
+            repaired_routes, feasible, ejection_successes = regret_ordered_insertions(instance, remaining_routes, removed_customers, allow_ejection=True)
         if not feasible:
             continue
         candidate_solution = {"schemaVersion": "external-benchmark-solution/v1", "solver": "route-elimination-v3", "routes": repaired_routes}
@@ -235,10 +293,60 @@ def generate_route_elimination_candidates(
         if not checked.get("feasible") or int(checked.get("vehicleCount", len(routes))) >= len(routes):
             continue
         successes += 1
+        ejection_chain_successes += 1 if ejection_successes else 0
         for repaired in repaired_routes:
             if append_route_to_pool(instance, route_pool, repaired, "route-elimination-v3"):
                 generated_routes += 1
-    return {"routeEliminationAttempts": attempts, "routeEliminationSuccesses": successes, "routeEliminationGeneratedRoutes": generated_routes}
+    return {
+        "routeEliminationAttempts": attempts,
+        "routeEliminationSuccesses": successes,
+        "routeEliminationGeneratedRoutes": generated_routes,
+        "ejectionChainAttempts": ejection_chain_attempts,
+        "ejectionChainSuccesses": ejection_chain_successes,
+    }
+
+
+def generate_cross_exchange_candidates(
+    instance: Dict[str, Any],
+    seed_solution: Dict[str, Any],
+    route_pool: List[Dict[str, Any]],
+    max_route_pairs: int,
+    max_segment_size: int,
+) -> Dict[str, int]:
+    routes = [[str(stop) for stop in route] for route in seed_solution.get("routes", []) if len(route) > 3]
+    attempts = 0
+    successes = 0
+    generated = 0
+    for left_index in range(len(routes)):
+        if attempts >= max_route_pairs:
+            break
+        for right_index in range(left_index + 1, len(routes)):
+            if attempts >= max_route_pairs:
+                break
+            left = routes[left_index]
+            right = routes[right_index]
+            attempts += 1
+            accepted_pair = False
+            for left_size in range(1, min(max_segment_size, len(left) - 2) + 1):
+                if accepted_pair:
+                    break
+                for right_size in range(1, min(max_segment_size, len(right) - 2) + 1):
+                    left_start = max(1, (len(left) - left_size) // 2)
+                    right_start = max(1, (len(right) - right_size) // 2)
+                    left_segment = left[left_start:left_start + left_size]
+                    right_segment = right[right_start:right_start + right_size]
+                    new_left = left[:left_start] + right_segment + left[left_start + left_size:]
+                    new_right = right[:right_start] + left_segment + right[right_start + right_size:]
+                    if not route_feasible(instance, new_left) or not route_feasible(instance, new_right):
+                        continue
+                    added_left = append_route_to_pool(instance, route_pool, new_left, "cross-exchange-v1")
+                    added_right = append_route_to_pool(instance, route_pool, new_right, "cross-exchange-v1")
+                    if added_left or added_right:
+                        successes += 1
+                        generated += int(added_left) + int(added_right)
+                        accepted_pair = True
+                        break
+    return {"crossExchangeAttempts": attempts, "crossExchangeSuccesses": successes, "crossExchangeGeneratedRoutes": generated}
 
 
 def set_partitioning_solution(instance: Dict[str, Any], route_pool: Sequence[Dict[str, Any]], time_limit_ms: int) -> Dict[str, Any] | None:
@@ -320,14 +428,30 @@ def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_
         })
     route_pool = collect_route_pool(instance, candidates)
     best_seed = min(candidates, key=lambda item: solution_key(item)) if candidates else None
-    operator_counts = {"routeEliminationAttempts": 0, "routeEliminationSuccesses": 0, "routeEliminationGeneratedRoutes": 0}
+    operator_counts = {
+        "routeEliminationAttempts": 0,
+        "routeEliminationSuccesses": 0,
+        "routeEliminationGeneratedRoutes": 0,
+        "ejectionChainAttempts": 0,
+        "ejectionChainSuccesses": 0,
+        "crossExchangeAttempts": 0,
+        "crossExchangeSuccesses": 0,
+        "crossExchangeGeneratedRoutes": 0,
+    }
     if best_seed is not None:
-        operator_counts = generate_route_elimination_candidates(
+        operator_counts.update(generate_route_elimination_candidates(
             instance,
             best_seed["solution"],
             route_pool,
-            max_attempts=max(10, min(80, len(best_seed["solution"].get("routes", [])) // 2)),
-        )
+            max_attempts=max(1, min(3, len(best_seed["solution"].get("routes", [])) // 25)),
+        ))
+        operator_counts.update(generate_cross_exchange_candidates(
+            instance,
+            best_seed["solution"],
+            route_pool,
+            max_route_pairs=max(5, min(10, len(best_seed["solution"].get("routes", [])) // 10)),
+            max_segment_size=2,
+        ))
     set_partitioning_runtime_ms = 0
     set_partitioning_solution_candidate = None
     if route_pool:
@@ -383,15 +507,20 @@ def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_
         "operatorSuccessCounts": {
             "route-elimination-v3": operator_counts["routeEliminationSuccesses"],
             "cp-sat-set-partitioning": 1 if set_partitioning_solution_candidate is not None else 0,
+            "ejection-chain-v1": operator_counts["ejectionChainSuccesses"],
+            "cross-exchange-v1": operator_counts["crossExchangeSuccesses"],
         },
         "objectiveMode": "vehicle-first-lexicographic",
         "solverSawBestKnown": False,
-        "localSearchOperatorsUsed": ["or-tools-multi-start", "route-elimination-v3", "regret-insertion", "cp-sat-set-partitioning"],
+        "localSearchOperatorsUsed": ["or-tools-multi-start", "route-elimination-v3", "regret-insertion", "ejection-chain-v1", "cross-exchange-v1", "cp-sat-set-partitioning"],
         "routeEliminationAttempts": operator_counts["routeEliminationAttempts"],
         "routeEliminationSuccesses": operator_counts["routeEliminationSuccesses"],
         "routeEliminationGeneratedRoutes": operator_counts["routeEliminationGeneratedRoutes"],
-        "ejectionChainAttempts": 0,
-        "ejectionChainSuccesses": 0,
+        "ejectionChainAttempts": operator_counts["ejectionChainAttempts"],
+        "ejectionChainSuccesses": operator_counts["ejectionChainSuccesses"],
+        "crossExchangeAttempts": operator_counts["crossExchangeAttempts"],
+        "crossExchangeSuccesses": operator_counts["crossExchangeSuccesses"],
+        "crossExchangeGeneratedRoutes": operator_counts["crossExchangeGeneratedRoutes"],
         "orToolsRuns": len(runs),
         "perRunTimeLimitMs": per_run_ms,
         "runtimeMs": runtime_ms,
