@@ -28,6 +28,7 @@ consolidation = load_module("academic_global_consolidation", "academic_global_co
 runner = load_module("run_external_benchmark_certification", "run_external_benchmark_certification.py")
 max_quality = load_module("run_academic_max_quality", "run_academic_max_quality.py")
 route_beauty = load_module("run_route_beauty_benchmark", "run_route_beauty_benchmark.py")
+elite = load_module("run_elite_food_dispatch_benchmark", "run_elite_food_dispatch_benchmark.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -210,6 +211,14 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertTrue(metrics["routePolylinePresent"])
         self.assertEqual(0, metrics["turnCount"])
         self.assertAlmostEqual(1.0, metrics["straightnessScore"])
+
+    def test_elite_scorecard_reports_missing_certification_as_evidence_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            scorecard = elite.build_elite_scorecard(root / "missing", root / "missing-max", root / "missing-road")
+
+        self.assertEqual("EVIDENCE_GAP", scorecard["finalVerdict"])
+        self.assertEqual("systemReliability", scorecard["layers"][0]["layer"])
 
 
 if __name__ == "__main__":
