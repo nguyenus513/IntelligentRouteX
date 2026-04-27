@@ -34,6 +34,7 @@ traffic_route = load_module("run_community_traffic_route_benchmark", "run_commun
 weather_route = load_module("run_community_weather_route_benchmark", "run_community_weather_route_benchmark.py")
 gap_plan = load_module("build_elite_gap_closure_plan", "build_elite_gap_closure_plan.py")
 closure_loop = load_module("run_elite_closure_loop", "run_elite_closure_loop.py")
+food_quality = load_module("run_food_dispatch_quality_benchmark", "run_food_dispatch_quality_benchmark.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -292,6 +293,39 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertEqual(8, len(loop_phases))
         self.assertEqual("academic-max-quality-v5", loop_phases[0].phase)
         self.assertEqual("elite-scorecard-and-gap-plan", loop_phases[-1].phase)
+
+    def test_food_quality_layer_replaces_proxy_blockers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            payload = {
+                "layers": [
+                    {"layer": "anchorQuality", "score": 0.95, "verdict": "PASS", "blockers": [], "metrics": {"avgPickupWaitTime": 1.0}}
+                ]
+            }
+            food_path = root / "food" / "food_dispatch_quality_results.json"
+            food_path.parent.mkdir(parents=True)
+            food_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            layer = elite.score_anchor_quality([], root / "food")
+
+        self.assertEqual("anchorQuality", layer["layer"])
+        self.assertEqual([], layer["blockers"])
+
+    def test_food_quality_scores_mdrp_rows(self) -> None:
+        rows = [{
+            "servedOrderCount": 10,
+            "orderCount": 10,
+            "lateOrderRate": 0.0,
+            "p95Delay": 5.0,
+            "p95FoodOnVehicleTime": 6.0,
+            "pickupBeforeReadyTimeViolation": 0,
+            "courierShiftViolation": 0,
+            "foodOnVehicleHardViolation": 0,
+        }]
+
+        layer = food_quality.score_food(rows)
+
+        self.assertEqual("PASS", layer["verdict"])
 
 
 if __name__ == "__main__":

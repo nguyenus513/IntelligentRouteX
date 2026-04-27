@@ -16,6 +16,7 @@ DEFAULT_TRAFFIC_ROUTE_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "community-
 DEFAULT_WEATHER_ROUTE_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "community-weather-route"
 DEFAULT_PYVRP_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "pyvrp-baseline"
 DEFAULT_ML_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "ml-intelligence-community"
+DEFAULT_FOOD_QUALITY_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "food-dispatch-quality"
 
 
 def read_json(path: Path) -> Dict[str, Any]:
@@ -43,7 +44,21 @@ def verdict_from_score(score: float, blockers: Sequence[str]) -> str:
     return "PASS_WITH_LIMITS"
 
 
-def score_bundle_quality(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+def quality_layer(food_quality_root: Path, layer_name: str) -> Dict[str, Any] | None:
+    path = food_quality_root / "food_dispatch_quality_results.json"
+    if not path.exists():
+        return None
+    result = read_json(path)
+    for item in result.get("layers", []):
+        if item.get("layer") == layer_name:
+            return dict(item)
+    return None
+
+
+def score_bundle_quality(rows: Sequence[Dict[str, Any]], food_quality_root: Path = DEFAULT_FOOD_QUALITY_ROOT) -> Dict[str, Any]:
+    quality = quality_layer(food_quality_root, "bundleQuality")
+    if quality is not None:
+        return quality
     mdrp_rows = [row for row in rows if row.get("suite") == "grubhub-mdrplib"]
     if not mdrp_rows:
         return layer("bundleQuality", 0.0, ["mdrplib-missing"], {})
@@ -59,7 +74,10 @@ def score_bundle_quality(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     return layer("bundleQuality", score, blockers, {"servedOrderRate": served_rate, "lateOrderRate": late_rate, "hardViolationCount": hard})
 
 
-def score_driver_assignment(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+def score_driver_assignment(rows: Sequence[Dict[str, Any]], food_quality_root: Path = DEFAULT_FOOD_QUALITY_ROOT) -> Dict[str, Any]:
+    quality = quality_layer(food_quality_root, "driverAssignmentQuality")
+    if quality is not None:
+        return quality
     mdrp_rows = [row for row in rows if row.get("suite") == "grubhub-mdrplib"]
     if not mdrp_rows:
         return layer("driverAssignmentQuality", 0.0, ["mdrplib-missing"], {})
@@ -71,7 +89,10 @@ def score_driver_assignment(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     return layer("driverAssignmentQuality", score, blockers, {"courierUtilization": utilization, "courierShiftViolation": shift_violations})
 
 
-def score_anchor_quality(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+def score_anchor_quality(rows: Sequence[Dict[str, Any]], food_quality_root: Path = DEFAULT_FOOD_QUALITY_ROOT) -> Dict[str, Any]:
+    quality = quality_layer(food_quality_root, "anchorQuality")
+    if quality is not None:
+        return quality
     mdrp_rows = [row for row in rows if row.get("suite") == "grubhub-mdrplib"]
     if not mdrp_rows:
         return layer("anchorQuality", 0.0, ["mdrplib-missing"], {})
@@ -83,7 +104,10 @@ def score_anchor_quality(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     return layer("anchorQuality", score, blockers, {"pickupBeforeReadyViolation": pickup_violations, "avgDelay": avg_delay})
 
 
-def score_sequence_quality(rows: Sequence[Dict[str, Any]], layer_name: str) -> Dict[str, Any]:
+def score_sequence_quality(rows: Sequence[Dict[str, Any]], layer_name: str, food_quality_root: Path = DEFAULT_FOOD_QUALITY_ROOT) -> Dict[str, Any]:
+    quality = quality_layer(food_quality_root, layer_name)
+    if quality is not None:
+        return quality
     sequence_rows = [row for row in rows if row.get("suite") in {"li-lim", "grubhub-mdrplib"}]
     if not sequence_rows:
         return layer(layer_name, 0.0, ["sequence-data-missing"], {})
@@ -118,7 +142,10 @@ def score_road_beauty(route_beauty_root: Path) -> Dict[str, Any]:
     return layer("roadRouteBeauty", score, blockers, {"avgStraightnessScore": straightness, "avgNetworkDetourRatio": detour, "evaluatedPairs": result.get("evaluatedPairs", 0)})
 
 
-def score_order_to_delivery(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+def score_order_to_delivery(rows: Sequence[Dict[str, Any]], food_quality_root: Path = DEFAULT_FOOD_QUALITY_ROOT) -> Dict[str, Any]:
+    quality = quality_layer(food_quality_root, "orderToDeliveryQuality")
+    if quality is not None:
+        return quality
     mdrp_rows = [row for row in rows if row.get("suite") == "grubhub-mdrplib"]
     if not mdrp_rows:
         return layer("orderToDeliveryQuality", 0.0, ["mdrplib-missing"], {})
@@ -323,6 +350,11 @@ ACTION_BY_BLOCKER = {
     "anchor-proxy-only": "Replace anchor proxy scoring with restaurant/driver anchor baselines and detour/freshness deltas.",
     "sequence-quality-proxy-only": "Add pickup/dropoff sequence baselines and report order-level precedence, delay, and freshness deltas.",
     "order-to-delivery-baseline-only": "Compare order-to-delivery p50/p95/p99 against greedy insertion and no-bundling baselines.",
+    "food-quality-target-gap": "Tune food-delivery objective for p95 delay and p95 food-on-vehicle targets.",
+    "driver-quality-target-gap": "Tune driver assignment for utilization and fairness target gaps.",
+    "anchor-quality-target-gap": "Tune anchor selection to reduce pickup wait and p95 order-to-delivery time.",
+    "sequence-quality-target-gap": "Tune pickup/dropoff sequencing to reduce food-on-vehicle p95 and sequence risk.",
+    "order-to-delivery-quality-target-gap": "Tune end-to-end delivery objective to improve p95 order-to-delivery score.",
     "dynamic-baseline-only": "Upgrade ICAPS from structural rolling-horizon checks to optimizer-vs-baseline dynamic quality.",
     "strong-baseline-gap": "Improve academic pass rate against best-known and PyVRP/HGS baselines before claiming strong competitiveness.",
     "max-quality-not-close-to-bks": "Run academic-max-quality v5 with richer route pool, ALNS, ejection chains, and repeated set partitioning.",
@@ -354,10 +386,15 @@ def build_action_plan(blockers: Sequence[str]) -> List[Dict[str, str]]:
         "route-beauty-limits",
         "ml-value-not-proven",
         "food-baseline-only",
+        "food-quality-target-gap",
         "driver-quality-baseline-only",
+        "driver-quality-target-gap",
         "anchor-proxy-only",
+        "anchor-quality-target-gap",
         "sequence-quality-proxy-only",
+        "sequence-quality-target-gap",
         "order-to-delivery-baseline-only",
+        "order-to-delivery-quality-target-gap",
         "dynamic-baseline-only",
         "svrpbench-not-integrated",
         "route-beauty-single-region-only",
@@ -409,7 +446,7 @@ def final_verdict(layers: Sequence[Dict[str, Any]]) -> str:
     return "PASS_WITH_LIMITS"
 
 
-def build_elite_scorecard(certification_root: Path, max_quality_root: Path, route_beauty_root: Path, pyvrp_root: Path = DEFAULT_PYVRP_ROOT, ml_root: Path = DEFAULT_ML_ROOT, route_condition_root: Path = DEFAULT_ROUTE_CONDITION_ROOT, traffic_route_root: Path = DEFAULT_TRAFFIC_ROUTE_ROOT, weather_route_root: Path = DEFAULT_WEATHER_ROUTE_ROOT) -> Dict[str, Any]:
+def build_elite_scorecard(certification_root: Path, max_quality_root: Path, route_beauty_root: Path, pyvrp_root: Path = DEFAULT_PYVRP_ROOT, ml_root: Path = DEFAULT_ML_ROOT, route_condition_root: Path = DEFAULT_ROUTE_CONDITION_ROOT, traffic_route_root: Path = DEFAULT_TRAFFIC_ROUTE_ROOT, weather_route_root: Path = DEFAULT_WEATHER_ROUTE_ROOT, food_quality_root: Path = DEFAULT_FOOD_QUALITY_ROOT) -> Dict[str, Any]:
     certification_path = certification_root / "certification_suite_results.json"
     if not certification_path.exists():
         layers = [layer("systemReliability", 0.0, ["certification-suite-missing"], {})]
@@ -418,16 +455,16 @@ def build_elite_scorecard(certification_root: Path, max_quality_root: Path, rout
     rows = certification.get("results", [])
     layers = [
         score_academic(max_quality_root, rows),
-        score_bundle_quality(rows),
-        score_driver_assignment(rows),
-        score_anchor_quality(rows),
-        score_sequence_quality(rows, "pickupSequenceQuality"),
-        score_sequence_quality(rows, "dropoffSequenceQuality"),
+        score_bundle_quality(rows, food_quality_root),
+        score_driver_assignment(rows, food_quality_root),
+        score_anchor_quality(rows, food_quality_root),
+        score_sequence_quality(rows, "pickupSequenceQuality", food_quality_root),
+        score_sequence_quality(rows, "dropoffSequenceQuality", food_quality_root),
         score_road_beauty(route_beauty_root),
         score_driver_route_condition(route_condition_root),
         score_community_traffic_route(traffic_route_root),
         score_community_weather_route(weather_route_root),
-        score_order_to_delivery(rows),
+        score_order_to_delivery(rows, food_quality_root),
         score_dynamic_dispatch(rows),
         score_ml_intelligence(ml_root),
         score_baseline_competitiveness(rows, max_quality_root, pyvrp_root),
@@ -448,6 +485,7 @@ def build_elite_scorecard(certification_root: Path, max_quality_root: Path, rout
         "sourceWeatherRoute": str(weather_route_root / "weather_route_results.json"),
         "sourcePyvrp": str(pyvrp_root / "pyvrp_results.json"),
         "sourceMlIntelligence": str(ml_root / "ml_intelligence_results.json"),
+        "sourceFoodQuality": str(food_quality_root / "food_dispatch_quality_results.json"),
         "finalVerdict": final_verdict(layers),
         "overallScore": overall,
         "mainBlockers": blockers,
@@ -488,10 +526,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--weather-route-root", default=str(DEFAULT_WEATHER_ROUTE_ROOT))
     parser.add_argument("--pyvrp-root", default=str(DEFAULT_PYVRP_ROOT))
     parser.add_argument("--ml-root", default=str(DEFAULT_ML_ROOT))
+    parser.add_argument("--food-quality-root", default=str(DEFAULT_FOOD_QUALITY_ROOT))
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     args = parser.parse_args(argv)
     output_root = Path(args.output_root)
-    scorecard = build_elite_scorecard(Path(args.certification_root), Path(args.max_quality_root), Path(args.route_beauty_root), Path(args.pyvrp_root), Path(args.ml_root), Path(args.route_condition_root), Path(args.traffic_route_root), Path(args.weather_route_root))
+    scorecard = build_elite_scorecard(Path(args.certification_root), Path(args.max_quality_root), Path(args.route_beauty_root), Path(args.pyvrp_root), Path(args.ml_root), Path(args.route_condition_root), Path(args.traffic_route_root), Path(args.weather_route_root), Path(args.food_quality_root))
     write_json(output_root / "elite_results.json", scorecard)
     (output_root / "elite_report.md").write_text(markdown(scorecard), encoding="utf-8")
     write_json(output_root / "scorecard.json", scorecard)

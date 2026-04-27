@@ -73,7 +73,7 @@ RAILS: Dict[str, Dict[str, Any]] = {
     },
     "food-driver-sequence-quality": {
         "priority": 50,
-        "blockers": ["food-baseline-only", "driver-quality-baseline-only", "anchor-proxy-only", "sequence-quality-proxy-only", "order-to-delivery-baseline-only"],
+        "blockers": ["food-baseline-only", "driver-quality-baseline-only", "anchor-proxy-only", "sequence-quality-proxy-only", "order-to-delivery-baseline-only", "food-quality-target-gap", "driver-quality-target-gap", "anchor-quality-target-gap", "sequence-quality-target-gap", "order-to-delivery-quality-target-gap"],
         "goal": "Replace proxy food-delivery scores with optimizer-vs-baseline quality deltas.",
         "commands": [
             "py -3.13 scripts/run_external_benchmark_certification.py --suite mdrplib",
