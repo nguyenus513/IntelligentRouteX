@@ -8,6 +8,7 @@ import com.google.android.material.button.MaterialButton;
 import com.routefood.app.R;
 import com.routefood.app.core.auth.AuthManager;
 import com.routefood.app.core.map.DemoMapView;
+import com.routefood.app.core.map.OsrmRouteClient;
 import com.routefood.app.core.ui.BaseActivity;
 import com.routefood.app.data.model.GeoPoint;
 import com.routefood.app.data.model.Assignment;
@@ -25,6 +26,7 @@ public class DriverMainActivity extends BaseActivity {
     private MaterialButton acceptButton;
     private MaterialButton rejectButton;
     private DemoMapView mapView;
+    private final OsrmRouteClient routeClient = new OsrmRouteClient();
     private Assignment activeAssignment;
 
     @Override
@@ -37,8 +39,7 @@ public class DriverMainActivity extends BaseActivity {
         acceptButton = findViewById(R.id.acceptAssignmentButton);
         rejectButton = findViewById(R.id.rejectAssignmentButton);
         mapView = findViewById(R.id.driverMapView);
-        mapView.setRoute(new GeoPoint(10.7741, 106.7038), new GeoPoint(10.7942, 106.7218),
-                new GeoPoint(10.776, 106.704), "Driver route preview");
+        renderRoutePreview("Driver route preview");
 
         findViewById(R.id.goOnlineButton).setOnClickListener(view -> goOnline());
         acceptButton.setOnClickListener(view -> acceptActiveAssignment());
@@ -82,8 +83,7 @@ public class DriverMainActivity extends BaseActivity {
                     return;
                 }
                 activeAssignment = assignments.get(0);
-                mapView.setRoute(new GeoPoint(10.7741, 106.7038), new GeoPoint(10.7942, 106.7218),
-                        new GeoPoint(10.776, 106.704), "Assignment " + activeAssignment.id());
+                renderRoutePreview("Assignment " + activeAssignment.id());
                 assignmentSummaryText.setText("New assignment " + activeAssignment.id()
                         + "\nETA: " + activeAssignment.etaMin() + " min\nRisk: " + activeAssignment.risk());
                 acceptButton.setEnabled(true);
@@ -123,5 +123,22 @@ public class DriverMainActivity extends BaseActivity {
                 Toast.makeText(DriverMainActivity.this, error.getMessage(), Toast.LENGTH_LONG).show();
             }
         };
+    }
+
+    private void renderRoutePreview(String label) {
+        GeoPoint driver = new GeoPoint(10.776, 106.704);
+        GeoPoint pickup = new GeoPoint(10.7741, 106.7038);
+        GeoPoint dropoff = new GeoPoint(10.7942, 106.7218);
+        mapView.setRoute(pickup, dropoff, driver, label);
+        routeClient.route(driver, pickup, dropoff, new OsrmRouteClient.Callback() {
+            @Override
+            public void onRoute(List<GeoPoint> routePoints) {
+                mapView.setRoadRoute(routePoints);
+            }
+
+            @Override
+            public void onError(Exception error) {
+            }
+        });
     }
 }

@@ -12,6 +12,9 @@ import androidx.annotation.Nullable;
 
 import com.routefood.app.data.model.GeoPoint;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class DemoMapView extends View {
     private static final double MIN_LAT = 10.70;
     private static final double MAX_LAT = 10.83;
@@ -29,6 +32,7 @@ public class DemoMapView extends View {
     private GeoPoint pickup = new GeoPoint(10.7741, 106.7038);
     private GeoPoint dropoff = new GeoPoint(10.7942, 106.7218);
     private GeoPoint driver = new GeoPoint(10.776, 106.704);
+    private final List<GeoPoint> routePoints = new ArrayList<>();
     private String label = "HCMC live route";
 
     public DemoMapView(Context context) {
@@ -52,6 +56,12 @@ public class DemoMapView extends View {
             this.driver = driver;
         }
         this.label = label == null ? "HCMC live route" : label;
+        invalidate();
+    }
+
+    public void setRoadRoute(List<GeoPoint> points) {
+        routePoints.clear();
+        routePoints.addAll(points);
         invalidate();
     }
 
@@ -96,9 +106,18 @@ public class DemoMapView extends View {
 
     private void drawRoute(Canvas canvas) {
         Path path = new Path();
-        path.moveTo(x(driver), y(driver));
-        path.lineTo(x(pickup), y(pickup));
-        path.lineTo(x(dropoff), y(dropoff));
+        if (!routePoints.isEmpty()) {
+            GeoPoint first = routePoints.get(0);
+            path.moveTo(x(first), y(first));
+            for (int index = 1; index < routePoints.size(); index++) {
+                GeoPoint point = routePoints.get(index);
+                path.lineTo(x(point), y(point));
+            }
+        } else {
+            path.moveTo(x(driver), y(driver));
+            path.lineTo(x(pickup), y(pickup));
+            path.lineTo(x(dropoff), y(dropoff));
+        }
         canvas.drawPath(path, routePaint);
     }
 

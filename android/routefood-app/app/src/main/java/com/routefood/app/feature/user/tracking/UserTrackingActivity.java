@@ -5,6 +5,7 @@ import android.widget.TextView;
 
 import com.routefood.app.R;
 import com.routefood.app.core.map.DemoMapView;
+import com.routefood.app.core.map.OsrmRouteClient;
 import com.routefood.app.core.ui.BaseActivity;
 import com.routefood.app.data.model.GeoPoint;
 import com.routefood.app.data.model.Order;
@@ -16,6 +17,8 @@ public class UserTrackingActivity extends BaseActivity {
     private com.google.firebase.firestore.ListenerRegistration orderRegistration;
     private TextView statusText;
     private DemoMapView mapView;
+    private final OsrmRouteClient routeClient = new OsrmRouteClient();
+    private String lastRouteKey = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,6 +34,7 @@ public class UserTrackingActivity extends BaseActivity {
                 GeoPoint driverPoint = simulatedDriverPoint(order);
                 mapView.setRoute(order.pickupLocation(), order.dropoffLocation(), driverPoint,
                         "Status: " + order.status() + " • ETA " + order.etaMin() + " min");
+                loadRoadRoute(driverPoint, order.pickupLocation(), order.dropoffLocation());
                 statusText.setText("Order " + order.id()
                         + "\nStatus: " + order.status()
                         + "\nDriver: " + safe(order.assignedDriverId())
@@ -74,5 +78,27 @@ public class UserTrackingActivity extends BaseActivity {
         return new GeoPoint(
                 from.latitude() + ((to.latitude() - from.latitude()) * progress),
                 from.longitude() + ((to.longitude() - from.longitude()) * progress));
+    }
+
+    private void loadRoadRoute(GeoPoint driver, GeoPoint pickup, GeoPoint dropoff) {
+        String routeKey = key(driver) + ":" + key(pickup) + ":" + key(dropoff);
+        if (routeKey.equals(lastRouteKey)) {
+            return;
+        }
+        lastRouteKey = routeKey;
+        routeClient.route(driver, pickup, dropoff, new OsrmRouteClient.Callback() {
+            @Override
+            public void onRoute(java.util.List<GeoPoint> routePoints) {
+                mapView.setRoadRoute(routePoints);
+            }
+
+            @Override
+            public void onError(Exception error) {
+            }
+        });
+    }
+
+    private String key(GeoPoint point) {
+        return Math.round(point.latitude() * 10000) + "," + Math.round(point.longitude() * 10000);
     }
 }
