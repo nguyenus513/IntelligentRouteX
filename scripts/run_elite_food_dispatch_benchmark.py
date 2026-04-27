@@ -13,6 +13,7 @@ DEFAULT_MAX_QUALITY_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "academic-obj
 DEFAULT_ROUTE_BEAUTY_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "route-beauty-community"
 DEFAULT_ROUTE_CONDITION_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "route-condition-community"
 DEFAULT_TRAFFIC_ROUTE_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "community-traffic-route"
+DEFAULT_WEATHER_ROUTE_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "community-weather-route"
 DEFAULT_PYVRP_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "pyvrp-baseline"
 DEFAULT_ML_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "ml-intelligence-community"
 
@@ -257,6 +258,30 @@ def score_community_traffic_route(traffic_route_root: Path) -> Dict[str, Any]:
     return layer("communityTrafficRouteQuality", score, blockers, {"routeCount": routes, "badTrafficRouteCount": bad, "avgPeakVsOffPeakRatio": avg_ratio})
 
 
+def score_community_weather_route(weather_route_root: Path) -> Dict[str, Any]:
+    path = weather_route_root / "weather_route_results.json"
+    if not path.exists():
+        return layer("communityWeatherRouteQuality", 0.0, ["community-weather-route-missing"], {})
+    result = read_json(path)
+    if result.get("finalVerdict") == "EVIDENCE_GAP":
+        reasons = []
+        for dataset in result.get("datasets", []):
+            reasons.extend(dataset.get("verdictReasons", []))
+        return layer("communityWeatherRouteQuality", 0.0, reasons or ["community-weather-data-missing"], result)
+    datasets = result.get("datasets", [])
+    routes = sum(int(row.get("routeCount", 0)) for row in datasets)
+    bad = sum(int(row.get("badWeatherRouteCount", 0)) for row in datasets)
+    avg_cost_values = [float(row.get("avgWeatherCostRatio", 1.0)) for row in datasets if row.get("routeCount", 0)]
+    avg_distance_values = [float(row.get("avgDistanceRatio", 1.0)) for row in datasets if row.get("routeCount", 0)]
+    straightness_values = [float(row.get("avgStraightnessScore", 0.0)) for row in datasets if row.get("routeCount", 0)]
+    avg_cost = sum(avg_cost_values) / max(1, len(avg_cost_values))
+    avg_distance = sum(avg_distance_values) / max(1, len(avg_distance_values))
+    straightness = sum(straightness_values) / max(1, len(straightness_values))
+    score = clamp((1.0 - bad / max(1, routes)) * 0.40 + max(0.0, 1.0 - max(0.0, avg_cost - 1.0) / 1.5) * 0.25 + max(0.0, 1.0 - max(0.0, avg_distance - 1.0) / 0.5) * 0.20 + straightness * 0.15)
+    blockers = [] if result.get("finalVerdict") == "PASS" else ["community-weather-route-limits"]
+    return layer("communityWeatherRouteQuality", score, blockers, {"routeCount": routes, "badWeatherRouteCount": bad, "avgWeatherCostRatio": avg_cost, "avgDistanceRatio": avg_distance, "avgStraightnessScore": straightness})
+
+
 def score_runtime_quality(rows: Sequence[Dict[str, Any]], max_quality_root: Path) -> Dict[str, Any]:
     runtimes = [float(row.get("runtimeMs", 0.0)) for row in rows if "runtimeMs" in row]
     avg_runtime = sum(runtimes) / max(1, len(runtimes))
@@ -303,6 +328,10 @@ ACTION_BY_BLOCKER = {
     "community-traffic-route-missing": "Run METR-LA/PeMS-BAY community traffic route benchmark.",
     "community-traffic-data-missing": "Download or place METR-LA/PeMS-BAY official community traffic files.",
     "community-traffic-route-limits": "Improve traffic-aware route selection against sensor peak/off-peak benchmark.",
+    "community-weather-route-missing": "Run Open-Meteo plus DIMACS community weather route benchmark.",
+    "community-weather-data-missing": "Download public Open-Meteo historical weather data for route stress evaluation.",
+    "community-weather-route-limits": "Improve weather-aware route selection, keeping route shape and detour under bad-weather stress.",
+    "no-weather-stress-events": "Use a public historical weather window with rain or wind stress events.",
 }
 
 
@@ -317,6 +346,8 @@ def build_action_plan(blockers: Sequence[str]) -> List[Dict[str, str]]:
         "svrpbench-not-integrated",
         "route-beauty-single-region-only",
         "route-beauty-pair-count-low",
+        "community-weather-route-missing",
+        "community-weather-data-missing",
     ]
     ordered = [blocker for blocker in priority if blocker in blockers] + [blocker for blocker in blockers if blocker not in priority]
     return [{"blocker": blocker, "recommendedAction": ACTION_BY_BLOCKER.get(blocker, "Investigate and add a targeted benchmark or baseline.")} for blocker in ordered]
@@ -362,7 +393,7 @@ def final_verdict(layers: Sequence[Dict[str, Any]]) -> str:
     return "PASS_WITH_LIMITS"
 
 
-def build_elite_scorecard(certification_root: Path, max_quality_root: Path, route_beauty_root: Path, pyvrp_root: Path = DEFAULT_PYVRP_ROOT, ml_root: Path = DEFAULT_ML_ROOT, route_condition_root: Path = DEFAULT_ROUTE_CONDITION_ROOT, traffic_route_root: Path = DEFAULT_TRAFFIC_ROUTE_ROOT) -> Dict[str, Any]:
+def build_elite_scorecard(certification_root: Path, max_quality_root: Path, route_beauty_root: Path, pyvrp_root: Path = DEFAULT_PYVRP_ROOT, ml_root: Path = DEFAULT_ML_ROOT, route_condition_root: Path = DEFAULT_ROUTE_CONDITION_ROOT, traffic_route_root: Path = DEFAULT_TRAFFIC_ROUTE_ROOT, weather_route_root: Path = DEFAULT_WEATHER_ROUTE_ROOT) -> Dict[str, Any]:
     certification_path = certification_root / "certification_suite_results.json"
     if not certification_path.exists():
         layers = [layer("systemReliability", 0.0, ["certification-suite-missing"], {})]
@@ -379,6 +410,7 @@ def build_elite_scorecard(certification_root: Path, max_quality_root: Path, rout
         score_road_beauty(route_beauty_root),
         score_driver_route_condition(route_condition_root),
         score_community_traffic_route(traffic_route_root),
+        score_community_weather_route(weather_route_root),
         score_order_to_delivery(rows),
         score_dynamic_dispatch(rows),
         score_ml_intelligence(ml_root),
@@ -397,6 +429,7 @@ def build_elite_scorecard(certification_root: Path, max_quality_root: Path, rout
         "sourceRouteBeauty": str(route_beauty_root / "route_beauty_results.json"),
         "sourceRouteCondition": str(route_condition_root / "route_condition_results.json"),
         "sourceTrafficRoute": str(traffic_route_root / "traffic_route_results.json"),
+        "sourceWeatherRoute": str(weather_route_root / "weather_route_results.json"),
         "sourcePyvrp": str(pyvrp_root / "pyvrp_results.json"),
         "sourceMlIntelligence": str(ml_root / "ml_intelligence_results.json"),
         "finalVerdict": final_verdict(layers),
@@ -436,12 +469,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--route-beauty-root", default=str(DEFAULT_ROUTE_BEAUTY_ROOT))
     parser.add_argument("--route-condition-root", default=str(DEFAULT_ROUTE_CONDITION_ROOT))
     parser.add_argument("--traffic-route-root", default=str(DEFAULT_TRAFFIC_ROUTE_ROOT))
+    parser.add_argument("--weather-route-root", default=str(DEFAULT_WEATHER_ROUTE_ROOT))
     parser.add_argument("--pyvrp-root", default=str(DEFAULT_PYVRP_ROOT))
     parser.add_argument("--ml-root", default=str(DEFAULT_ML_ROOT))
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     args = parser.parse_args(argv)
     output_root = Path(args.output_root)
-    scorecard = build_elite_scorecard(Path(args.certification_root), Path(args.max_quality_root), Path(args.route_beauty_root), Path(args.pyvrp_root), Path(args.ml_root), Path(args.route_condition_root), Path(args.traffic_route_root))
+    scorecard = build_elite_scorecard(Path(args.certification_root), Path(args.max_quality_root), Path(args.route_beauty_root), Path(args.pyvrp_root), Path(args.ml_root), Path(args.route_condition_root), Path(args.traffic_route_root), Path(args.weather_route_root))
     write_json(output_root / "elite_results.json", scorecard)
     (output_root / "elite_report.md").write_text(markdown(scorecard), encoding="utf-8")
     write_json(output_root / "scorecard.json", scorecard)

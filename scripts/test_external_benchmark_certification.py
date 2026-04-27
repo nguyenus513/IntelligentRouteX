@@ -31,6 +31,7 @@ route_beauty = load_module("run_route_beauty_benchmark", "run_route_beauty_bench
 elite = load_module("run_elite_food_dispatch_benchmark", "run_elite_food_dispatch_benchmark.py")
 route_condition = load_module("run_route_condition_benchmark", "run_route_condition_benchmark.py")
 traffic_route = load_module("run_community_traffic_route_benchmark", "run_community_traffic_route_benchmark.py")
+weather_route = load_module("run_community_weather_route_benchmark", "run_community_weather_route_benchmark.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -239,6 +240,21 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         self.assertEqual("EVIDENCE_GAP", row["verdict"])
         self.assertIn("community-traffic-data-missing", row["verdictReasons"])
+
+    def test_community_weather_benchmark_reports_missing_data(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            row = weather_route.evaluate_dataset(root / "missing-road", root / "missing-weather", "open-meteo-ny", ["NY"], 2, 1, 100)
+
+        self.assertEqual("EVIDENCE_GAP", row["verdict"])
+        self.assertIn("community-weather-data-missing", row["verdictReasons"])
+
+    def test_community_weather_edge_factor_increases_cost(self) -> None:
+        event = {"rainMm": 5.0, "precipitationMm": 5.0, "windKmh": 35.0, "severity": 0.75}
+
+        factor = weather_route.edge_weather_factor(1, 2, event)
+
+        self.assertGreater(factor, 1.0)
 
 
 if __name__ == "__main__":

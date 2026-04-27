@@ -1,0 +1,17 @@
+{
+  "dataset": "open-meteo-ny",
+  "displayName": "Open-Meteo Historical Weather - New York",
+  "endDate": "2024-06-07",
+  "expectedFiles": [
+    "weather.json"
+  ],
+  "latitude": 40.7128,
+  "longitude": -74.006,
+  "manualNote": "If automatic download is unavailable, place the Open-Meteo archive JSON at weather.json.",
+  "missingFiles": [],
+  "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\weather\\open-meteo-ny",
+  "ready": true,
+  "schemaVersion": "community-weather-data/v1",
+  "source": "Open-Meteo Historical Weather API",
+  "startDate": "2024-06-01"
+}
