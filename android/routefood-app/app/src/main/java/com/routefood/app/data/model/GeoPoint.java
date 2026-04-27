@@ -22,6 +22,14 @@ public class GeoPoint {
             com.google.firebase.firestore.GeoPoint geoPoint = (com.google.firebase.firestore.GeoPoint) value;
             return new GeoPoint(geoPoint.getLatitude(), geoPoint.getLongitude());
         }
+        if (value instanceof java.util.Map<?, ?>) {
+            java.util.Map<?, ?> map = (java.util.Map<?, ?>) value;
+            Object lat = map.get("lat");
+            Object lng = map.get("lng");
+            if (lat instanceof Number && lng instanceof Number) {
+                return new GeoPoint(((Number) lat).doubleValue(), ((Number) lng).doubleValue());
+            }
+        }
         return new GeoPoint(0, 0);
     }
 }

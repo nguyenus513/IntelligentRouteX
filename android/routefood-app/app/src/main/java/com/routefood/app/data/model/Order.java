@@ -9,9 +9,11 @@ public class Order {
     private final String assignmentId;
     private final long total;
     private final int etaMin;
+    private final GeoPoint pickupLocation;
+    private final GeoPoint dropoffLocation;
 
     public Order(String id, String userId, String restaurantId, String status, String assignedDriverId,
-                 String assignmentId, long total, int etaMin) {
+                 String assignmentId, long total, int etaMin, GeoPoint pickupLocation, GeoPoint dropoffLocation) {
         this.id = id;
         this.userId = userId;
         this.restaurantId = restaurantId;
@@ -20,6 +22,8 @@ public class Order {
         this.assignmentId = assignmentId;
         this.total = total;
         this.etaMin = etaMin;
+        this.pickupLocation = pickupLocation;
+        this.dropoffLocation = dropoffLocation;
     }
 
     public String id() {
@@ -52,5 +56,13 @@ public class Order {
 
     public int etaMin() {
         return etaMin;
+    }
+
+    public GeoPoint pickupLocation() {
+        return pickupLocation;
+    }
+
+    public GeoPoint dropoffLocation() {
+        return dropoffLocation;
     }
 }

@@ -17,7 +17,7 @@
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
-        android:layout_height="150dp"
+        android:layout_height="130dp"
         android:layout_marginTop="24dp"
         app:cardCornerRadius="24dp"
         app:cardElevation="2dp">
@@ -47,6 +47,13 @@
                 android:textColor="@color/route_text_secondary" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
+
+    <com.routefood.app.core.map.DemoMapView
+        android:id="@+id/driverMapView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="16dp"
+        android:layout_weight="1" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/goOnlineButton"

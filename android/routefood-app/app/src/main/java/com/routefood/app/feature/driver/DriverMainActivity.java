@@ -7,7 +7,9 @@ import android.widget.Toast;
 import com.google.android.material.button.MaterialButton;
 import com.routefood.app.R;
 import com.routefood.app.core.auth.AuthManager;
+import com.routefood.app.core.map.DemoMapView;
 import com.routefood.app.core.ui.BaseActivity;
+import com.routefood.app.data.model.GeoPoint;
 import com.routefood.app.data.model.Assignment;
 import com.routefood.app.data.repository.DriverRepository;
 import com.routefood.app.data.repository.RepositoryCallback;
@@ -22,6 +24,7 @@ public class DriverMainActivity extends BaseActivity {
     private TextView assignmentSummaryText;
     private MaterialButton acceptButton;
     private MaterialButton rejectButton;
+    private DemoMapView mapView;
     private Assignment activeAssignment;
 
     @Override
@@ -33,6 +36,9 @@ public class DriverMainActivity extends BaseActivity {
         assignmentSummaryText = findViewById(R.id.assignmentSummaryText);
         acceptButton = findViewById(R.id.acceptAssignmentButton);
         rejectButton = findViewById(R.id.rejectAssignmentButton);
+        mapView = findViewById(R.id.driverMapView);
+        mapView.setRoute(new GeoPoint(10.7741, 106.7038), new GeoPoint(10.7942, 106.7218),
+                new GeoPoint(10.776, 106.704), "Driver route preview");
 
         findViewById(R.id.goOnlineButton).setOnClickListener(view -> goOnline());
         acceptButton.setOnClickListener(view -> acceptActiveAssignment());
@@ -76,6 +82,8 @@ public class DriverMainActivity extends BaseActivity {
                     return;
                 }
                 activeAssignment = assignments.get(0);
+                mapView.setRoute(new GeoPoint(10.7741, 106.7038), new GeoPoint(10.7942, 106.7218),
+                        new GeoPoint(10.776, 106.704), "Assignment " + activeAssignment.id());
                 assignmentSummaryText.setText("New assignment " + activeAssignment.id()
                         + "\nETA: " + activeAssignment.etaMin() + " min\nRisk: " + activeAssignment.risk());
                 acceptButton.setEnabled(true);

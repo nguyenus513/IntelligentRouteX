@@ -2,6 +2,7 @@ package com.routefood.app.data.repository;
 
 import com.routefood.app.core.firebase.FunctionsClient;
 import com.routefood.app.core.firebase.FirebaseRefs;
+import com.routefood.app.data.model.GeoPoint;
 import com.routefood.app.data.model.Order;
 
 import java.util.Map;
@@ -53,8 +54,16 @@ public class OrderRepository {
                     snapshot.getString("assignedDriverId"),
                     snapshot.getString("assignmentId"),
                     number(snapshot.get("total")).longValue(),
-                    number(snapshot.get("etaMin")).intValue()));
+                    number(snapshot.get("etaMin")).intValue(),
+                    GeoPoint.fromFirestore(snapshot.get("pickupLocation")),
+                    GeoPoint.fromFirestore(snapshot.get("dropoffLocation"))));
         });
+    }
+
+    public com.google.firebase.database.Query listenDriverLocation(String driverId) {
+        return com.google.firebase.database.FirebaseDatabase.getInstance()
+                .getReference("driver_locations")
+                .child(driverId);
     }
 
     private Number number(Object value) {
