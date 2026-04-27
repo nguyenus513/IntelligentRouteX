@@ -632,6 +632,22 @@ def markdown(rows: Sequence[Dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def write_results(output_root: Path, rows: Sequence[Dict[str, Any]]) -> None:
+    result = {"schemaVersion": "academic-max-quality/v1", "results": list(rows)}
+    write_json(output_root / "academic_max_quality_results.json", result)
+    (output_root / "academic_max_quality_report.md").write_text(markdown(rows), encoding="utf-8")
+
+
+def read_existing_row(output_root: Path, instance: str) -> Dict[str, Any] | None:
+    path = output_root / instance / "metrics.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run academic max-quality Homberger optimization.")
     parser.add_argument("--instances", default=",".join(DEFAULT_INSTANCES))
@@ -639,17 +655,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--or-tools-runs", type=int, default=6)
     parser.add_argument("--fixed-cost-multiplier", type=int, default=1_000_000)
     parser.add_argument("--operator-intensity", type=int, default=2)
+    parser.add_argument("--resume", action="store_true", help="Reuse completed per-instance metrics and write aggregate results after every instance.")
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     args = parser.parse_args(argv)
     output_root = Path(args.output_root)
     instances = [part.strip() for part in args.instances.split(",") if part.strip()]
-    rows = [
-        run_instance(instance, parse_duration_ms(args.time_limit), output_root, args.or_tools_runs, args.fixed_cost_multiplier, max(1, args.operator_intensity))
-        for instance in instances
-    ]
-    result = {"schemaVersion": "academic-max-quality/v1", "results": rows}
-    write_json(output_root / "academic_max_quality_results.json", result)
-    (output_root / "academic_max_quality_report.md").write_text(markdown(rows), encoding="utf-8")
+    rows = []
+    for instance in instances:
+        existing = read_existing_row(output_root, instance) if args.resume else None
+        if existing is not None and existing.get("verdict") != "EVIDENCE_GAP":
+            rows.append(existing)
+        else:
+            rows.append(run_instance(instance, parse_duration_ms(args.time_limit), output_root, args.or_tools_runs, args.fixed_cost_multiplier, max(1, args.operator_intensity)))
+        write_results(output_root, rows)
     print(f"[ACADEMIC MAX QUALITY JSON] {output_root / 'academic_max_quality_results.json'}")
     print(f"[ACADEMIC MAX QUALITY REPORT] {output_root / 'academic_max_quality_report.md'}")
     return 1 if any(row["verdict"] == "FAIL" for row in rows) else 0
