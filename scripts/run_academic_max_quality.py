@@ -349,6 +349,47 @@ def generate_cross_exchange_candidates(
     return {"crossExchangeAttempts": attempts, "crossExchangeSuccesses": successes, "crossExchangeGeneratedRoutes": generated}
 
 
+def generate_route_merge_candidates(
+    instance: Dict[str, Any],
+    seed_solution: Dict[str, Any],
+    route_pool: List[Dict[str, Any]],
+    max_pairs: int,
+    max_combined_customers: int,
+) -> Dict[str, int]:
+    depot = str(instance.get("depotNodeId", "0"))
+    routes = [[str(stop) for stop in route] for route in seed_solution.get("routes", []) if len(route) > 2]
+    priorities = sorted(
+        range(len(routes)),
+        key=lambda index: (
+            len([stop for stop in routes[index] if stop != depot]),
+            route_distance(instance, routes[index]) / max(1, len(routes[index]) - 2),
+        ),
+    )
+    attempts = 0
+    successes = 0
+    generated = 0
+    for left_order, left_index in enumerate(priorities):
+        if attempts >= max_pairs:
+            break
+        left_customers = [stop for stop in routes[left_index] if stop != depot]
+        for right_index in priorities[left_order + 1:]:
+            if attempts >= max_pairs:
+                break
+            right_customers = [stop for stop in routes[right_index] if stop != depot]
+            combined = left_customers + right_customers
+            if len(combined) > max_combined_customers:
+                continue
+            attempts += 1
+            repaired_routes, feasible, _ = regret_ordered_insertions(instance, [[depot, depot]], combined)
+            if not feasible or len(repaired_routes) != 1:
+                continue
+            merged_route = repaired_routes[0]
+            if route_feasible(instance, merged_route) and append_route_to_pool(instance, route_pool, merged_route, "route-merge-v5"):
+                successes += 1
+                generated += 1
+    return {"routeMergeAttempts": attempts, "routeMergeSuccesses": successes, "routeMergeGeneratedRoutes": generated}
+
+
 def set_partitioning_solution(instance: Dict[str, Any], route_pool: Sequence[Dict[str, Any]], time_limit_ms: int) -> Dict[str, Any] | None:
     try:
         from ortools.sat.python import cp_model
@@ -381,7 +422,7 @@ def set_partitioning_solution(instance: Dict[str, Any], route_pool: Sequence[Dic
     return {"schemaVersion": "external-benchmark-solution/v1", "solver": "academic-max-quality-set-partitioning", "routes": routes}
 
 
-def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_runs: int, fixed_cost_multiplier: int) -> Dict[str, Any]:
+def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_runs: int, fixed_cost_multiplier: int, operator_intensity: int = 1) -> Dict[str, Any]:
     started = time.perf_counter()
     instance = load_homberger(instance_name)
     bks = instance.get("bestKnown", {})
@@ -437,21 +478,36 @@ def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_
         "crossExchangeAttempts": 0,
         "crossExchangeSuccesses": 0,
         "crossExchangeGeneratedRoutes": 0,
+        "routeMergeAttempts": 0,
+        "routeMergeSuccesses": 0,
+        "routeMergeGeneratedRoutes": 0,
     }
-    if best_seed is not None:
-        operator_counts.update(generate_route_elimination_candidates(
+    seed_candidates = sorted(candidates, key=solution_key)[:max(1, min(len(candidates), operator_intensity + 1))]
+    for seed in seed_candidates:
+        route_count = len(seed["solution"].get("routes", []))
+        for key, value in generate_route_elimination_candidates(
             instance,
-            best_seed["solution"],
+            seed["solution"],
             route_pool,
-            max_attempts=max(1, min(3, len(best_seed["solution"].get("routes", [])) // 25)),
-        ))
-        operator_counts.update(generate_cross_exchange_candidates(
+            max_attempts=max(1, min(8 * operator_intensity, route_count)),
+        ).items():
+            operator_counts[key] += value
+        for key, value in generate_route_merge_candidates(
             instance,
-            best_seed["solution"],
+            seed["solution"],
             route_pool,
-            max_route_pairs=max(5, min(10, len(best_seed["solution"].get("routes", [])) // 10)),
-            max_segment_size=2,
-        ))
+            max_pairs=max(10, min(60 * operator_intensity, route_count * max(1, route_count - 1) // 2)),
+            max_combined_customers=18 + operator_intensity * 4,
+        ).items():
+            operator_counts[key] += value
+        for key, value in generate_cross_exchange_candidates(
+            instance,
+            seed["solution"],
+            route_pool,
+            max_route_pairs=max(10, min(40 * operator_intensity, route_count * max(1, route_count - 1) // 2)),
+            max_segment_size=2 + min(2, operator_intensity),
+        ).items():
+            operator_counts[key] += value
     set_partitioning_runtime_ms = 0
     set_partitioning_solution_candidate = None
     if route_pool:
@@ -509,10 +565,12 @@ def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_
             "cp-sat-set-partitioning": 1 if set_partitioning_solution_candidate is not None else 0,
             "ejection-chain-v1": operator_counts["ejectionChainSuccesses"],
             "cross-exchange-v1": operator_counts["crossExchangeSuccesses"],
+            "route-merge-v5": operator_counts["routeMergeSuccesses"],
         },
         "objectiveMode": "vehicle-first-lexicographic",
         "solverSawBestKnown": False,
-        "localSearchOperatorsUsed": ["or-tools-multi-start", "route-elimination-v3", "regret-insertion", "ejection-chain-v1", "cross-exchange-v1", "cp-sat-set-partitioning"],
+        "localSearchOperatorsUsed": ["or-tools-multi-start", "route-elimination-v3", "regret-insertion", "ejection-chain-v1", "route-merge-v5", "cross-exchange-v1", "cp-sat-set-partitioning"],
+        "operatorIntensity": operator_intensity,
         "routeEliminationAttempts": operator_counts["routeEliminationAttempts"],
         "routeEliminationSuccesses": operator_counts["routeEliminationSuccesses"],
         "routeEliminationGeneratedRoutes": operator_counts["routeEliminationGeneratedRoutes"],
@@ -521,6 +579,9 @@ def run_instance(instance_name: str, time_limit_ms: int, output_root: Path, max_
         "crossExchangeAttempts": operator_counts["crossExchangeAttempts"],
         "crossExchangeSuccesses": operator_counts["crossExchangeSuccesses"],
         "crossExchangeGeneratedRoutes": operator_counts["crossExchangeGeneratedRoutes"],
+        "routeMergeAttempts": operator_counts["routeMergeAttempts"],
+        "routeMergeSuccesses": operator_counts["routeMergeSuccesses"],
+        "routeMergeGeneratedRoutes": operator_counts["routeMergeGeneratedRoutes"],
         "orToolsRuns": len(runs),
         "perRunTimeLimitMs": per_run_ms,
         "runtimeMs": runtime_ms,
@@ -556,9 +617,16 @@ def markdown(rows: Sequence[Dict[str, Any]]) -> str:
         gap_text = "n/a" if distance_gap is None else f"{float(distance_gap):.2f}%"
         lines.append(
             "| {instance} | {finalVehicles} | {bksVehicles} | {vehicleGap} | {gap} | {routePoolSize} | {setPartitioningProducedSolution} | {runtimeMinutes:.2f} | {verdict} | {reasons} |".format(
+                instance=row.get("instance", "unknown"),
+                finalVehicles=row.get("finalVehicles", "n/a"),
+                bksVehicles=row.get("bksVehicles", "n/a"),
+                vehicleGap=row.get("vehicleGap", "n/a"),
                 gap=gap_text,
+                routePoolSize=row.get("routePoolSize", "n/a"),
+                setPartitioningProducedSolution=row.get("setPartitioningProducedSolution", "n/a"),
+                runtimeMinutes=float(row.get("runtimeMinutes", 0.0)),
+                verdict=row.get("verdict", "UNKNOWN"),
                 reasons=", ".join(row.get("verdictReasons", [])),
-                **row,
             )
         )
     return "\n".join(lines) + "\n"
@@ -570,12 +638,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--time-limit", default="30m")
     parser.add_argument("--or-tools-runs", type=int, default=6)
     parser.add_argument("--fixed-cost-multiplier", type=int, default=1_000_000)
+    parser.add_argument("--operator-intensity", type=int, default=2)
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     args = parser.parse_args(argv)
     output_root = Path(args.output_root)
     instances = [part.strip() for part in args.instances.split(",") if part.strip()]
     rows = [
-        run_instance(instance, parse_duration_ms(args.time_limit), output_root, args.or_tools_runs, args.fixed_cost_multiplier)
+        run_instance(instance, parse_duration_ms(args.time_limit), output_root, args.or_tools_runs, args.fixed_cost_multiplier, max(1, args.operator_intensity))
         for instance in instances
     ]
     result = {"schemaVersion": "academic-max-quality/v1", "results": rows}

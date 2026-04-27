@@ -207,6 +207,17 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         for pattern in forbidden_patterns:
             self.assertNotIn(pattern, source)
 
+    def test_academic_max_quality_generates_route_merge_candidates(self) -> None:
+        instance = solomon.parse_solomon(Path("benchmarks/external/solomon/fixtures/C101.txt"))
+        route_pool = []
+        seed = {"routes": [["0", "1", "0"], ["0", "2", "3", "0"]]}
+
+        counts = max_quality.generate_route_merge_candidates(instance, seed, route_pool, max_pairs=4, max_combined_customers=4)
+
+        self.assertGreaterEqual(counts["routeMergeAttempts"], 1)
+        self.assertGreaterEqual(counts["routeMergeGeneratedRoutes"], 1)
+        self.assertTrue(any(route["sourceRun"] == "route-merge-v5" for route in route_pool))
+
     def test_route_beauty_metrics_detect_straight_route(self) -> None:
         coordinates = {1: (0.0, 0.0), 2: (1.0, 0.0), 3: (2.0, 0.0)}
 
