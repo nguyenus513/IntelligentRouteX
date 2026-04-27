@@ -30,6 +30,7 @@ max_quality = load_module("run_academic_max_quality", "run_academic_max_quality.
 route_beauty = load_module("run_route_beauty_benchmark", "run_route_beauty_benchmark.py")
 elite = load_module("run_elite_food_dispatch_benchmark", "run_elite_food_dispatch_benchmark.py")
 route_condition = load_module("run_route_condition_benchmark", "run_route_condition_benchmark.py")
+traffic_route = load_module("run_community_traffic_route_benchmark", "run_community_traffic_route_benchmark.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -231,6 +232,13 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         factor = route_condition.edge_factor(1, 2, route_condition.PROFILES["storm-peak"])
 
         self.assertGreater(factor, 1.0)
+
+    def test_community_traffic_benchmark_reports_missing_data(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            row = traffic_route.evaluate_dataset(Path(temp_dir), "metr-la", 2)
+
+        self.assertEqual("EVIDENCE_GAP", row["verdict"])
+        self.assertIn("community-traffic-data-missing", row["verdictReasons"])
 
 
 if __name__ == "__main__":

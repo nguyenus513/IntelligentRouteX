@@ -1,0 +1,16 @@
+{
+  "dataset": "metr-la",
+  "displayName": "METR-LA",
+  "expectedFiles": [
+    "METR-LA.npz",
+    "adj_mx.pkl"
+  ],
+  "manualNote": "Place METR-LA.npz and adj_mx.pkl in this directory if automatic download is unavailable.",
+  "missingFiles": [
+    "METR-LA.npz",
+    "adj_mx.pkl"
+  ],
+  "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\traffic\\metr-la",
+  "ready": false,
+  "source": "DCRNN/METR-LA community traffic forecasting benchmark"
+}

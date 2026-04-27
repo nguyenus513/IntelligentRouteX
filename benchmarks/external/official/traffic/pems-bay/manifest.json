@@ -1,0 +1,16 @@
+{
+  "dataset": "pems-bay",
+  "displayName": "PeMS-BAY",
+  "expectedFiles": [
+    "PEMS-BAY.npz",
+    "adj_mx_bay.pkl"
+  ],
+  "manualNote": "Place PEMS-BAY.npz and adj_mx_bay.pkl in this directory if automatic download is unavailable.",
+  "missingFiles": [
+    "PEMS-BAY.npz",
+    "adj_mx_bay.pkl"
+  ],
+  "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\traffic\\pems-bay",
+  "ready": false,
+  "source": "DCRNN/PeMS-BAY community traffic forecasting benchmark"
+}

@@ -1,0 +1,39 @@
+{
+  "datasets": [
+    {
+      "dataset": "metr-la",
+      "displayName": "METR-LA",
+      "expectedFiles": [
+        "METR-LA.npz",
+        "adj_mx.pkl"
+      ],
+      "manualNote": "Place METR-LA.npz and adj_mx.pkl in this directory if automatic download is unavailable.",
+      "missingFiles": [
+        "METR-LA.npz",
+        "adj_mx.pkl"
+      ],
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\traffic\\metr-la",
+      "ready": false,
+      "source": "DCRNN/METR-LA community traffic forecasting benchmark"
+    },
+    {
+      "dataset": "pems-bay",
+      "displayName": "PeMS-BAY",
+      "expectedFiles": [
+        "PEMS-BAY.npz",
+        "adj_mx_bay.pkl"
+      ],
+      "manualNote": "Place PEMS-BAY.npz and adj_mx_bay.pkl in this directory if automatic download is unavailable.",
+      "missingFiles": [
+        "PEMS-BAY.npz",
+        "adj_mx_bay.pkl"
+      ],
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\traffic\\pems-bay",
+      "ready": false,
+      "source": "DCRNN/PeMS-BAY community traffic forecasting benchmark"
+    }
+  ],
+  "finalVerdict": "EVIDENCE_GAP",
+  "readyDatasetCount": 0,
+  "schemaVersion": "community-traffic-data/v1"
+}
