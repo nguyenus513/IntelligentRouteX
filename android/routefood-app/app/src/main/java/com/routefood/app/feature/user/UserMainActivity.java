@@ -1,6 +1,7 @@
 package com.routefood.app.feature.user;
 
 import android.os.Bundle;
+import android.content.Intent;
 import android.view.View;
 import android.widget.TextView;
 
@@ -13,6 +14,7 @@ import com.routefood.app.data.model.Restaurant;
 import com.routefood.app.data.repository.RepositoryCallback;
 import com.routefood.app.data.repository.RestaurantRepository;
 import com.routefood.app.feature.user.home.RestaurantAdapter;
+import com.routefood.app.feature.user.restaurant.RestaurantDetailActivity;
 
 import java.util.List;
 
@@ -26,7 +28,14 @@ public class UserMainActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_user_main);
         homeStateText = findViewById(R.id.homeStateText);
-        restaurantAdapter = new RestaurantAdapter();
+        restaurantAdapter = new RestaurantAdapter(restaurant -> {
+            Intent intent = new Intent(this, RestaurantDetailActivity.class);
+            intent.putExtra(RestaurantDetailActivity.EXTRA_RESTAURANT_ID, restaurant.id());
+            intent.putExtra(RestaurantDetailActivity.EXTRA_RESTAURANT_NAME, restaurant.name());
+            intent.putExtra(RestaurantDetailActivity.EXTRA_RESTAURANT_META,
+                    "Rating " + restaurant.rating() + " • " + restaurant.averagePrepTimeMin() + " min");
+            startActivity(intent);
+        });
         restaurantRepository = new RestaurantRepository();
 
         RecyclerView recyclerView = findViewById(R.id.restaurantRecyclerView);

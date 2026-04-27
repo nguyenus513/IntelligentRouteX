@@ -49,6 +49,10 @@ function requireNumber(value: unknown, fieldName: string): number {
   return value;
 }
 
+function optionalNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 function requireRoleValue(value: unknown): Role {
   const role = requireString(value, "role");
   if (role !== "user" && role !== "driver" && role !== "admin") {
@@ -101,17 +105,45 @@ export const createUserOrder = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "At least one item is required.");
   }
 
+  const restaurant = await firestore.collection("restaurants").doc(restaurantId).get();
+  if (!restaurant.exists) {
+    throw new HttpsError("not-found", "Restaurant does not exist.");
+  }
+
+  let subtotal = 0;
+  const normalizedItems = [];
+  for (const item of items) {
+    const itemId = requireString(item?.itemId, "items[].itemId");
+    const quantity = Math.max(1, Math.floor(optionalNumber(item?.quantity, 1)));
+    const menuItem = await firestore.collection("restaurants").doc(restaurantId).collection("menu_items").doc(itemId).get();
+    if (!menuItem.exists || menuItem.data()?.available === false) {
+      throw new HttpsError("invalid-argument", `Menu item ${itemId} is not available.`);
+    }
+    const price = optionalNumber(menuItem.data()?.price, 0);
+    subtotal += price * quantity;
+    normalizedItems.push({
+      itemId,
+      name: menuItem.data()?.name ?? itemId,
+      price,
+      quantity
+    });
+  }
+
+  const deliveryFee = subtotal > 0 ? 15000 : 0;
+  const total = subtotal + deliveryFee;
+  const pickupLocation = restaurant.data()?.geo ?? null;
   const orderRef = firestore.collection("orders").doc();
   await orderRef.set({
     userId: uid,
     restaurantId,
-    items,
+    items: normalizedItems,
+    pickupLocation,
     dropoffLocation: {lat: dropoffLat, lng: dropoffLng},
     status: "ORDER_CREATED",
     paymentMethod: request.data?.paymentMethod ?? "COD_DEMO",
-    subtotal: request.data?.subtotal ?? 0,
-    deliveryFee: request.data?.deliveryFee ?? 0,
-    total: request.data?.total ?? 0,
+    subtotal,
+    deliveryFee,
+    total,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     demoScenarioId: request.data?.demoScenarioId ?? "hcm-default"
@@ -223,9 +255,86 @@ export const advanceDemoOrder = onCall(async (request) => {
 
 export const dispatchOrder = onDocumentCreated("orders/{orderId}", async (event) => {
   const orderId = event.params.orderId;
+  const order = event.data?.data();
+  if (!order || order.status !== "ORDER_CREATED") {
+    return;
+  }
+
   await firestore.collection("orders").doc(orderId).set({
     status: "ASSIGNING_DRIVER",
     dispatchRequestedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp()
   }, {merge: true});
+
+  const driverSnapshot = await firestore.collection("drivers")
+    .where("online", "==", true)
+    .where("status", "==", "idle")
+    .limit(20)
+    .get();
+
+  if (driverSnapshot.empty) {
+    await firestore.collection("orders").doc(orderId).set({
+      status: "ASSIGNING_DRIVER",
+      degradeReasons: ["no-online-driver"],
+      updatedAt: FieldValue.serverTimestamp()
+    }, {merge: true});
+    return;
+  }
+
+  const dropoff = order.dropoffLocation ?? {lat: 10.7741, lng: 106.7038};
+  let selectedDriver = driverSnapshot.docs[0];
+  let selectedDistance = Number.MAX_VALUE;
+  for (const driver of driverSnapshot.docs) {
+    const location = driver.data().lastLocation ?? {lat: 10.7741, lng: 106.7038};
+    const distance = distanceMeters(location.lat, location.lng, dropoff.lat, dropoff.lng);
+    if (distance < selectedDistance) {
+      selectedDriver = driver;
+      selectedDistance = distance;
+    }
+  }
+
+  const etaMin = Math.max(8, Math.round(selectedDistance / 350));
+  const assignmentRef = firestore.collection("assignments").doc();
+  await assignmentRef.set({
+    orderIds: [orderId],
+    driverId: selectedDriver.id,
+    driverUid: selectedDriver.data().uid ?? selectedDriver.id,
+    status: "assigned",
+    pickupSequence: [order.restaurantId],
+    dropoffSequence: [orderId],
+    route: [],
+    eta: {minutes: etaMin},
+    risk: "fallback-medium",
+    trafficProfile: "demo-hcm",
+    weatherProfile: "light_rain",
+    createdAt: FieldValue.serverTimestamp(),
+    degradeReasons: ["nearest-driver-fallback"]
+  });
+
+  await firestore.collection("orders").doc(orderId).set({
+    status: "DRIVER_ASSIGNED",
+    assignedDriverId: selectedDriver.id,
+    assignedDriverUid: selectedDriver.data().uid ?? selectedDriver.id,
+    assignmentId: assignmentRef.id,
+    etaMin,
+    routeId: "fallback-" + assignmentRef.id,
+    updatedAt: FieldValue.serverTimestamp(),
+    degradeReasons: ["nearest-driver-fallback"]
+  }, {merge: true});
+
+  await firestore.collection("drivers").doc(selectedDriver.id).set({
+    status: "assigned",
+    currentAssignmentId: assignmentRef.id,
+    updatedAt: FieldValue.serverTimestamp()
+  }, {merge: true});
 });
+
+function distanceMeters(fromLat: number, fromLng: number, toLat: number, toLng: number): number {
+  const earthRadiusMeters = 6371000;
+  const dLat = (toLat - fromLat) * Math.PI / 180;
+  const dLng = (toLng - fromLng) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+    + Math.cos(fromLat * Math.PI / 180) * Math.cos(toLat * Math.PI / 180)
+    * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}

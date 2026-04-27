@@ -15,7 +15,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class RestaurantAdapter extends RecyclerView.Adapter<RestaurantAdapter.RestaurantViewHolder> {
+    public interface Listener {
+        void onRestaurantClicked(Restaurant restaurant);
+    }
+
+    private final Listener listener;
     private final List<Restaurant> restaurants = new ArrayList<>();
+
+    public RestaurantAdapter(Listener listener) {
+        this.listener = listener;
+    }
 
     public void submitList(List<Restaurant> nextRestaurants) {
         restaurants.clear();
@@ -32,7 +41,7 @@ public class RestaurantAdapter extends RecyclerView.Adapter<RestaurantAdapter.Re
 
     @Override
     public void onBindViewHolder(@NonNull RestaurantViewHolder holder, int position) {
-        holder.bind(restaurants.get(position));
+        holder.bind(restaurants.get(position), listener);
     }
 
     @Override
@@ -52,10 +61,11 @@ public class RestaurantAdapter extends RecyclerView.Adapter<RestaurantAdapter.Re
             addressText = itemView.findViewById(R.id.restaurantAddressText);
         }
 
-        void bind(Restaurant restaurant) {
+        void bind(Restaurant restaurant, Listener listener) {
             nameText.setText(restaurant.name());
-            metaText.setText("★ " + restaurant.rating() + " • " + restaurant.averagePrepTimeMin() + " min • " + categories(restaurant));
+            metaText.setText("Rating " + restaurant.rating() + " • " + restaurant.averagePrepTimeMin() + " min • " + categories(restaurant));
             addressText.setText(restaurant.address());
+            itemView.setOnClickListener(view -> listener.onRestaurantClicked(restaurant));
         }
 
         private String categories(Restaurant restaurant) {

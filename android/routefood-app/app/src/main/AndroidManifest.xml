@@ -15,6 +15,18 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RouteFood">
         <activity
+            android:name=".feature.user.tracking.UserTrackingActivity"
+            android:exported="false" />
+        <activity
+            android:name=".feature.user.checkout.CheckoutActivity"
+            android:exported="false" />
+        <activity
+            android:name=".feature.user.cart.CartActivity"
+            android:exported="false" />
+        <activity
+            android:name=".feature.user.restaurant.RestaurantDetailActivity"
+            android:exported="false" />
+        <activity
             android:name=".feature.driver.DriverMainActivity"
             android:exported="false" />
         <activity
