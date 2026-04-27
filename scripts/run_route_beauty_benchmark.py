@@ -118,6 +118,59 @@ def route_shape_metrics(path: Sequence[int], coordinates: Dict[int, Tuple[float,
     }
 
 
+def classify_route_shape(row: Dict[str, object]) -> Dict[str, str]:
+    high_detour = float(row.get("networkDetourRatio", 0.0)) > 4.0
+    low_straightness = float(row.get("straightnessScore", 0.0)) < 0.30
+    if high_detour and low_straightness:
+        issue = "high-detour-and-low-straightness"
+    elif high_detour:
+        issue = "high-detour"
+    elif low_straightness:
+        issue = "low-straightness"
+    else:
+        issue = "clean"
+    issue_class = "topology-constrained" if issue != "clean" else "clean"
+    return {"routeShapeIssue": issue, "routeShapeIssueClass": issue_class}
+
+
+def top_bad_routes(rows: Sequence[Dict[str, object]], limit: int = 10) -> List[Dict[str, object]]:
+    def severity(row: Dict[str, object]) -> float:
+        detour_excess = max(0.0, float(row.get("networkDetourRatio", 0.0)) - 1.0)
+        straightness_gap = max(0.0, 1.0 - float(row.get("straightnessScore", 0.0)))
+        return detour_excess + straightness_gap + int(row.get("sharpTurnCount", 0)) * 0.02
+
+    ranked = sorted(rows, key=severity, reverse=True)
+    return [
+        {
+            "region": row.get("region"),
+            "source": row.get("source"),
+            "target": row.get("target"),
+            "straightnessScore": row.get("straightnessScore"),
+            "networkDetourRatio": row.get("networkDetourRatio"),
+            "turnCount": row.get("turnCount"),
+            "sharpTurnCount": row.get("sharpTurnCount"),
+            "routeShapeIssue": row.get("routeShapeIssue"),
+            "routeShapeIssueClass": row.get("routeShapeIssueClass"),
+        }
+        for row in ranked[:limit]
+    ]
+
+
+def region_summary(rows: Sequence[Dict[str, object]]) -> List[Dict[str, object]]:
+    regions = sorted({str(row.get("region", "unknown")) for row in rows})
+    summary: List[Dict[str, object]] = []
+    for region in regions:
+        region_rows = [row for row in rows if str(row.get("region", "unknown")) == region]
+        summary.append({
+            "region": region,
+            "routeCount": len(region_rows),
+            "badRouteCount": sum(1 for row in region_rows if row.get("routeShapeIssue") != "clean"),
+            "avgStraightnessScore": sum(float(row["straightnessScore"]) for row in region_rows) / len(region_rows) if region_rows else 0.0,
+            "avgNetworkDetourRatio": sum(float(row["networkDetourRatio"]) for row in region_rows) / len(region_rows) if region_rows else 0.0,
+        })
+    return summary
+
+
 def benchmark_pairs(nodes: Sequence[int], count: int) -> List[Tuple[int, int]]:
     pairs: List[Tuple[int, int]] = []
     stride = max(7, len(nodes) // max(1, count))
@@ -148,6 +201,13 @@ def write_json(path: Path, payload: Dict[str, object]) -> None:
 
 def markdown(result: Dict[str, object]) -> str:
     lines = ["# Route Beauty Community Benchmark", "", f"FINAL_VERDICT = {result['finalVerdict']}", ""]
+    lines.extend([
+        f"- bad routes: `{result.get('badRouteCount', 0)}`",
+        f"- high detour routes: `{result.get('highDetourRouteCount', 0)}`",
+        f"- low straightness routes: `{result.get('lowStraightnessRouteCount', 0)}`",
+        f"- topology constrained routes: `{result.get('topologyConstrainedRouteCount', 0)}`",
+        "",
+    ])
     lines.append("| Pair | Points | Straightness | Detour | Turns | Sharp Turns | Verdict |")
     lines.append("| --- | ---: | ---: | ---: | ---: | ---: | --- |")
     for row in result["routes"]:
@@ -189,8 +249,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 continue
             network_distance, path = path_result
             metrics = route_shape_metrics(path, coordinates, network_distance)
-            rows.append({"region": region, "source": source, "target": target, **metrics})
+            row = {"region": region, "source": source, "target": target, **metrics}
+            row.update(classify_route_shape(row))
+            rows.append(row)
     final_verdict, reasons = verdict(rows)
+    bad_route_count = sum(1 for row in rows if row.get("routeShapeIssue") != "clean")
+    high_detour_count = sum(1 for row in rows if float(row.get("networkDetourRatio", 0.0)) > 4.0)
+    low_straightness_count = sum(1 for row in rows if float(row.get("straightnessScore", 0.0)) < 0.30)
+    topology_constrained_count = sum(1 for row in rows if row.get("routeShapeIssueClass") == "topology-constrained")
     result = {
         "schemaVersion": "route-beauty-community/v1",
         "benchmarkFamily": "dimacs-road",
@@ -205,6 +271,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "avgStraightnessScore": sum(float(row["straightnessScore"]) for row in rows) / len(rows) if rows else 0.0,
         "avgNetworkDetourRatio": sum(float(row["networkDetourRatio"]) for row in rows) / len(rows) if rows else 0.0,
         "avgTurnCount": sum(int(row["turnCount"]) for row in rows) / len(rows) if rows else 0.0,
+        "badRouteCount": bad_route_count,
+        "highDetourRouteCount": high_detour_count,
+        "lowStraightnessRouteCount": low_straightness_count,
+        "topologyConstrainedRouteCount": topology_constrained_count,
+        "topBadRoutes": top_bad_routes(rows),
+        "regionSummary": region_summary(rows),
         "routes": rows,
     }
     output_root = Path(args.output_root)

@@ -17,6 +17,8 @@ DEFAULT_WEATHER_ROUTE_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "community-
 DEFAULT_PYVRP_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "pyvrp-baseline"
 DEFAULT_ML_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "ml-intelligence-community"
 DEFAULT_FOOD_QUALITY_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "food-dispatch-quality"
+DEFAULT_DYNAMIC_QUALITY_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "dynamic-dispatch-quality"
+DEFAULT_STOCHASTIC_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "stochastic-community"
 
 
 def read_json(path: Path) -> Dict[str, Any]:
@@ -35,7 +37,8 @@ def clamp(value: float) -> float:
 def verdict_from_score(score: float, blockers: Sequence[str]) -> str:
     if any(blocker.startswith("hard-") for blocker in blockers):
         return "FAIL"
-    if any(blocker.endswith("missing") or blocker == "evidence-gap" for blocker in blockers):
+    evidence_gap_exceptions = {"dynamic-optimizer-comparison-missing"}
+    if any((blocker.endswith("missing") and blocker not in evidence_gap_exceptions) or blocker == "evidence-gap" for blocker in blockers):
         return "EVIDENCE_GAP"
     if score >= 0.92 and not blockers:
         return "ELITE_PASS"
@@ -156,7 +159,20 @@ def score_order_to_delivery(rows: Sequence[Dict[str, Any]], food_quality_root: P
     return layer("orderToDeliveryQuality", score, ["order-to-delivery-baseline-only"], {"avgDelay": avg_delay, "avgFoodOnVehicleTime": avg_food, "lateOrderRate": late_rate})
 
 
-def score_dynamic_dispatch(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+def score_dynamic_dispatch(rows: Sequence[Dict[str, Any]], dynamic_quality_root: Path = DEFAULT_DYNAMIC_QUALITY_ROOT) -> Dict[str, Any]:
+    quality_path = dynamic_quality_root / "dynamic_dispatch_quality_results.json"
+    if quality_path.exists():
+        result = read_json(quality_path)
+        if result.get("finalVerdict") == "EVIDENCE_GAP":
+            return layer("dynamicDispatchQuality", 0.0, result.get("verdictReasons", ["dynamic-data-missing"]), result)
+        hard = int(result.get("hardViolationCount", 0))
+        stability = float(result.get("avgRouteStabilityScore", 0.0))
+        baseline = bool(result.get("baselineComparisonAvailable"))
+        score = clamp((1.0 if hard == 0 else 0.0) * 0.45 + stability * 0.35 + (1.0 if baseline else 0.0) * 0.20)
+        blockers = [] if hard == 0 else ["hard-dynamic-continuity-violation"]
+        if not baseline:
+            blockers.append("dynamic-optimizer-comparison-missing")
+        return layer("dynamicDispatchQuality", score, blockers, result)
     dynamic_rows = [row for row in rows if row.get("suite") in {"icaps-dpdp", "dpdp-stress"}]
     if not dynamic_rows:
         return layer("dynamicDispatchQuality", 0.0, ["dynamic-data-missing"], {})
@@ -165,7 +181,7 @@ def score_dynamic_dispatch(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     score = clamp(pass_rate * 0.70 + (1.0 if hard == 0 else 0.0) * 0.30)
     blockers = [] if hard == 0 else ["hard-dynamic-continuity-violation"]
     if any(row.get("suite") == "icaps-dpdp" and row.get("verdict") == "PASS_WITH_LIMITS" for row in dynamic_rows):
-        blockers.append("dynamic-baseline-only")
+        blockers.append("dynamic-optimizer-comparison-missing")
     return layer("dynamicDispatchQuality", score, blockers, {"hardViolationCount": hard, "rowCount": len(dynamic_rows)})
 
 
@@ -176,11 +192,36 @@ def score_ml_intelligence(ml_root: Path) -> Dict[str, Any]:
     result = read_json(path)
     if result.get("finalVerdict") == "EVIDENCE_GAP":
         return layer("mlIntelligence", 0.0, result.get("verdictReasons", ["ml-community-benchmark-missing"]), {"mlValueProven": False, "rl4coAvailable": result.get("rl4coAvailable")})
-    score = 0.5 if result.get("rl4coAvailable") else 0.0
+    score = 0.45 if result.get("rl4coAvailable") else 0.0
+    if result.get("torchCudaAvailable"):
+        score += 0.10
+    if result.get("localMlPolicyAdapterPresent"):
+        score += 0.15
     if result.get("mlValueProven"):
         score = 1.0
     blockers = [] if result.get("mlValueProven") else ["ml-value-not-proven"]
+    if not result.get("workerReadinessAudited"):
+        blockers.append("ml-worker-readiness-not-audited")
     return layer("mlIntelligence", score, blockers, result)
+
+
+def academic_suite_name(row: Dict[str, Any]) -> str:
+    return str(row.get("suite") or row.get("benchmarkFamily") or "unknown")
+
+
+def academic_gap_reason(row: Dict[str, Any]) -> str:
+    if row.get("bestKnownVehicleCount") is None and row.get("bestKnownDistance") is None:
+        return "best-known-missing"
+    vehicle_count = row.get("vehicleCount")
+    best_vehicle = row.get("bestKnownVehicleCount")
+    try:
+        if vehicle_count is not None and best_vehicle is not None and int(vehicle_count) > int(best_vehicle):
+            return "vehicle-count"
+    except (TypeError, ValueError):
+        pass
+    if row.get("verdict") == "PASS_WITH_LIMITS":
+        return "objective-gap"
+    return "pyvrp-baseline-limited"
 
 
 def score_baseline_competitiveness(rows: Sequence[Dict[str, Any]], max_quality_root: Path, pyvrp_root: Path) -> Dict[str, Any]:
@@ -193,6 +234,28 @@ def score_baseline_competitiveness(rows: Sequence[Dict[str, Any]], max_quality_r
     bks_coverage = len(rows_with_bks) / max(1, len(academic_rows))
     pass_rate = len(pass_rows) / max(1, len(academic_rows))
     close_rate = len(close_max_quality) / max(1, len(max_quality_rows))
+    pass_rate_by_suite = {}
+    for suite_name in sorted({academic_suite_name(row) for row in academic_rows}):
+        suite_rows = [row for row in academic_rows if academic_suite_name(row) == suite_name]
+        pass_rate_by_suite[suite_name] = sum(1 for row in suite_rows if row.get("verdict") == "PASS") / max(1, len(suite_rows))
+    weak_rows = [row for row in academic_rows if row.get("verdict") != "PASS"][:10]
+    weak_instances = [
+        {
+            "suite": academic_suite_name(row),
+            "instance": row.get("instance"),
+            "verdict": row.get("verdict"),
+            "reason": academic_gap_reason(row),
+            "vehicleCount": row.get("vehicleCount"),
+            "bestKnownVehicleCount": row.get("bestKnownVehicleCount"),
+            "gapPercent": row.get("gapPercent") or row.get("objectiveGapPercent"),
+        }
+        for row in weak_rows
+    ]
+    reason_counts: Dict[str, int] = {}
+    for row in academic_rows:
+        if row.get("verdict") != "PASS":
+            reason = academic_gap_reason(row)
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
     pyvrp_path = pyvrp_root / "pyvrp_results.json"
     pyvrp_score = 0.0
     pyvrp_blocker = "pyvrp-hgs-baseline-not-integrated"
@@ -212,15 +275,31 @@ def score_baseline_competitiveness(rows: Sequence[Dict[str, Any]], max_quality_r
         blockers.append("max-quality-not-close-to-bks")
     if pyvrp_blocker:
         blockers.append(pyvrp_blocker)
-    return layer("baselineCompetitiveness", score, blockers, {"bksCoverage": bks_coverage, "academicPassRate": pass_rate, "maxQualityCloseRate": close_rate, "pyvrpBaselineScore": pyvrp_score})
+    return layer("baselineCompetitiveness", score, blockers, {
+        "bksCoverage": bks_coverage,
+        "academicPassRate": pass_rate,
+        "academicPassRateBySuite": pass_rate_by_suite,
+        "maxQualityCloseRate": close_rate,
+        "pyvrpBaselineScore": pyvrp_score,
+        "weakAcademicInstances": weak_instances,
+        "passWithLimitsReasons": reason_counts,
+        "strongBaselineGapRootCause": sorted(reason_counts, key=reason_counts.get, reverse=True)[0] if reason_counts else None,
+    })
 
 
-def score_evidence_depth(rows: Sequence[Dict[str, Any]], route_beauty_root: Path) -> Dict[str, Any]:
+def score_evidence_depth(rows: Sequence[Dict[str, Any]], route_beauty_root: Path, stochastic_root: Path = DEFAULT_STOCHASTIC_ROOT) -> Dict[str, Any]:
     suite_names = {str(row.get("suite")) for row in rows}
     expected = {"solomon", "li-lim", "homberger-vrptw", "grubhub-mdrplib", "icaps-dpdp", "dpdp-stress"}
     route_beauty = route_beauty_root / "route_beauty_results.json"
-    covered = len(expected & suite_names) + (1 if route_beauty.exists() else 0)
-    total = len(expected) + 1
+    stochastic = stochastic_root / "stochastic_results.json"
+    stochastic_integrated = False
+    stochastic_reasons: List[str] = []
+    if stochastic.exists():
+        stochastic_result = read_json(stochastic)
+        stochastic_integrated = stochastic_result.get("finalVerdict") != "EVIDENCE_GAP"
+        stochastic_reasons = list(stochastic_result.get("verdictReasons", []))
+    covered = len(expected & suite_names) + (1 if route_beauty.exists() else 0) + (1 if stochastic_integrated else 0)
+    total = len(expected) + 2
     score = covered / total
     blockers = []
     if "grubhub-mdrplib" not in suite_names:
@@ -229,8 +308,9 @@ def score_evidence_depth(rows: Sequence[Dict[str, Any]], route_beauty_root: Path
         blockers.append("icaps-missing")
     if not route_beauty.exists():
         blockers.append("route-beauty-missing")
-    blockers.append("svrpbench-not-integrated")
-    return layer("evidenceDepth", score, blockers, {"coveredBenchmarkFamilies": covered, "expectedBenchmarkFamilies": total, "suiteNames": sorted(suite_names)})
+    if not stochastic_integrated:
+        blockers.append(stochastic_reasons[0] if stochastic_reasons else "stochastic-community-data-missing")
+    return layer("evidenceDepth", score, blockers, {"coveredBenchmarkFamilies": covered, "expectedBenchmarkFamilies": total, "suiteNames": sorted(suite_names), "stochasticCommunityIntegrated": stochastic_integrated})
 
 
 def score_route_beauty_readiness(route_beauty_root: Path) -> Dict[str, Any]:
@@ -357,10 +437,12 @@ ACTION_BY_BLOCKER = {
     "sequence-quality-target-gap": "Tune pickup/dropoff sequencing to reduce food-on-vehicle p95 and sequence risk.",
     "order-to-delivery-quality-target-gap": "Tune end-to-end delivery objective to improve p95 order-to-delivery score.",
     "dynamic-baseline-only": "Upgrade ICAPS from structural rolling-horizon checks to optimizer-vs-baseline dynamic quality.",
+    "dynamic-optimizer-comparison-missing": "Add rolling-horizon optimizer-vs-baseline comparison for ICAPS/DPDP and report served count, tardiness, latency, and route stability deltas.",
     "strong-baseline-gap": "Improve academic pass rate against best-known and PyVRP/HGS baselines before claiming strong competitiveness.",
     "max-quality-not-close-to-bks": "Run academic-max-quality v5 with richer route pool, ALNS, ejection chains, and repeated set partitioning.",
     "route-beauty-limits": "Add shape-aware route selection and reject high-detour/low-straightness candidates on multi-region DIMACS.",
     "ml-value-not-proven": "Connect the local ML policy to the benchmark and run ML versus no-ML ablation on public instances.",
+    "ml-worker-readiness-not-audited": "Run live RouteFinder, GreedRL, and Forecast worker health checks and attach readiness evidence to the ML benchmark.",
     "route-beauty-single-region-only": "Add DIMACS BAY/COL/FLA or OSRM OSM extracts for multi-region route-beauty evidence.",
     "route-beauty-pair-count-low": "Increase route-beauty pair count to at least 50 per region.",
     "route-condition-benchmark-missing": "Run route-condition benchmark with clear/rain/traffic/storm profiles.",
@@ -372,6 +454,9 @@ ACTION_BY_BLOCKER = {
     "community-weather-data-missing": "Download public Open-Meteo historical weather data for route stress evaluation.",
     "community-weather-route-limits": "Improve weather-aware route selection, keeping route shape and detour under bad-weather stress.",
     "no-weather-stress-events": "Use a public historical weather window with rain or wind stress events.",
+    "public-stochastic-vrp-data-missing": "Add official public stochastic VRP instance files and checksums before claiming uncertainty-routing coverage.",
+    "svrpbench-data-source-not-configured": "Document and configure the public stochastic/SVRP benchmark data source.",
+    "stochastic-data-manifest-missing": "Run download_stochastic_benchmark_data.py to create the stochastic benchmark manifest.",
 }
 
 
@@ -397,7 +482,12 @@ def build_action_plan(blockers: Sequence[str]) -> List[Dict[str, str]]:
         "order-to-delivery-baseline-only",
         "order-to-delivery-quality-target-gap",
         "dynamic-baseline-only",
+        "dynamic-optimizer-comparison-missing",
         "svrpbench-not-integrated",
+        "public-stochastic-vrp-data-missing",
+        "svrpbench-data-source-not-configured",
+        "stochastic-data-manifest-missing",
+        "ml-worker-readiness-not-audited",
         "route-beauty-single-region-only",
         "route-beauty-pair-count-low",
         "community-weather-route-missing",
@@ -447,7 +537,7 @@ def final_verdict(layers: Sequence[Dict[str, Any]]) -> str:
     return "PASS_WITH_LIMITS"
 
 
-def build_elite_scorecard(certification_root: Path, max_quality_root: Path, route_beauty_root: Path, pyvrp_root: Path = DEFAULT_PYVRP_ROOT, ml_root: Path = DEFAULT_ML_ROOT, route_condition_root: Path = DEFAULT_ROUTE_CONDITION_ROOT, traffic_route_root: Path = DEFAULT_TRAFFIC_ROUTE_ROOT, weather_route_root: Path = DEFAULT_WEATHER_ROUTE_ROOT, food_quality_root: Path = DEFAULT_FOOD_QUALITY_ROOT) -> Dict[str, Any]:
+def build_elite_scorecard(certification_root: Path, max_quality_root: Path, route_beauty_root: Path, pyvrp_root: Path = DEFAULT_PYVRP_ROOT, ml_root: Path = DEFAULT_ML_ROOT, route_condition_root: Path = DEFAULT_ROUTE_CONDITION_ROOT, traffic_route_root: Path = DEFAULT_TRAFFIC_ROUTE_ROOT, weather_route_root: Path = DEFAULT_WEATHER_ROUTE_ROOT, food_quality_root: Path = DEFAULT_FOOD_QUALITY_ROOT, dynamic_quality_root: Path = DEFAULT_DYNAMIC_QUALITY_ROOT, stochastic_root: Path = DEFAULT_STOCHASTIC_ROOT) -> Dict[str, Any]:
     certification_path = certification_root / "certification_suite_results.json"
     if not certification_path.exists():
         layers = [layer("systemReliability", 0.0, ["certification-suite-missing"], {})]
@@ -466,10 +556,10 @@ def build_elite_scorecard(certification_root: Path, max_quality_root: Path, rout
         score_community_traffic_route(traffic_route_root),
         score_community_weather_route(weather_route_root),
         score_order_to_delivery(rows, food_quality_root),
-        score_dynamic_dispatch(rows),
+        score_dynamic_dispatch(rows, dynamic_quality_root),
         score_ml_intelligence(ml_root),
         score_baseline_competitiveness(rows, max_quality_root, pyvrp_root),
-        score_evidence_depth(rows, route_beauty_root),
+        score_evidence_depth(rows, route_beauty_root, stochastic_root),
         score_route_beauty_readiness(route_beauty_root),
         score_runtime_quality(rows, max_quality_root),
         score_system_reliability(certification),
@@ -487,6 +577,8 @@ def build_elite_scorecard(certification_root: Path, max_quality_root: Path, rout
         "sourcePyvrp": str(pyvrp_root / "pyvrp_results.json"),
         "sourceMlIntelligence": str(ml_root / "ml_intelligence_results.json"),
         "sourceFoodQuality": str(food_quality_root / "food_dispatch_quality_results.json"),
+        "sourceDynamicQuality": str(dynamic_quality_root / "dynamic_dispatch_quality_results.json"),
+        "sourceStochastic": str(stochastic_root / "stochastic_results.json"),
         "finalVerdict": final_verdict(layers),
         "overallScore": overall,
         "mainBlockers": blockers,
@@ -528,10 +620,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--pyvrp-root", default=str(DEFAULT_PYVRP_ROOT))
     parser.add_argument("--ml-root", default=str(DEFAULT_ML_ROOT))
     parser.add_argument("--food-quality-root", default=str(DEFAULT_FOOD_QUALITY_ROOT))
+    parser.add_argument("--dynamic-quality-root", default=str(DEFAULT_DYNAMIC_QUALITY_ROOT))
+    parser.add_argument("--stochastic-root", default=str(DEFAULT_STOCHASTIC_ROOT))
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     args = parser.parse_args(argv)
     output_root = Path(args.output_root)
-    scorecard = build_elite_scorecard(Path(args.certification_root), Path(args.max_quality_root), Path(args.route_beauty_root), Path(args.pyvrp_root), Path(args.ml_root), Path(args.route_condition_root), Path(args.traffic_route_root), Path(args.weather_route_root), Path(args.food_quality_root))
+    scorecard = build_elite_scorecard(Path(args.certification_root), Path(args.max_quality_root), Path(args.route_beauty_root), Path(args.pyvrp_root), Path(args.ml_root), Path(args.route_condition_root), Path(args.traffic_route_root), Path(args.weather_route_root), Path(args.food_quality_root), Path(args.dynamic_quality_root), Path(args.stochastic_root))
     write_json(output_root / "elite_results.json", scorecard)
     (output_root / "elite_report.md").write_text(markdown(scorecard), encoding="utf-8")
     write_json(output_root / "scorecard.json", scorecard)

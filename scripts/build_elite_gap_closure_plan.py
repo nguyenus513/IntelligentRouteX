@@ -59,7 +59,7 @@ RAILS: Dict[str, Dict[str, Any]] = {
     },
     "ml-ablation-value": {
         "priority": 40,
-        "blockers": ["ml-value-not-proven"],
+        "blockers": ["ml-value-not-proven", "ml-worker-readiness-not-audited"],
         "goal": "Connect local ML policy and prove value against no-ML and heuristic baselines.",
         "commands": [
             "py -3.13 scripts/run_ml_intelligence_benchmark.py",
@@ -68,6 +68,7 @@ RAILS: Dict[str, Dict[str, Any]] = {
         "gates": [
             "rl4coImportable == true",
             "localMlPolicyAdapterPresent == true",
+            "workerReadinessAudited == true",
             "mlValueProven == true or report negative result honestly",
         ],
     },
@@ -88,10 +89,10 @@ RAILS: Dict[str, Dict[str, Any]] = {
     },
     "dynamic-rolling-horizon-quality": {
         "priority": 60,
-        "blockers": ["dynamic-baseline-only"],
+        "blockers": ["dynamic-baseline-only", "dynamic-optimizer-comparison-missing"],
         "goal": "Upgrade ICAPS/DPDP from structural continuity to optimizer-quality rolling-horizon comparison.",
         "commands": [
-            "py -3.13 scripts/run_external_benchmark_certification.py --suite icaps-dpdp",
+            "py -3.13 scripts/run_dynamic_dispatch_quality_benchmark.py",
             "py -3.13 scripts/run_elite_food_dispatch_benchmark.py",
         ],
         "gates": [
@@ -103,10 +104,11 @@ RAILS: Dict[str, Dict[str, Any]] = {
     },
     "stochastic-community-coverage": {
         "priority": 70,
-        "blockers": ["svrpbench-not-integrated"],
+        "blockers": ["svrpbench-not-integrated", "public-stochastic-vrp-data-missing", "svrpbench-data-source-not-configured", "stochastic-data-manifest-missing"],
         "goal": "Add public stochastic/uncertainty routing evidence beyond deterministic VRPTW and DPDP smoke.",
         "commands": [
-            "py -3.13 scripts/verify_certification_dataset.py --level full",
+            "py -3.13 scripts/download_stochastic_benchmark_data.py",
+            "py -3.13 scripts/run_stochastic_community_benchmark.py",
             "py -3.13 scripts/run_elite_food_dispatch_benchmark.py",
         ],
         "gates": [

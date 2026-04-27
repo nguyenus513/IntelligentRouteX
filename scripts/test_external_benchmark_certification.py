@@ -35,6 +35,9 @@ weather_route = load_module("run_community_weather_route_benchmark", "run_commun
 gap_plan = load_module("build_elite_gap_closure_plan", "build_elite_gap_closure_plan.py")
 closure_loop = load_module("run_elite_closure_loop", "run_elite_closure_loop.py")
 food_quality = load_module("run_food_dispatch_quality_benchmark", "run_food_dispatch_quality_benchmark.py")
+dynamic_quality = load_module("run_dynamic_dispatch_quality_benchmark", "run_dynamic_dispatch_quality_benchmark.py")
+stochastic_data = load_module("download_stochastic_benchmark_data", "download_stochastic_benchmark_data.py")
+stochastic_benchmark = load_module("run_stochastic_community_benchmark", "run_stochastic_community_benchmark.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -229,6 +232,14 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertEqual(0, metrics["turnCount"])
         self.assertAlmostEqual(1.0, metrics["straightnessScore"])
 
+    def test_route_beauty_classifies_bad_shape(self) -> None:
+        row = {"straightnessScore": 0.20, "networkDetourRatio": 5.0}
+
+        classified = route_beauty.classify_route_shape(row)
+
+        self.assertEqual("high-detour-and-low-straightness", classified["routeShapeIssue"])
+        self.assertEqual("topology-constrained", classified["routeShapeIssueClass"])
+
     def test_elite_scorecard_reports_missing_certification_as_evidence_gap(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -338,6 +349,42 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         layer = food_quality.score_food(rows)
 
         self.assertEqual("PASS", layer["verdict"])
+
+    def test_food_quality_explainability_ranks_worst_instances(self) -> None:
+        rows = [{"instanceName": "easy", "p95Delay": 3.0}, {"instanceName": "hard", "p95Delay": 9.0}]
+
+        ranked = food_quality.top_instances(rows, "p95Delay", limit=1)
+
+        self.assertEqual("hard", ranked[0]["instance"])
+
+    def test_dynamic_quality_reports_missing_baseline_comparison(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cert = root / "cert" / "certification_suite_results.json"
+            cert.parent.mkdir(parents=True)
+            cert.write_text(json.dumps({"results": [{"suite": "icaps-dpdp", "instance": "unit", "verdict": "PASS_WITH_LIMITS", "activeRouteCorruptionCount": 0, "vehicleStateContinuityViolation": 0, "routeStabilityScore": 1.0}]}), encoding="utf-8")
+
+            result = dynamic_quality.build_quality(root / "cert")
+
+        self.assertEqual("PASS_WITH_LIMITS", result["finalVerdict"])
+        self.assertIn("dynamic-optimizer-comparison-missing", result["verdictReasons"])
+
+    def test_stochastic_manifest_is_evidence_gap_without_data(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manifest = stochastic_data.build_manifest(Path(temp_dir))
+            stochastic_data.write_json(Path(temp_dir) / "manifest.json", manifest)
+            result = stochastic_benchmark.build_result(Path(temp_dir))
+
+        self.assertEqual("EVIDENCE_GAP", result["finalVerdict"])
+        self.assertIn("public-stochastic-vrp-data-missing", result["verdictReasons"])
+
+    def test_baseline_competitiveness_reports_root_cause(self) -> None:
+        rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            layer = elite.score_baseline_competitiveness(rows, Path(temp_dir) / "max", Path(temp_dir) / "pyvrp")
+
+        self.assertEqual("vehicle-count", layer["metrics"]["strongBaselineGapRootCause"])
 
 
 if __name__ == "__main__":

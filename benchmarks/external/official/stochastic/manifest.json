@@ -1,0 +1,17 @@
+{
+  "benchmarkFamily": "public-stochastic-vrp",
+  "dataRoot": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\stochastic",
+  "finalVerdict": "EVIDENCE_GAP",
+  "instanceDirectory": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\stochastic\\instances",
+  "instanceFileCount": 0,
+  "instanceFiles": [],
+  "manualDataInstructions": [
+    "Place public stochastic VRP benchmark instance files under benchmarks/external/official/stochastic/instances/.",
+    "Keep source URLs and checksums beside the files before enabling PASS claims."
+  ],
+  "schemaVersion": "stochastic-community-data-manifest/v1",
+  "verdictReasons": [
+    "public-stochastic-vrp-data-missing",
+    "svrpbench-data-source-not-configured"
+  ]
+}
