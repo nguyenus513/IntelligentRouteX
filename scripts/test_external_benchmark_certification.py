@@ -255,6 +255,18 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertEqual("EVIDENCE_GAP", row["verdict"])
         self.assertIn("community-traffic-data-missing", row["verdictReasons"])
 
+    def test_elite_traffic_score_does_not_block_unavoidable_peak_stress(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            payload = {"finalVerdict": "PASS", "datasets": [{"dataset": "unit", "routeCount": 2, "badTrafficRouteCount": 0, "unavoidablePeakStressRouteCount": 2, "avgPeakVsOffPeakRatio": 3.0}]}
+            path = root / "traffic_route_results.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+            layer = elite.score_community_traffic_route(root)
+
+        self.assertEqual([], layer["blockers"])
+        self.assertEqual(2, layer["metrics"]["unavoidablePeakStressRouteCount"])
+
     def test_community_weather_benchmark_reports_missing_data(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

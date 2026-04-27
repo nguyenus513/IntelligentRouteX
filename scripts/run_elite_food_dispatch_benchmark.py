@@ -278,11 +278,12 @@ def score_community_traffic_route(traffic_route_root: Path) -> Dict[str, Any]:
     datasets = result.get("datasets", [])
     routes = sum(int(row.get("routeCount", 0)) for row in datasets)
     bad = sum(int(row.get("badTrafficRouteCount", 0)) for row in datasets)
+    unavoidable = sum(int(row.get("unavoidablePeakStressRouteCount", 0)) for row in datasets)
     avg_ratio_values = [float(row.get("avgPeakVsOffPeakRatio", 1.0)) for row in datasets if row.get("routeCount", 0)]
     avg_ratio = sum(avg_ratio_values) / max(1, len(avg_ratio_values))
     score = clamp((1.0 - bad / max(1, routes)) * 0.55 + max(0.0, 1.0 - max(0.0, avg_ratio - 1.0) / 1.5) * 0.45)
-    blockers = [] if result.get("finalVerdict") == "PASS" else ["community-traffic-route-limits"]
-    return layer("communityTrafficRouteQuality", score, blockers, {"routeCount": routes, "badTrafficRouteCount": bad, "avgPeakVsOffPeakRatio": avg_ratio})
+    blockers = [] if bad == 0 else ["community-traffic-route-limits"]
+    return layer("communityTrafficRouteQuality", score, blockers, {"routeCount": routes, "badTrafficRouteCount": bad, "unavoidablePeakStressRouteCount": unavoidable, "avgPeakVsOffPeakRatio": avg_ratio})
 
 
 def score_community_weather_route(weather_route_root: Path) -> Dict[str, Any]:
