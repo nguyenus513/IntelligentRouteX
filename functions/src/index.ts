@@ -218,6 +218,22 @@ export const driverAcceptAssignment = onCall(async (request) => {
     updatedAt: FieldValue.serverTimestamp()
   });
 
+  const orderIds = Array.isArray(assignment.data()?.orderIds) ? assignment.data()?.orderIds : [];
+  for (const orderId of orderIds) {
+    if (typeof orderId === "string") {
+      await firestore.collection("orders").doc(orderId).set({
+        status: "DRIVER_TO_RESTAURANT",
+        updatedAt: FieldValue.serverTimestamp()
+      }, {merge: true});
+    }
+  }
+
+  await firestore.collection("drivers").doc(uid).set({
+    status: "picking_up",
+    currentAssignmentId: assignmentId,
+    updatedAt: FieldValue.serverTimestamp()
+  }, {merge: true});
+
   return {assignmentId, status: "accepted"};
 });
 
@@ -236,6 +252,26 @@ export const driverRejectAssignment = onCall(async (request) => {
     rejectedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp()
   });
+
+  const orderIds = Array.isArray(assignment.data()?.orderIds) ? assignment.data()?.orderIds : [];
+  for (const orderId of orderIds) {
+    if (typeof orderId === "string") {
+      await firestore.collection("orders").doc(orderId).set({
+        status: "ASSIGNING_DRIVER",
+        assignedDriverId: null,
+        assignedDriverUid: null,
+        assignmentId: null,
+        degradeReasons: ["driver-rejected-assignment"],
+        updatedAt: FieldValue.serverTimestamp()
+      }, {merge: true});
+    }
+  }
+
+  await firestore.collection("drivers").doc(uid).set({
+    status: "idle",
+    currentAssignmentId: null,
+    updatedAt: FieldValue.serverTimestamp()
+  }, {merge: true});
 
   return {assignmentId, status: "rejected"};
 });

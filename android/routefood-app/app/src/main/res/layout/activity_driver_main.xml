@@ -30,6 +30,7 @@
             android:padding="20dp">
 
             <TextView
+                android:id="@+id/driverStatusText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Offline"
@@ -38,6 +39,7 @@
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/assignmentSummaryText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
@@ -52,4 +54,29 @@
         android:layout_height="56dp"
         android:layout_marginTop="24dp"
         android:text="Go online demo" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/acceptAssignmentButton"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:enabled="false"
+            android:text="Accept" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/rejectAssignmentButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:enabled="false"
+            android:text="Reject" />
+    </LinearLayout>
 </LinearLayout>
