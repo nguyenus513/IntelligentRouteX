@@ -11,6 +11,8 @@ DEFAULT_OUTPUT_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "elite-food-dispat
 DEFAULT_CERTIFICATION_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "certification-suite-external-only-full"
 DEFAULT_MAX_QUALITY_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "academic-objective-quality-v4"
 DEFAULT_ROUTE_BEAUTY_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "route-beauty-community"
+DEFAULT_PYVRP_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "pyvrp-baseline"
+DEFAULT_ML_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "ml-intelligence-community"
 
 
 def read_json(path: Path) -> Dict[str, Any]:
@@ -137,11 +139,21 @@ def score_dynamic_dispatch(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     return layer("dynamicDispatchQuality", score, blockers, {"hardViolationCount": hard, "rowCount": len(dynamic_rows)})
 
 
-def score_ml_intelligence() -> Dict[str, Any]:
-    return layer("mlIntelligence", 0.0, ["ml-community-benchmark-missing", "rl4co-not-integrated"], {"mlValueProven": False})
+def score_ml_intelligence(ml_root: Path) -> Dict[str, Any]:
+    path = ml_root / "ml_intelligence_results.json"
+    if not path.exists():
+        return layer("mlIntelligence", 0.0, ["ml-community-benchmark-missing", "rl4co-not-integrated"], {"mlValueProven": False})
+    result = read_json(path)
+    if result.get("finalVerdict") == "EVIDENCE_GAP":
+        return layer("mlIntelligence", 0.0, result.get("verdictReasons", ["ml-community-benchmark-missing"]), {"mlValueProven": False, "rl4coAvailable": result.get("rl4coAvailable")})
+    score = 0.5 if result.get("rl4coAvailable") else 0.0
+    if result.get("mlValueProven"):
+        score = 1.0
+    blockers = [] if result.get("mlValueProven") else ["ml-value-not-proven"]
+    return layer("mlIntelligence", score, blockers, result)
 
 
-def score_baseline_competitiveness(rows: Sequence[Dict[str, Any]], max_quality_root: Path) -> Dict[str, Any]:
+def score_baseline_competitiveness(rows: Sequence[Dict[str, Any]], max_quality_root: Path, pyvrp_root: Path) -> Dict[str, Any]:
     academic_rows = [row for row in rows if row.get("stage") in {"A-academic-correctness", "B-scale"}]
     max_quality_path = max_quality_root / "academic_max_quality_results.json"
     max_quality_rows = read_json(max_quality_path).get("results", []) if max_quality_path.exists() else []
@@ -151,14 +163,26 @@ def score_baseline_competitiveness(rows: Sequence[Dict[str, Any]], max_quality_r
     bks_coverage = len(rows_with_bks) / max(1, len(academic_rows))
     pass_rate = len(pass_rows) / max(1, len(academic_rows))
     close_rate = len(close_max_quality) / max(1, len(max_quality_rows))
-    score = clamp(bks_coverage * 0.25 + pass_rate * 0.35 + close_rate * 0.40)
+    pyvrp_path = pyvrp_root / "pyvrp_results.json"
+    pyvrp_score = 0.0
+    pyvrp_blocker = "pyvrp-hgs-baseline-not-integrated"
+    if pyvrp_path.exists():
+        pyvrp = read_json(pyvrp_path)
+        pyvrp_rows = pyvrp.get("results", [])
+        if pyvrp.get("pyvrpInstalled") and pyvrp_rows and all(row.get("verdict") != "EVIDENCE_GAP" for row in pyvrp_rows):
+            pyvrp_score = 1.0
+            pyvrp_blocker = ""
+        else:
+            pyvrp_blocker = "pyvrp-hgs-baseline-evidence-gap"
+    score = clamp(bks_coverage * 0.20 + pass_rate * 0.30 + close_rate * 0.30 + pyvrp_score * 0.20)
     blockers = []
     if pass_rate < 0.75:
         blockers.append("strong-baseline-gap")
     if close_rate < 0.75:
         blockers.append("max-quality-not-close-to-bks")
-    blockers.append("pyvrp-hgs-baseline-not-integrated")
-    return layer("baselineCompetitiveness", score, blockers, {"bksCoverage": bks_coverage, "academicPassRate": pass_rate, "maxQualityCloseRate": close_rate})
+    if pyvrp_blocker:
+        blockers.append(pyvrp_blocker)
+    return layer("baselineCompetitiveness", score, blockers, {"bksCoverage": bks_coverage, "academicPassRate": pass_rate, "maxQualityCloseRate": close_rate, "pyvrpBaselineScore": pyvrp_score})
 
 
 def score_evidence_depth(rows: Sequence[Dict[str, Any]], route_beauty_root: Path) -> Dict[str, Any]:
@@ -185,14 +209,16 @@ def score_route_beauty_readiness(route_beauty_root: Path) -> Dict[str, Any]:
         return layer("routeBeautyReadiness", 0.0, ["route-beauty-missing"], {})
     result = read_json(path)
     evaluated = int(result.get("evaluatedPairs", 0))
-    single_region_score = 0.5 if result.get("benchmarkFamily") == "dimacs-road-ny" else 0.25
+    region_count = int(result.get("regionCount", 1))
+    single_region_score = clamp(region_count / 4.0)
     pair_score = clamp(evaluated / 50.0)
     score = clamp(single_region_score + pair_score * 0.5)
     blockers = []
     if evaluated < 50:
         blockers.append("route-beauty-pair-count-low")
-    blockers.append("route-beauty-single-region-only")
-    return layer("routeBeautyReadiness", score, blockers, {"evaluatedPairs": evaluated, "regions": [result.get("benchmarkFamily", "unknown")]})
+    if region_count < 4:
+        blockers.append("route-beauty-single-region-only")
+    return layer("routeBeautyReadiness", score, blockers, {"evaluatedPairs": evaluated, "regionCount": region_count, "regions": result.get("regions", [result.get("benchmarkFamily", "unknown")])})
 
 
 def score_runtime_quality(rows: Sequence[Dict[str, Any]], max_quality_root: Path) -> Dict[str, Any]:
@@ -226,7 +252,10 @@ ACTION_BY_BLOCKER = {
     "vehicle-count-gap": "Add stronger ALNS/ejection-chain route generation and rerun Homberger R/RC max-quality.",
     "ml-community-benchmark-missing": "Integrate RL4CO or an equivalent public ML routing benchmark with no-ML ablation.",
     "rl4co-not-integrated": "Add RL4CO adapter and report ML gap versus heuristic/PyVRP baselines.",
+    "rl4co-package-not-installed": "Install RL4CO in the benchmark environment or add a containerized RL4CO runner.",
+    "our-ml-policy-adapter-missing": "Expose local ML policy inference for no-ML versus ML benchmark comparison.",
     "pyvrp-hgs-baseline-not-integrated": "Run PyVRP/HGS baselines for Solomon/Homberger and compare vehicle/distance gaps.",
+    "pyvrp-hgs-baseline-evidence-gap": "Install PyVRP and complete the Solomon/Homberger adapter for HGS comparison.",
     "svrpbench-not-integrated": "Add SVRPBench stochastic VRP cases for robustness under delay/traffic uncertainty.",
     "food-baseline-only": "Upgrade MDRPLib from structural baseline to optimizer quality with bundle/delay/utilization comparisons.",
     "driver-quality-baseline-only": "Add driver fairness, utilization distribution, and baseline comparison on MDRPLib.",
@@ -292,7 +321,7 @@ def final_verdict(layers: Sequence[Dict[str, Any]]) -> str:
     return "PASS_WITH_LIMITS"
 
 
-def build_elite_scorecard(certification_root: Path, max_quality_root: Path, route_beauty_root: Path) -> Dict[str, Any]:
+def build_elite_scorecard(certification_root: Path, max_quality_root: Path, route_beauty_root: Path, pyvrp_root: Path = DEFAULT_PYVRP_ROOT, ml_root: Path = DEFAULT_ML_ROOT) -> Dict[str, Any]:
     certification_path = certification_root / "certification_suite_results.json"
     if not certification_path.exists():
         layers = [layer("systemReliability", 0.0, ["certification-suite-missing"], {})]
@@ -309,8 +338,8 @@ def build_elite_scorecard(certification_root: Path, max_quality_root: Path, rout
         score_road_beauty(route_beauty_root),
         score_order_to_delivery(rows),
         score_dynamic_dispatch(rows),
-        score_ml_intelligence(),
-        score_baseline_competitiveness(rows, max_quality_root),
+        score_ml_intelligence(ml_root),
+        score_baseline_competitiveness(rows, max_quality_root, pyvrp_root),
         score_evidence_depth(rows, route_beauty_root),
         score_route_beauty_readiness(route_beauty_root),
         score_runtime_quality(rows, max_quality_root),
@@ -323,6 +352,8 @@ def build_elite_scorecard(certification_root: Path, max_quality_root: Path, rout
         "sourceCertification": str(certification_path),
         "sourceMaxQuality": str(max_quality_root / "academic_max_quality_results.json"),
         "sourceRouteBeauty": str(route_beauty_root / "route_beauty_results.json"),
+        "sourcePyvrp": str(pyvrp_root / "pyvrp_results.json"),
+        "sourceMlIntelligence": str(ml_root / "ml_intelligence_results.json"),
         "finalVerdict": final_verdict(layers),
         "overallScore": overall,
         "mainBlockers": blockers,
@@ -358,10 +389,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--certification-root", default=str(DEFAULT_CERTIFICATION_ROOT))
     parser.add_argument("--max-quality-root", default=str(DEFAULT_MAX_QUALITY_ROOT))
     parser.add_argument("--route-beauty-root", default=str(DEFAULT_ROUTE_BEAUTY_ROOT))
+    parser.add_argument("--pyvrp-root", default=str(DEFAULT_PYVRP_ROOT))
+    parser.add_argument("--ml-root", default=str(DEFAULT_ML_ROOT))
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     args = parser.parse_args(argv)
     output_root = Path(args.output_root)
-    scorecard = build_elite_scorecard(Path(args.certification_root), Path(args.max_quality_root), Path(args.route_beauty_root))
+    scorecard = build_elite_scorecard(Path(args.certification_root), Path(args.max_quality_root), Path(args.route_beauty_root), Path(args.pyvrp_root), Path(args.ml_root))
     write_json(output_root / "elite_results.json", scorecard)
     (output_root / "elite_report.md").write_text(markdown(scorecard), encoding="utf-8")
     write_json(output_root / "scorecard.json", scorecard)

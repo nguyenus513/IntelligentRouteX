@@ -152,9 +152,8 @@ def markdown(result: Dict[str, object]) -> str:
     lines.append("| --- | ---: | ---: | ---: | ---: | ---: | --- |")
     for row in result["routes"]:
         route_verdict = "PASS" if row["routePolylinePresent"] and row["straightnessScore"] >= 0.30 and row["networkDetourRatio"] <= 4.0 else "PASS_WITH_LIMITS"
-        lines.append(
-            f"| {row['source']}->{row['target']} | {row['polylinePointCount']} | {row['straightnessScore']:.3f} | {row['networkDetourRatio']:.3f} | {row['turnCount']} | {row['sharpTurnCount']} | {route_verdict} |"
-        )
+        pair_label = f"{row.get('region', '')}:{row['source']}->{row['target']}"
+        lines.append(f"| {pair_label} | {row['polylinePointCount']} | {row['straightnessScore']:.3f} | {row['networkDetourRatio']:.3f} | {row['turnCount']} | {row['sharpTurnCount']} | {route_verdict} |")
     return "\n".join(lines) + "\n"
 
 
@@ -164,33 +163,40 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     parser.add_argument("--node-limit", type=int, default=20_000)
     parser.add_argument("--pairs", type=int, default=20)
+    parser.add_argument("--regions", default="NY", help="Comma-separated DIMACS regions to evaluate.")
     args = parser.parse_args(argv)
     data_root = Path(args.data_root)
-    graph_path = data_root / "USA-road-d.NY.gr.gz"
-    coord_path = data_root / "USA-road-d.NY.co.gz"
-    if not graph_path.exists() or not coord_path.exists():
+    regions = [part.strip().upper() for part in args.regions.split(",") if part.strip()]
+    missing = [region for region in regions if not (data_root / f"USA-road-d.{region}.gr.gz").exists() or not (data_root / f"USA-road-d.{region}.co.gz").exists()]
+    if missing:
         result = {"schemaVersion": "route-beauty-community/v1", "finalVerdict": "EVIDENCE_GAP", "verdictReasons": ["dimacs-road-data-missing"]}
+        result["missingRegions"] = missing
         output_root = Path(args.output_root)
         write_json(output_root / "route_beauty_results.json", result)
         (output_root / "route_beauty_report.md").write_text(markdown({"finalVerdict": "EVIDENCE_GAP", "routes": []}), encoding="utf-8")
         print(f"[ROUTE BEAUTY JSON] {output_root / 'route_beauty_results.json'}")
         return 2
-    coordinates = read_coordinates(coord_path, args.node_limit)
-    graph = read_graph(graph_path, args.node_limit)
-    nodes = sorted(node for node in graph if graph[node] and node in coordinates)
     rows: List[Dict[str, object]] = []
-    for source, target in benchmark_pairs(nodes, args.pairs):
-        path_result = shortest_path(graph, source, target)
-        if path_result is None:
-            continue
-        network_distance, path = path_result
-        metrics = route_shape_metrics(path, coordinates, network_distance)
-        rows.append({"source": source, "target": target, **metrics})
+    for region in regions:
+        graph_path = data_root / f"USA-road-d.{region}.gr.gz"
+        coord_path = data_root / f"USA-road-d.{region}.co.gz"
+        coordinates = read_coordinates(coord_path, args.node_limit)
+        graph = read_graph(graph_path, args.node_limit)
+        nodes = sorted(node for node in graph if graph[node] and node in coordinates)
+        for source, target in benchmark_pairs(nodes, args.pairs):
+            path_result = shortest_path(graph, source, target)
+            if path_result is None:
+                continue
+            network_distance, path = path_result
+            metrics = route_shape_metrics(path, coordinates, network_distance)
+            rows.append({"region": region, "source": source, "target": target, **metrics})
     final_verdict, reasons = verdict(rows)
     result = {
         "schemaVersion": "route-beauty-community/v1",
-        "benchmarkFamily": "dimacs-road-ny",
-        "dataSource": "DIMACS 9th Implementation Challenge USA-road-d.NY",
+        "benchmarkFamily": "dimacs-road",
+        "regions": regions,
+        "regionCount": len(regions),
+        "dataSource": "DIMACS 9th Implementation Challenge USA-road-d",
         "nodeLimit": args.node_limit,
         "requestedPairs": args.pairs,
         "evaluatedPairs": len(rows),

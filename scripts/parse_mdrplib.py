@@ -44,6 +44,10 @@ def evaluate_mdrplib_instance(path: Path, speed_meters_per_minute: float = 500.0
     max_delay_observed = 0.0
     total_delay = 0.0
     total_food_on_vehicle = 0.0
+    delays: list[float] = []
+    food_on_vehicle_times: list[float] = []
+    order_to_delivery_times: list[float] = []
+    pickup_wait_times: list[float] = []
 
     for order in sorted(orders, key=lambda row: float(row["placement_time"])):
         restaurant = restaurants.get(order["restaurant"])
@@ -78,11 +82,28 @@ def evaluate_mdrplib_instance(path: Path, speed_meters_per_minute: float = 500.0
         max_delay_observed = max(max_delay_observed, delay)
         total_delay += delay
         total_food_on_vehicle += food_on_vehicle
+        delays.append(delay)
+        food_on_vehicle_times.append(food_on_vehicle)
+        order_to_delivery_times.append(dropoff_time - float(order["placement_time"]))
+        pickup_wait_times.append(max(0.0, pickup_time - ready_time))
 
     served_rate = served / max(1, len(orders))
     hard_violations = pickup_before_ready_violations + shift_violations
     verdict = "PASS_WITH_LIMITS" if hard_violations == 0 and served > 0 else "FAIL"
     reasons = ["mdrplib-official-structural-baseline"] if verdict == "PASS_WITH_LIMITS" else ["mdrplib-hard-violation-or-no-service"]
+    courier_order_values = list(courier_orders.values())
+    mean_orders = sum(courier_order_values) / max(1, len(courier_order_values))
+    fairness_gini = 0.0
+    if mean_orders > 0.0:
+        fairness_gini = sum(abs(left - right) for left in courier_order_values for right in courier_order_values) / (2 * len(courier_order_values) ** 2 * mean_orders)
+
+    def percentile(values: list[float], percent: float) -> float:
+        if not values:
+            return 0.0
+        ordered = sorted(values)
+        index = min(len(ordered) - 1, max(0, int(round((percent / 100.0) * (len(ordered) - 1)))))
+        return ordered[index]
+
     return {
         "schemaVersion": "mdrplib-metrics/v1",
         "benchmarkFamily": "grubhub-mdrplib",
@@ -101,10 +122,24 @@ def evaluate_mdrplib_instance(path: Path, speed_meters_per_minute: float = 500.0
         "courierShiftViolation": shift_violations,
         "foodOnVehicleHardViolation": 0,
         "avgDelay": total_delay / max(1, served),
+        "p50Delay": percentile(delays, 50),
+        "p95Delay": percentile(delays, 95),
         "maxDelay": max_delay_observed,
         "avgFoodOnVehicleTime": total_food_on_vehicle / max(1, served),
+        "p50FoodOnVehicleTime": percentile(food_on_vehicle_times, 50),
+        "p95FoodOnVehicleTime": percentile(food_on_vehicle_times, 95),
+        "avgOrderToDeliveryTime": sum(order_to_delivery_times) / max(1, served),
+        "p50OrderToDeliveryTime": percentile(order_to_delivery_times, 50),
+        "p95OrderToDeliveryTime": percentile(order_to_delivery_times, 95),
+        "avgPickupWaitTime": sum(pickup_wait_times) / max(1, served),
         "courierUtilization": sum(1 for count in courier_orders.values() if count > 0) / max(1, len(couriers)),
         "ordersPerCourier": served / max(1, len(couriers)),
+        "ordersPerCourierP95": percentile([float(value) for value in courier_order_values], 95),
+        "assignmentFairnessGini": fairness_gini,
+        "bundleCount": served,
+        "avgBundleSize": 1.0 if served else 0.0,
+        "maxBundleSize": 1 if served else 0,
+        "multiOrderBundleRate": 0.0,
         "verdict": verdict,
         "verdictReasons": reasons,
     }
