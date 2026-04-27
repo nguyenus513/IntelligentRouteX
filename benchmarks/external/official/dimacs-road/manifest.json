@@ -12,8 +12,50 @@
       "filename": "USA-road-d.NY.co.gz",
       "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\dimacs-road\\USA-road-d.NY.co.gz",
       "url": "https://www.diag.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.NY.co.gz"
+    },
+    {
+      "bytes": 4130672,
+      "filename": "USA-road-d.BAY.gr.gz",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\dimacs-road\\USA-road-d.BAY.gr.gz",
+      "url": "https://www.diag.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.BAY.gr.gz"
+    },
+    {
+      "bytes": 2581007,
+      "filename": "USA-road-d.BAY.co.gz",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\dimacs-road\\USA-road-d.BAY.co.gz",
+      "url": "https://www.diag.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.BAY.co.gz"
+    },
+    {
+      "bytes": 5753354,
+      "filename": "USA-road-d.COL.gr.gz",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\dimacs-road\\USA-road-d.COL.gr.gz",
+      "url": "https://www.diag.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.COL.gr.gz"
+    },
+    {
+      "bytes": 3963158,
+      "filename": "USA-road-d.COL.co.gz",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\dimacs-road\\USA-road-d.COL.co.gz",
+      "url": "https://www.diag.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.COL.co.gz"
+    },
+    {
+      "bytes": 14448759,
+      "filename": "USA-road-d.FLA.gr.gz",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\dimacs-road\\USA-road-d.FLA.gr.gz",
+      "url": "https://www.diag.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.FLA.gr.gz"
+    },
+    {
+      "bytes": 9062784,
+      "filename": "USA-road-d.FLA.co.gz",
+      "path": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\dimacs-road\\USA-road-d.FLA.co.gz",
+      "url": "https://www.diag.uniroma1.it/challenge9/data/USA-road-d/USA-road-d.FLA.co.gz"
     }
   ],
   "licenseNote": "Public DIMACS 9th Implementation Challenge road-network benchmark files; keep provenance with downloaded artifacts.",
+  "regions": [
+    "NY",
+    "BAY",
+    "COL",
+    "FLA"
+  ],
   "schemaVersion": "route-beauty-benchmark-data/v1"
 }

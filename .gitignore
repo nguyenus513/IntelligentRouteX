@@ -21,3 +21,4 @@ artifacts/visual/
 artifacts/validation/geo-tiles/
 benchmarks/external/official/traffic/*/*.csv
 benchmarks/external/official/traffic/*/*.pkl
+benchmarks/external/official/dimacs-road/*.gz
