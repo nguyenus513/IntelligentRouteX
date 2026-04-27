@@ -46,4 +46,18 @@ public class FunctionsClient {
                     return data;
                 });
     }
+
+    public Task<Map<String, Object>> call(String functionName, Map<String, Object> payload) {
+        if (functions == null) {
+            return Tasks.forException(new IllegalStateException("Firebase Functions is not configured."));
+        }
+        return functions
+                .getHttpsCallable(functionName)
+                .call(payload)
+                .continueWith(task -> {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> data = (Map<String, Object>) task.getResult().getData();
+                    return data;
+                });
+    }
 }

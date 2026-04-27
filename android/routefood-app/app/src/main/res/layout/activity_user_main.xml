@@ -57,12 +57,21 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/homeStateText"
             android:layout_width="match_parent"
-            android:layout_height="110dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:background="@drawable/bg_card"
             android:gravity="center"
-            android:text="HCMC restaurant cards will render here"
+            android:padding="20dp"
+            android:text="Loading HCMC restaurants..."
             android:textColor="@color/route_text_secondary" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/restaurantRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:nestedScrollingEnabled="false" />
     </LinearLayout>
 </ScrollView>
