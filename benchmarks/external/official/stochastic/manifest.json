@@ -1,17 +1,27 @@
 {
   "benchmarkFamily": "public-stochastic-vrp",
+  "checksums": {
+    "svrp-bench-test-sample.json": "sha256:10603eedd6864de873652e65ab5c473975ff3f5730b0339ff0ac1266e83b2c19",
+    "svrp-bench-test.parquet": "sha256:c367e3ccd6185c591f19cd6aceb1c1cd41d2845b8e1976b0fe54cf67568a13c8"
+  },
   "dataRoot": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\stochastic",
-  "finalVerdict": "EVIDENCE_GAP",
+  "downloadError": null,
+  "finalVerdict": "PASS_WITH_LIMITS",
   "instanceDirectory": "E:\\Code _Project\\IntelligentRouteX\\benchmarks\\external\\official\\stochastic\\instances",
-  "instanceFileCount": 0,
-  "instanceFiles": [],
+  "instanceFileCount": 2,
+  "instanceFiles": [
+    "svrp-bench-test-sample.json",
+    "svrp-bench-test.parquet"
+  ],
   "manualDataInstructions": [
     "Place public stochastic VRP benchmark instance files under benchmarks/external/official/stochastic/instances/.",
     "Keep source URLs and checksums beside the files before enabling PASS claims."
   ],
+  "sampleRowsUrl": "https://datasets-server.huggingface.co/rows?dataset=MBZUAI%2Fsvrp-bench&config=default&split=test&offset=0&length=10",
   "schemaVersion": "stochastic-community-data-manifest/v1",
+  "sourceLandingPage": "https://huggingface.co/datasets/MBZUAI/svrp-bench",
+  "sourceUrl": "https://huggingface.co/datasets/MBZUAI/svrp-bench/resolve/main/data/test-00000-of-00001.parquet",
   "verdictReasons": [
-    "public-stochastic-vrp-data-missing",
-    "svrpbench-data-source-not-configured"
+    "stochastic-parser-checker-not-yet-integrated"
   ]
 }

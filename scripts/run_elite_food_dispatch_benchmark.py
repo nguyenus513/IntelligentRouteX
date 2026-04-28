@@ -296,7 +296,7 @@ def score_evidence_depth(rows: Sequence[Dict[str, Any]], route_beauty_root: Path
     stochastic_reasons: List[str] = []
     if stochastic.exists():
         stochastic_result = read_json(stochastic)
-        stochastic_integrated = stochastic_result.get("finalVerdict") != "EVIDENCE_GAP"
+        stochastic_integrated = stochastic_result.get("finalVerdict") in {"PASS", "PASS_WITH_LIMITS"} and bool(stochastic_result.get("parserIntegrated")) and bool(stochastic_result.get("checkerIntegrated"))
         stochastic_reasons = list(stochastic_result.get("verdictReasons", []))
     covered = len(expected & suite_names) + (1 if route_beauty.exists() else 0) + (1 if stochastic_integrated else 0)
     total = len(expected) + 2
@@ -457,6 +457,7 @@ ACTION_BY_BLOCKER = {
     "public-stochastic-vrp-data-missing": "Add official public stochastic VRP instance files and checksums before claiming uncertainty-routing coverage.",
     "svrpbench-data-source-not-configured": "Document and configure the public stochastic/SVRP benchmark data source.",
     "stochastic-data-manifest-missing": "Run download_stochastic_benchmark_data.py to create the stochastic benchmark manifest.",
+    "stochastic-public-data-unreadable": "Install a Parquet engine or use the Hugging Face rows API sample so stochastic public data can be parsed.",
 }
 
 
@@ -487,6 +488,7 @@ def build_action_plan(blockers: Sequence[str]) -> List[Dict[str, str]]:
         "public-stochastic-vrp-data-missing",
         "svrpbench-data-source-not-configured",
         "stochastic-data-manifest-missing",
+        "stochastic-public-data-unreadable",
         "ml-worker-readiness-not-audited",
         "route-beauty-single-region-only",
         "route-beauty-pair-count-low",

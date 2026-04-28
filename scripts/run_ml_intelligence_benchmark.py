@@ -5,13 +5,16 @@ import importlib
 import importlib.metadata
 import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, List, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "artifacts" / "benchmark" / "ml-intelligence-community"
 SERVICES_ROOT = REPO_ROOT / "services"
+DEFAULT_ABLATION_ROOT = REPO_ROOT / "artifacts" / "benchmark"
 
 
 def package_available(name: str) -> bool:
@@ -63,11 +66,54 @@ def greedrl_runtime_mode() -> str:
     return "unknown"
 
 
+def probe_worker_readiness(service_name: str, timeout_seconds: int = 20) -> Dict[str, Any]:
+    app_path = SERVICES_ROOT / service_name / "app.py"
+    if not app_path.exists():
+        return {"ready": False, "reason": "worker-app-missing", "version": {}}
+    probe = """
+import importlib.util
+import json
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location('worker_app', path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+if not hasattr(module, '_readiness'):
+    print(json.dumps({'ready': False, 'reason': 'readiness-function-missing', 'version': {}}))
+else:
+    ready, reason, _manifest, _artifact, version = module._readiness()
+    print(json.dumps({'ready': bool(ready), 'reason': reason, 'version': version}))
+"""
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", probe, str(app_path)],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {"ready": False, "reason": "worker-readiness-timeout", "version": {}}
+    if completed.returncode != 0:
+        return {"ready": False, "reason": "worker-readiness-error", "stderr": completed.stderr[-500:], "version": {}}
+    try:
+        return json.loads(completed.stdout.strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError) as exc:
+        return {"ready": False, "reason": "worker-readiness-invalid-output", "error": str(exc), "version": {}}
+
+
 def local_adapter_status() -> Dict[str, Any]:
     routefinder_present = service_present("ml-routefinder-worker")
     greedrl_present = service_present("ml-greedrl-worker")
     forecast_present = service_present("ml-forecast-worker")
     tabular_present = service_present("ml-tabular-worker")
+    routefinder_probe = probe_worker_readiness("ml-routefinder-worker") if routefinder_present else {"ready": False, "reason": "worker-app-missing", "version": {}}
+    greedrl_probe = probe_worker_readiness("ml-greedrl-worker") if greedrl_present else {"ready": False, "reason": "worker-app-missing", "version": {}}
+    forecast_probe = probe_worker_readiness("ml-forecast-worker") if forecast_present else {"ready": False, "reason": "worker-app-missing", "version": {}}
+    worker_readiness_audited = routefinder_present and greedrl_present and forecast_present
     worker_implementations = {
         "routeFinderWorkerImplementationPresent": routefinder_present,
         "greedRlWorkerImplementationPresent": greedrl_present,
@@ -77,12 +123,59 @@ def local_adapter_status() -> Dict[str, Any]:
     return {
         **worker_implementations,
         "localMlPolicyAdapterPresent": routefinder_present and greedrl_present and forecast_present,
-        "routeFinderWorkerReady": False,
-        "greedRlWorkerReady": False,
-        "forecastWorkerReady": False,
-        "workerReadinessAudited": False,
-        "workerReadinessReason": "static-filesystem-audit-only-no-live-worker-healthcheck-run",
+        "routeFinderWorkerReady": bool(routefinder_probe.get("ready")),
+        "greedRlWorkerReady": bool(greedrl_probe.get("ready")),
+        "forecastWorkerReady": bool(forecast_probe.get("ready")),
+        "workerReadinessAudited": worker_readiness_audited,
+        "workerReadinessReason": "live-readiness-probes-completed" if worker_readiness_audited else "worker-implementation-missing",
+        "workerReadinessDetails": {
+            "routefinder": routefinder_probe,
+            "greedrl": greedrl_probe,
+            "forecast": forecast_probe,
+        },
         "greedRlRuntimeMode": greedrl_runtime_mode(),
+    }
+
+
+def ml_ablation_rows(ablation_root: Path = DEFAULT_ABLATION_ROOT) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    if not ablation_root.exists():
+        return rows
+    for path in sorted(ablation_root.rglob("dispatch-quality-ablation*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        component = payload.get("toggledComponent")
+        if component not in {"routefinder", "greedrl", "forecast", "tabular"}:
+            continue
+        control = payload.get("controlMetrics", {})
+        variant = payload.get("variantMetrics", {})
+        control_utility = float(control.get("robustUtilityAverage", 0.0) or 0.0)
+        variant_utility = float(variant.get("robustUtilityAverage", 0.0) or 0.0)
+        control_objective = float(control.get("selectorObjectiveValue", 0.0) or 0.0)
+        variant_objective = float(variant.get("selectorObjectiveValue", 0.0) or 0.0)
+        rows.append({
+            "component": component,
+            "scenarioPack": payload.get("scenarioPack"),
+            "workloadSize": payload.get("workloadSize"),
+            "executionMode": payload.get("executionMode"),
+            "robustUtilityDelta": control_utility - variant_utility,
+            "selectorObjectiveDelta": control_objective - variant_objective,
+            "artifactPath": str(path),
+        })
+    return rows
+
+
+def ml_value_evidence(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    positive_rows = [row for row in rows if float(row.get("robustUtilityDelta", 0.0)) > 0.0 or float(row.get("selectorObjectiveDelta", 0.0)) > 0.0]
+    positive_components = sorted({str(row.get("component")) for row in positive_rows})
+    return {
+        "mlAblationArtifactCount": len(rows),
+        "mlPositiveAblationCount": len(positive_rows),
+        "mlPositiveComponents": positive_components,
+        "mlAblationRows": list(rows[:20]),
+        "mlValueProven": len(positive_components) >= 2,
     }
 
 
@@ -96,13 +189,14 @@ def run_benchmark() -> Dict[str, Any]:
     torch_status = package_status("torch")
     cuda = torch_cuda_status(torch_status)
     adapter = local_adapter_status()
+    value_evidence = ml_value_evidence(ml_ablation_rows())
     common = {
         "torchAvailable": torch_status["available"],
         "torchImportable": torch_status["importable"],
         "torchVersion": torch_status.get("version"),
         **cuda,
         **adapter,
-        "mlValueProven": False,
+        **value_evidence,
     }
     if not rl4co_status["available"]:
         return {
@@ -127,7 +221,7 @@ def run_benchmark() -> Dict[str, Any]:
             "rl4coImportError": rl4co_status.get("importError"),
             **common,
         }
-    reasons = ["ml-value-not-proven"]
+    reasons = [] if value_evidence["mlValueProven"] else ["ml-value-not-proven"]
     if not adapter["workerReadinessAudited"]:
         reasons.append("ml-worker-readiness-not-audited")
     return {

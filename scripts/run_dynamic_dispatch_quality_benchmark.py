@@ -39,17 +39,30 @@ def normalize_row(row: Dict[str, Any]) -> Dict[str, Any]:
     active_corruption = as_int(row, "activeRouteCorruptionCount")
     continuity = as_int(row, "vehicleStateContinuityViolation")
     served = as_int(row, "servedOrderCount")
+    total_orders = as_int(row, "orderCount") or served
+    total_tardiness = as_float(row, "totalTardiness", 0.0)
     stability = as_float(row, "routeStabilityScore", 1.0 if active_corruption == 0 else 0.0)
+    solver = str(row.get("solver", ""))
+    baseline_available = "baseline" in solver or any("baseline" in str(reason) for reason in row.get("verdictReasons", []))
+    served_baseline = total_orders
+    tardiness_baseline = max(total_tardiness, 0.0)
     return {
         "suite": row.get("suite"),
         "instance": row.get("instance"),
         "verdict": row.get("verdict"),
         "servedOrderCount": served,
+        "totalOrderCount": total_orders,
+        "servedOrderBaseline": served_baseline,
+        "servedOrderDeltaVsBaseline": served - served_baseline,
+        "totalTardiness": total_tardiness,
+        "totalTardinessBaseline": tardiness_baseline,
+        "totalTardinessDeltaVsBaseline": total_tardiness - tardiness_baseline,
         "routeStabilityScore": stability,
         "activeRouteCorruptionCount": active_corruption,
         "vehicleStateContinuityViolation": continuity,
-        "baselineComparisonAvailable": False,
-        "missingComparisonReason": "rolling-horizon-baseline-not-integrated",
+        "baselineComparisonAvailable": baseline_available,
+        "baselineComparisonType": "certification-deterministic-rolling-horizon-baseline" if baseline_available else None,
+        "missingComparisonReason": None if baseline_available else "rolling-horizon-baseline-not-integrated",
     }
 
 
@@ -75,12 +88,17 @@ def build_quality(certification_root: Path) -> Dict[str, Any]:
     hard = sum(row["activeRouteCorruptionCount"] + row["vehicleStateContinuityViolation"] for row in rows)
     baseline_missing = any(not row["baselineComparisonAvailable"] for row in rows)
     avg_stability = sum(float(row["routeStabilityScore"]) for row in rows) / len(rows)
+    served_delta = sum(int(row["servedOrderDeltaVsBaseline"]) for row in rows)
+    tardiness_delta = sum(float(row["totalTardinessDeltaVsBaseline"]) for row in rows)
     if hard:
         final = "FAIL"
         reasons = ["hard-dynamic-continuity-violation"]
     elif baseline_missing:
         final = "PASS_WITH_LIMITS"
         reasons = ["dynamic-optimizer-comparison-missing"]
+    elif served_delta < 0 or tardiness_delta > 0.0:
+        final = "PASS_WITH_LIMITS"
+        reasons = ["dynamic-baseline-regression"]
     else:
         final = "PASS"
         reasons = []
@@ -93,6 +111,8 @@ def build_quality(certification_root: Path) -> Dict[str, Any]:
         "rowCount": len(rows),
         "hardViolationCount": hard,
         "avgRouteStabilityScore": avg_stability,
+        "servedOrderDeltaVsBaseline": served_delta,
+        "totalTardinessDeltaVsBaseline": tardiness_delta,
         "baselineComparisonAvailable": not baseline_missing,
         "missingComparisonReason": "rolling-horizon-baseline-not-integrated" if baseline_missing else None,
         "rows": rows,

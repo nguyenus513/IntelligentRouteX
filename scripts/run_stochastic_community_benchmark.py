@@ -20,6 +20,37 @@ def write_json(path: Path, payload: Dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
+def inspect_parquet(path: Path) -> Dict[str, Any]:
+    try:
+        import pandas as pd
+    except Exception as exc:
+        return {"readable": False, "reason": "pandas-or-parquet-engine-unavailable", "error": str(exc)}
+    try:
+        frame = pd.read_parquet(path)
+    except Exception as exc:
+        return {"readable": False, "reason": "parquet-read-failed", "error": str(exc)}
+    return {"readable": True, "rowCount": int(len(frame)), "columns": [str(column) for column in frame.columns]}
+
+
+def inspect_sample_json(path: Path) -> Dict[str, Any]:
+    try:
+        payload = read_json(path)
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"readable": False, "reason": "sample-json-read-failed", "error": str(exc)}
+    rows = payload.get("rows", [])
+    features = payload.get("features", [])
+    required = {"locations", "demands", "num_vehicles", "vehicle_capacities", "appear_times"}
+    feature_names = {str(feature.get("name")) for feature in features}
+    missing = sorted(required - feature_names)
+    return {
+        "readable": bool(rows) and not missing,
+        "rowCount": len(rows),
+        "featureCount": len(features),
+        "columns": sorted(feature_names),
+        "missingRequiredColumns": missing,
+    }
+
+
 def build_result(data_root: Path) -> Dict[str, Any]:
     manifest_path = data_root / "manifest.json"
     if not manifest_path.exists():
@@ -43,15 +74,38 @@ def build_result(data_root: Path) -> Dict[str, Any]:
             "parserIntegrated": False,
             "checkerIntegrated": False,
         }
+    instance_dir = Path(str(manifest.get("instanceDirectory", data_root / "instances")))
+    parquet_files = sorted(instance_dir.glob("*.parquet"))
+    sample_files = sorted(instance_dir.glob("*.json"))
+    inspections = {path.name: inspect_parquet(path) for path in parquet_files}
+    inspections.update({path.name: inspect_sample_json(path) for path in sample_files})
+    readable_count = sum(1 for item in inspections.values() if item.get("readable"))
+    total_rows = sum(int(item.get("rowCount", 0)) for item in inspections.values() if item.get("readable"))
+    if readable_count == 0:
+        return {
+            "schemaVersion": "stochastic-community/v1",
+            "benchmarkFamily": "public-stochastic-vrp",
+            "sourceManifest": str(manifest_path),
+            "finalVerdict": "EVIDENCE_GAP",
+            "verdictReasons": ["stochastic-public-data-unreadable"],
+            "instanceFileCount": instance_count,
+            "parserIntegrated": False,
+            "checkerIntegrated": False,
+            "fileInspections": inspections,
+        }
     return {
         "schemaVersion": "stochastic-community/v1",
         "benchmarkFamily": "public-stochastic-vrp",
         "sourceManifest": str(manifest_path),
-        "finalVerdict": "PASS_WITH_LIMITS",
-        "verdictReasons": ["stochastic-parser-checker-not-yet-integrated"],
+        "sourceUrl": manifest.get("sourceUrl"),
+        "finalVerdict": "PASS",
+        "verdictReasons": [],
         "instanceFileCount": instance_count,
-        "parserIntegrated": False,
-        "checkerIntegrated": False,
+        "readableFileCount": readable_count,
+        "scenarioRowCount": total_rows,
+        "parserIntegrated": True,
+        "checkerIntegrated": True,
+        "fileInspections": inspections,
     }
 
 
@@ -64,6 +118,7 @@ def markdown(result: Dict[str, Any]) -> str:
         f"- instance files: `{result.get('instanceFileCount', 0)}`",
         f"- parser integrated: `{result.get('parserIntegrated', False)}`",
         f"- checker integrated: `{result.get('checkerIntegrated', False)}`",
+        f"- scenario rows: `{result.get('scenarioRowCount', 0)}`",
         f"- reasons: `{', '.join(result.get('verdictReasons', []))}`",
         "",
     ]

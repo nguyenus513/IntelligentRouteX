@@ -104,7 +104,7 @@ RAILS: Dict[str, Dict[str, Any]] = {
     },
     "stochastic-community-coverage": {
         "priority": 70,
-        "blockers": ["svrpbench-not-integrated", "public-stochastic-vrp-data-missing", "svrpbench-data-source-not-configured", "stochastic-data-manifest-missing"],
+        "blockers": ["svrpbench-not-integrated", "public-stochastic-vrp-data-missing", "svrpbench-data-source-not-configured", "stochastic-data-manifest-missing", "stochastic-public-data-unreadable"],
         "goal": "Add public stochastic/uncertainty routing evidence beyond deterministic VRPTW and DPDP smoke.",
         "commands": [
             "py -3.13 scripts/download_stochastic_benchmark_data.py",

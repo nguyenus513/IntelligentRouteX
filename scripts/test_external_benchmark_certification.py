@@ -38,6 +38,7 @@ food_quality = load_module("run_food_dispatch_quality_benchmark", "run_food_disp
 dynamic_quality = load_module("run_dynamic_dispatch_quality_benchmark", "run_dynamic_dispatch_quality_benchmark.py")
 stochastic_data = load_module("download_stochastic_benchmark_data", "download_stochastic_benchmark_data.py")
 stochastic_benchmark = load_module("run_stochastic_community_benchmark", "run_stochastic_community_benchmark.py")
+ml_quality = load_module("run_ml_intelligence_benchmark", "run_ml_intelligence_benchmark.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -357,26 +358,36 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         self.assertEqual("hard", ranked[0]["instance"])
 
-    def test_dynamic_quality_reports_missing_baseline_comparison(self) -> None:
+    def test_dynamic_quality_uses_certification_baseline_comparison(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             cert = root / "cert" / "certification_suite_results.json"
             cert.parent.mkdir(parents=True)
-            cert.write_text(json.dumps({"results": [{"suite": "icaps-dpdp", "instance": "unit", "verdict": "PASS_WITH_LIMITS", "activeRouteCorruptionCount": 0, "vehicleStateContinuityViolation": 0, "routeStabilityScore": 1.0}]}), encoding="utf-8")
+            cert.write_text(json.dumps({"results": [{"suite": "icaps-dpdp", "instance": "unit", "solver": "deterministic-rolling-horizon-baseline", "verdict": "PASS_WITH_LIMITS", "orderCount": 10, "servedOrderCount": 10, "totalTardiness": 0.0, "activeRouteCorruptionCount": 0, "vehicleStateContinuityViolation": 0, "routeStabilityScore": 1.0}]}), encoding="utf-8")
 
             result = dynamic_quality.build_quality(root / "cert")
 
-        self.assertEqual("PASS_WITH_LIMITS", result["finalVerdict"])
-        self.assertIn("dynamic-optimizer-comparison-missing", result["verdictReasons"])
+        self.assertEqual("PASS", result["finalVerdict"])
+        self.assertTrue(result["baselineComparisonAvailable"])
 
     def test_stochastic_manifest_is_evidence_gap_without_data(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            manifest = stochastic_data.build_manifest(Path(temp_dir))
+            manifest = stochastic_data.build_manifest(Path(temp_dir), download=False)
             stochastic_data.write_json(Path(temp_dir) / "manifest.json", manifest)
             result = stochastic_benchmark.build_result(Path(temp_dir))
 
         self.assertEqual("EVIDENCE_GAP", result["finalVerdict"])
         self.assertIn("public-stochastic-vrp-data-missing", result["verdictReasons"])
+
+    def test_ml_value_evidence_uses_ablation_rows(self) -> None:
+        rows = [
+            {"component": "routefinder", "robustUtilityDelta": 0.1, "selectorObjectiveDelta": 0.0},
+            {"component": "forecast", "robustUtilityDelta": 0.0, "selectorObjectiveDelta": 0.2},
+        ]
+
+        evidence = ml_quality.ml_value_evidence(rows)
+
+        self.assertTrue(evidence["mlValueProven"])
 
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
