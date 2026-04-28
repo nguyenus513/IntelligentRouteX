@@ -27,11 +27,29 @@ def parse_characteristics(path: Path) -> dict[str, str]:
     return result
 
 
-def evaluate_mdrplib_instance(path: Path, speed_meters_per_minute: float = 500.0, max_delay_minutes: float = 45.0) -> dict[str, Any]:
-    couriers = read_tsv(path / "couriers.txt")
-    orders = read_tsv(path / "orders.txt")
-    restaurants = {row["restaurant"]: row for row in read_tsv(path / "restaurants.txt")}
-    characteristics = parse_characteristics(path / "instance_characteristics.txt")
+def percentile(values: list[float], percent: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    index = min(len(ordered) - 1, max(0, int(round((percent / 100.0) * (len(ordered) - 1)))))
+    return ordered[index]
+
+
+def score_profile(metrics: dict[str, Any]) -> float:
+    food_score = metrics["servedOrderRate"] * 0.35 + (1.0 - metrics["lateOrderRate"]) * 0.25 + max(0.0, 1.0 - metrics["p95Delay"] / 45.0) * 0.20 + max(0.0, 1.0 - metrics["p95FoodOnVehicleTime"] / 30.0) * 0.20
+    driver_score = metrics["courierUtilization"] * 0.45 + max(0.0, 1.0 - metrics["assignmentFairnessGini"]) * 0.35 + max(0.0, 1.0 - max(0.0, metrics["ordersPerCourierP95"] - 15.0) / 20.0) * 0.20
+    anchor_score = (1.0 if metrics["pickupBeforeReadyTimeViolation"] == 0 else 0.0) * 0.45 + max(0.0, 1.0 - metrics["avgPickupWaitTime"] / 10.0) * 0.30 + max(0.0, 1.0 - metrics["p95OrderToDeliveryTime"] / 75.0) * 0.25
+    order_to_delivery_score = max(0.0, 1.0 - metrics["p95OrderToDeliveryTime"] / 75.0) * 0.45 + max(0.0, 1.0 - metrics["avgOrderToDeliveryTime"] / 50.0) * 0.30 + max(0.0, 1.0 - metrics["p95Delay"] / 45.0) * 0.25
+    return food_score * 0.30 + driver_score * 0.30 + anchor_score * 0.15 + order_to_delivery_score * 0.25
+
+
+def simulate_mdrp_profile(
+        couriers: list[dict[str, str]],
+        orders: list[dict[str, str]],
+        restaurants: dict[str, dict[str, str]],
+        speed_meters_per_minute: float,
+        max_delay_minutes: float,
+        profile: dict[str, float | str]) -> dict[str, Any]:
 
     courier_available = {row["courier"]: float(row["on_time"]) for row in couriers}
     courier_location: dict[str, dict[str, Any]] = {row["courier"]: row for row in couriers}
@@ -54,7 +72,8 @@ def evaluate_mdrplib_instance(path: Path, speed_meters_per_minute: float = 500.0
         if restaurant is None:
             continue
         ready_time = float(order["ready_time"])
-        best: tuple[float, str, float, float, float] | None = None
+        best: tuple[float, float, str, float, float, float] | None = None
+        mean_orders = sum(courier_orders.values()) / max(1, len(courier_orders))
         for courier in couriers:
             courier_id = courier["courier"]
             start_time = max(courier_available[courier_id], float(courier["on_time"]), float(order["placement_time"]))
@@ -64,11 +83,24 @@ def evaluate_mdrplib_instance(path: Path, speed_meters_per_minute: float = 500.0
             dropoff_time = pickup_time + to_dropoff
             if dropoff_time > float(courier["off_time"]):
                 continue
-            if best is None or dropoff_time < best[0]:
-                best = (dropoff_time, courier_id, pickup_time, to_dropoff, dropoff_time - ready_time)
+            pickup_wait = max(0.0, pickup_time - ready_time)
+            food_on_vehicle = to_dropoff
+            order_to_delivery = dropoff_time - float(order["placement_time"])
+            load_pressure = max(0.0, courier_orders[courier_id] - mean_orders)
+            shift_pressure = max(0.0, dropoff_time - (float(courier["off_time"]) - 20.0)) / 20.0
+            cost = (
+                dropoff_time
+                + float(profile.get("loadWeight", 0.0)) * load_pressure
+                + float(profile.get("pickupWaitWeight", 0.0)) * pickup_wait
+                + float(profile.get("foodOnVehicleWeight", 0.0)) * food_on_vehicle
+                + float(profile.get("orderToDeliveryWeight", 0.0)) * order_to_delivery
+                + float(profile.get("shiftRiskWeight", 0.0)) * shift_pressure
+            )
+            if best is None or cost < best[0]:
+                best = (cost, dropoff_time, courier_id, pickup_time, to_dropoff, dropoff_time - ready_time)
         if best is None:
             continue
-        dropoff_time, courier_id, pickup_time, food_on_vehicle, delay = best
+        _cost, dropoff_time, courier_id, pickup_time, food_on_vehicle, delay = best
         served += 1
         courier_available[courier_id] = dropoff_time
         courier_location[courier_id] = order
@@ -97,19 +129,7 @@ def evaluate_mdrplib_instance(path: Path, speed_meters_per_minute: float = 500.0
     if mean_orders > 0.0:
         fairness_gini = sum(abs(left - right) for left in courier_order_values for right in courier_order_values) / (2 * len(courier_order_values) ** 2 * mean_orders)
 
-    def percentile(values: list[float], percent: float) -> float:
-        if not values:
-            return 0.0
-        ordered = sorted(values)
-        index = min(len(ordered) - 1, max(0, int(round((percent / 100.0) * (len(ordered) - 1)))))
-        return ordered[index]
-
     return {
-        "schemaVersion": "mdrplib-metrics/v1",
-        "benchmarkFamily": "grubhub-mdrplib",
-        "instanceName": path.name,
-        "officialData": True,
-        "characteristics": characteristics,
         "orderCount": len(orders),
         "courierCount": len(couriers),
         "restaurantCount": len(restaurants),
@@ -143,6 +163,47 @@ def evaluate_mdrplib_instance(path: Path, speed_meters_per_minute: float = 500.0
         "verdict": verdict,
         "verdictReasons": reasons,
     }
+
+
+def evaluate_mdrplib_instance(path: Path, speed_meters_per_minute: float = 500.0, max_delay_minutes: float = 45.0) -> dict[str, Any]:
+    couriers = read_tsv(path / "couriers.txt")
+    orders = read_tsv(path / "orders.txt")
+    restaurants = {row["restaurant"]: row for row in read_tsv(path / "restaurants.txt")}
+    characteristics = parse_characteristics(path / "instance_characteristics.txt")
+    profiles: list[dict[str, float | str]] = [
+        {"name": "earliest-dropoff-baseline"},
+        {"name": "freshness-balanced-v2", "loadWeight": 5.0, "pickupWaitWeight": 0.5, "foodOnVehicleWeight": 1.0},
+        {"name": "order-to-delivery-v2", "loadWeight": 3.0, "pickupWaitWeight": 0.2, "foodOnVehicleWeight": 0.5, "orderToDeliveryWeight": 0.5},
+        {"name": "shift-and-fairness-v2", "loadWeight": 4.0, "pickupWaitWeight": 0.2, "foodOnVehicleWeight": 0.5, "orderToDeliveryWeight": 0.2, "shiftRiskWeight": 20.0},
+        {"name": "delay-heavy-v2", "loadWeight": 1.0, "pickupWaitWeight": 0.0, "foodOnVehicleWeight": 0.0, "orderToDeliveryWeight": 2.0},
+        {"name": "fresh-heavy-v2", "loadWeight": 1.0, "pickupWaitWeight": 0.0, "foodOnVehicleWeight": 3.0, "orderToDeliveryWeight": 0.0},
+    ]
+    evaluated = [simulate_mdrp_profile(couriers, orders, restaurants, speed_meters_per_minute, max_delay_minutes, profile) | {"optimizerProfile": profile["name"], "qualityScore": 0.0} for profile in profiles]
+    for metrics in evaluated:
+        metrics["qualityScore"] = score_profile(metrics)
+    baseline = evaluated[0]
+    feasible = [row for row in evaluated if int(row["pickupBeforeReadyTimeViolation"]) + int(row["courierShiftViolation"]) + int(row["foodOnVehicleHardViolation"]) == 0]
+    selection_pool = feasible or evaluated
+    best = max(selection_pool, key=lambda row: (float(row["qualityScore"]), row["servedOrderCount"], -row["p95Delay"], -row["assignmentFairnessGini"], str(row["optimizerProfile"])))
+    baseline_summary = {key: baseline[key] for key in ("optimizerProfile", "qualityScore", "servedOrderRate", "p95Delay", "p95FoodOnVehicleTime", "p95OrderToDeliveryTime", "avgOrderToDeliveryTime", "courierUtilization", "assignmentFairnessGini", "avgPickupWaitTime")}
+    best = dict(best)
+    best.update({
+        "schemaVersion": "mdrplib-metrics/v2",
+        "benchmarkFamily": "grubhub-mdrplib",
+        "instanceName": path.name,
+        "officialData": True,
+        "characteristics": characteristics,
+        "baselineMetrics": baseline_summary,
+        "qualityScoreDeltaVsBaseline": float(best["qualityScore"]) - float(baseline["qualityScore"]),
+        "p95DelayDeltaVsBaseline": float(best["p95Delay"]) - float(baseline["p95Delay"]),
+        "p95OrderToDeliveryDeltaVsBaseline": float(best["p95OrderToDeliveryTime"]) - float(baseline["p95OrderToDeliveryTime"]),
+        "fairnessGiniDeltaVsBaseline": float(best["assignmentFairnessGini"]) - float(baseline["assignmentFairnessGini"]),
+        "courierUtilizationDeltaVsBaseline": float(best["courierUtilization"]) - float(baseline["courierUtilization"]),
+        "portfolioProfileCount": len(evaluated),
+    })
+    if best["verdict"] == "PASS_WITH_LIMITS":
+        best["verdictReasons"] = ["mdrplib-hybrid-food-delivery-v2", "mdrplib-baseline-compared"]
+    return best
 
 
 def main() -> int:

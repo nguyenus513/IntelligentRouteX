@@ -23,6 +23,7 @@ def load_module(name: str, filename: str):
 support = load_module("external_benchmark_support", "external_benchmark_support.py")
 solomon = load_module("parse_solomon_vrptw", "parse_solomon_vrptw.py")
 li_lim = load_module("parse_li_lim_pdptw", "parse_li_lim_pdptw.py")
+mdrplib = load_module("parse_mdrplib", "parse_mdrplib.py")
 adapter = load_module("external_benchmark_dispatch_adapter", "external_benchmark_dispatch_adapter.py")
 consolidation = load_module("academic_global_consolidation", "academic_global_consolidation.py")
 runner = load_module("run_external_benchmark_certification", "run_external_benchmark_certification.py")
@@ -350,6 +351,15 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         layer = food_quality.score_food(rows)
 
         self.assertEqual("PASS", layer["verdict"])
+
+    def test_mdrplib_hybrid_profile_reports_baseline_delta(self) -> None:
+        metrics = mdrplib.evaluate_mdrplib_instance(Path("benchmarks/external/official/mdrplib/mdrp-smoke-low"))
+
+        self.assertEqual("mdrplib-metrics/v2", metrics["schemaVersion"])
+        self.assertEqual(metrics["orderCount"], metrics["servedOrderCount"])
+        self.assertEqual(0, metrics["pickupBeforeReadyTimeViolation"] + metrics["courierShiftViolation"])
+        self.assertGreaterEqual(metrics["qualityScoreDeltaVsBaseline"], 0.0)
+        self.assertIn("baselineMetrics", metrics)
 
     def test_food_quality_explainability_ranks_worst_instances(self) -> None:
         rows = [{"instanceName": "easy", "p95Delay": 3.0}, {"instanceName": "hard", "p95Delay": 9.0}]
