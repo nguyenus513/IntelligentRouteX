@@ -179,6 +179,17 @@ def ml_value_evidence(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def ml_verdict(adapter: Dict[str, Any], value_evidence: Dict[str, Any]) -> Dict[str, Any]:
+    reasons: List[str] = []
+    if not value_evidence.get("mlValueProven"):
+        reasons.append("ml-value-not-proven")
+    if not adapter.get("workerReadinessAudited"):
+        reasons.append("ml-worker-readiness-not-audited")
+    elif not all(bool(adapter.get(key)) for key in ("routeFinderWorkerReady", "greedRlWorkerReady", "forecastWorkerReady")):
+        reasons.append("ml-worker-not-ready")
+    return {"finalVerdict": "PASS" if not reasons else "PASS_WITH_LIMITS", "verdictReasons": reasons}
+
+
 def write_json(path: Path, payload: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
@@ -221,14 +232,11 @@ def run_benchmark() -> Dict[str, Any]:
             "rl4coImportError": rl4co_status.get("importError"),
             **common,
         }
-    reasons = [] if value_evidence["mlValueProven"] else ["ml-value-not-proven"]
-    if not adapter["workerReadinessAudited"]:
-        reasons.append("ml-worker-readiness-not-audited")
+    verdict_payload = ml_verdict(adapter, value_evidence)
     return {
         "schemaVersion": "ml-intelligence-community/v1",
         "benchmarkFamily": "rl4co",
-        "finalVerdict": "PASS_WITH_LIMITS",
-        "verdictReasons": reasons,
+        **verdict_payload,
         "rl4coAvailable": True,
         "rl4coImportable": True,
         "rl4coVersion": rl4co_status.get("version"),

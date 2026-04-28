@@ -389,6 +389,33 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         self.assertTrue(evidence["mlValueProven"])
 
+    def test_ml_verdict_passes_when_value_and_workers_are_ready(self) -> None:
+        adapter = {"workerReadinessAudited": True, "routeFinderWorkerReady": True, "greedRlWorkerReady": True, "forecastWorkerReady": True}
+        value = {"mlValueProven": True}
+
+        verdict = ml_quality.ml_verdict(adapter, value)
+
+        self.assertEqual("PASS", verdict["finalVerdict"])
+        self.assertEqual([], verdict["verdictReasons"])
+
+    def test_ml_verdict_limits_when_audited_worker_is_not_ready(self) -> None:
+        adapter = {"workerReadinessAudited": True, "routeFinderWorkerReady": True, "greedRlWorkerReady": True, "forecastWorkerReady": False}
+        value = {"mlValueProven": True}
+
+        verdict = ml_quality.ml_verdict(adapter, value)
+
+        self.assertEqual("PASS_WITH_LIMITS", verdict["finalVerdict"])
+        self.assertIn("ml-worker-not-ready", verdict["verdictReasons"])
+
+    def test_ml_verdict_limits_when_value_is_not_proven(self) -> None:
+        adapter = {"workerReadinessAudited": True, "routeFinderWorkerReady": True, "greedRlWorkerReady": True, "forecastWorkerReady": True}
+        value = {"mlValueProven": False}
+
+        verdict = ml_quality.ml_verdict(adapter, value)
+
+        self.assertEqual("PASS_WITH_LIMITS", verdict["finalVerdict"])
+        self.assertIn("ml-value-not-proven", verdict["verdictReasons"])
+
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
 
