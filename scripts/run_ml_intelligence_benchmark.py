@@ -112,7 +112,7 @@ def local_adapter_status() -> Dict[str, Any]:
     tabular_present = service_present("ml-tabular-worker")
     routefinder_probe = probe_worker_readiness("ml-routefinder-worker") if routefinder_present else {"ready": False, "reason": "worker-app-missing", "version": {}}
     greedrl_probe = probe_worker_readiness("ml-greedrl-worker") if greedrl_present else {"ready": False, "reason": "worker-app-missing", "version": {}}
-    forecast_probe = probe_worker_readiness("ml-forecast-worker") if forecast_present else {"ready": False, "reason": "worker-app-missing", "version": {}}
+    forecast_probe = probe_worker_readiness("ml-forecast-worker", timeout_seconds=90) if forecast_present else {"ready": False, "reason": "worker-app-missing", "version": {}}
     worker_readiness_audited = routefinder_present and greedrl_present and forecast_present
     worker_implementations = {
         "routeFinderWorkerImplementationPresent": routefinder_present,
