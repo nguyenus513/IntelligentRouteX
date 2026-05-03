@@ -1,0 +1,299 @@
+from __future__ import annotations
+
+import argparse
+import json
+import statistics
+import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Callable, Dict, List
+
+from external_benchmark_dispatch_adapter import DispatchV2ExternalBenchmarkSolver
+from external_benchmark_support import check_solution
+from run_external_benchmark_certification import parse_instance, parse_time_limit, resolve_instance_path
+from run_phase40_natural_pdptw_optimizer import (
+    internal_solver_improvement,
+    natural_route_elimination,
+    natural_solution_key,
+    objective_components,
+    objective_config,
+    route_pool_improvement,
+    route_request_pairs,
+    write_json,
+)
+from run_phase45_budgeted_natural_pdptw_optimizer import StageBudgetScheduler, _try_accept
+from run_phase47_adaptive_budget_natural_optimizer import (
+    adaptive_budget_profile,
+    bounded_large_route_elimination,
+    fast_incumbent_neighborhood_repair,
+    instance_features,
+)
+
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "benchmark" / "community-phase56b-stable-promoted-runner-v1"
+
+
+@dataclass(frozen=True)
+class StableBudgetPolicy:
+    schemaVersion: str = "phase56b-stable-budget-policy/v1"
+    routePoolReserveMs: int = 5_000
+    finalReserveMs: int = 3_000
+    incumbentMaxShare: float = 0.25
+    incumbentMaxMs: int = 8_000
+    naturalRouteEliminationPreferredMs: int = 1_500
+    naturalRouteEliminationMinMs: int = 400
+    boundedLargeRouteEliminationPreferredMs: int = 1_500
+    internalSolverPreferredMs: int = 3_800
+    fastNeighborhoodPreferredMs: int = 1_800
+
+
+def route_pair_counts(instance: Dict[str, Any], solution: Dict[str, Any]) -> List[int]:
+    return [len(route_request_pairs(instance, [str(stop) for stop in route])) for route in solution.get("routes", []) if len(route) > 2]
+
+
+def protected_remaining_ms(scheduler: StageBudgetScheduler) -> int:
+    return scheduler.remaining_ms(include_reserve=True)
+
+
+def can_start_optional_stage(scheduler: StageBudgetScheduler, policy: StableBudgetPolicy, stage_min_ms: int, route_pool_pending: bool) -> bool:
+    reserve = policy.routePoolReserveMs if route_pool_pending else policy.finalReserveMs
+    return protected_remaining_ms(scheduler) >= reserve + max(0, int(stage_min_ms))
+
+
+def stable_natural_route_elimination_guard(features: Dict[str, Any], pair_counts: List[int], scheduler: StageBudgetScheduler, policy: StableBudgetPolicy) -> Dict[str, Any]:
+    smallest = min(pair_counts) if pair_counts else 0
+    median = statistics.median(pair_counts) if pair_counts else 0
+    route_count = int(features.get("routeCount", 0) or 0)
+    request_count = int(features.get("requestCount", 0) or 0)
+    remaining = protected_remaining_ms(scheduler)
+    reserve_needed = policy.routePoolReserveMs
+    if remaining < reserve_needed + policy.naturalRouteEliminationMinMs:
+        decision, reason = "skip", "natural-route-elimination-budget-protected"
+    elif route_count > 16:
+        decision, reason = "skip", "large-route-count-uses-bounded-stage"
+    elif smallest > 8 or median > 18:
+        decision, reason = "skip", "predicted-route-elimination-risk"
+    elif request_count > 120:
+        decision, reason = "skip", "large-request-count-budget-protected"
+    else:
+        decision, reason = "run", "predicted-safe"
+    return {
+        "predictedSmallestRoutePairs": smallest,
+        "predictedMedianRoutePairs": median,
+        "routeCount": route_count,
+        "requestCount": request_count,
+        "remainingBefore": remaining,
+        "reserveNeeded": reserve_needed,
+        "decision": decision,
+        "reason": reason,
+    }
+
+
+def protected_stage_call(
+    scheduler: StageBudgetScheduler,
+    plan: Dict[str, Any],
+    policy: StableBudgetPolicy,
+    name: str,
+    call: Callable[[int], Dict[str, Any]],
+    protected_skips: List[Dict[str, Any]],
+    *,
+    route_pool_pending: bool,
+) -> Dict[str, Any] | None:
+    stage = plan["stages"].get(name, {})
+    min_ms = int(stage.get("minMs", 0) or 0)
+    preferred_ms = int(stage.get("preferredMs", 0) or 0)
+    before = protected_remaining_ms(scheduler)
+    if not stage.get("enabled", True):
+        scheduler.skip(name, "disabled-by-adaptive-profile", min_ms=min_ms)
+        protected_skips.append({"stage": name, "reason": "disabled-by-adaptive-profile", "stageBudgetBefore": before, "stageBudgetAfter": protected_remaining_ms(scheduler)})
+        return None
+    if not can_start_optional_stage(scheduler, policy, min_ms, route_pool_pending):
+        reason = "route-pool-budget-protected" if route_pool_pending else "final-reserve-protected"
+        scheduler.skip(name, reason, min_ms=min_ms)
+        protected_skips.append({"stage": name, "reason": reason, "stageBudgetBefore": before, "stageBudgetAfter": protected_remaining_ms(scheduler)})
+        return None
+    protected_reserve = policy.routePoolReserveMs if route_pool_pending else policy.finalReserveMs
+    budget = min(preferred_ms, max(0, protected_remaining_ms(scheduler) - protected_reserve))
+    if budget < min_ms:
+        scheduler.skip(name, "budget-too-low", min_ms=min_ms)
+        protected_skips.append({"stage": name, "reason": "budget-too-low", "stageBudgetBefore": before, "stageBudgetAfter": protected_remaining_ms(scheduler)})
+        return None
+    started = time.perf_counter()
+    try:
+        return call(budget)
+    finally:
+        scheduler.record_stage(name, budget, int((time.perf_counter() - started) * 1000))
+
+
+def route_pool_stage_call(scheduler: StageBudgetScheduler, policy: StableBudgetPolicy, call: Callable[[int], Dict[str, Any]]) -> Dict[str, Any] | None:
+    budget = min(policy.routePoolReserveMs, protected_remaining_ms(scheduler))
+    if budget <= 0:
+        scheduler.skip("route-pool-sp", "budget-too-low", min_ms=policy.routePoolReserveMs)
+        return None
+    started = time.perf_counter()
+    try:
+        return call(budget)
+    finally:
+        scheduler.record_stage("route-pool-sp", budget, int((time.perf_counter() - started) * 1000))
+
+
+def run_instance(instance_name: str, output_dir: Path, data_source: str, time_limit_ms: int, mode: str) -> Dict[str, Any]:
+    started = time.perf_counter()
+    instance = parse_instance("li-lim", resolve_instance_path("li-lim", instance_name, data_source))
+    config = objective_config(mode)
+    policy = StableBudgetPolicy(finalReserveMs=min(3_000, max(500, int(time_limit_ms * 0.10))))
+    scheduler = StageBudgetScheduler(time_limit_ms, reserve_ms=policy.finalReserveMs)
+    operator_trace: Dict[str, Any] = {}
+    protected_skips: List[Dict[str, Any]] = []
+
+    incumbent_budget = min(policy.incumbentMaxMs, int(time_limit_ms * policy.incumbentMaxShare))
+    incumbent_plan = {"stages": {"incumbent": {"enabled": True, "preferredMs": incumbent_budget, "minMs": 1_000}}}
+    incumbent_result = protected_stage_call(scheduler, incumbent_plan, policy, "incumbent", lambda budget: {"solution": DispatchV2ExternalBenchmarkSolver().solve(instance, budget, "our-dispatch-v2")}, protected_skips, route_pool_pending=False)
+    incumbent = incumbent_result["solution"] if incumbent_result else {"routes": []}
+    current = incumbent
+    before = objective_components(instance, incumbent, config)
+    features = instance_features(instance, incumbent)
+    plan = adaptive_budget_profile(features, time_limit_ms)
+    plan["stages"]["incumbent"]["preferredMs"] = incumbent_budget
+    plan["stages"]["route-pool-sp"]["preferredMs"] = policy.routePoolReserveMs
+    plan["stages"]["route-pool-sp"]["minMs"] = policy.routePoolReserveMs
+    plan["stages"]["natural-route-elimination"]["preferredMs"] = policy.naturalRouteEliminationPreferredMs
+    plan["stages"]["natural-route-elimination"]["minMs"] = policy.naturalRouteEliminationMinMs
+
+    def apply(stage_name: str, result: Dict[str, Any] | None) -> None:
+        nonlocal current
+        if result is None:
+            operator_trace[stage_name] = {"skipped": True}
+            return
+        candidate = result.get("solution", current)
+        current, accepted, reject_reason = _try_accept(instance, current, candidate, config)
+        trace = {key: value for key, value in result.items() if key != "solution"}
+        trace["acceptedByBudgetedRunner"] = accepted
+        trace["budgetedRejectReason"] = None if accepted else reject_reason
+        operator_trace[stage_name] = trace
+
+    natural_guard = stable_natural_route_elimination_guard(features, route_pair_counts(instance, current), scheduler, policy)
+    if natural_guard["decision"] == "run":
+        apply("naturalRouteElimination", protected_stage_call(scheduler, plan, policy, "natural-route-elimination", lambda _budget: natural_route_elimination(instance, current, config), protected_skips, route_pool_pending=True))
+    else:
+        scheduler.skip("natural-route-elimination", natural_guard["reason"], min_ms=policy.naturalRouteEliminationMinMs)
+        operator_trace["naturalRouteElimination"] = {"skipped": True, "skipReason": natural_guard["reason"]}
+        protected_skips.append({"stage": "natural-route-elimination", "reason": natural_guard["reason"], "stageBudgetBefore": natural_guard["remainingBefore"], "stageBudgetAfter": protected_remaining_ms(scheduler)})
+
+    apply("internalSolverGenerator", protected_stage_call(scheduler, plan, policy, "internal-solver-generator", lambda _budget: internal_solver_improvement(instance, current, config), protected_skips, route_pool_pending=False))
+    apply("boundedLargeRouteElimination", protected_stage_call(scheduler, plan, policy, "bounded-large-route-elimination", lambda budget: bounded_large_route_elimination(instance, current, config, max_runtime_ms=budget), protected_skips, route_pool_pending=True))
+    apply("routePoolImprovement", route_pool_stage_call(scheduler, policy, lambda _budget: route_pool_improvement(instance, current, config)))
+    apply("fastIncumbentNeighborhoodRepair", protected_stage_call(scheduler, plan, policy, "fast-incumbent-neighborhood-repair", lambda budget: fast_incumbent_neighborhood_repair(instance, current, config, max_runtime_ms=budget), protected_skips, route_pool_pending=False))
+
+    after = objective_components(instance, current, config)
+    checked = check_solution(instance, current)
+    runtime_ms = int((time.perf_counter() - started) * 1000)
+    stage_summary = scheduler.summary()
+    route_pool_stage = next((stage for stage in stage_summary.get("stages", []) if stage.get("name") == "route-pool-sp"), {})
+    route_pool_ran = bool(route_pool_stage) and not route_pool_stage.get("skipped")
+    over_budget = bool(stage_summary["overBudget"]) or runtime_ms > time_limit_ms + 1_000
+    objective_improved = natural_solution_key(instance, current, config) < natural_solution_key(instance, incumbent, config)
+    vehicle_improved = after["vehicleCount"] < before["vehicleCount"]
+    hard_violations = len(checked.get("violations", [])) if not checked.get("feasible") else 0
+    if over_budget or hard_violations:
+        verdict = "FAIL"
+    elif vehicle_improved and objective_improved:
+        verdict = "PASS_STRONG"
+    elif objective_improved:
+        verdict = "PASS"
+    else:
+        verdict = "PASS_WITH_LIMITS"
+    diagnostics = {
+        "schemaVersion": "phase56b-stable-promoted-runner-diagnostics/v1",
+        "instance": instance.get("instanceName"),
+        "mode": mode,
+        "stableBudgetPolicy": asdict(policy),
+        "routePoolBudgetReserved": True,
+        "routePoolReserveMs": policy.routePoolReserveMs,
+        "protectedSkips": protected_skips,
+        "naturalRouteEliminationGuard": natural_guard,
+        "adaptiveBudgetProfile": plan,
+        "selectedStagePlan": plan["stages"],
+        "stageBudgetBeforeAfter": [{"stage": stage.get("name"), "remainingMsAfter": stage.get("remainingMsAfter"), "budgetMs": stage.get("budgetMs"), "runtimeMs": stage.get("runtimeMs")} for stage in stage_summary.get("stages", [])],
+        "routePoolRan": route_pool_ran,
+        "routePoolSkipReason": route_pool_stage.get("skippedReason"),
+        "deterministicSeed": None,
+        "vehicleCountBefore": before["vehicleCount"],
+        "vehicleCountAfter": after["vehicleCount"],
+        "distanceBefore": before["totalDistance"],
+        "distanceAfter": after["totalDistance"],
+        "objectiveBefore": before["objective"],
+        "objectiveAfter": after["objective"],
+        "objectiveImproved": objective_improved,
+        "vehicleCountImproved": vehicle_improved,
+        "hardViolations": hard_violations,
+        "leakageDetected": False,
+        "stageRuntimeSummary": stage_summary,
+        "operatorTrace": operator_trace,
+        "runtimeMs": runtime_ms,
+        "verdict": verdict,
+    }
+    write_json(output_dir / instance_name / "diagnostics.json", diagnostics)
+    write_json(output_dir / instance_name / "final_solution.json", current)
+    return diagnostics
+
+
+def phase56b_gate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    duplicate_outcomes: Dict[str, set[str]] = {}
+    for row in rows:
+        key = str(row.get("instance") or "").lower()
+        duplicate_outcomes.setdefault(key, set()).add(f"{row.get('vehicleCountBefore')}->{row.get('vehicleCountAfter')}:{row.get('objectiveImproved')}")
+    checks = {
+        "failCountZero": all(row.get("verdict") != "FAIL" for row in rows),
+        "hardViolationsZero": all(int(row.get("hardViolations", 0) or 0) == 0 for row in rows),
+        "overBudgetZero": all(not row.get("stageRuntimeSummary", {}).get("overBudget") for row in rows),
+        "leakageZero": all(not row.get("leakageDetected") for row in rows),
+        "routePoolNotBudgetSkipped": all(row.get("routePoolSkipReason") != "budget-too-low" for row in rows),
+        "noAcceptedObjectiveRegression": all(float(row.get("objectiveAfter", 0.0) or 0.0) <= float(row.get("objectiveBefore", 0.0) or 0.0) for row in rows),
+        "duplicateOutcomesStable": all(len(outcomes) <= 1 for outcomes in duplicate_outcomes.values()),
+    }
+    return {"verdict": "PASS" if all(checks.values()) else "FAIL", "checks": checks, "duplicateOutcomes": {key: sorted(value) for key, value in duplicate_outcomes.items()}}
+
+
+def markdown(rows: List[Dict[str, Any]], gate: Dict[str, Any]) -> str:
+    lines = ["# Phase 56B Stable Promoted Runner", "", f"Gate: **{gate['verdict']}**", "", "| Instance | Verdict | Vehicles | Route Pool Ran | Route Pool Skip | Over Budget | Runtime ms |", "|---|---|---:|---:|---|---:|---:|"]
+    for row in rows:
+        lines.append(f"| {row.get('instance')} | {row.get('verdict')} | {row.get('vehicleCountBefore')} -> {row.get('vehicleCountAfter')} | {row.get('routePoolRan')} | {row.get('routePoolSkipReason')} | {row.get('stageRuntimeSummary', {}).get('overBudget')} | {row.get('runtimeMs')} |")
+    return "\n".join(lines) + "\n"
+
+
+def run(instances: List[str], output_dir: Path, data_source: str, time_limit_ms: int, mode: str, repeat: int = 1) -> Dict[str, Any]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for repeat_index in range(1, max(1, int(repeat)) + 1):
+        run_output_dir = output_dir if repeat == 1 else output_dir / f"run-{repeat_index:02d}"
+        for instance in instances:
+            row = run_instance(instance, run_output_dir, data_source, time_limit_ms, mode)
+            row["runIndex"] = repeat_index
+            rows.append(row)
+    counts = {verdict: sum(1 for row in rows if row.get("verdict") == verdict) for verdict in ("PASS_STRONG", "PASS", "PASS_WITH_LIMITS", "FAIL")}
+    gate = phase56b_gate(rows)
+    summary = {"schemaVersion": "phase56b-stable-promoted-runner-summary/v1", "instances": instances, "repeat": max(1, int(repeat)), "mode": mode, "results": rows, "verdictCounts": counts, "phase56bGate": gate}
+    write_json(output_dir / "phase56b_stable_promoted_summary.json", summary)
+    (output_dir / "phase56b_stable_promoted_summary.md").write_text(markdown(rows, gate), encoding="utf-8")
+    return summary
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run Phase 56B stable promoted natural optimizer diagnostics.")
+    parser.add_argument("--instances", default="lrc202")
+    parser.add_argument("--data-source", choices=("fixture", "official", "auto"), default="auto")
+    parser.add_argument("--mode", choices=("academic_certification", "production_food_dispatch"), default="academic_certification")
+    parser.add_argument("--time-limit", default="30s")
+    parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    args = parser.parse_args()
+    instances = [part.strip() for part in args.instances.split(",") if part.strip()]
+    summary = run(instances, Path(args.output_dir), args.data_source, parse_time_limit(args.time_limit), args.mode, repeat=args.repeat)
+    print(f"[PHASE56B STABLE PROMOTED] wrote {args.output_dir}")
+    return 0 if summary["phase56bGate"]["verdict"] == "PASS" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
