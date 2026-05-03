@@ -10,7 +10,7 @@ from typing import Any, Dict, Iterable, List
 
 from academic_global_consolidation import GlobalRouteConsolidator, PairAwareRouteEliminationOperator, PairEjectionChainOperator
 from external_benchmark_dispatch_adapter import DispatchV2ExternalBenchmarkSolver
-from external_benchmark_support import check_solution, route_distance
+from external_benchmark_support import check_solution, ortools_baseline_solution, route_distance
 from run_external_benchmark_certification import parse_instance, parse_time_limit, resolve_instance_path
 from run_phase31_pdptw_route_pool_sp import PDPTWRoutePool, PDPTWSetPartitioningSolver
 from run_phase32_internal_column_generation import RouteColumnCollector, _insert_pair_best, generate_internal_columns, request_features, request_pairs
@@ -319,6 +319,100 @@ def route_pool_improvement(instance: Dict[str, Any], solution: Dict[str, Any], c
     return {"solution": candidate if accepted else solution, "poolStats": pool.stats(), "spStatus": sp_result.get("status"), "accepted": accepted, "generationDiagnostics": diagnostics}
 
 
+class InternalSolverCandidateGenerator:
+    def __init__(self, max_runtime_ms: int = 3_000) -> None:
+        self._max_runtime_ms = max_runtime_ms
+
+    def generate(self, instance: Dict[str, Any], config: NaturalPDPTWObjectiveConfig) -> Dict[str, Any]:
+        strategies = [
+            ("PARALLEL_CHEAPEST_INSERTION", "GUIDED_LOCAL_SEARCH"),
+            ("PATH_CHEAPEST_ARC", "TABU_SEARCH"),
+            ("SAVINGS", "SIMULATED_ANNEALING"),
+        ]
+        candidates = []
+        trace = []
+        per_candidate_ms = max(300, self._max_runtime_ms // max(1, len(strategies)))
+        for first_strategy, local_strategy in strategies:
+            try:
+                candidate = ortools_baseline_solution(
+                    instance,
+                    per_candidate_ms,
+                    "our-dispatch-v2-internal-generator",
+                    vehicle_fixed_cost=int(config.vehicle_fixed_cost),
+                    first_solution_strategy=first_strategy,
+                    local_search_metaheuristic=local_strategy,
+                )
+            except Exception as exception:
+                trace.append({"firstSolutionStrategy": first_strategy, "localSearchMetaheuristic": local_strategy, "status": "model-build-failed", "reason": str(exception)})
+                continue
+            checked = check_solution(instance, candidate)
+            feasible = bool(checked.get("feasible"))
+            if feasible:
+                candidates.append(candidate)
+            trace.append({
+                "firstSolutionStrategy": first_strategy,
+                "localSearchMetaheuristic": local_strategy,
+                "status": "feasible" if feasible else candidate.get("evidenceGapReason", "hard-violation"),
+                "vehicleCount": checked.get("vehicleCount"),
+                "distance": checked.get("totalDistance"),
+            })
+        return {"candidates": candidates, "trace": trace, "candidateCount": len(trace), "feasibleCandidateCount": len(candidates)}
+
+    def affected_subproblem(self, instance: Dict[str, Any], fixed_routes: List[List[str]], affected_pairs: List[tuple[str, str]], config: NaturalPDPTWObjectiveConfig) -> Dict[str, Any]:
+        affected_nodes = {stop for pair in affected_pairs for stop in pair}
+        if not affected_nodes:
+            return {"solution": None, "trace": {"status": "empty-affected-set"}}
+        depot = str(instance.get("depotNodeId", "0"))
+        sub_nodes = [node for node in instance.get("nodes", []) if str(node.get("id")) == depot or str(node.get("id")) in affected_nodes]
+        sub_requests = [request for request in instance.get("requests", []) if (str(request.get("pickupNodeId")), str(request.get("dropoffNodeId"))) in set(affected_pairs)]
+        sub_instance = dict(instance)
+        sub_instance["nodes"] = sub_nodes
+        sub_instance["requests"] = sub_requests
+        sub_instance["vehicleCount"] = max(1, len(affected_pairs))
+        generated = self.generate(sub_instance, config)
+        if not generated["candidates"]:
+            return {"solution": None, "trace": {"status": "no-feasible-candidate", "generatorTrace": generated["trace"]}}
+        replacement = min(generated["candidates"], key=lambda candidate: objective_components(sub_instance, candidate, config)["objective"])
+        full_solution = {"routes": fixed_routes + replacement.get("routes", [])}
+        checked = check_solution(instance, full_solution)
+        if not checked.get("feasible"):
+            return {"solution": None, "trace": {"status": "hard-violation", "generatorTrace": generated["trace"]}}
+        return {"solution": full_solution, "trace": {"status": "feasible", "generatorTrace": generated["trace"]}}
+
+
+def internal_solver_improvement(instance: Dict[str, Any], solution: Dict[str, Any], config: NaturalPDPTWObjectiveConfig, mode: str = "natural") -> Dict[str, Any]:
+    before = objective_components(instance, solution, config)
+    generator = InternalSolverCandidateGenerator(max_runtime_ms=3_000)
+    generated = generator.generate(instance, config)
+    best_candidate = None
+    best_after = None
+    for candidate in generated["candidates"]:
+        after = objective_components(instance, candidate, config)
+        if not after["feasible"]:
+            continue
+        if best_after is None or after["objective"] < best_after["objective"]:
+            best_candidate = candidate
+            best_after = after
+    accepted = best_candidate is not None and best_after is not None and natural_solution_key(instance, best_candidate, config) < natural_solution_key(instance, solution, config)
+    reject_reason = None if accepted else ("no-feasible-candidate" if not generated["candidates"] else "objective-not-improved")
+    return {
+        "solution": best_candidate if accepted else solution,
+        "accepted": accepted,
+        "trace": {
+            "generatorMode": mode,
+            "strategiesTried": generated["trace"],
+            "candidateCount": generated["candidateCount"],
+            "feasibleCandidateCount": generated["feasibleCandidateCount"],
+            "bestCandidateVehicleCount": best_after.get("vehicleCount") if best_after else None,
+            "bestCandidateDistance": best_after.get("totalDistance") if best_after else None,
+            "objectiveBefore": before,
+            "objectiveAfter": best_after,
+            "accepted": accepted,
+            "rejectReason": reject_reason,
+        },
+    }
+
+
 def natural_alns_probe(instance: Dict[str, Any], solution: Dict[str, Any], config: NaturalPDPTWObjectiveConfig, max_runtime_ms: int = 3_000) -> Dict[str, Any]:
     started = time.perf_counter()
     consolidator = GlobalRouteConsolidator(
@@ -341,7 +435,8 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
     before = objective_components(instance, incumbent, config)
     route_elimination = natural_route_elimination(instance, incumbent, config)
     objective_elimination = objective_driven_route_elimination_repair(instance, route_elimination["solution"], config)
-    alns = natural_alns_probe(instance, objective_elimination["solution"], config, max_runtime_ms=min(3_000, max(500, time_limit_ms // 8)))
+    internal_generator = internal_solver_improvement(instance, objective_elimination["solution"], config)
+    alns = natural_alns_probe(instance, internal_generator["solution"], config, max_runtime_ms=min(3_000, max(500, time_limit_ms // 8)))
     pool = route_pool_improvement(instance, alns["solution"], config)
     final_solution = pool["solution"]
     after = objective_components(instance, final_solution, config)
@@ -371,7 +466,7 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
         "vehicleCountImproved": vehicle_improved,
         "hardViolations": hard_violations,
         "leakageDetected": leakage,
-        "operatorTrace": {"routeElimination": route_elimination["attempts"], "objectiveDrivenRouteElimination": objective_elimination["trace"], "objectiveDrivenAccepted": objective_elimination["accepted"], "alnsAccepted": alns["accepted"], "routePoolAccepted": pool["accepted"]},
+        "operatorTrace": {"routeElimination": route_elimination["attempts"], "objectiveDrivenRouteElimination": objective_elimination["trace"], "objectiveDrivenAccepted": objective_elimination["accepted"], "internalSolverGenerator": internal_generator["trace"], "alnsAccepted": alns["accepted"], "routePoolAccepted": pool["accepted"]},
         "routePoolStats": pool.get("poolStats"),
         "routePoolSpStatus": pool.get("spStatus"),
         "runtimeMs": int((time.perf_counter() - started) * 1000),

@@ -2288,6 +2288,69 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         if result["accepted"]:
             self.assertTrue(support.check_solution(instance, result["solution"]).get("feasible"))
 
+    def test_phase42_internal_generator_creates_feasible_synthetic_candidate(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase42-generator", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+
+        generated = natural_pdptw.InternalSolverCandidateGenerator(max_runtime_ms=600).generate(instance, natural_pdptw.objective_config("academic_certification"))
+
+        self.assertGreaterEqual(generated["candidateCount"], 1)
+        self.assertGreaterEqual(generated["feasibleCandidateCount"], 1)
+
+    def test_phase42_candidate_with_objective_regression_is_rejected(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase42-reject", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        solution = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+
+        result = natural_pdptw.internal_solver_improvement(instance, solution, natural_pdptw.objective_config("academic_certification"))
+
+        self.assertFalse(result["accepted"])
+
+    def test_phase42_hard_violation_candidate_is_rejected(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 1, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase42-hard", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        solution = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+
+        result = natural_pdptw.internal_solver_improvement(instance, solution, natural_pdptw.objective_config("academic_certification"))
+
+        if result["accepted"]:
+            self.assertTrue(support.check_solution(instance, result["solution"]).get("feasible"))
+
+    def test_phase42_affected_subproblem_recombines_with_fixed_routes(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase42-affected", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        fixed = [["0", "1", "2", "0"]]
+
+        result = natural_pdptw.InternalSolverCandidateGenerator(max_runtime_ms=600).affected_subproblem(instance, fixed, [("3", "4"), ("5", "6")], natural_pdptw.objective_config("academic_certification"))
+
+        if result.get("solution"):
+            self.assertTrue(support.check_solution(instance, result["solution"]).get("feasible"))
+
+    def test_phase42_has_no_instance_name_special_case(self) -> None:
+        source = Path("scripts/run_phase40_natural_pdptw_optimizer.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("instanceName ==", source)
+        self.assertNotIn("startswith(\"LRC\")", source)
+
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
 
