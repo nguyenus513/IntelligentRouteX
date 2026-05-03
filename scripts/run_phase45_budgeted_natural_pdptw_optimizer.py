@@ -78,7 +78,7 @@ class StageBudgetScheduler:
             "totalRuntimeMs": elapsed,
             "totalBudgetMs": self.total_budget_ms,
             "reserveMs": self.reserve_ms,
-            "overBudget": elapsed > self.total_budget_ms + 1_000,
+            "overBudget": elapsed > self.total_budget_ms,
             "stages": self.stages,
         }
 
@@ -139,7 +139,7 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
     scheduler = StageBudgetScheduler(time_limit_ms)
     operator_trace: Dict[str, Any] = {}
 
-    incumbent_budget = scheduler.stage_budget("incumbent", int(time_limit_ms * 0.55), min_ms=1_000)
+    incumbent_budget = scheduler.stage_budget("incumbent", min(8_000, int(time_limit_ms * 0.25)), min_ms=1_000)
     if incumbent_budget <= 0:
         incumbent_budget = max(1, min(time_limit_ms, 1_000))
     incumbent_started = time.perf_counter()
@@ -177,8 +177,8 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
         _stage_call(
             scheduler,
             "objective-driven-route-elimination",
-            preferred_ms=2_500,
-            min_ms=700,
+            preferred_ms=20_000,
+            min_ms=20_000,
             call=lambda _budget: objective_driven_route_elimination_repair(instance, current, config),
         ),
     )
@@ -210,8 +210,8 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
         _stage_call(
             scheduler,
             "natural-alns-probe",
-            preferred_ms=2_500,
-            min_ms=800,
+            preferred_ms=20_000,
+            min_ms=20_000,
             call=lambda budget: natural_alns_probe(instance, current, config, max_runtime_ms=budget),
         ),
     )
