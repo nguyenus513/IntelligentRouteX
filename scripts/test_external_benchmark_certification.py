@@ -49,6 +49,7 @@ route_set_guided = load_module("run_phase33_route_set_guided_generation", "run_p
 missing_large_columns = load_module("run_phase34_missing_request_large_columns", "run_phase34_missing_request_large_columns.py")
 residual_repair = load_module("run_phase35_residual_exact_cover_repair", "run_phase35_residual_exact_cover_repair.py")
 focused_repair = load_module("run_phase36_residual_focused_repair", "run_phase36_residual_focused_repair.py")
+conflict_guided = load_module("run_phase37_conflict_guided_replacement", "run_phase37_conflict_guided_replacement.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -1758,6 +1759,108 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         selected_ids = set(result.get("selectedColumnIds", []))
         self.assertFalse(any(column.column_id in selected_ids and not column.allowed_for_claim for column in collector.pool.columns))
+
+    def test_phase37_conflict_analysis_identifies_blocking_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase37-conflict", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "selected")
+        selected = collector.pool.columns[:]
+        collector.collect(["0", "1", "2", "5", "6", "0"], "candidate")
+
+        analysis = conflict_guided.conflict_analysis(selected, collector.pool.columns, ["2"])
+
+        self.assertTrue(analysis)
+        self.assertEqual([selected[0].column_id], analysis[0]["blockingSelectedColumnIds"])
+        self.assertEqual(["2"], analysis[0]["missingCovered"])
+
+    def test_phase37_local_subproblem_selects_disjoint_fixed_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase37-subproblem", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "fixed")
+        fixed = collector.pool.columns[:]
+        collector.collect(["0", "3", "4", "5", "6", "0"], "candidate")
+        collector.pool.add_route(["0", "1", "2", "5", "6", "0"], "comparator", source_solver="baseline", provenance="comparator", allowed_for_claim=False)
+
+        result = conflict_guided.solve_residual_subproblem(instance, fixed, collector.pool.columns, ["1", "2"], route_slots=1)
+
+        self.assertTrue(result["feasible"])
+        self.assertTrue(all(column.allowed_for_claim and not (set(column.request_ids) & {"0"}) for column in result["selectedColumns"]))
+
+    def test_phase37_generated_replacement_columns_are_internal_only(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase37-generated", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+
+        generated = conflict_guided.generate_replacement_columns(instance, collector, ["0", "1", "2"], route_slots=1)
+
+        self.assertGreater(generated, 0)
+        self.assertTrue(all(column.provenance == "internal" and column.allowed_for_claim for column in collector.pool.columns))
+
+    def test_phase37_replacement_search_fixes_synthetic_no_compatible_case(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase37-fix", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "selected")
+        selected = collector.pool.columns[:]
+        collector.collect(["0", "1", "2", "5", "6", "0"], "overlap-candidate")
+        collector.collect(["0", "1", "2", "5", "6", "0"], "duplicate-overlap")
+        collector.collect(["0", "1", "2", "5", "6", "0"], "duplicate-overlap-2")
+
+        result = conflict_guided.blocking_set_replacement_search(instance, collector, selected, ["2"], target_vehicle_count=1)
+
+        self.assertTrue(result["feasible"])
+        self.assertTrue(support.check_solution(instance, result["solution"]).get("feasible"))
+
+    def test_phase37_comparator_columns_are_never_used(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase37-no-leak", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "fixed")
+        fixed = collector.pool.columns[:]
+        collector.pool.add_route(["0", "3", "4", "0"], "comparator", source_solver="baseline", provenance="comparator", allowed_for_claim=False)
+
+        result = conflict_guided.solve_residual_subproblem(instance, fixed, collector.pool.columns, ["1"], route_slots=1)
+
+        self.assertFalse(result.get("feasible"))
 
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
