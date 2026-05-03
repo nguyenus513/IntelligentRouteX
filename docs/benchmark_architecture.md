@@ -38,6 +38,14 @@ Current meaning:
 - academic = routing algorithm competitiveness;
 - current weaknesses are `vehicle-count-gap`, `strong-baseline-gap` and `max-quality-not-close-to-bks`.
 
+Current promoted production-natural PDPTW diagnostic runner:
+
+- `scripts/run_phase47_adaptive_budget_natural_optimizer.py`
+- Promotion note: `docs/benchmark/phase47_promoted_natural_optimizer.md`
+- Promotion artifact: `artifacts/benchmark/community-phase48-promotion-v2`
+
+Target-K runners remain diagnostic microscopes only; the promoted natural path uses objective-driven acceptance and budgeted candidate generation.
+
 ## Food Dispatch Quality Benchmark
 
 Food dispatch benchmark measures production dispatch quality, not only VRP score.
