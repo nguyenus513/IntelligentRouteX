@@ -2413,6 +2413,91 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertTrue(result["trace"]["warmStartUsed"])
         self.assertTrue(result["trace"]["candidateObjectiveDeltas"])
 
+    def test_phase44_neighborhood_extraction_covers_complete_pairs(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase44-neighborhood", 3, 3, nodes, requests, {"vehicleCount": 3, "objective": 12.0})
+        solution = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"], ["0", "5", "6", "0"]]}
+
+        neighborhoods = natural_pdptw.IncumbentNeighborhoodRepairGenerator(max_runtime_ms=300).extract_neighborhoods(instance, solution)
+
+        self.assertTrue(neighborhoods)
+        first = neighborhoods[0]
+        affected_stops = {stop for pair in first["affectedRequests"] for stop in pair}
+        affected_route_stops = {str(stop) for route in first["affectedRoutes"] for stop in route if str(stop) != "0"}
+        self.assertEqual(affected_route_stops, affected_stops)
+
+    def test_phase44_recombination_preserves_exact_coverage(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase44-coverage", 3, 3, nodes, requests, {"vehicleCount": 3, "objective": 12.0})
+        solution = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"], ["0", "5", "6", "0"]]}
+
+        coverage = natural_pdptw._exact_pair_coverage(instance, solution)
+
+        self.assertTrue(coverage["valid"])
+        self.assertFalse(coverage["duplicatePairs"])
+
+    def test_phase44_same_slot_repair_can_improve_distance(self) -> None:
+        coords = [(0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (100.0, 0.0), (101.0, 0.0), (-1.0, 0.0), (-2.0, 0.0), (-100.0, 0.0), (-101.0, 0.0)]
+        nodes = [{"id": str(index), "x": coords[index][0], "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(9)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6), (7, 8)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}, {"pickupNodeId": "7", "dropoffNodeId": "8"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase44-same-slot", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        config = natural_pdptw.objective_config("academic_certification")
+        neighborhood = {"affectedRequests": [("1", "2"), ("3", "4"), ("5", "6"), ("7", "8")], "affectedRoutes": [["0", "1", "2", "7", "8", "0"], ["0", "5", "6", "3", "4", "0"]]}
+
+        solved = natural_pdptw.IncumbentNeighborhoodRepairGenerator(max_runtime_ms=300)._subproblem_candidates(instance, neighborhood, 2, "same-slot-polish", config)
+        best = min((natural_pdptw.objective_components(instance, candidate, config)["totalDistance"] for candidate in solved["candidates"]), default=1e18)
+
+        self.assertLess(best, natural_pdptw.objective_components(instance, {"routes": neighborhood["affectedRoutes"]}, config)["totalDistance"])
+
+    def test_phase44_compression_candidate_reduces_route_count_synthetic(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase44-compress", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        config = natural_pdptw.objective_config("academic_certification")
+        neighborhood = {"affectedRequests": [("1", "2"), ("3", "4")], "affectedRoutes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+
+        solved = natural_pdptw.IncumbentNeighborhoodRepairGenerator(max_runtime_ms=300)._subproblem_candidates(instance, neighborhood, 1, "compression-candidate", config)
+
+        self.assertTrue(any(natural_pdptw.objective_components(instance, candidate, config)["vehicleCount"] == 1 for candidate in solved["candidates"]))
+
+    def test_phase44_production_rejects_worse_compression(self) -> None:
+        coords = [(0.0, 0.0), (100.0, 0.0), (101.0, 0.0), (-100.0, 0.0), (-101.0, 0.0)]
+        nodes = [{"id": str(index), "x": coords[index][0], "y": coords[index][1], "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase44-prod-reject", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        split = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+
+        result = natural_pdptw.incumbent_neighborhood_repair(instance, split, natural_pdptw.objective_config("production_food_dispatch"))
+
+        self.assertFalse(result["accepted"])
+        self.assertEqual(split["routes"], result["solution"]["routes"])
+
+    def test_phase44_has_no_leakage_or_instance_name_special_case(self) -> None:
+        source = Path("scripts/run_phase40_natural_pdptw_optimizer.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("ortools-baseline", source)
+        self.assertNotIn("instanceName ==", source)
+        self.assertNotIn("startswith(\"LRC\")", source)
+
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
 

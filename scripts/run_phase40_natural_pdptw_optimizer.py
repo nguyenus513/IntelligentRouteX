@@ -120,6 +120,44 @@ def solution_from_routes(routes: List[List[str]]) -> Dict[str, Any]:
     return {"schemaVersion": "external-benchmark-solution/v1", "solver": "phase40-natural-pdptw-optimizer", "routes": routes}
 
 
+def _exact_pair_coverage(instance: Dict[str, Any], solution: Dict[str, Any]) -> Dict[str, Any]:
+    pairs = [(str(pickup), str(dropoff)) for pickup, dropoff in request_pairs(instance)]
+    stop_counts: Dict[str, int] = {stop: 0 for pair in pairs for stop in pair}
+    pair_counts: Dict[str, int] = {f"{pickup}->{dropoff}": 0 for pickup, dropoff in pairs}
+    partial_pairs = []
+    precedence_violations = []
+    for route in solution.get("routes", []):
+        route_stops = [str(stop) for stop in route]
+        positions: Dict[str, List[int]] = {}
+        for index, stop in enumerate(route_stops):
+            if stop in stop_counts:
+                stop_counts[stop] += 1
+                positions.setdefault(stop, []).append(index)
+        route_set = set(route_stops)
+        for pickup, dropoff in pairs:
+            has_pickup = pickup in route_set
+            has_dropoff = dropoff in route_set
+            if has_pickup and has_dropoff:
+                pair_counts[f"{pickup}->{dropoff}"] += 1
+                if min(positions.get(pickup, [10**9])) > min(positions.get(dropoff, [-1])):
+                    precedence_violations.append(f"{pickup}->{dropoff}")
+            elif has_pickup or has_dropoff:
+                partial_pairs.append(f"{pickup}->{dropoff}")
+    duplicate_stops = [stop for stop, count in stop_counts.items() if count > 1]
+    missing_stops = [stop for stop, count in stop_counts.items() if count == 0]
+    duplicate_pairs = [pair for pair, count in pair_counts.items() if count > 1]
+    missing_pairs = [pair for pair, count in pair_counts.items() if count == 0]
+    return {
+        "valid": not duplicate_stops and not missing_stops and not duplicate_pairs and not missing_pairs and not partial_pairs and not precedence_violations,
+        "duplicateStops": duplicate_stops,
+        "missingStops": missing_stops,
+        "duplicatePairs": duplicate_pairs,
+        "missingPairs": missing_pairs,
+        "partialPairs": partial_pairs,
+        "precedenceViolations": precedence_violations,
+    }
+
+
 def remove_route_and_repair(instance: Dict[str, Any], routes: List[List[str]], remove_index: int, max_checks: int = 4_000) -> Dict[str, Any] | None:
     removed_route = routes[remove_index]
     removed_pairs = route_request_pairs(instance, removed_route)
@@ -398,6 +436,200 @@ class InternalSolverCandidateGenerator:
         return {"solution": full_solution, "trace": {"status": "feasible", "generatorTrace": generated["trace"]}}
 
 
+def _route_neighborhood_features(instance: Dict[str, Any], route: List[str]) -> Dict[str, float]:
+    pairs = route_request_pairs(instance, route)
+    if not pairs:
+        return {"x": 0.0, "y": 0.0, "ready": 0.0, "due": 0.0, "slackRisk": evaluate_route_state(instance, route)["slackRisk"]}
+    features = [request_features(instance, pair) for pair in pairs]
+    return {
+        "x": sum((row["pickupX"] + row.get("dropoffX", row["pickupX"])) * 0.5 for row in features) / len(features),
+        "y": sum((row["pickupY"] + row.get("dropoffY", row["pickupY"])) * 0.5 for row in features) / len(features),
+        "ready": sum(row.get("ready", 0.0) for row in features) / len(features),
+        "due": sum(row.get("due", 0.0) for row in features) / len(features),
+        "slackRisk": evaluate_route_state(instance, route)["slackRisk"],
+    }
+
+
+def _neighborhood_distance(left: Dict[str, float], right: Dict[str, float]) -> float:
+    return abs(left["x"] - right["x"]) + abs(left["y"] - right["y"]) + abs(left["ready"] - right["ready"]) * 0.005 + abs(left["due"] - right["due"]) * 0.005 + abs(left["slackRisk"] - right["slackRisk"])
+
+
+def _sub_instance_for_pairs(instance: Dict[str, Any], pairs: List[tuple[str, str]], slots: int) -> Dict[str, Any]:
+    affected_nodes = {stop for pair in pairs for stop in pair}
+    depot = str(instance.get("depotNodeId", "0"))
+    pair_set = set(pairs)
+    sub_instance = dict(instance)
+    sub_instance["nodes"] = [node for node in instance.get("nodes", []) if str(node.get("id")) == depot or str(node.get("id")) in affected_nodes]
+    sub_instance["requests"] = [request for request in instance.get("requests", []) if (str(request.get("pickupNodeId")), str(request.get("dropoffNodeId"))) in pair_set]
+    sub_instance["vehicleCount"] = max(1, slots)
+    return sub_instance
+
+
+def _construct_routes_for_pairs(instance: Dict[str, Any], pairs: List[tuple[str, str]], slots: int) -> List[List[str]] | None:
+    depot = str(instance.get("depotNodeId", "0"))
+    routes = [[depot, depot] for _ in range(max(1, slots))]
+    for pair in sorted(pairs, key=lambda item: (request_features(instance, item)["due"], request_features(instance, item)["ready"])):
+        best_index = None
+        best_route = None
+        best_delta = 1e18
+        for route_index, route in enumerate(routes):
+            candidate = _insert_pair_best(instance, route, pair, max_checks=420)
+            if candidate is None:
+                continue
+            delta = route_distance(instance, candidate) - route_distance(instance, route)
+            if delta < best_delta:
+                best_index = route_index
+                best_route = candidate
+                best_delta = delta
+        if best_index is None or best_route is None:
+            return None
+        routes[best_index] = best_route
+    return [route for route in routes if len(route) > 2]
+
+
+class IncumbentNeighborhoodRepairGenerator:
+    def __init__(self, max_runtime_ms: int = 2_000, max_neighborhoods: int = 4, max_ortools_pairs: int = 12) -> None:
+        self._max_runtime_ms = max_runtime_ms
+        self._max_neighborhoods = max_neighborhoods
+        self._max_ortools_pairs = max_ortools_pairs
+
+    def extract_neighborhoods(self, instance: Dict[str, Any], solution: Dict[str, Any]) -> List[Dict[str, Any]]:
+        routes = [[str(stop) for stop in route] for route in solution.get("routes", []) if len(route) > 2]
+        features = [_route_neighborhood_features(instance, route) for route in routes]
+        route_order = sorted(range(len(routes)), key=lambda index: (len(route_request_pairs(instance, routes[index])), features[index]["slackRisk"], index))
+        neighborhoods = []
+        seen = set()
+        for route_index in route_order:
+            neighbors = sorted([index for index in range(len(routes)) if index != route_index], key=lambda index: (_neighborhood_distance(features[route_index], features[index]), index))
+            for neighbor_count in range(1, min(3, len(neighbors)) + 1):
+                affected_indexes = tuple(sorted([route_index] + neighbors[:neighbor_count]))
+                if affected_indexes in seen:
+                    continue
+                seen.add(affected_indexes)
+                affected_pairs = sorted({pair for index in affected_indexes for pair in route_request_pairs(instance, routes[index])}, key=lambda pair: request_features(instance, pair)["due"])
+                neighborhoods.append({
+                    "affectedRouteIndexes": list(affected_indexes),
+                    "affectedRequests": affected_pairs,
+                    "affectedRequestCount": len(affected_pairs),
+                    "availableSlots": len(affected_indexes),
+                    "compressionSlots": max(0, len(affected_indexes) - 1),
+                    "unaffectedRoutes": [route[:] for index, route in enumerate(routes) if index not in affected_indexes],
+                    "affectedRoutes": [routes[index][:] for index in affected_indexes],
+                })
+                if len(neighborhoods) >= self._max_neighborhoods:
+                    return neighborhoods
+        return neighborhoods
+
+    def _subproblem_candidates(self, instance: Dict[str, Any], neighborhood: Dict[str, Any], slots: int, mode: str, config: NaturalPDPTWObjectiveConfig) -> Dict[str, Any]:
+        candidates = []
+        trace = []
+        pairs = neighborhood["affectedRequests"]
+        sub_instance = _sub_instance_for_pairs(instance, pairs, slots)
+        if slots <= 0:
+            return {"candidates": [], "trace": [{"mode": mode, "status": "insufficient-slots"}], "candidateCap": False}
+        if mode == "same-slot-polish" and slots == len(neighborhood["affectedRoutes"]):
+            incumbent = solution_from_routes(neighborhood["affectedRoutes"])
+        else:
+            incumbent = None
+        constructed = _construct_routes_for_pairs(instance, pairs, slots)
+        if constructed is not None:
+            candidate = solution_from_routes(constructed)
+            if _exact_pair_coverage(sub_instance, candidate)["valid"] and check_solution(sub_instance, candidate).get("feasible"):
+                candidates.append(candidate)
+                trace.append({"mode": mode, "strategy": "regret-construct", "status": "feasible", "vehicleCount": len(constructed), "distance": route_distance(sub_instance, constructed[0]) if len(constructed) == 1 else objective_components(sub_instance, candidate, config)["totalDistance"]})
+            else:
+                trace.append({"mode": mode, "strategy": "regret-construct", "status": "hard-violation"})
+        else:
+            trace.append({"mode": mode, "strategy": "regret-construct", "status": "no-feasible-candidate"})
+        if len(pairs) > self._max_ortools_pairs:
+            trace.append({"mode": mode, "strategy": "internal-ortools", "status": "candidate-cap", "affectedRequestCount": len(pairs), "maxOrtoolsPairs": self._max_ortools_pairs})
+            return {"candidates": candidates, "trace": trace, "candidateCap": True}
+        generator = InternalSolverCandidateGenerator(max_runtime_ms=max(600, self._max_runtime_ms // 4))
+        generated = generator.generate(sub_instance, config, incumbent=incumbent)
+        for candidate in generated["candidates"]:
+            if _exact_pair_coverage(sub_instance, candidate)["valid"] and check_solution(sub_instance, candidate).get("feasible"):
+                candidates.append(candidate)
+        trace.append({"mode": mode, "strategy": "internal-ortools", "status": "complete", "candidateCount": generated["candidateCount"], "feasibleCandidateCount": generated["feasibleCandidateCount"], "generatorTrace": generated["trace"]})
+        return {"candidates": candidates, "trace": trace, "candidateCap": False}
+
+    def repair(self, instance: Dict[str, Any], solution: Dict[str, Any], config: NaturalPDPTWObjectiveConfig) -> Dict[str, Any]:
+        started = time.perf_counter()
+        before = objective_components(instance, solution, config)
+        best_solution = solution
+        best_key = natural_solution_key(instance, solution, config)
+        attempts = []
+        for neighborhood in self.extract_neighborhoods(instance, solution):
+            if int((time.perf_counter() - started) * 1000) > self._max_runtime_ms:
+                attempts.append({"affectedRouteIndexes": neighborhood["affectedRouteIndexes"], "rejectReason": "runtime-cap"})
+                break
+            modes = [("same-slot-polish", neighborhood["availableSlots"])]
+            if neighborhood["compressionSlots"] >= 1:
+                modes.append(("compression-candidate", neighborhood["compressionSlots"]))
+            feasible_subproblem = 0
+            recombined_feasible = 0
+            solver_modes = []
+            candidate_cap = False
+            best_attempt_after = None
+            best_attempt_delta = None
+            best_attempt_solution = None
+            reject_reason = "no-feasible-subproblem"
+            for mode, slots in modes:
+                if int((time.perf_counter() - started) * 1000) > self._max_runtime_ms:
+                    reject_reason = "runtime-cap"
+                    break
+                solved = self._subproblem_candidates(instance, neighborhood, slots, mode, config)
+                solver_modes.extend([row.get("strategy", mode) for row in solved["trace"]])
+                feasible_subproblem += len(solved["candidates"])
+                candidate_cap = candidate_cap or bool(solved.get("candidateCap"))
+                for replacement in solved["candidates"]:
+                    replacement_routes = [[str(stop) for stop in route] for route in replacement.get("routes", []) if len(route) > 2]
+                    candidate = solution_from_routes(neighborhood["unaffectedRoutes"] + replacement_routes)
+                    coverage = _exact_pair_coverage(instance, candidate)
+                    checked = check_solution(instance, candidate)
+                    if not coverage["valid"]:
+                        reject_reason = "recombination-invalid"
+                        continue
+                    if not checked.get("feasible"):
+                        reject_reason = "hard-violation"
+                        continue
+                    recombined_feasible += 1
+                    after = objective_components(instance, candidate, config)
+                    delta = after["objective"] - before["objective"]
+                    if best_attempt_after is None or after["objective"] < best_attempt_after["objective"]:
+                        best_attempt_after = after
+                        best_attempt_delta = delta
+                        best_attempt_solution = candidate
+                    reject_reason = "objective-not-improved"
+            if candidate_cap and recombined_feasible == 0 and reject_reason == "no-feasible-subproblem":
+                reject_reason = "candidate-cap"
+            accepted = best_attempt_solution is not None and natural_solution_key(instance, best_attempt_solution, config) < best_key
+            attempts.append({
+                "affectedRouteIndexes": neighborhood["affectedRouteIndexes"],
+                "affectedRequestCount": neighborhood["affectedRequestCount"],
+                "availableSlots": neighborhood["availableSlots"],
+                "compressionSlots": neighborhood["compressionSlots"],
+                "solverModesTried": sorted(set(solver_modes)),
+                "feasibleSubproblemCandidates": feasible_subproblem,
+                "recombinedFeasibleCandidates": recombined_feasible,
+                "bestCandidateVehicleCount": best_attempt_after.get("vehicleCount") if best_attempt_after else None,
+                "bestCandidateDistance": best_attempt_after.get("totalDistance") if best_attempt_after else None,
+                "objectiveBefore": before["objective"],
+                "objectiveAfter": best_attempt_after.get("objective") if best_attempt_after else None,
+                "objectiveDelta": best_attempt_delta,
+                "accepted": accepted,
+                "rejectReason": None if accepted else reject_reason,
+            })
+            if accepted:
+                best_solution = best_attempt_solution
+                best_key = natural_solution_key(instance, best_solution, config)
+                break
+        return {"solution": best_solution, "accepted": best_solution is not solution, "trace": attempts, "runtimeMs": int((time.perf_counter() - started) * 1000)}
+
+
+def incumbent_neighborhood_repair(instance: Dict[str, Any], solution: Dict[str, Any], config: NaturalPDPTWObjectiveConfig) -> Dict[str, Any]:
+    return IncumbentNeighborhoodRepairGenerator(max_runtime_ms=2_000, max_neighborhoods=4).repair(instance, solution, config)
+
+
 def internal_solver_improvement(instance: Dict[str, Any], solution: Dict[str, Any], config: NaturalPDPTWObjectiveConfig, mode: str = "natural") -> Dict[str, Any]:
     before = objective_components(instance, solution, config)
     generator = InternalSolverCandidateGenerator(max_runtime_ms=3_000)
@@ -474,7 +706,8 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
     route_elimination = natural_route_elimination(instance, incumbent, config)
     objective_elimination = objective_driven_route_elimination_repair(instance, route_elimination["solution"], config)
     internal_generator = internal_solver_improvement(instance, objective_elimination["solution"], config)
-    alns = natural_alns_probe(instance, internal_generator["solution"], config, max_runtime_ms=min(3_000, max(500, time_limit_ms // 8)))
+    neighborhood = incumbent_neighborhood_repair(instance, internal_generator["solution"], config)
+    alns = natural_alns_probe(instance, neighborhood["solution"], config, max_runtime_ms=min(3_000, max(500, time_limit_ms // 8)))
     pool = route_pool_improvement(instance, alns["solution"], config)
     final_solution = pool["solution"]
     after = objective_components(instance, final_solution, config)
@@ -504,7 +737,7 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
         "vehicleCountImproved": vehicle_improved,
         "hardViolations": hard_violations,
         "leakageDetected": leakage,
-        "operatorTrace": {"routeElimination": route_elimination["attempts"], "objectiveDrivenRouteElimination": objective_elimination["trace"], "objectiveDrivenAccepted": objective_elimination["accepted"], "internalSolverGenerator": internal_generator["trace"], "alnsAccepted": alns["accepted"], "routePoolAccepted": pool["accepted"]},
+        "operatorTrace": {"routeElimination": route_elimination["attempts"], "objectiveDrivenRouteElimination": objective_elimination["trace"], "objectiveDrivenAccepted": objective_elimination["accepted"], "internalSolverGenerator": internal_generator["trace"], "incumbentNeighborhoodRepair": neighborhood["trace"], "incumbentNeighborhoodAccepted": neighborhood["accepted"], "alnsAccepted": alns["accepted"], "routePoolAccepted": pool["accepted"]},
         "routePoolStats": pool.get("poolStats"),
         "routePoolSpStatus": pool.get("spStatus"),
         "runtimeMs": int((time.perf_counter() - started) * 1000),
