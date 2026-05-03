@@ -53,6 +53,7 @@ conflict_guided = load_module("run_phase37_conflict_guided_replacement", "run_ph
 residual_partition = load_module("run_phase38_residual_partition_generator", "run_phase38_residual_partition_generator.py")
 target_vehicle = load_module("run_phase38b_target_vehicle_feasibility", "run_phase38b_target_vehicle_feasibility.py")
 missing_targetk = load_module("run_phase39_missing_driven_targetk_repair", "run_phase39_missing_driven_targetk_repair.py")
+natural_pdptw = load_module("run_phase40_natural_pdptw_optimizer", "run_phase40_natural_pdptw_optimizer.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -2150,6 +2151,69 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         second = missing_targetk.run_missing_driven_repair(instance, [["0", "1", "2", "0"]])
 
         self.assertEqual(first["routes"], second["routes"])
+
+    def test_phase40_objective_ranks_feasible_over_infeasible(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase40-feasible", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        config = natural_pdptw.objective_config("academic_certification")
+        feasible = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+        infeasible = {"routes": [["0", "2", "1", "0"], ["0", "3", "4", "0"]]}
+
+        self.assertLess(natural_pdptw.natural_solution_key(instance, feasible, config), natural_pdptw.natural_solution_key(instance, infeasible, config))
+
+    def test_phase40_academic_mode_ranks_fewer_vehicles_over_shorter_distance(self) -> None:
+        nodes = [{"id": str(index), "x": float(index * 10), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase40-academic", 3, 3, nodes, requests, {"vehicleCount": 3, "objective": 120.0})
+        config = natural_pdptw.objective_config("academic_certification")
+        fewer = {"routes": [["0", "1", "2", "3", "4", "5", "6", "0"]]}
+        shorter = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"], ["0", "5", "6", "0"]]}
+
+        self.assertLess(natural_pdptw.natural_solution_key(instance, fewer, config), natural_pdptw.natural_solution_key(instance, shorter, config))
+
+    def test_phase40_production_mode_can_reject_fewer_vehicles_if_tail_penalty_high(self) -> None:
+        coords = [(0.0, 0.0), (10.0, 0.0), (11.0, 0.0), (-10.0, 0.0), (-11.0, 0.0), (0.0, 10.0), (0.0, 11.0)]
+        nodes = [{"id": str(index), "x": coords[index][0], "y": coords[index][1], "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase40-production", 3, 3, nodes, requests, {"vehicleCount": 3, "objective": 1200.0})
+        config = natural_pdptw.objective_config("production_food_dispatch")
+        fewer_long_tail = {"routes": [["0", "1", "2", "3", "4", "5", "6", "0"]]}
+        more_short_tail = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"], ["0", "5", "6", "0"]]}
+
+        self.assertGreater(natural_pdptw.objective_components(instance, fewer_long_tail, config)["tailPenalty"], natural_pdptw.objective_components(instance, more_short_tail, config)["tailPenalty"])
+
+    def test_phase40_route_elimination_accepts_only_objective_improving_solution(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase40-elimination", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        config = natural_pdptw.objective_config("academic_certification")
+        solution = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+
+        result = natural_pdptw.natural_route_elimination(instance, solution, config)
+
+        self.assertLessEqual(len(result["solution"]["routes"]), 2)
+        self.assertTrue(any("accepted" in attempt for attempt in result["attempts"]))
+
+    def test_phase40_has_no_instance_name_branch(self) -> None:
+        source = Path("scripts/run_phase40_natural_pdptw_optimizer.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("instanceName ==", source)
+        self.assertNotIn("startswith(\"LRC\")", source)
 
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
