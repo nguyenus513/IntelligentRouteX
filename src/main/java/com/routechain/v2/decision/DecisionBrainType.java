@@ -7,13 +7,13 @@ public enum DecisionBrainType {
 
     public static DecisionBrainType fromMode(String rawMode) {
         if (rawMode == null || rawMode.isBlank()) {
-            return LLM;
+            return LEGACY;
         }
         return switch (rawMode.trim().toLowerCase(java.util.Locale.ROOT)) {
             case "legacy" -> LEGACY;
             case "student" -> STUDENT;
             case "llm", "hybrid", "llm-shadow", "llm-authoritative" -> LLM;
-            default -> LLM;
+            default -> LEGACY;
         };
     }
 }

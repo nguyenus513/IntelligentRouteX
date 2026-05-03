@@ -571,8 +571,9 @@ public class DispatchV2Configuration {
     @Bean
     DispatchSelectorService dispatchSelectorService(SelectorCandidateBuilder selectorCandidateBuilder,
                                                     ConflictGraphBuilder conflictGraphBuilder,
-                                                    GlobalSelector globalSelector) {
-        return new DispatchSelectorService(selectorCandidateBuilder, conflictGraphBuilder, globalSelector);
+                                                    GlobalSelector globalSelector,
+                                                    RouteChainDispatchV2Properties properties) {
+        return new DispatchSelectorService(properties, selectorCandidateBuilder, conflictGraphBuilder, globalSelector);
     }
 
     @Bean
@@ -862,6 +863,7 @@ public class DispatchV2Configuration {
                                   DispatchScenarioService dispatchScenarioService,
                                   DispatchSelectorService dispatchSelectorService,
                                   DispatchExecutorService dispatchExecutorService,
+                                  EtaLegCacheFactory etaLegCacheFactory,
                                   WarmStartManager warmStartManager,
                                   PostDispatchHardeningService postDispatchHardeningService,
                                   DecisionBrainResolver decisionBrainResolver,
@@ -878,6 +880,7 @@ public class DispatchV2Configuration {
                 dispatchScenarioService,
                 dispatchSelectorService,
                 dispatchExecutorService,
+                etaLegCacheFactory,
                 warmStartManager,
                 postDispatchHardeningService,
                 decisionBrainResolver,

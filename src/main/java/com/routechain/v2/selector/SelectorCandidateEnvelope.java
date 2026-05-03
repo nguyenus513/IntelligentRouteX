@@ -1,6 +1,6 @@
 package com.routechain.v2.selector;
 
-record SelectorCandidateEnvelope(
+public record SelectorCandidateEnvelope(
         SelectorCandidate candidate,
         double projectedPickupEtaMinutes) {
 }

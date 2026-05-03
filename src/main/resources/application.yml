@@ -9,6 +9,22 @@ management:
 
 routechain:
   dispatch-v2:
+    streaming:
+      enabled: false
+      broker-type: kafka
+      bootstrap-servers: ${IRX_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      input-topic: ${IRX_KAFKA_INPUT_TOPIC:irx.dispatch.requests.v1}
+      output-topic: ${IRX_KAFKA_OUTPUT_TOPIC:irx.dispatch.results.v1}
+      dead-letter-topic: ${IRX_KAFKA_DLQ_TOPIC:irx.dispatch.dlq.v1}
+      consumer-group-id: ${IRX_KAFKA_CONSUMER_GROUP:irx-dispatch-v2}
+      client-id: ${IRX_KAFKA_CLIENT_ID:irx-dispatch-node}
+      concurrency: ${IRX_KAFKA_CONCURRENCY:3}
+      partitions: ${IRX_KAFKA_PARTITIONS:12}
+      key-strategy: region-trace
+      publish-training-trace: true
+      file-sink-enabled: ${IRX_STREAMING_FILE_SINK_ENABLED:false}
+      file-sink-base-dir: ${IRX_STREAMING_FILE_SINK_BASE_DIR:data/dispatch-v2-streaming}
+      max-in-flight: ${IRX_STREAMING_MAX_IN_FLIGHT:64}
     enabled: false
     ml-enabled: false
     sidecar-required: false

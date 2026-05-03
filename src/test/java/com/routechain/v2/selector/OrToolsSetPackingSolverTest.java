@@ -1,6 +1,7 @@
 package com.routechain.v2.selector;
 
 import com.routechain.config.RouteChainDispatchV2Properties;
+import com.routechain.v2.objective.UnifiedObjective;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -29,7 +30,12 @@ class OrToolsSetPackingSolverTest {
                 .collect(java.util.stream.Collectors.toMap(SelectorCandidate::proposalId, candidate -> candidate));
 
         assertEquals(SelectionSolverMode.ORTOOLS, result.solverMode());
-        assertEquals(result.selectedProposals().stream().mapToDouble(SelectedProposal::selectionScore).sum(), result.objectiveValue(), 1e-9);
+        UnifiedObjective objective = new UnifiedObjective();
+        assertEquals(result.selectedProposals().stream()
+                .map(SelectedProposal::proposalId)
+                .map(byProposalId::get)
+                .mapToDouble(candidate -> objective.scoreSelectorCandidate(candidate).totalUtility())
+                .sum(), result.objectiveValue(), 1e-9);
         assertTrue(result.selectedProposals().stream().allMatch(selected -> byProposalId.containsKey(selected.proposalId())));
         assertTrue(result.selectedProposals().stream().allMatch(selected -> graph.edges().stream()
                 .filter(edge -> edge.leftProposalId().equals(selected.proposalId()) || edge.rightProposalId().equals(selected.proposalId()))

@@ -1,6 +1,12 @@
 package com.routechain.v2;
 
 import com.routechain.config.RouteChainDispatchV2Properties;
+import com.routechain.domain.Order;
+import com.routechain.domain.WeatherProfile;
+import com.routechain.v2.active.ActiveFleetStateStore;
+import com.routechain.v2.active.ActiveRouteInsertionCandidate;
+import com.routechain.v2.active.ActiveRouteInsertionGenerator;
+import com.routechain.v2.active.ActiveRouteState;
 import com.routechain.v2.bundle.BundleCandidate;
 import com.routechain.v2.bundle.BundleFamily;
 import com.routechain.v2.bundle.BundlePoolSummary;
@@ -9,6 +15,8 @@ import com.routechain.v2.bundle.DispatchBundleStage;
 import com.routechain.v2.bundle.DispatchBundleStageService;
 import com.routechain.v2.cluster.DispatchPairClusterService;
 import com.routechain.v2.cluster.DispatchPairClusterStage;
+import com.routechain.v2.cluster.EtaLegCache;
+import com.routechain.v2.cluster.EtaLegCacheFactory;
 import com.routechain.v2.context.DispatchEtaContextService;
 import com.routechain.v2.context.DispatchEtaContextStage;
 import com.routechain.v2.decision.ContextAssembler;
@@ -39,6 +47,12 @@ import com.routechain.v2.route.RouteProposal;
 import com.routechain.v2.route.RouteProposalSource;
 import com.routechain.v2.route.RouteProposalSummary;
 import com.routechain.v2.route.PickupAnchorSummary;
+import com.routechain.v2.rolling.AdaptiveHoldWindowPolicy;
+import com.routechain.v2.rolling.RollingDecisionMode;
+import com.routechain.v2.rolling.RollingDispatchState;
+import com.routechain.v2.rolling.RollingHoldDecision;
+import com.routechain.v2.rolling.RollingPendingOrderBuffer;
+import com.routechain.v2.rolling.RollingReoptimizationPrioritizer;
 import com.routechain.v2.scenario.DispatchScenarioService;
 import com.routechain.v2.scenario.DispatchScenarioStage;
 import com.routechain.v2.scenario.RobustUtility;
@@ -53,6 +67,7 @@ import com.routechain.v2.selector.SelectionSolverMode;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
@@ -85,12 +100,18 @@ public final class DispatchV2Core {
     private final DispatchScenarioService dispatchScenarioService;
     private final DispatchSelectorService dispatchSelectorService;
     private final DispatchExecutorService dispatchExecutorService;
+    private final EtaLegCacheFactory etaLegCacheFactory;
     private final WarmStartManager warmStartManager;
     private final PostDispatchHardeningService postDispatchHardeningService;
     private final DecisionBrainResolver decisionBrainResolver;
     private final ContextAssembler contextAssembler;
     private final DecisionStageLogger decisionStageLogger;
     private final HarvestRecorder harvestRecorder;
+    private final AdaptiveHoldWindowPolicy adaptiveHoldWindowPolicy = new AdaptiveHoldWindowPolicy();
+    private final RollingPendingOrderBuffer rollingPendingOrderBuffer;
+    private final RollingReoptimizationPrioritizer rollingReoptimizationPrioritizer = new RollingReoptimizationPrioritizer();
+    private final ActiveFleetStateStore activeFleetStateStore;
+    private final ActiveRouteInsertionGenerator activeRouteInsertionGenerator = new ActiveRouteInsertionGenerator();
 
     public DispatchV2Core(RouteChainDispatchV2Properties properties,
                           DispatchEtaContextService dispatchEtaContextService,
@@ -101,12 +122,51 @@ public final class DispatchV2Core {
                           DispatchScenarioService dispatchScenarioService,
                           DispatchSelectorService dispatchSelectorService,
                           DispatchExecutorService dispatchExecutorService,
+                          EtaLegCacheFactory etaLegCacheFactory,
                           WarmStartManager warmStartManager,
                           PostDispatchHardeningService postDispatchHardeningService,
                           DecisionBrainResolver decisionBrainResolver,
                           ContextAssembler contextAssembler,
                           DecisionStageLogger decisionStageLogger,
                           HarvestRecorder harvestRecorder) {
+        this(properties,
+                dispatchEtaContextService,
+                dispatchPairClusterService,
+                dispatchBundleStageService,
+                dispatchRouteCandidateService,
+                dispatchRouteProposalService,
+                dispatchScenarioService,
+                dispatchSelectorService,
+                dispatchExecutorService,
+                etaLegCacheFactory,
+                warmStartManager,
+                postDispatchHardeningService,
+                decisionBrainResolver,
+                contextAssembler,
+                decisionStageLogger,
+                harvestRecorder,
+                new RollingPendingOrderBuffer(),
+                new ActiveFleetStateStore());
+    }
+
+    public DispatchV2Core(RouteChainDispatchV2Properties properties,
+                          DispatchEtaContextService dispatchEtaContextService,
+                          DispatchPairClusterService dispatchPairClusterService,
+                          DispatchBundleStageService dispatchBundleStageService,
+                          DispatchRouteCandidateService dispatchRouteCandidateService,
+                          DispatchRouteProposalService dispatchRouteProposalService,
+                          DispatchScenarioService dispatchScenarioService,
+                          DispatchSelectorService dispatchSelectorService,
+                          DispatchExecutorService dispatchExecutorService,
+                          EtaLegCacheFactory etaLegCacheFactory,
+                          WarmStartManager warmStartManager,
+                          PostDispatchHardeningService postDispatchHardeningService,
+                          DecisionBrainResolver decisionBrainResolver,
+                          ContextAssembler contextAssembler,
+                          DecisionStageLogger decisionStageLogger,
+                          HarvestRecorder harvestRecorder,
+                          RollingPendingOrderBuffer rollingPendingOrderBuffer,
+                          ActiveFleetStateStore activeFleetStateStore) {
         this.properties = properties;
         this.dispatchEtaContextService = dispatchEtaContextService;
         this.dispatchPairClusterService = dispatchPairClusterService;
@@ -116,12 +176,15 @@ public final class DispatchV2Core {
         this.dispatchScenarioService = dispatchScenarioService;
         this.dispatchSelectorService = dispatchSelectorService;
         this.dispatchExecutorService = dispatchExecutorService;
+        this.etaLegCacheFactory = etaLegCacheFactory;
         this.warmStartManager = warmStartManager;
         this.postDispatchHardeningService = postDispatchHardeningService;
         this.decisionBrainResolver = decisionBrainResolver;
         this.contextAssembler = contextAssembler;
         this.decisionStageLogger = decisionStageLogger;
         this.harvestRecorder = harvestRecorder;
+        this.rollingPendingOrderBuffer = rollingPendingOrderBuffer;
+        this.activeFleetStateStore = activeFleetStateStore;
     }
 
     public DispatchV2Result dispatch(DispatchV2Request request) {
@@ -160,30 +223,43 @@ public final class DispatchV2Core {
 
     private DispatchPipelineExecution executePipeline(DispatchV2Request request, boolean allowHotStartReuse) {
         long dispatchStartedAt = System.nanoTime();
-        harvestRecorder.recordRunManifest(request);
+        DispatchV2Request rollingInputRequest = rollingPendingOrderBuffer.mergeDueOrders(request);
+        RollingDispatchState rollingState = RollingDispatchState.fromRequest(rollingInputRequest);
+        List<RollingHoldDecision> rollingDecisions = adaptiveHoldWindowPolicy.decide(rollingState);
+        rollingPendingOrderBuffer.update(rollingInputRequest, rollingDecisions);
+        DispatchV2Request effectiveRequest = applyRollingDecisions(rollingInputRequest, rollingDecisions);
+        harvestRecorder.recordRunManifest(effectiveRequest);
         ResolvedDecisionBrain resolvedDecisionBrain = decisionBrainResolver.resolve();
-        DecisionStageInputV1 observationInput = contextAssembler.observationInput(request);
+        DecisionStageInputV1 observationInput = contextAssembler.observationInput(effectiveRequest);
         DecisionStageOutputV1 observationOutput = runDecisionSidecar(resolvedDecisionBrain, observationInput);
-        writeDecisionJoin(observationInput, request.traceId(), observationOutput, List.of(), List.of(), false, false, List.of());
-        DispatchEtaContextStage etaStage = dispatchEtaContextService.evaluate(request);
+        writeDecisionJoin(observationInput, effectiveRequest.traceId(), observationOutput, List.of(), List.of(), false, false, List.of());
+        decisionStageLogger.writeFamily("rolling_horizon", effectiveRequest.traceId(), "adaptive-hold-window", java.util.Map.of(
+                "traceId", effectiveRequest.traceId(),
+                "inputOrderCount", request.openOrders().size(),
+                "rollingInputOrderCount", rollingInputRequest.openOrders().size(),
+                "effectiveOrderCount", effectiveRequest.openOrders().size(),
+                "bufferedOrderCount", rollingPendingOrderBuffer.size(),
+                "bufferedOrderIds", rollingPendingOrderBuffer.bufferedOrderIds(),
+                "decisions", rollingDecisions.stream().map(this::rollingDecisionRow).toList()));
+        DispatchEtaContextStage etaStage = dispatchEtaContextService.evaluate(effectiveRequest);
         HotStartReusePlan reusePlan = allowHotStartReuse
                 ? postDispatchHardeningService.planHotStartReuse(etaStage.etaContext())
                 : HotStartReusePlan.none();
         DispatchPairClusterStage pairClusterStage = dispatchPairClusterService.evaluate(
-                request,
+                effectiveRequest,
                 etaStage.etaContext(),
                 reusePlan.pairClusterReuseInput());
         DispatchBundleStage bundleStage = dispatchBundleStageService.evaluate(
                 etaStage.etaContext(),
                 pairClusterStage,
                 reusePlan.bundleReuseInput());
-        DecisionStageInputV1 pairBundleInput = contextAssembler.pairBundleInput(request, etaStage.etaContext(), pairClusterStage, bundleStage);
+        DecisionStageInputV1 pairBundleInput = contextAssembler.pairBundleInput(effectiveRequest, etaStage.etaContext(), pairClusterStage, bundleStage);
         DecisionStageOutputV1 pairBundleOutput = runDecisionSidecar(resolvedDecisionBrain, pairBundleInput);
         StageAuthorityResult<DispatchBundleStage> pairBundleAuthority = applyPairBundleAuthority(bundleStage, pairBundleOutput, resolvedDecisionBrain);
         bundleStage = pairBundleAuthority.value();
         writeDecisionJoin(
                 pairBundleInput,
-                request.traceId(),
+                effectiveRequest.traceId(),
                 pairBundleAuthority.output(),
                 bundleStage.bundleCandidates().stream().map(BundleCandidate::bundleId).toList(),
                 pairBundleAuthority.actualSelectedIds(),
@@ -191,28 +267,31 @@ public final class DispatchV2Core {
                 pairBundleAuthority.authoritativeApplied(),
                 List.of("observation-pack"));
         DispatchRouteCandidateStage routeCandidateStage = dispatchRouteCandidateService.evaluate(
-                request,
+                effectiveRequest,
                 etaStage.etaContext(),
                 pairClusterStage,
                 bundleStage);
-        DecisionStageInputV1 anchorInput = contextAssembler.anchorInput(request, etaStage.etaContext(), routeCandidateStage);
+        DecisionStageInputV1 anchorInput = contextAssembler.anchorInput(effectiveRequest, etaStage.etaContext(), routeCandidateStage);
         DecisionStageOutputV1 anchorOutput = runDecisionSidecar(resolvedDecisionBrain, anchorInput);
         writeDecisionJoin(
                 anchorInput,
-                request.traceId(),
+                effectiveRequest.traceId(),
                 anchorOutput,
                 routeCandidateStage.pickupAnchors().stream().map(PickupAnchor::anchorOrderId).toList(),
                 routeCandidateStage.pickupAnchors().stream().map(PickupAnchor::anchorOrderId).toList(),
                 true,
                 false,
                 List.of("pair-bundle"));
-        DecisionStageInputV1 driverInput = contextAssembler.driverInput(request, etaStage.etaContext(), routeCandidateStage);
+        DecisionStageInputV1 driverInput = contextAssembler.driverInput(effectiveRequest, etaStage.etaContext(), routeCandidateStage);
         DecisionStageOutputV1 driverOutput = runDecisionSidecar(resolvedDecisionBrain, driverInput);
         StageAuthorityResult<DispatchRouteCandidateStage> driverAuthority = applyDriverAuthority(routeCandidateStage, driverOutput, resolvedDecisionBrain);
-        routeCandidateStage = driverAuthority.value();
+        routeCandidateStage = rollingReoptimizationPrioritizer.apply(
+                driverAuthority.value(),
+                bundleStage.bundleCandidates(),
+                rollingDecisions);
         writeDecisionJoin(
                 driverInput,
-                request.traceId(),
+                effectiveRequest.traceId(),
                 driverAuthority.output(),
                 routeCandidateStage.driverCandidates().stream().map(DriverCandidate::driverId).toList(),
                 driverAuthority.actualSelectedIds(),
@@ -220,32 +299,32 @@ public final class DispatchV2Core {
                 driverAuthority.authoritativeApplied(),
                 List.of("anchor"));
         DispatchRouteProposalStage routeProposalStage = dispatchRouteProposalService.evaluate(
-                request,
+                effectiveRequest,
                 etaStage.etaContext(),
                 pairClusterStage,
                 bundleStage,
                 routeCandidateStage,
                 reusePlan.routeProposalReuseInput());
-        DecisionStageInputV1 routeGenerationInput = contextAssembler.routeGenerationInput(request, etaStage.etaContext(), routeProposalStage);
+        DecisionStageInputV1 routeGenerationInput = contextAssembler.routeGenerationInput(effectiveRequest, etaStage.etaContext(), routeProposalStage);
         DecisionStageOutputV1 routeGenerationOutput = runDecisionSidecar(resolvedDecisionBrain, routeGenerationInput);
         StageAuthorityResult<DispatchRouteProposalStage> routeGenerationAuthority = applyRouteProposalAuthority(routeProposalStage, routeGenerationOutput, resolvedDecisionBrain, "route-generation");
         routeProposalStage = routeGenerationAuthority.value();
         writeDecisionJoin(
                 routeGenerationInput,
-                request.traceId(),
+                effectiveRequest.traceId(),
                 routeGenerationAuthority.output(),
                 routeProposalStage.routeProposals().stream().map(RouteProposal::proposalId).toList(),
                 routeGenerationAuthority.actualSelectedIds(),
                 true,
                 routeGenerationAuthority.authoritativeApplied(),
                 List.of("driver"));
-        DecisionStageInputV1 routeCritiqueInput = contextAssembler.routeCritiqueInput(request, etaStage.etaContext(), routeProposalStage);
+        DecisionStageInputV1 routeCritiqueInput = contextAssembler.routeCritiqueInput(effectiveRequest, etaStage.etaContext(), routeProposalStage);
         DecisionStageOutputV1 routeCritiqueOutput = runDecisionSidecar(resolvedDecisionBrain, routeCritiqueInput);
         StageAuthorityResult<DispatchRouteProposalStage> routeCritiqueAuthority = applyRouteProposalAuthority(routeProposalStage, routeCritiqueOutput, resolvedDecisionBrain, "route-critique");
         routeProposalStage = routeCritiqueAuthority.value();
         writeDecisionJoin(
                 routeCritiqueInput,
-                request.traceId(),
+                effectiveRequest.traceId(),
                 routeCritiqueAuthority.output(),
                 routeProposalStage.routeProposals().stream().map(RouteProposal::proposalId).toList(),
                 routeCritiqueAuthority.actualSelectedIds(),
@@ -253,7 +332,7 @@ public final class DispatchV2Core {
                 routeCritiqueAuthority.authoritativeApplied(),
                 List.of("route-generation"));
         DispatchScenarioStage scenarioStage = dispatchScenarioService.evaluate(
-                request,
+                effectiveRequest,
                 etaStage.etaContext(),
                 etaStage.freshnessMetadata(),
                 etaStage.liveStageMetadata(),
@@ -261,28 +340,35 @@ public final class DispatchV2Core {
                 routeCandidateStage,
                 bundleStage,
                 pairClusterStage);
-        DecisionStageInputV1 scenarioInput = contextAssembler.scenarioInput(request, etaStage.etaContext(), scenarioStage);
+        DecisionStageInputV1 scenarioInput = contextAssembler.scenarioInput(effectiveRequest, etaStage.etaContext(), scenarioStage);
         DecisionStageOutputV1 scenarioOutput = runDecisionSidecar(resolvedDecisionBrain, scenarioInput);
         StageAuthorityResult<DispatchScenarioStage> scenarioAuthority = applyScenarioAuthority(scenarioStage, scenarioOutput, resolvedDecisionBrain);
         scenarioStage = scenarioAuthority.value();
         writeDecisionJoin(
                 scenarioInput,
-                request.traceId(),
+                effectiveRequest.traceId(),
                 scenarioAuthority.output(),
                 scenarioStage.robustUtilities().stream().map(RobustUtility::proposalId).toList(),
                 scenarioAuthority.actualSelectedIds(),
                 true,
                 scenarioAuthority.authoritativeApplied(),
                 List.of("route-critique"));
+        List<ActiveRouteInsertionCandidate> activeInsertionCandidates = activeInsertionCandidates(effectiveRequest, rollingDecisions);
+        decisionStageLogger.writeFamily("active_route_insertion", effectiveRequest.traceId(), "active-route-insertion", java.util.Map.of(
+                "activeRouteCount", activeFleetStateStore.activeRoutes(effectiveRequest).size(),
+                "candidateCount", activeInsertionCandidates.size(),
+                "candidateIds", activeInsertionCandidates.stream().map(ActiveRouteInsertionCandidate::candidateId).toList(),
+                "activeRouteIds", activeFleetStateStore.activeRouteIds()));
         DispatchSelectorStage selectorStage = dispatchSelectorService.evaluate(
-                request,
+                effectiveRequest,
                 etaStage.etaContext(),
                 pairClusterStage,
                 bundleStage,
                 routeCandidateStage,
                 routeProposalStage,
-                scenarioStage);
-        DecisionStageInputV1 finalSelectionInput = contextAssembler.finalSelectionInput(request, etaStage.etaContext(), selectorStage);
+                scenarioStage,
+                activeInsertionCandidates);
+        DecisionStageInputV1 finalSelectionInput = contextAssembler.finalSelectionInput(effectiveRequest, etaStage.etaContext(), selectorStage);
         DecisionStageOutputV1 finalSelectionOutput = runDecisionSidecar(
                 resolvedDecisionBrain,
                 finalSelectionInput);
@@ -290,7 +376,7 @@ public final class DispatchV2Core {
         selectorStage = finalSelectionAuthority.value();
         writeDecisionJoin(
                 finalSelectionInput,
-                request.traceId(),
+                effectiveRequest.traceId(),
                 finalSelectionAuthority.output(),
                 selectorStage.selectorCandidates().stream().map(candidate -> candidate.proposalId()).toList(),
                 finalSelectionAuthority.actualSelectedIds(),
@@ -298,19 +384,20 @@ public final class DispatchV2Core {
                 finalSelectionAuthority.authoritativeApplied(),
                 List.of("scenario"));
         DispatchExecutorStage executorStage = dispatchExecutorService.evaluate(
-                request,
+                effectiveRequest,
                 pairClusterStage,
                 bundleStage,
                 routeCandidateStage,
                 routeProposalStage,
                 selectorStage);
-        DecisionStageInputV1 safetyExecuteInput = contextAssembler.safetyExecuteInput(request, etaStage.etaContext(), executorStage);
+        activeFleetStateStore.recordAssignments(effectiveRequest, executorStage.assignments());
+        DecisionStageInputV1 safetyExecuteInput = contextAssembler.safetyExecuteInput(effectiveRequest, etaStage.etaContext(), executorStage);
         DecisionStageOutputV1 executionOutput = runDecisionSidecar(
                 resolvedDecisionBrain,
                 safetyExecuteInput);
         writeDecisionJoin(
                 safetyExecuteInput,
-                request.traceId(),
+                effectiveRequest.traceId(),
                 executionOutput,
                 executorStage.assignments().stream().map(assignment -> assignment.assignmentId()).toList(),
                 executorStage.assignments().stream().map(assignment -> assignment.assignmentId()).toList(),
@@ -366,9 +453,14 @@ public final class DispatchV2Core {
                 .flatMap(stream -> stream)
                 .distinct()
                 .toList();
+        List<String> rollingDegradeReasons = rollingDegradeReasons(rollingInputRequest, effectiveRequest, rollingDecisions);
+        List<String> finalDegradeReasons = java.util.stream.Stream.concat(degradeReasons.stream(), rollingDegradeReasons.stream())
+                .filter(reason -> reason != null && !reason.isBlank())
+                .distinct()
+                .toList();
         DispatchV2Result result = new DispatchV2Result(
                 "dispatch-v2-result/v1",
-                request.traceId(),
+                effectiveRequest.traceId(),
                 false,
                 null,
                 DECISION_STAGES,
@@ -425,26 +517,38 @@ public final class DispatchV2Core {
                         latencyBudgetSummary.estimatedHotStartSavedMs(),
                         stageLatencies.stream().filter(DispatchStageLatency::hotStartReused).map(DispatchStageLatency::stageName).toList(),
                         reusePlan.degradeReasons()),
-                degradeReasons);
-        decisionStageLogger.writeFamily("dispatch_execution", request.traceId(), "dispatch-executor", executorStage.dispatchExecutionSummary());
-        decisionStageLogger.writeFamily("route_outcome_trace", request.traceId(), "dispatch-executor", java.util.Map.of(
+                selectorStage.activeRepairTelemetry(),
+                finalDegradeReasons);
+        decisionStageLogger.writeFamily("dispatch_execution", effectiveRequest.traceId(), "dispatch-executor", executorStage.dispatchExecutionSummary());
+        decisionStageLogger.writeFamily("route_outcome_trace", effectiveRequest.traceId(), "dispatch-executor", java.util.Map.of(
                 "assignmentIds", executorStage.assignments().stream().map(assignment -> assignment.assignmentId()).toList(),
                 "selectedProposalIds", selectorStage.globalSelectionResult().selectedProposals().stream()
                         .map(selectedProposal -> selectedProposal.proposalId())
                         .toList(),
                 "executionBrainSelectedIds", executionOutput == null ? List.of() : executionOutput.selectedIds()));
         harvestRecorder.recordDispatchExecution(
-                request,
+                effectiveRequest,
                 executorStage,
                 executionOutput,
                 selectorStage.globalSelectionResult().selectedProposals().stream()
                         .map(SelectedProposal::proposalId)
                         .toList());
-        decisionStageLogger.writeFamily("dispatch_outcome", request.traceId(), "dispatch-result", java.util.Map.of(
-                "traceId", request.traceId(),
+        decisionStageLogger.writeFamily("dispatch_outcome", effectiveRequest.traceId(), "dispatch-result", java.util.Map.of(
+                "traceId", effectiveRequest.traceId(),
                 "assignmentCount", executorStage.assignments().size(),
-                "degradeReasons", degradeReasons));
-        harvestRecorder.recordDispatchOutcome(request, executorStage, degradeReasons);
+                "repairMode", selectorStage.activeRepairTelemetry().candidateInputCount() > 0 ? "BOUNDED_ALNS" : "NONE",
+                "repairOperatorCounts", selectorStage.activeRepairTelemetry().operatorStats().stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                com.routechain.v2.repair.RepairOperatorStat::operatorName,
+                                com.routechain.v2.repair.RepairOperatorStat::triedCount,
+                                Integer::sum,
+                                java.util.LinkedHashMap::new)),
+                "repairAcceptedMoves", selectorStage.activeRepairTelemetry().acceptedMoves(),
+                "repairRejectedMoves", selectorStage.activeRepairTelemetry().rejectedMoves(),
+                "repairImprovementDelta", selectorStage.activeRepairTelemetry().bestImprovementDelta(),
+                "repairRuntimeMs", selectorStage.activeRepairTelemetry().runtimeMs(),
+                "degradeReasons", finalDegradeReasons));
+        harvestRecorder.recordDispatchOutcome(effectiveRequest, executorStage, finalDegradeReasons);
         return new DispatchPipelineExecution(
                 result,
                 reusePlan,
@@ -454,6 +558,113 @@ public final class DispatchV2Core {
                 routeCandidateStage,
                 routeProposalStage,
                 scenarioStage);
+    }
+
+    private DispatchV2Request applyRollingDecisions(DispatchV2Request request, List<RollingHoldDecision> rollingDecisions) {
+        Map<String, RollingHoldDecision> decisionByOrderId = rollingDecisions.stream()
+                .collect(Collectors.toMap(RollingHoldDecision::orderId, decision -> decision, (left, right) -> left));
+        List<Order> dispatchableOrders = request.openOrders().stream()
+                .filter(order -> {
+                    RollingHoldDecision decision = decisionByOrderId.get(order.orderId());
+                    return decision == null
+                            || decision.decisionMode() == RollingDecisionMode.DISPATCH_NOW
+                            || decision.decisionMode() == RollingDecisionMode.MICRO_BATCH
+                            || decision.decisionMode() == RollingDecisionMode.REOPTIMIZE_ACTIVE_ROUTE;
+                })
+                .toList();
+        if (dispatchableOrders.isEmpty() && !request.openOrders().isEmpty()) {
+            Order safestOrder = request.openOrders().stream()
+                    .min(Comparator.comparing(order -> {
+                        RollingHoldDecision decision = decisionByOrderId.get(order.orderId());
+                        return decision == null ? 0L : Math.max(0L, decision.holdSeconds());
+                    }))
+                    .orElse(request.openOrders().getFirst());
+            dispatchableOrders = List.of(safestOrder);
+        }
+        if (dispatchableOrders.size() == request.openOrders().size()) {
+            return request;
+        }
+        return new DispatchV2Request(
+                request.schemaVersion(),
+                request.traceId(),
+                dispatchableOrders,
+                request.availableDrivers(),
+                request.regions(),
+                request.weatherProfile(),
+                request.decisionTime());
+    }
+
+    private Map<String, Object> rollingDecisionRow(RollingHoldDecision decision) {
+        return java.util.Map.of(
+                "orderId", decision.orderId(),
+                "decisionMode", decision.decisionMode().name(),
+                "holdSeconds", decision.holdSeconds(),
+                "confidence", decision.confidence(),
+                "bundleOpportunityScore", decision.bundleOpportunityScore(),
+                "riskScore", decision.riskScore(),
+                "reasonCodes", decision.reasonCodes());
+    }
+
+    private List<String> rollingDegradeReasons(DispatchV2Request originalRequest,
+                                               DispatchV2Request effectiveRequest,
+                                               List<RollingHoldDecision> rollingDecisions) {
+        List<String> reasons = new ArrayList<>();
+        if (effectiveRequest.openOrders().size() < originalRequest.openOrders().size()) {
+            reasons.add("rolling-horizon-held-orders");
+        }
+        if (rollingDecisions.stream().anyMatch(decision -> decision.decisionMode() == RollingDecisionMode.MICRO_BATCH)) {
+            reasons.add("rolling-horizon-micro-batch-enabled");
+        }
+        if (rollingDecisions.stream().anyMatch(decision -> decision.decisionMode() == RollingDecisionMode.REOPTIMIZE_ACTIVE_ROUTE)) {
+            reasons.add("rolling-horizon-active-route-reoptimize-requested");
+        }
+        return List.copyOf(reasons);
+    }
+
+    private List<ActiveRouteInsertionCandidate> activeInsertionCandidates(DispatchV2Request effectiveRequest,
+                                                                          List<RollingHoldDecision> rollingDecisions) {
+        if (!properties.getSelector().isActiveRouteRepairEnabled()) {
+            return List.of();
+        }
+        Set<String> reoptimizationOrderIds = rollingDecisions.stream()
+                .filter(decision -> decision.decisionMode() == RollingDecisionMode.REOPTIMIZE_ACTIVE_ROUTE)
+                .map(RollingHoldDecision::orderId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (activeFleetStateStore.size() == 0) {
+            return List.of();
+        }
+        if (reoptimizationOrderIds.isEmpty()) {
+            reoptimizationOrderIds = effectiveRequest.openOrders().stream()
+                    .map(Order::orderId)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+        }
+        Set<String> finalReoptimizationOrderIds = reoptimizationOrderIds;
+        List<Order> candidateOrders = effectiveRequest.openOrders().stream()
+                .filter(order -> finalReoptimizationOrderIds.contains(order.orderId()))
+                .toList();
+        if (candidateOrders.isEmpty()) {
+            return List.of();
+        }
+        List<ActiveRouteState> activeRoutes = activeFleetStateStore.activeRoutes(effectiveRequest);
+        if (activeRoutes.isEmpty()) {
+            return List.of();
+        }
+        List<Order> knownOrders = java.util.stream.Stream.concat(
+                        activeFleetStateStore.knownOrders(effectiveRequest).stream(),
+                        candidateOrders.stream())
+                .collect(Collectors.toMap(Order::orderId, order -> order, (left, right) -> right, LinkedHashMap::new))
+                .values()
+                .stream()
+                .toList();
+        EtaLegCache etaLegCache = etaLegCacheFactory.create(
+                effectiveRequest.traceId(),
+                effectiveRequest.decisionTime(),
+                effectiveRequest.weatherProfile() == null ? WeatherProfile.CLEAR : effectiveRequest.weatherProfile());
+        Set<String> candidateOrderIds = candidateOrders.stream().map(Order::orderId).collect(Collectors.toSet());
+        return activeRouteInsertionGenerator.generate(activeRoutes, knownOrders, effectiveRequest.decisionTime(), etaLegCache).stream()
+                .filter(candidate -> candidateOrderIds.contains(candidate.insertedOrderId()))
+                .limit(24)
+                .toList();
     }
 
     private DecisionStageOutputV1 runDecisionSidecar(ResolvedDecisionBrain resolvedDecisionBrain, DecisionStageInputV1 input) {
@@ -682,6 +893,18 @@ public final class DispatchV2Core {
                 selectedProposals.size(),
                 solverMode,
                 selectedProposals.stream().mapToDouble(SelectedProposal::selectionScore).sum(),
+                selectorStage.globalSelectionResult().selectorPoolInputCount(),
+                selectorStage.globalSelectionResult().selectorPoolReducedCount(),
+                selectorStage.globalSelectionResult().selectorFeasibleCount(),
+                selectorStage.globalSelectionResult().selectorRejectedCount(),
+                selectorStage.globalSelectionResult().selectorTimedOut(),
+                selectorStage.globalSelectionResult().selectorFallbackLevel(),
+                selectorStage.globalSelectionResult().acceptanceGatePassed(),
+                selectorStage.globalSelectionResult().acceptanceGateRejectedReasons(),
+                selectorStage.globalSelectionResult().selectorMaxPoolSize(),
+                selectorStage.globalSelectionResult().selectorPoolCapApplied(),
+                selectorStage.globalSelectionResult().selectorRetainedBestObjectiveUtility(),
+                selectorStage.globalSelectionResult().selectorFeasibleBestObjectiveUtility(),
                 appendDistinct(selectorStage.globalSelectionResult().degradeReasons(), "decision-authority-final-selection"));
         GlobalSelectorSummary selectorSummary = new GlobalSelectorSummary(
                 selectorStage.globalSelectorSummary().schemaVersion(),
@@ -690,6 +913,16 @@ public final class DispatchV2Core {
                 selectorStage.globalSelectorSummary().conflictEdgeCount(),
                 selectedProposals.size(),
                 solverMode,
+                selectorStage.globalSelectorSummary().poolInputCount(),
+                selectorStage.globalSelectorSummary().poolReducedCount(),
+                selectorStage.globalSelectorSummary().poolRejectedCount(),
+                selectorStage.globalSelectorSummary().selectorTimedOut(),
+                selectorStage.globalSelectorSummary().selectorFallbackLevel(),
+                selectorStage.globalSelectorSummary().acceptanceGatePassed(),
+                selectorStage.globalSelectorSummary().acceptanceGateRejectedReasons(),
+                selectorStage.globalSelectorSummary().selectorMaxPoolSize(),
+                selectorStage.globalSelectorSummary().selectorPoolCapApplied(),
+                selectorStage.globalSelectorSummary().selectorPoolCapObjectiveLoss(),
                 appendDistinct(selectorStage.globalSelectorSummary().degradeReasons(), "decision-authority-final-selection"));
         return new StageAuthorityResult<>(
                 new DispatchSelectorStage(
@@ -698,6 +931,7 @@ public final class DispatchV2Core {
                         selectorStage.conflictGraph(),
                         selectionResult,
                         selectorSummary,
+                        selectorStage.trainingTraces(),
                         selectorStage.stageLatencies(),
                         appendDistinct(selectorStage.degradeReasons(), "decision-authority-final-selection")),
                 output,
@@ -765,11 +999,21 @@ public final class DispatchV2Core {
     private BundlePoolSummary summarizeBundles(List<BundleCandidate> filtered, BundlePoolSummary original) {
         Map<BundleFamily, Integer> familyCounts = new EnumMap<>(BundleFamily.class);
         Map<BundleProposalSource, Integer> sourceCounts = new EnumMap<>(BundleProposalSource.class);
+        Map<BundleFamily, Integer> familyRetainedCounts = new EnumMap<>(BundleFamily.class);
         int maxBundleSize = 0;
+        int lateRiskRescueCandidateCount = 0;
+        int activeRouteAddonCandidateCount = 0;
         for (BundleCandidate bundle : filtered) {
             familyCounts.merge(bundle.family(), 1, Integer::sum);
+            familyRetainedCounts.merge(bundle.family(), 1, Integer::sum);
             sourceCounts.merge(bundle.proposalSource(), 1, Integer::sum);
             maxBundleSize = Math.max(maxBundleSize, bundle.orderIds().size());
+            if (bundle.family() == BundleFamily.LATE_RISK_RESCUE) {
+                lateRiskRescueCandidateCount++;
+            }
+            if (bundle.family() == BundleFamily.ACTIVE_ROUTE_ADDON) {
+                activeRouteAddonCandidateCount++;
+            }
         }
         return new BundlePoolSummary(
                 original.schemaVersion(),
@@ -778,7 +1022,19 @@ public final class DispatchV2Core {
                 familyCounts,
                 sourceCounts,
                 maxBundleSize,
-                appendDistinct(original.degradeReasons(), "decision-authority-pair-bundle"));
+                appendDistinct(original.degradeReasons(), "decision-authority-pair-bundle"),
+                original.familyGeneratedCounts(),
+                familyRetainedCounts,
+                original.rejectedByReasonCounts(),
+                diversityRetainedCount(familyRetainedCounts),
+                lateRiskRescueCandidateCount,
+                activeRouteAddonCandidateCount);
+    }
+
+    private int diversityRetainedCount(Map<BundleFamily, Integer> familyRetainedCounts) {
+        return (int) familyRetainedCounts.values().stream()
+                .filter(count -> count != null && count > 0)
+                .count();
     }
 
     private DriverShortlistSummary summarizeDrivers(List<DriverCandidate> filtered, DriverShortlistSummary original) {

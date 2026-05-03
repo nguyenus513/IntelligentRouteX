@@ -345,7 +345,7 @@ class NineRouterResponsesClientTest {
                 "run-1",
                 Instant.parse("2026-04-20T00:00:00Z").toString(),
                 stageName,
-                java.util.Map.of("decisionMode", "llm", "authoritativeStages", java.util.List.of("pair-bundle")),
+                java.util.Map.of("decisionMode", "legacy", "authoritativeStages", java.util.List.of("pair-bundle")),
                 java.util.Map.of("topIds", java.util.List.of("proposal-1")),
                 java.util.Map.of("heuristicBaseline", java.util.Map.of("id", "proposal-1", "score", 0.8)),
                 java.util.Map.of("items", java.util.List.of()),

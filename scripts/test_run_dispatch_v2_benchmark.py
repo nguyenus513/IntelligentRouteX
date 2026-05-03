@@ -48,7 +48,11 @@ class RunDispatchBenchmarkTest(unittest.TestCase):
                         "runAuthorityClass": "LOCAL_NON_AUTHORITY",
                         "authorityEligible": False,
                         "metrics": {"selectedProposalCount": 1, "executedAssignmentCount": 1, "robustUtilityAverage": 0.5},
-                        "llmShadowAgreement": {"overallExactMatchRate": 0.0},
+                        "decisionAgreement": {"overallExactMatchRate": 0.0},
+                        "bundleDiversity": {"candidateCount": 12, "retainedCount": 8, "familyDiversityCount": 3, "lateRiskRescueCandidateCount": 2, "activeRouteAddonCandidateCount": 1},
+                        "selectorTelemetry": {"mode": "CP_SAT_TIMEOUT_INCUMBENT", "poolInputCount": 12, "poolReducedCount": 8, "poolRejectedCount": 4, "fallbackLevel": "CP_SAT_TIMEOUT_INCUMBENT", "selectorMaxPoolSize": 256, "selectorPoolCapApplied": True, "selectorPoolCapObjectiveLoss": 0.0, "acceptanceGatePassed": True},
+                        "objectiveTelemetry": {"breakdownCount": 12, "selectedTotalUtility": 1.25, "selectedRiskCost": 0.1},
+                        "activeRepair": {"mode": "BOUNDED_ALNS", "runtimeMs": 12, "acceptedMoves": 2, "rejectedMoves": 1, "bestImprovementDelta": 0.25, "frozenPrefixViolationCount": 0, "freshnessImprovementDelta": 0.12, "tailRiskImprovementDelta": 0.08},
                         "tokenUsageSummary": {"totalTokens": 0},
                         "routeVectorMetrics": {"geometryCoverage": 0.0},
                     }),
@@ -67,7 +71,20 @@ class RunDispatchBenchmarkTest(unittest.TestCase):
                 benchmark_runner.run_cell = original_run_cell
 
             self.assertEqual(0, exit_code)
-            self.assertTrue((output_dir / "dispatch-quality-summary.md").is_file())
+            summary = (output_dir / "dispatch-quality-summary.md")
+            self.assertTrue(summary.is_file())
+            summary_text = summary.read_text(encoding="utf-8")
+            self.assertIn("bundle candidates retained: `12 -> 8`", summary_text)
+            self.assertIn("bundle family diversity count: `3`", summary_text)
+            self.assertIn("selector mode: `CP_SAT_TIMEOUT_INCUMBENT`", summary_text)
+            self.assertIn("selector pool input/reduced/rejected: `12 / 8 / 4`", summary_text)
+            self.assertIn("selector max pool/cap/loss: `256 / True / 0.0`", summary_text)
+            self.assertIn("objective breakdown count: `12`", summary_text)
+            self.assertIn("objective selected total utility: `1.25`", summary_text)
+            self.assertIn("repair mode: `BOUNDED_ALNS`", summary_text)
+            self.assertIn("repair frozen prefix violations: `0`", summary_text)
+            self.assertIn("repair freshness improvement delta: `0.12`", summary_text)
+            self.assertIn("repair accepted/rejected moves: `2 / 1`", summary_text)
 
     def test_runner_updates_summary_after_each_completed_cell(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -89,7 +106,7 @@ class RunDispatchBenchmarkTest(unittest.TestCase):
                         "runAuthorityClass": "LOCAL_NON_AUTHORITY",
                         "authorityEligible": False,
                         "metrics": {"selectedProposalCount": 1, "executedAssignmentCount": 1, "robustUtilityAverage": 0.5},
-                        "llmShadowAgreement": {"overallExactMatchRate": 0.0},
+                        "decisionAgreement": {"overallExactMatchRate": 0.0},
                         "tokenUsageSummary": {"totalTokens": 0},
                         "routeVectorMetrics": {"geometryCoverage": 0.0},
                     }),
@@ -115,7 +132,7 @@ class RunDispatchBenchmarkTest(unittest.TestCase):
 
             output = stdout.getvalue()
             self.assertEqual(0, exit_code)
-            self.assertEqual(6, calls["count"])
+            self.assertEqual(len(benchmark_runner.SCENARIO_PACKS), calls["count"])
             self.assertIn("[CELL ARTIFACT WRITTEN]", output)
             self.assertIn("[CELL ARTIFACT PATHS]", output)
             self.assertIn("[CELL SUMMARY UPDATED]", output)
@@ -126,7 +143,7 @@ class RunDispatchBenchmarkTest(unittest.TestCase):
             baselines="C",
             size="S",
             scenario_pack="normal-clear",
-            decision_mode="llm-shadow",
+            decision_mode="legacy",
             prompt_family="v3",
             authoritative_stages=(),
             execution_mode="controlled",

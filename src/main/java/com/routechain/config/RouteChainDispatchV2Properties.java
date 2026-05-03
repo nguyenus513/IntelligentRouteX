@@ -38,6 +38,7 @@ public class RouteChainDispatchV2Properties {
     private final Compute compute = new Compute();
     private final Decision decision = new Decision();
     private final Routing routing = new Routing();
+    private final Streaming streaming = new Streaming();
 
     public static RouteChainDispatchV2Properties defaults() {
         return new RouteChainDispatchV2Properties();
@@ -193,6 +194,59 @@ public class RouteChainDispatchV2Properties {
 
     public Routing getRouting() {
         return routing;
+    }
+
+    public Streaming getStreaming() {
+        return streaming;
+    }
+
+    public static final class Streaming {
+        private boolean enabled = false;
+        private String brokerType = "kafka";
+        private String bootstrapServers = "localhost:9092";
+        private String inputTopic = "irx.dispatch.requests.v1";
+        private String outputTopic = "irx.dispatch.results.v1";
+        private String deadLetterTopic = "irx.dispatch.dlq.v1";
+        private String consumerGroupId = "irx-dispatch-v2";
+        private String clientId = "irx-dispatch-node";
+        private int concurrency = 3;
+        private int partitions = 12;
+        private String keyStrategy = "region-trace";
+        private boolean publishTrainingTrace = true;
+        private boolean fileSinkEnabled = false;
+        private String fileSinkBaseDir = "data/dispatch-v2-streaming";
+        private int maxInFlight = 64;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getBrokerType() { return brokerType; }
+        public void setBrokerType(String brokerType) { this.brokerType = brokerType; }
+        public String getBootstrapServers() { return bootstrapServers; }
+        public void setBootstrapServers(String bootstrapServers) { this.bootstrapServers = bootstrapServers; }
+        public String getInputTopic() { return inputTopic; }
+        public void setInputTopic(String inputTopic) { this.inputTopic = inputTopic; }
+        public String getOutputTopic() { return outputTopic; }
+        public void setOutputTopic(String outputTopic) { this.outputTopic = outputTopic; }
+        public String getDeadLetterTopic() { return deadLetterTopic; }
+        public void setDeadLetterTopic(String deadLetterTopic) { this.deadLetterTopic = deadLetterTopic; }
+        public String getConsumerGroupId() { return consumerGroupId; }
+        public void setConsumerGroupId(String consumerGroupId) { this.consumerGroupId = consumerGroupId; }
+        public String getClientId() { return clientId; }
+        public void setClientId(String clientId) { this.clientId = clientId; }
+        public int getConcurrency() { return concurrency; }
+        public void setConcurrency(int concurrency) { this.concurrency = concurrency; }
+        public int getPartitions() { return partitions; }
+        public void setPartitions(int partitions) { this.partitions = partitions; }
+        public String getKeyStrategy() { return keyStrategy; }
+        public void setKeyStrategy(String keyStrategy) { this.keyStrategy = keyStrategy; }
+        public boolean isPublishTrainingTrace() { return publishTrainingTrace; }
+        public void setPublishTrainingTrace(boolean publishTrainingTrace) { this.publishTrainingTrace = publishTrainingTrace; }
+        public boolean isFileSinkEnabled() { return fileSinkEnabled; }
+        public void setFileSinkEnabled(boolean fileSinkEnabled) { this.fileSinkEnabled = fileSinkEnabled; }
+        public String getFileSinkBaseDir() { return fileSinkBaseDir; }
+        public void setFileSinkBaseDir(String fileSinkBaseDir) { this.fileSinkBaseDir = fileSinkBaseDir; }
+        public int getMaxInFlight() { return maxInFlight; }
+        public void setMaxInFlight(int maxInFlight) { this.maxInFlight = maxInFlight; }
     }
 
     public static final class Routing {
@@ -771,6 +825,10 @@ public class RouteChainDispatchV2Properties {
 
     public static final class Selector {
         private boolean greedyRepairEnabled = true;
+        private boolean globalSelectorEnabled = true;
+        private boolean activeRouteRepairEnabled = true;
+        private boolean runtimePolicyEnabled = false;
+        private int maxPoolSize = 256;
         private int repairPassLimit = 1;
         private double fallbackPenalty = 0.03;
         private final Ortools ortools = new Ortools();
@@ -781,6 +839,38 @@ public class RouteChainDispatchV2Properties {
 
         public void setGreedyRepairEnabled(boolean greedyRepairEnabled) {
             this.greedyRepairEnabled = greedyRepairEnabled;
+        }
+
+        public boolean isGlobalSelectorEnabled() {
+            return globalSelectorEnabled;
+        }
+
+        public void setGlobalSelectorEnabled(boolean globalSelectorEnabled) {
+            this.globalSelectorEnabled = globalSelectorEnabled;
+        }
+
+        public boolean isActiveRouteRepairEnabled() {
+            return activeRouteRepairEnabled;
+        }
+
+        public void setActiveRouteRepairEnabled(boolean activeRouteRepairEnabled) {
+            this.activeRouteRepairEnabled = activeRouteRepairEnabled;
+        }
+
+        public boolean isRuntimePolicyEnabled() {
+            return runtimePolicyEnabled;
+        }
+
+        public void setRuntimePolicyEnabled(boolean runtimePolicyEnabled) {
+            this.runtimePolicyEnabled = runtimePolicyEnabled;
+        }
+
+        public int getMaxPoolSize() {
+            return maxPoolSize;
+        }
+
+        public void setMaxPoolSize(int maxPoolSize) {
+            this.maxPoolSize = maxPoolSize;
         }
 
         public int getRepairPassLimit() {
@@ -1572,14 +1662,9 @@ public class RouteChainDispatchV2Properties {
     }
 
     public static final class Decision {
-        private String mode = "llm";
+        private String mode = "legacy";
         private boolean fallbackToLegacy = true;
-        private java.util.List<String> authoritativeStages = new java.util.ArrayList<>(java.util.List.of(
-                "pair-bundle",
-                "driver",
-                "route-critique",
-                "scenario",
-                "final-selection"));
+        private java.util.List<String> authoritativeStages = new java.util.ArrayList<>();
         private final EffortPolicy effortPolicy = new EffortPolicy();
         private final ContextSelection contextSelection = new ContextSelection();
         private final Llm llm = new Llm();

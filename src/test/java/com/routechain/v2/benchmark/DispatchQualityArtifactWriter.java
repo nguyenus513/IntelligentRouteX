@@ -106,10 +106,62 @@ public final class DispatchQualityArtifactWriter {
         builder.append("- model manifest: `").append(result.resolvedModelManifestPath()).append("`\n");
         builder.append("- manifest exists: `").append(result.manifestExists()).append("`\n");
         builder.append("- ml attach status: `").append(result.mlAttachStatus()).append("`\n");
-        builder.append("- llm exact-match rate: `").append(result.llmShadowAgreement().overallExactMatchRate()).append("`\n");
+        builder.append("- decision exact-match rate: `").append(result.decisionAgreement().overallExactMatchRate()).append("`\n");
         builder.append("- token requests: `").append(result.tokenUsageSummary().requestCount()).append("`\n");
         builder.append("- token total: `").append(result.tokenUsageSummary().totalTokens()).append("`\n");
         builder.append("- stage fallbacks: `").append(result.stageFallbackSummary().totalFallbacks()).append("`\n");
+        DispatchBundleDiversityMetrics bundleDiversity = result.bundleDiversity();
+        builder.append("\n## Bundle Diversity\n\n");
+        builder.append("- candidates retained: `").append(bundleDiversity.candidateCount())
+                .append(" -> ").append(bundleDiversity.retainedCount()).append("`\n");
+        builder.append("- family diversity count: `").append(bundleDiversity.familyDiversityCount()).append("`\n");
+        builder.append("- diversity retained count: `").append(bundleDiversity.diversityRetainedCount()).append("`\n");
+        builder.append("- late-risk rescue candidates: `").append(bundleDiversity.lateRiskRescueCandidateCount()).append("`\n");
+        builder.append("- active-route addon candidates: `").append(bundleDiversity.activeRouteAddonCandidateCount()).append("`\n");
+        builder.append("- family generated counts: `").append(bundleDiversity.familyGeneratedCounts()).append("`\n");
+        builder.append("- family retained counts: `").append(bundleDiversity.familyRetainedCounts()).append("`\n");
+        builder.append("- rejected reasons: `").append(bundleDiversity.rejectedByReasonCounts()).append("`\n");
+        DispatchSelectorTelemetryMetrics selectorTelemetry = result.selectorTelemetry();
+        builder.append("\n## Selector Telemetry\n\n");
+        builder.append("- selector mode: `").append(selectorTelemetry.mode()).append("`\n");
+        builder.append("- pool input/reduced/rejected: `")
+                .append(selectorTelemetry.poolInputCount()).append(" / ")
+                .append(selectorTelemetry.poolReducedCount()).append(" / ")
+                .append(selectorTelemetry.poolRejectedCount()).append("`\n");
+        builder.append("- timed out: `").append(selectorTelemetry.timedOut()).append("`\n");
+        builder.append("- fallback level: `").append(selectorTelemetry.fallbackLevel()).append("`\n");
+        builder.append("- max pool size: `").append(selectorTelemetry.selectorMaxPoolSize()).append("`\n");
+        builder.append("- pool cap applied: `").append(selectorTelemetry.selectorPoolCapApplied()).append("`\n");
+        builder.append("- pool cap objective loss: `").append(selectorTelemetry.selectorPoolCapObjectiveLoss()).append("`\n");
+        builder.append("- acceptance gate passed: `").append(selectorTelemetry.acceptanceGatePassed()).append("`\n");
+        builder.append("- acceptance rejected reasons: `").append(selectorTelemetry.acceptanceGateRejectedReasons()).append("`\n");
+        DispatchObjectiveTelemetryMetrics objectiveTelemetry = result.objectiveTelemetry();
+        builder.append("\n## Objective Telemetry\n\n");
+        builder.append("- breakdown count: `").append(objectiveTelemetry.breakdownCount()).append("`\n");
+        builder.append("- selected total utility: `").append(objectiveTelemetry.selectedTotalUtility()).append("`\n");
+        builder.append("- selected quality cost: `").append(objectiveTelemetry.selectedQualityCost()).append("`\n");
+        builder.append("- selected risk cost: `").append(objectiveTelemetry.selectedRiskCost()).append("`\n");
+        builder.append("- selected runtime cost: `").append(objectiveTelemetry.selectedRuntimeCost()).append("`\n");
+        builder.append("- selected reward: `").append(objectiveTelemetry.selectedReward()).append("`\n");
+        builder.append("- selected top reasons: `").append(objectiveTelemetry.selectedTopReasons()).append("`\n");
+        DispatchRepairTelemetryMetrics repair = result.activeRepair();
+        builder.append("\n## Active Repair\n\n");
+        builder.append("- mode: `").append(repair.mode()).append("`\n");
+        builder.append("- enabled: `").append(repair.enabled()).append("`\n");
+        builder.append("- timed out: `").append(repair.timedOut()).append("`\n");
+        builder.append("- runtime ms: `").append(repair.runtimeMs()).append("`\n");
+        builder.append("- candidate input/output: `").append(repair.candidateInputCount()).append(" / ").append(repair.candidateOutputCount()).append("`\n");
+        builder.append("- operators tried: `").append(repair.operatorsTried()).append("`\n");
+        builder.append("- accepted/rejected moves: `").append(repair.acceptedMoves()).append(" / ").append(repair.rejectedMoves()).append("`\n");
+        builder.append("- best improvement delta: `").append(repair.bestImprovementDelta()).append("`\n");
+        builder.append("- frozen prefix violations: `").append(repair.frozenPrefixViolationCount()).append("`\n");
+        builder.append("- food duration violations: `").append(repair.foodDurationViolationCount()).append("`\n");
+        builder.append("- freshness improvement delta: `").append(repair.freshnessImprovementDelta()).append("`\n");
+        builder.append("- tail-risk improvement delta: `").append(repair.tailRiskImprovementDelta()).append("`\n");
+        builder.append("- operator counts: `").append(repair.operatorCounts()).append("`\n");
+        builder.append("- rejection reasons: `").append(repair.rejectionReasons()).append("`\n");
+        builder.append("- degrade reasons: `").append(repair.degradeReasons()).append("`\n");
+        builder.append("\n## Route Evidence\n\n");
         builder.append("- route vector geometry coverage: `").append(result.routeVectorMetrics().geometryCoverage()).append("`\n");
         builder.append("- route proposal budget mode: `").append(result.routeProposalBudgetMetrics().budgetMode()).append("`\n");
         builder.append("- route proposals before/after prune: `")
@@ -164,9 +216,9 @@ public final class DispatchQualityArtifactWriter {
                         .append('\n');
             }
         }
-        if (!result.llmShadowAgreement().stageAgreements().isEmpty()) {
+        if (!result.decisionAgreement().stageAgreements().isEmpty()) {
             builder.append("\n## LLM Agreement\n\n");
-            for (DispatchDecisionStageAgreement stageAgreement : result.llmShadowAgreement().stageAgreements()) {
+            for (DispatchDecisionStageAgreement stageAgreement : result.decisionAgreement().stageAgreements()) {
                 builder.append("- `").append(stageAgreement.stageName()).append("` ")
                         .append("rate=`").append(stageAgreement.exactMatchRate()).append("` ")
                         .append("matches=`").append(stageAgreement.exactMatchCount()).append('/')
@@ -246,9 +298,12 @@ public final class DispatchQualityArtifactWriter {
 
     private static String csvForComparison(DispatchQualityComparisonReport report) {
         StringBuilder builder = new StringBuilder();
-        builder.append("baseline,scenarioPack,scenarioName,workloadSize,decisionMode,runtimeClassification,executionMode,selectedProposalCount,executedAssignmentCount,conflictFreeAssignments,executionValid,bundleRate,averageBundleSize,selectedSingleOrderCount,selectedBundleSize2Count,selectedBundleSize3Count,selectedBundleSize4Count,selectedBundleSize5Count,coveredOrderCount,maxSelectedBundleSize,routeFallbackRate,averageProjectedPickupEtaMinutes,averageProjectedCompletionEtaMinutes,landingValueAverage,robustUtilityAverage,selectorObjectiveValue,routeCostQuality,driverEntryQuality,burstRobustness,dispatchRegretAverage,courierUtilizationEstimate,degradeRate,workerFallbackRate,liveSourceFallbackRate,llmExactMatchRate,tokenTotal,stageFallbacks,geometryCoverage,averageRouteDistanceMeters,averageRouteTravelTimeSeconds,averageRouteCost,averageCongestionScore,averageMajorRoadRatio,averageStraightnessScore,averageTurnCount,routeDominanceRate,averageRouteRegret,averagePathEfficiency,averageEtaDominanceScore,contextEfficiency,stageCoherence,fallbackRecoveryQuality,adaptationQuality,decisionConsistencyVariance\n");
+        builder.append("baseline,scenarioPack,scenarioName,workloadSize,decisionMode,runtimeClassification,executionMode,selectedProposalCount,executedAssignmentCount,conflictFreeAssignments,executionValid,bundleRate,averageBundleSize,selectedSingleOrderCount,selectedBundleSize2Count,selectedBundleSize3Count,selectedBundleSize4Count,selectedBundleSize5Count,coveredOrderCount,maxSelectedBundleSize,routeFallbackRate,averageProjectedPickupEtaMinutes,averageProjectedCompletionEtaMinutes,landingValueAverage,robustUtilityAverage,selectorObjectiveValue,routeCostQuality,driverEntryQuality,burstRobustness,dispatchRegretAverage,courierUtilizationEstimate,degradeRate,workerFallbackRate,liveSourceFallbackRate,decisionExactMatchRate,bundleCandidateCount,bundleRetainedCount,bundleFamilyDiversityCount,bundleDiversityRetainedCount,bundleLateRiskRescueCount,bundleActiveRouteAddonCount,selectorMode,selectorPoolInputCount,selectorPoolReducedCount,selectorPoolRejectedCount,selectorTimedOut,selectorFallbackLevel,selectorMaxPoolSize,selectorPoolCapApplied,selectorPoolCapObjectiveLoss,acceptanceGatePassed,objectiveBreakdownCount,objectiveSelectedTotalUtility,objectiveSelectedQualityCost,objectiveSelectedRiskCost,objectiveSelectedRuntimeCost,objectiveSelectedReward,repairMode,repairEnabled,repairTimedOut,repairRuntimeMs,repairCandidateInputCount,repairCandidateOutputCount,repairOperatorsTried,repairAcceptedMoves,repairRejectedMoves,repairBestImprovementDelta,repairFrozenPrefixViolationCount,repairFoodDurationViolationCount,repairFreshnessImprovementDelta,repairTailRiskImprovementDelta,tokenTotal,stageFallbacks,geometryCoverage,averageRouteDistanceMeters,averageRouteTravelTimeSeconds,averageRouteCost,averageCongestionScore,averageMajorRoadRatio,averageStraightnessScore,averageTurnCount,routeDominanceRate,averageRouteRegret,averagePathEfficiency,averageEtaDominanceScore,contextEfficiency,stageCoherence,fallbackRecoveryQuality,adaptationQuality,decisionConsistencyVariance\n");
         for (DispatchQualityBenchmarkResult result : report.baselineResults()) {
             DispatchQualityMetrics metrics = result.metrics();
+            DispatchBundleDiversityMetrics bundleDiversity = result.bundleDiversity();
+            DispatchSelectorTelemetryMetrics selectorTelemetry = result.selectorTelemetry();
+            DispatchObjectiveTelemetryMetrics objectiveTelemetry = result.objectiveTelemetry();
             builder.append(csv(result.baselineId())).append(',')
                     .append(csv(result.scenarioPack())).append(',')
                     .append(csv(result.scenarioName())).append(',')
@@ -283,7 +338,43 @@ public final class DispatchQualityArtifactWriter {
                     .append(metrics.degradeRate()).append(',')
                     .append(metrics.workerFallbackRate()).append(',')
                     .append(metrics.liveSourceFallbackRate()).append(',')
-                    .append(result.llmShadowAgreement().overallExactMatchRate()).append(',')
+                    .append(result.decisionAgreement().overallExactMatchRate()).append(',')
+                    .append(bundleDiversity.candidateCount()).append(',')
+                    .append(bundleDiversity.retainedCount()).append(',')
+                    .append(bundleDiversity.familyDiversityCount()).append(',')
+                    .append(bundleDiversity.diversityRetainedCount()).append(',')
+                    .append(bundleDiversity.lateRiskRescueCandidateCount()).append(',')
+                    .append(bundleDiversity.activeRouteAddonCandidateCount()).append(',')
+                    .append(csv(selectorTelemetry.mode())).append(',')
+                    .append(selectorTelemetry.poolInputCount()).append(',')
+                    .append(selectorTelemetry.poolReducedCount()).append(',')
+                    .append(selectorTelemetry.poolRejectedCount()).append(',')
+                    .append(selectorTelemetry.timedOut()).append(',')
+                    .append(csv(selectorTelemetry.fallbackLevel())).append(',')
+                    .append(selectorTelemetry.selectorMaxPoolSize()).append(',')
+                    .append(selectorTelemetry.selectorPoolCapApplied()).append(',')
+                    .append(selectorTelemetry.selectorPoolCapObjectiveLoss()).append(',')
+                    .append(selectorTelemetry.acceptanceGatePassed()).append(',')
+                    .append(objectiveTelemetry.breakdownCount()).append(',')
+                    .append(objectiveTelemetry.selectedTotalUtility()).append(',')
+                    .append(objectiveTelemetry.selectedQualityCost()).append(',')
+                    .append(objectiveTelemetry.selectedRiskCost()).append(',')
+                    .append(objectiveTelemetry.selectedRuntimeCost()).append(',')
+                    .append(objectiveTelemetry.selectedReward()).append(',')
+                    .append(csv(result.activeRepair().mode())).append(',')
+                    .append(result.activeRepair().enabled()).append(',')
+                    .append(result.activeRepair().timedOut()).append(',')
+                    .append(result.activeRepair().runtimeMs()).append(',')
+                    .append(result.activeRepair().candidateInputCount()).append(',')
+                    .append(result.activeRepair().candidateOutputCount()).append(',')
+                    .append(result.activeRepair().operatorsTried()).append(',')
+                    .append(result.activeRepair().acceptedMoves()).append(',')
+                    .append(result.activeRepair().rejectedMoves()).append(',')
+                    .append(result.activeRepair().bestImprovementDelta()).append(',')
+                    .append(result.activeRepair().frozenPrefixViolationCount()).append(',')
+                    .append(result.activeRepair().foodDurationViolationCount()).append(',')
+                    .append(result.activeRepair().freshnessImprovementDelta()).append(',')
+                    .append(result.activeRepair().tailRiskImprovementDelta()).append(',')
                     .append(result.tokenUsageSummary().totalTokens()).append(',')
                     .append(result.stageFallbackSummary().totalFallbacks()).append(',')
                     .append(result.routeVectorMetrics().geometryCoverage()).append(',')

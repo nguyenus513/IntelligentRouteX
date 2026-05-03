@@ -51,15 +51,15 @@ class StandardComparisonRunnerTest(unittest.TestCase):
     def test_local_minimum_expands_four_scenarios_by_default_profiles(self) -> None:
         cells = standard_runner.planned_cells("local-minimum")
 
-        self.assertEqual(20, len(cells))
+        self.assertEqual(12, len(cells))
         self.assertEqual("normal-clear/S/heuristic-only", cells[0].cell_id)
-        self.assertEqual("forecast-heavy/S/llm-authoritative-gated", cells[-1].cell_id)
+        self.assertEqual("forecast-heavy/S/full-adaptive", cells[-1].cell_id)
 
-    def test_profile_mapping_builds_authoritative_gated_command(self) -> None:
+    def test_profile_mapping_builds_full_adaptive_legacy_command(self) -> None:
         cell = standard_runner.StandardCell(
             "traffic-shock",
             "S",
-            standard_runner.PROFILE_SPECS["llm-authoritative-gated"],
+            standard_runner.PROFILE_SPECS["full-adaptive"],
         )
 
         command = standard_runner.benchmark_command(cell, Path("out"))
@@ -67,12 +67,10 @@ class StandardComparisonRunnerTest(unittest.TestCase):
         self.assertIn("--baseline", command)
         self.assertIn("C", command)
         self.assertIn("--decision-mode", command)
-        self.assertIn("llm-authoritative", command)
+        self.assertIn("legacy", command)
         self.assertIn("--profile", command)
         self.assertIn("dispatch-v2-full-adaptive", command)
-        self.assertEqual(2, command.count("--authoritative-stage"))
-        self.assertIn("route-critique", command)
-        self.assertIn("final-selection", command)
+        self.assertEqual(0, command.count("--authoritative-stage"))
 
     def test_classifies_valid_fallback_and_invalid_artifacts(self) -> None:
         self.assertEqual(("PASS", ("quality-artifact-valid",)), standard_runner.classify_artifact(benchmark_payload(timeoutPhase="NONE")))
@@ -101,24 +99,10 @@ class StandardComparisonRunnerTest(unittest.TestCase):
 
         self.assertEqual(("route-generation:route-vector-coverage-below-1.0",), reasons)
 
-    def test_llm_cell_becomes_evidence_gap_when_provider_not_ready(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            cell = standard_runner.StandardCell(
-                "normal-clear",
-                "S",
-                standard_runner.PROFILE_SPECS["llm-shadow"],
-            )
-
-            result = standard_runner.run_standard_cell(
-                cell,
-                Path(temp_dir),
-                provider_ready=False,
-                provider_reason="provider-responses-not-ready",
-                runner=lambda *args, **kwargs: self.fail("benchmark should not run when provider is not ready"),
-            )
-
-            self.assertEqual("EVIDENCE_GAP", result.verdict)
-            self.assertEqual(("provider-responses-not-ready",), result.verdict_reasons)
+    def test_llm_profiles_are_disabled_by_policy(self) -> None:
+        self.assertFalse(hasattr(standard_runner, "LLM_PROFILES"))
+        self.assertNotIn("llm-shadow", standard_runner.PROFILE_SPECS)
+        self.assertNotIn("llm-authoritative-gated", standard_runner.PROFILE_SPECS)
 
     def test_run_standard_cell_collects_artifact_and_decision_log(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

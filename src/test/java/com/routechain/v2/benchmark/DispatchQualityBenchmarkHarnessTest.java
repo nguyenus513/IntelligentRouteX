@@ -197,12 +197,12 @@ class DispatchQualityBenchmarkHarnessTest {
     }
 
     @Test
-    void llmShadowBenchmarkModePopulatesDecisionFeedbackSummaries() {
+    void legacyBenchmarkModePopulatesDecisionFeedbackSummariesWithoutLlm() {
         DispatchQualityBenchmarkRun run = harness.benchmark(new DispatchQualityBenchmarkHarness.BenchmarkRequest(
                 List.of(DispatchPerfBenchmarkHarness.BaselineId.C),
                 DispatchPerfBenchmarkHarness.WorkloadSize.S,
                 DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
-                DispatchBenchmarkDecisionMode.LLM_SHADOW,
+                DispatchBenchmarkDecisionMode.LEGACY,
                 "v2",
                 DispatchQualityBenchmarkHarness.ExecutionMode.CONTROLLED,
                 DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
@@ -211,8 +211,9 @@ class DispatchQualityBenchmarkHarnessTest {
                 tempDir));
 
         DispatchQualityBenchmarkResult result = run.rawResults().getFirst();
-        assertEquals("llm-shadow", result.decisionMode());
-        assertNotNull(result.llmShadowAgreement());
+        assertEquals("legacy", result.decisionMode());
+        assertNotNull(result.decisionAgreement());
+        assertNotNull(result.activeRepair());
         assertNotNull(result.stageFallbackSummary());
         assertNotNull(result.tokenUsageSummary());
         assertTrue(result.stageFallbackSummary().totalStageOutputs() >= 1);
@@ -227,7 +228,7 @@ class DispatchQualityBenchmarkHarnessTest {
                     List.of(DispatchPerfBenchmarkHarness.BaselineId.C),
                     DispatchPerfBenchmarkHarness.WorkloadSize.S,
                     DispatchQualityBenchmarkHarness.ScenarioPack.NORMAL_CLEAR,
-                    DispatchBenchmarkDecisionMode.LLM_AUTHORITATIVE,
+                    DispatchBenchmarkDecisionMode.LEGACY,
                     "v2",
                     DispatchQualityBenchmarkHarness.ExecutionMode.CONTROLLED,
                     DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL,
@@ -245,7 +246,7 @@ class DispatchQualityBenchmarkHarnessTest {
                     .resolve("normal-clear")
                     .resolve("s")
                     .resolve("controlled")
-                    .resolve("llm-authoritative")
+                    .resolve("legacy")
                     .resolve("v2")
                     .resolve("c")
                     .resolve("decision-stage")

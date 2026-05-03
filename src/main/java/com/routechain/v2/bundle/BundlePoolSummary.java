@@ -13,7 +13,45 @@ public record BundlePoolSummary(
         Map<BundleFamily, Integer> familyCounts,
         Map<BundleProposalSource, Integer> sourceCounts,
         int maxBundleSize,
-        List<String> degradeReasons) implements SchemaVersioned {
+        List<String> degradeReasons,
+        Map<BundleFamily, Integer> familyGeneratedCounts,
+        Map<BundleFamily, Integer> familyRetainedCounts,
+        Map<String, Integer> rejectedByReasonCounts,
+        int diversityRetainedCount,
+        int lateRiskRescueCandidateCount,
+        int activeRouteAddonCandidateCount) implements SchemaVersioned {
+
+    public BundlePoolSummary(
+            String schemaVersion,
+            int candidateCount,
+            int retainedCount,
+            Map<BundleFamily, Integer> familyCounts,
+            Map<BundleProposalSource, Integer> sourceCounts,
+            int maxBundleSize,
+            List<String> degradeReasons) {
+        this(schemaVersion,
+                candidateCount,
+                retainedCount,
+                familyCounts,
+                sourceCounts,
+                maxBundleSize,
+                degradeReasons,
+                familyCounts,
+                new EnumMap<>(BundleFamily.class),
+                Map.of(),
+                0,
+                0,
+                0);
+    }
+
+    public BundlePoolSummary {
+        familyCounts = familyCounts == null ? new EnumMap<>(BundleFamily.class) : new EnumMap<>(familyCounts);
+        sourceCounts = sourceCounts == null ? new EnumMap<>(BundleProposalSource.class) : new EnumMap<>(sourceCounts);
+        degradeReasons = degradeReasons == null ? List.of() : List.copyOf(degradeReasons);
+        familyGeneratedCounts = familyGeneratedCounts == null ? new EnumMap<>(BundleFamily.class) : new EnumMap<>(familyGeneratedCounts);
+        familyRetainedCounts = familyRetainedCounts == null ? new EnumMap<>(BundleFamily.class) : new EnumMap<>(familyRetainedCounts);
+        rejectedByReasonCounts = rejectedByReasonCounts == null ? Map.of() : Map.copyOf(rejectedByReasonCounts);
+    }
 
     public static BundlePoolSummary empty() {
         return new BundlePoolSummary(
@@ -23,6 +61,12 @@ public record BundlePoolSummary(
                 new EnumMap<>(BundleFamily.class),
                 new EnumMap<>(BundleProposalSource.class),
                 0,
-                List.of());
+                List.of(),
+                new EnumMap<>(BundleFamily.class),
+                new EnumMap<>(BundleFamily.class),
+                Map.of(),
+                0,
+                0,
+                0);
     }
 }

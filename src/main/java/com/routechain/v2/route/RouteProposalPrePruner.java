@@ -182,6 +182,8 @@ public final class RouteProposalPrePruner {
             case FALLBACK_SIMPLE -> 2;
             case ML_REFINED -> 3;
             case ML_PROPOSAL -> 4;
+            case ACTIVE_ROUTE_INSERTION -> 5;
+            case BEAUTY_CORRIDOR -> 1;
         };
     }
 

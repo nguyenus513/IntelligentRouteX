@@ -28,12 +28,11 @@ class BottleneckAnalysisRunnerTest(unittest.TestCase):
         self.assertIn("run_dispatch_v2_standard_comparison.py", " ".join(steps[0].command))
         self.assertIn("full-adaptive", steps[0].command)
 
-    def test_deep_matrix_omits_llm_shadow_by_default(self) -> None:
-        steps = bottleneck.planned_steps("deep", Path("out"), include_llm_shadow=False)
-        llm_step = next(step for step in steps if step.name == "llm-provider-focus")
+    def test_deep_matrix_omits_llm_steps_by_policy(self) -> None:
+        steps = bottleneck.planned_steps("deep", Path("out"))
 
-        self.assertIn("llm-authoritative-gated", llm_step.command)
-        self.assertNotIn("llm-shadow,llm-authoritative-gated", llm_step.command)
+        self.assertFalse(any("llm" in step.name for step in steps))
+        self.assertFalse(any("llm-gated" in step.command for step in steps))
 
     def test_collects_standard_rows_and_ranks_stage_latency(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

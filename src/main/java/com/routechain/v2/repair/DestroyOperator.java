@@ -1,0 +1,10 @@
+package com.routechain.v2.repair;
+
+public enum DestroyOperator {
+    LATE_RISK_REMOVAL,
+    HIGH_DETOUR_REMOVAL,
+    WEAK_BUNDLE_REMOVAL,
+    OVERLOADED_SUFFIX_REMOVAL,
+    SHAW_RELATED_REMOVAL,
+    CONTROLLED_RANDOM_REMOVAL
+}

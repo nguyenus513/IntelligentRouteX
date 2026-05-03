@@ -5,5 +5,7 @@ public enum RouteProposalSource {
     HEURISTIC_SAFE,
     FALLBACK_SIMPLE,
     ML_PROPOSAL,
-    ML_REFINED
+    ML_REFINED,
+    ACTIVE_ROUTE_INSERTION,
+    BEAUTY_CORRIDOR
 }

@@ -28,5 +28,10 @@ class BundleFamilyEnumeratorTest {
 
         assertTrue(candidates.stream().anyMatch(candidate -> candidate.family() == BundleFamily.BOUNDARY_CROSS));
         assertTrue(candidates.stream().anyMatch(candidate -> candidate.family() == BundleFamily.URGENT_COMPANION));
+        assertTrue(candidates.stream().anyMatch(candidate -> candidate.family() == BundleFamily.SAME_RESTAURANT));
+        assertTrue(candidates.stream().anyMatch(candidate -> candidate.family() == BundleFamily.SAME_DELIVERY_ZONE));
+        assertTrue(candidates.stream().anyMatch(candidate -> candidate.family() == BundleFamily.LATE_RISK_RESCUE));
+        assertTrue(candidates.stream().anyMatch(candidate -> candidate.family() == BundleFamily.URGENT_SINGLE_FALLBACK));
+        assertTrue(candidates.stream().anyMatch(candidate -> candidate.family() == BundleFamily.DIVERSITY_EXPLORATION));
     }
 }

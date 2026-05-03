@@ -77,13 +77,28 @@ class DispatchQualityArtifactSmokeTest {
         assertNotNull(firstResult.executionPolicy());
         assertNotNull(firstResult.artifactWriteCompletedAt());
         assertNotNull(firstResult.timeoutPhase());
+        assertNotNull(firstResult.bundleDiversity());
+        assertNotNull(firstResult.selectorTelemetry());
+        assertNotNull(firstResult.objectiveTelemetry());
+        assertNotNull(firstResult.activeRepair());
         assertTrue(promptFamilyWire.equals(firstResult.promptFamily()));
         assertTrue(firstResult.workerStatusSnapshot().stream().allMatch(worker -> worker.workerAuditSource() != null));
         if (run.comparisonReport() != null) {
             assertNotNull(artifacts.comparisonJsonPath());
             assertTrue(artifacts.comparisonJsonPath().toFile().isFile());
             assertTrue(artifacts.comparisonCsvPath().toFile().isFile());
+            String csv = Files.readString(artifacts.comparisonCsvPath());
+            assertTrue(csv.contains("bundleFamilyDiversityCount"));
+            assertTrue(csv.contains("selectorMode"));
+            assertTrue(csv.contains("acceptanceGatePassed"));
+            assertTrue(csv.contains("objectiveBreakdownCount"));
+            assertTrue(csv.contains("repairMode"));
         }
+        String markdown = Files.readString(artifacts.rawMarkdownPaths().getFirst());
+        assertTrue(markdown.contains("## Bundle Diversity"));
+        assertTrue(markdown.contains("## Selector Telemetry"));
+        assertTrue(markdown.contains("## Objective Telemetry"));
+        assertTrue(markdown.contains("## Active Repair"));
     }
 
     @Test

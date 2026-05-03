@@ -24,11 +24,11 @@ TARGET_STAGES = (
 )
 PROMPT_FAMILIES = ("v2", "v3")
 STAGE_DEFAULTS = {
-    "pair-bundle": {"scenario_pack": "normal-clear", "size": "S", "baseline": "C", "decision_mode": "llm-shadow", "execution_mode": "controlled"},
-    "route-generation": {"scenario_pack": "heavy-rain", "size": "S", "baseline": "C", "decision_mode": "llm-shadow", "execution_mode": "controlled"},
-    "route-critique": {"scenario_pack": "traffic-shock", "size": "S", "baseline": "C", "decision_mode": "llm-shadow", "execution_mode": "controlled"},
-    "scenario": {"scenario_pack": "forecast-heavy", "size": "S", "baseline": "C", "decision_mode": "llm-shadow", "execution_mode": "controlled"},
-    "final-selection": {"scenario_pack": "normal-clear", "size": "S", "baseline": "C", "decision_mode": "llm-shadow", "execution_mode": "controlled"},
+    "pair-bundle": {"scenario_pack": "normal-clear", "size": "S", "baseline": "C", "decision_mode": "legacy", "execution_mode": "controlled"},
+    "route-generation": {"scenario_pack": "heavy-rain", "size": "S", "baseline": "C", "decision_mode": "legacy", "execution_mode": "controlled"},
+    "route-critique": {"scenario_pack": "traffic-shock", "size": "S", "baseline": "C", "decision_mode": "legacy", "execution_mode": "controlled"},
+    "scenario": {"scenario_pack": "forecast-heavy", "size": "S", "baseline": "C", "decision_mode": "legacy", "execution_mode": "controlled"},
+    "final-selection": {"scenario_pack": "normal-clear", "size": "S", "baseline": "C", "decision_mode": "legacy", "execution_mode": "controlled"},
 }
 EXPECTED_ASSESSMENT_FIELDS = (
     "id",
@@ -112,9 +112,7 @@ def benchmark_command() -> List[str]:
 
 
 def provider_probe_command() -> List[str]:
-    if os.name == "nt" and shutil.which("py"):
-        return ["py", "-3.13", str(REPO_ROOT / "scripts" / "probe_llm_provider_responses.py")]
-    return ["python", str(REPO_ROOT / "scripts" / "probe_llm_provider_responses.py")]
+    raise RuntimeError("LLM provider probing is disabled by policy.")
 
 
 def truthy(value: object) -> bool:
@@ -731,6 +729,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--skip-provider-responses-preflight", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schemaVersion": "dispatch-prompt-redesign-validation/v2",
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "rerunExecuted": False,
+        "verdict": "DISABLED",
+        "reason": "llm-disabled-by-policy",
+        "providerResponsesPreflight": {
+            "ready": False,
+            "failureReason": "llm-disabled-by-policy",
+        },
+    }
+    output_path = output_dir / "prompt_redesign_validation_disabled.json"
+    output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(f"[PROMPT VALIDATION DISABLED] reason=llm-disabled-by-policy json={output_path}")
+    return 2
 
     stages = args.stage or list(TARGET_STAGES)
     output_dir = Path(args.output_dir)

@@ -303,6 +303,7 @@ public final class RouteTestFixtures {
     public static DispatchSelectorService selectorService(RouteChainDispatchV2Properties properties) {
         SelectorSolver selectorSolver = new OrToolsSetPackingSolver(properties);
         return new DispatchSelectorService(
+                properties,
                 new SelectorCandidateBuilder(properties),
                 new ConflictGraphBuilder(),
                 new GlobalSelector(properties, new GreedyRepairSelector(), selectorSolver));

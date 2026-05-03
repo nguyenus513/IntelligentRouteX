@@ -32,6 +32,8 @@ public final class BundleFamilyEnumerator {
         if (!seed.acceptedBoundaryOrderIds().isEmpty()) {
             candidates.addAll(candidateSeries(seed, BundleFamily.BOUNDARY_CROSS,
                     boundaryOrdered(preferredSeed, prioritizedOrders, seed.acceptedBoundaryOrderIds(), context), Math.min(4, properties.getBundle().getMaxSize()), context));
+            candidates.addAll(candidateSeries(seed, BundleFamily.ACTIVE_ROUTE_ADDON,
+                    boundaryOrdered(preferredSeed, prioritizedOrders, seed.acceptedBoundaryOrderIds(), context), Math.min(3, properties.getBundle().getMaxSize()), context));
         }
         Order urgentOrder = workingOrders.stream().filter(Order::urgent).findFirst().orElse(null);
         if (urgentOrder != null) {
@@ -40,6 +42,25 @@ public final class BundleFamilyEnumerator {
         }
         candidates.addAll(candidateSeries(seed, BundleFamily.LANDING_VALUE_BUNDLE,
                 landingValueOrdered(preferredSeed, prioritizedOrders), properties.getBundle().getMaxSize(), context));
+        candidates.addAll(candidateSeries(seed, BundleFamily.SAME_RESTAURANT,
+                samePickupOrdered(preferredSeed, prioritizedOrders), Math.min(3, properties.getBundle().getMaxSize()), context));
+        candidates.addAll(candidateSeries(seed, BundleFamily.SAME_FOOD_COURT,
+                pickupCellOrdered(preferredSeed, prioritizedOrders), Math.min(3, properties.getBundle().getMaxSize()), context));
+        candidates.addAll(candidateSeries(seed, BundleFamily.SAME_DELIVERY_ZONE,
+                dropoffCellOrdered(preferredSeed, prioritizedOrders), Math.min(4, properties.getBundle().getMaxSize()), context));
+        candidates.addAll(candidateSeries(seed, BundleFamily.CORRIDOR,
+                corridorOrdered(preferredSeed, prioritizedOrders), Math.min(4, properties.getBundle().getMaxSize()), context));
+        candidates.addAll(candidateSeries(seed, BundleFamily.NEIGHBORHOOD,
+                neighborhoodOrdered(preferredSeed, prioritizedOrders), Math.min(3, properties.getBundle().getMaxSize()), context));
+        candidates.addAll(candidateSeries(seed, BundleFamily.HOLD_TO_BATCH,
+                holdToBatchOrdered(preferredSeed, prioritizedOrders), Math.min(3, properties.getBundle().getMaxSize()), context));
+        if (urgentOrder != null) {
+            candidates.addAll(candidateSeries(seed, BundleFamily.LATE_RISK_RESCUE,
+                    urgentOrdered(urgentOrder, prioritizedOrders), Math.min(2, properties.getBundle().getMaxSize()), context));
+            candidates.add(candidate(seed, BundleFamily.URGENT_SINGLE_FALLBACK, List.of(urgentOrder.orderId()), context));
+        }
+        candidates.addAll(candidateSeries(seed, BundleFamily.DIVERSITY_EXPLORATION,
+                diversityOrdered(preferredSeed, prioritizedOrders), Math.min(3, properties.getBundle().getMaxSize()), context));
         candidates.addAll(connectedPairPortfolio(seed, workingOrders, context));
         return candidates.stream().filter(candidate -> !candidate.orderIds().isEmpty()).toList();
     }
@@ -184,6 +205,73 @@ public final class BundleFamilyEnumerator {
                         .thenComparing(Order::readyAt)
                         .thenComparing(Order::orderId))
                 .toList());
+    }
+
+
+    private List<Order> samePickupOrdered(Order seedOrder, List<Order> prioritizedOrders) {
+        String seedCell = pickupCell(seedOrder, 1000.0);
+        return orderedWithSeedFirst(seedOrder, prioritizedOrders.stream()
+                .sorted(Comparator.comparing((Order order) -> pickupCell(order, 1000.0).equals(seedCell) ? 0 : 1)
+                        .thenComparing(Order::readyAt)
+                        .thenComparing(Order::orderId))
+                .toList());
+    }
+
+    private List<Order> pickupCellOrdered(Order seedOrder, List<Order> prioritizedOrders) {
+        String seedCell = pickupCell(seedOrder, 250.0);
+        return orderedWithSeedFirst(seedOrder, prioritizedOrders.stream()
+                .sorted(Comparator.comparing((Order order) -> pickupCell(order, 250.0).equals(seedCell) ? 0 : 1)
+                        .thenComparing(Order::readyAt)
+                        .thenComparing(Order::orderId))
+                .toList());
+    }
+
+    private List<Order> dropoffCellOrdered(Order seedOrder, List<Order> prioritizedOrders) {
+        String seedCell = dropoffCell(seedOrder, 200.0);
+        return orderedWithSeedFirst(seedOrder, prioritizedOrders.stream()
+                .sorted(Comparator.comparing((Order order) -> dropoffCell(order, 200.0).equals(seedCell) ? 0 : 1)
+                        .thenComparing(Order::readyAt)
+                        .thenComparing(Order::orderId))
+                .toList());
+    }
+
+    private List<Order> neighborhoodOrdered(Order seedOrder, List<Order> prioritizedOrders) {
+        String pickup = pickupCell(seedOrder, 200.0);
+        String dropoff = dropoffCell(seedOrder, 200.0);
+        return orderedWithSeedFirst(seedOrder, prioritizedOrders.stream()
+                .sorted(Comparator.comparing((Order order) -> (pickupCell(order, 200.0).equals(pickup) || dropoffCell(order, 200.0).equals(dropoff)) ? 0 : 1)
+                        .thenComparing(Order::readyAt)
+                        .thenComparing(Order::orderId))
+                .toList());
+    }
+
+    private List<Order> holdToBatchOrdered(Order seedOrder, List<Order> prioritizedOrders) {
+        return orderedWithSeedFirst(seedOrder, prioritizedOrders.stream()
+                .filter(order -> !order.urgent())
+                .sorted(Comparator.comparing(Order::promisedEtaMinutes).reversed()
+                        .thenComparing(Order::readyAt)
+                        .thenComparing(Order::orderId))
+                .toList());
+    }
+
+    private List<Order> diversityOrdered(Order seedOrder, List<Order> prioritizedOrders) {
+        return orderedWithSeedFirst(seedOrder, prioritizedOrders.stream()
+                .sorted(Comparator.comparing((Order order) -> pickupCell(order, 100.0))
+                        .thenComparing(order -> dropoffCell(order, 100.0))
+                        .thenComparing(Order::orderId))
+                .toList());
+    }
+
+    private String pickupCell(Order order, double scale) {
+        return "%d:%d".formatted(
+                Math.round(order.pickupPoint().latitude() * scale),
+                Math.round(order.pickupPoint().longitude() * scale));
+    }
+
+    private String dropoffCell(Order order, double scale) {
+        return "%d:%d".formatted(
+                Math.round(order.dropoffPoint().latitude() * scale),
+                Math.round(order.dropoffPoint().longitude() * scale));
     }
 
     private String corridorSignature(Order order) {

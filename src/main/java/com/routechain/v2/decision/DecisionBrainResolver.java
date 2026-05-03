@@ -47,33 +47,14 @@ public final class DecisionBrainResolver {
     }
 
     private ResolvedDecisionBrain resolveLlm(DecisionBrainType requestedType, DecisionRuntimeMode runtimeMode) {
-        String apiKey = System.getenv(properties.getDecision().getLlm().getApiKeyEnv());
-        if (apiKey == null || apiKey.isBlank()) {
-            if (!properties.getDecision().isFallbackToLegacy()) {
-                throw new IllegalStateException("LLM mode requires env " + properties.getDecision().getLlm().getApiKeyEnv());
-            }
-            return new ResolvedDecisionBrain(
-                    requestedType,
-                    DecisionBrainType.LEGACY,
-                    legacyMlBrain,
-                    legacyMlBrain,
-                    true,
-                    "llm-api-key-missing",
-                    runtimeMode,
-                    EnumSet.noneOf(DecisionStageName.class));
-        }
-        EnumSet<DecisionStageName> authoritativeStages = EnumSet.noneOf(DecisionStageName.class);
-        for (String stageWireName : properties.getDecision().getAuthoritativeStages()) {
-            authoritativeStages.add(DecisionStageName.fromWire(stageWireName));
-        }
         return new ResolvedDecisionBrain(
                 requestedType,
-                DecisionBrainType.LLM,
-                llmBrain,
+                DecisionBrainType.LEGACY,
                 legacyMlBrain,
-                false,
-                null,
+                legacyMlBrain,
+                true,
+                "llm-disabled-by-policy",
                 runtimeMode,
-                authoritativeStages);
+                EnumSet.noneOf(DecisionStageName.class));
     }
 }

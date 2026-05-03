@@ -73,7 +73,8 @@ public final class GreedyRepairSelector {
                 repairSwapReplacements.add(new SelectorRepairSwap(
                         displaced.candidate().proposalId(),
                         candidateEnvelope.candidate().proposalId(),
-                        candidateEnvelope.candidate().selectionScore() - displaced.candidate().selectionScore()));
+                        SelectorCandidateRanking.objectiveUtility(candidateEnvelope.candidate())
+                                - SelectorCandidateRanking.objectiveUtility(displaced.candidate())));
             }
         }
 
@@ -120,7 +121,7 @@ public final class GreedyRepairSelector {
     private double selectionPriority(SelectorCandidateEnvelope envelope, boolean scarceBundling) {
         int orderCount = envelope.candidate().orderIds().size();
         double coverageBonus = scarceBundling ? Math.max(0, orderCount - 2) * SCARCE_ORDER_COVERAGE_BONUS : 0.0;
-        return envelope.candidate().selectionScore() + coverageBonus;
+        return SelectorCandidateRanking.objectiveUtility(envelope.candidate()) + coverageBonus;
     }
 
     private List<String> conflictsWithSelected(SelectorCandidateEnvelope candidateEnvelope,

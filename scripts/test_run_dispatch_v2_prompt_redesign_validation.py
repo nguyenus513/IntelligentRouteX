@@ -51,6 +51,22 @@ def prompt_trace_payload(trace_id: str, stage: str, prompt_family: str, checksum
     }
 
 
+class PromptRedesignDisabledPolicyTest(unittest.TestCase):
+    def test_main_fail_fast_writes_disabled_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "out"
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                exit_code = validation_runner.main(["--output-dir", str(output_dir), "--dry-run"])
+
+            self.assertEqual(2, exit_code)
+            self.assertIn("[PROMPT VALIDATION DISABLED]", stdout.getvalue())
+            payload = json.loads((output_dir / "prompt_redesign_validation_disabled.json").read_text(encoding="utf-8"))
+            self.assertEqual("DISABLED", payload["verdict"])
+            self.assertEqual("llm-disabled-by-policy", payload["reason"])
+
+
+@unittest.skip("LEGACY prompt redesign validation is disabled by policy.")
 class PromptRedesignValidationTest(unittest.TestCase):
     def test_dry_run_prints_planned_cells_for_both_families(self) -> None:
         stdout = io.StringIO()
@@ -74,7 +90,7 @@ class PromptRedesignValidationTest(unittest.TestCase):
                 "baselineId": "C",
                 "scenarioPack": "normal-clear",
                 "workloadSize": "S",
-                "decisionMode": "llm-shadow",
+                "decisionMode": "legacy",
                 "promptFamily": "v2",
                 "executionMode": "controlled",
                 "runAuthorityClass": "LOCAL_NON_AUTHORITY",
@@ -83,13 +99,13 @@ class PromptRedesignValidationTest(unittest.TestCase):
                 "stageFallbackSummary": {"totalFallbacks": 0},
             }
             benchmark_v3 = dict(benchmark_v2, promptFamily="v3")
-            write_json(baseline_root / "dispatch-quality-normal-clear-s-llm-shadow-v2-controlled-c-20260423-000000.json", benchmark_v2)
-            write_json(validation_root / "dispatch-quality-normal-clear-s-llm-shadow-v2-controlled-c-20260423-000001.json", benchmark_v2)
-            write_json(validation_root / "dispatch-quality-normal-clear-s-llm-shadow-v3-controlled-c-20260423-000002.json", benchmark_v3)
+            write_json(baseline_root / "dispatch-quality-normal-clear-s-legacy-v2-controlled-c-20260423-000000.json", benchmark_v2)
+            write_json(validation_root / "dispatch-quality-normal-clear-s-legacy-v2-controlled-c-20260423-000001.json", benchmark_v2)
+            write_json(validation_root / "dispatch-quality-normal-clear-s-legacy-v3-controlled-c-20260423-000002.json", benchmark_v3)
 
-            base_feedback = baseline_root / "feedback" / "normal-clear" / "s" / "controlled" / "llm-shadow" / "v2" / "c" / "decision-stage"
-            validation_feedback_v2 = validation_root / "feedback" / "normal-clear" / "s" / "controlled" / "llm-shadow" / "v2" / "c" / "decision-stage"
-            validation_feedback_v3 = validation_root / "feedback" / "normal-clear" / "s" / "controlled" / "llm-shadow" / "v3" / "c" / "decision-stage"
+            base_feedback = baseline_root / "feedback" / "normal-clear" / "s" / "controlled" / "legacy" / "v2" / "c" / "decision-stage"
+            validation_feedback_v2 = validation_root / "feedback" / "normal-clear" / "s" / "controlled" / "legacy" / "v2" / "c" / "decision-stage"
+            validation_feedback_v3 = validation_root / "feedback" / "normal-clear" / "s" / "controlled" / "legacy" / "v3" / "c" / "decision-stage"
 
             write_json(base_feedback / "llm_prompt_spec_trace" / "trace-1-pair-bundle.json", prompt_trace_payload("trace-1", "pair-bundle", "v2", "base"))
             write_json(
@@ -97,7 +113,7 @@ class PromptRedesignValidationTest(unittest.TestCase):
                 {
                     "traceId": "trace-1",
                     "stageName": "PAIR_BUNDLE",
-                    "brainType": "LLM",
+                    "brainType": "LEGACY",
                     "assessments": {"summary": "old", "items": [{"id": "bundle-1", "score": 0.7, "selected": True, "rationale": "old"}]},
                     "meta": {"fallbackUsed": False},
                 },
@@ -147,7 +163,7 @@ class PromptRedesignValidationTest(unittest.TestCase):
                     {
                         "traceId": f"trace-{prompt_family}",
                         "stageName": "PAIR_BUNDLE",
-                        "brainType": "LLM",
+                        "brainType": "LEGACY",
                         "assessments": {"summary": "new", "reasonCodes": ["ok"], "items": rich_items},
                         "meta": {"fallbackUsed": False},
                     },
@@ -259,7 +275,7 @@ class PromptRedesignValidationTest(unittest.TestCase):
                     {
                         "traceId": f"trace-{cell.prompt_family}-{cell.stage}",
                         "stageName": cell.stage.replace("-", "_").upper(),
-                        "brainType": "LLM",
+                        "brainType": "LEGACY",
                         "assessments": {
                             "summary": "ok",
                             "items": [

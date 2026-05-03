@@ -37,6 +37,9 @@ public final class RouteProposalEngine {
             for (List<String> stopOrder : recoveryStopOrders(driverCandidate, context, etaLegCache)) {
                 generated.add(candidate(driverCandidate, pickupAnchor, RouteProposalSource.HEURISTIC_SAFE, stopOrder, context, etaLegCache));
             }
+            for (List<String> stopOrder : beautyStopOrders(driverCandidate, context)) {
+                generated.add(candidate(driverCandidate, pickupAnchor, RouteProposalSource.BEAUTY_CORRIDOR, stopOrder, context, etaLegCache));
+            }
         }
         return List.copyOf(generated);
     }
@@ -115,6 +118,8 @@ public final class RouteProposalEngine {
             case FALLBACK_SIMPLE -> List.of("fallback-anchor-first");
             case ML_PROPOSAL -> List.of("routefinder-ml-proposal");
             case ML_REFINED -> List.of("routefinder-ml-refined");
+            case ACTIVE_ROUTE_INSERTION -> List.of("active-route-insertion-proposal");
+            case BEAUTY_CORRIDOR -> List.of("route-beauty-corridor-variant", "route-beauty-low-zigzag-priority");
         };
         List<String> degradeReasons = new ArrayList<>(pickupEstimate.degradeReasons());
         degradeReasons.addAll(projection.degradeReasons());
@@ -213,6 +218,33 @@ public final class RouteProposalEngine {
         return alternatives.stream()
                 .distinct()
                 .toList();
+    }
+
+    private List<List<String>> beautyStopOrders(DriverCandidate driverCandidate, DispatchCandidateContext context) {
+        List<String> remaining = remainingOrders(driverCandidate.bundleId(), driverCandidate.anchorOrderId(), context);
+        if (remaining.size() < 2) {
+            return List.of();
+        }
+        List<String> corridorOrdered = remaining.stream()
+                .sorted(Comparator.comparingDouble((String orderId) -> corridorProjection(context.order(driverCandidate.anchorOrderId()), context.order(orderId)))
+                        .thenComparing(orderId -> context.order(orderId).readyAt())
+                        .thenComparing(orderId -> orderId))
+                .toList();
+        return List.of(prefixed(driverCandidate.anchorOrderId(), corridorOrdered));
+    }
+
+    private double corridorProjection(Order anchorOrder, Order candidateOrder) {
+        if (anchorOrder == null || candidateOrder == null) {
+            return Double.MAX_VALUE;
+        }
+        double anchorDx = anchorOrder.dropoffPoint().latitude() - anchorOrder.pickupPoint().latitude();
+        double anchorDy = anchorOrder.dropoffPoint().longitude() - anchorOrder.pickupPoint().longitude();
+        double candidateDx = candidateOrder.pickupPoint().latitude() - anchorOrder.pickupPoint().latitude();
+        double candidateDy = candidateOrder.pickupPoint().longitude() - anchorOrder.pickupPoint().longitude();
+        double norm = Math.max(1e-6, Math.sqrt(anchorDx * anchorDx + anchorDy * anchorDy));
+        double projection = (candidateDx * anchorDx + candidateDy * anchorDy) / norm;
+        double crossTrack = Math.abs(candidateDx * anchorDy - candidateDy * anchorDx) / norm;
+        return projection + 2.0 * crossTrack;
     }
 
     private List<String> nearestNeighborRemaining(String anchorOrderId,

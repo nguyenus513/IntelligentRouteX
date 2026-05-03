@@ -260,36 +260,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--dotenv", default=str(REPO_ROOT / ".env"))
     args = parser.parse_args(argv)
 
-    load_dotenv(Path(args.dotenv))
     base_url = args.base_url or os.environ.get("ROUTECHAIN_DECISION_LLM_BASE_URL", DEFAULT_BASE_URL)
-    api_key = os.environ.get(args.api_key_env, "")
     models = tuple(args.model or DEFAULT_MODELS)
-    if not api_key.strip():
-        payload = {
-            "schemaVersion": "llm-provider-responses-probe/v1",
-            "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "baseUrl": base_url,
-            "modelsProbed": list(models),
-            "selectedModel": None,
-            "ready": False,
-            "results": [{
-                "model": model,
-                "accepted": False,
-                "failureClass": "provider-auth-error",
-                "statusCode": None,
-                "latencyMs": 0,
-                "schemaValid": False,
-                "responseHash": "",
-                "errorSummary": f"missing API key env {args.api_key_env}",
-            } for model in models],
-        }
-    else:
-        payload = run_probe(base_url, api_key, models, args.timeout_seconds)
+    payload = {
+        "schemaVersion": "llm-provider-responses-probe/v1",
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "baseUrl": base_url,
+        "modelsProbed": list(models),
+        "selectedModel": None,
+        "ready": False,
+        "results": [{
+            "model": model,
+            "accepted": False,
+            "failureClass": "llm-disabled-by-policy",
+            "statusCode": None,
+            "latencyMs": 0,
+            "schemaValid": False,
+            "responseHash": "",
+            "errorSummary": "LLM provider probing is disabled by policy.",
+        } for model in models],
+    }
     json_path, markdown_path = write_artifacts(payload, Path(args.output_dir))
     print(f"[RESPONSES PROBE JSON] {json_path}")
     print(f"[RESPONSES PROBE MARKDOWN] {markdown_path}")
-    print(f"[RESPONSES PROBE READY] {str(payload['ready']).lower()} selectedModel={payload.get('selectedModel') or 'none'}")
-    return 0 if payload["ready"] else 1
+    print("[RESPONSES PROBE DISABLED] reason=llm-disabled-by-policy")
+    return 2
 
 
 if __name__ == "__main__":

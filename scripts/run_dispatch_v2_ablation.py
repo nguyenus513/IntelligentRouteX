@@ -9,13 +9,14 @@ from typing import Sequence
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "benchmark"
-COMPONENTS = ("tabular", "routefinder", "greedrl", "forecast", "tomtom", "open-meteo", "ortools", "hot-start")
+COMPONENTS = ("tabular", "routefinder", "greedrl", "forecast", "tomtom", "open-meteo", "ortools", "hot-start", "active-repair", "runtime-policy", "selector-global")
 SIZES = ("S", "M", "L", "XL")
 SCENARIO_PACKS = (
     "normal-clear",
     "heavy-rain",
     "traffic-shock",
     "forecast-heavy",
+    "dense-bundle-20x5",
     "worker-degradation",
     "live-source-degradation",
 )

@@ -116,6 +116,25 @@ public final class TestDispatchV2Factory {
         return configuration.dispatchV2CompatibleCore(properties, core);
     }
 
+    public static RouteChainDispatchV2Properties selectorSmokeProperties() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        properties.getDecision().setMode("legacy");
+        properties.getDecision().setAuthoritativeStages(List.of());
+        properties.getDecision().getEffortPolicy().setDynamicEnabled(false);
+        properties.getDecision().getContextSelection().setDynamicEnabled(false);
+        properties.getDecision().getContextSelection().setToolFetchEnabled(false);
+        properties.setMlEnabled(false);
+        properties.setSelectorOrtoolsEnabled(false);
+        properties.setWarmStartEnabled(false);
+        properties.setHotStartEnabled(false);
+        properties.getFeedback().setDecisionLogEnabled(false);
+        properties.getFeedback().setSnapshotEnabled(false);
+        properties.getFeedback().setReplayEnabled(false);
+        properties.getWarmHotStart().setLoadLatestSnapshotOnBoot(false);
+        properties.getPerformance().setTelemetryEnabled(false);
+        return properties;
+    }
+
     public static DispatchV2Core core(RouteChainDispatchV2Properties properties) {
         return harness(properties).core();
     }
@@ -314,7 +333,8 @@ public final class TestDispatchV2Factory {
         DispatchSelectorService dispatchSelectorService = configuration.dispatchSelectorService(
                 selectorCandidateBuilder,
                 conflictGraphBuilder,
-                globalSelector);
+                globalSelector,
+                properties);
         DispatchAssignmentBuilder dispatchAssignmentBuilder = configuration.dispatchAssignmentBuilder();
         SelectedProposalResolver selectedProposalResolver = configuration.selectedProposalResolver();
         ExecutionConflictValidator executionConflictValidator = configuration.executionConflictValidator();
@@ -361,6 +381,7 @@ public final class TestDispatchV2Factory {
                 dispatchScenarioService,
                 dispatchSelectorService,
                 dispatchExecutorService,
+                etaLegCacheFactory,
                 warmStartManager,
                 postDispatchHardeningService,
                 decisionBrainResolver,
@@ -405,6 +426,22 @@ public final class TestDispatchV2Factory {
                         new Driver("driver-1", new GeoPoint(10.7700, 106.6950)),
                         new Driver("driver-2", new GeoPoint(10.7720, 106.6970)),
                         new Driver("driver-3", new GeoPoint(10.7810, 106.7060))),
+                List.of(),
+                WeatherProfile.CLEAR,
+                decisionTime);
+    }
+
+    public static DispatchV2Request selectorSmokeRequest() {
+        Instant decisionTime = Instant.parse("2026-04-16T12:00:00Z");
+        return new DispatchV2Request(
+                "dispatch-v2-request/v1",
+                "trace-selector-smoke",
+                List.of(
+                        order("order-1", 10.7750, 106.7000, 10.7800, 106.7100, decisionTime, false),
+                        order("order-2", 10.7760, 106.7010, 10.7810, 106.7120, decisionTime.plusSeconds(120), false)),
+                List.of(
+                        new Driver("driver-1", new GeoPoint(10.7700, 106.6950)),
+                        new Driver("driver-2", new GeoPoint(10.7720, 106.6970))),
                 List.of(),
                 WeatherProfile.CLEAR,
                 decisionTime);

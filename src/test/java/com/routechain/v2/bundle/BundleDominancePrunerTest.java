@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BundleDominancePrunerTest {
 
@@ -18,5 +19,34 @@ class BundleDominancePrunerTest {
 
         assertEquals(1, retained.size());
         assertEquals("c", retained.getFirst().bundleId());
+    }
+
+    @Test
+    void preservesFamilyDiversityWhenPoolExceedsCap() {
+        BundleDominancePruner pruner = new BundleDominancePruner();
+        java.util.ArrayList<BundleCandidate> candidates = new java.util.ArrayList<>();
+        for (int index = 0; index < 270; index++) {
+            BundleFamily family = index < 260 ? BundleFamily.COMPACT_CLIQUE : BundleFamily.LATE_RISK_RESCUE;
+            candidates.add(new BundleCandidate(
+                    "bundle-candidate/v1",
+                    "candidate-" + index,
+                    BundleProposalSource.DETERMINISTIC_FAMILY,
+                    family,
+                    "cluster-001",
+                    false,
+                    List.of(),
+                    List.of("order-" + index, "order-x" + index),
+                    "order-" + index + "|order-x" + index,
+                    "order-" + index,
+                    "0:0",
+                    1000 - index,
+                    true,
+                    List.of()));
+        }
+
+        List<BundleCandidate> retained = pruner.prune(candidates);
+
+        assertEquals(256, retained.size());
+        assertTrue(retained.stream().anyMatch(candidate -> candidate.family() == BundleFamily.LATE_RISK_RESCUE));
     }
 }

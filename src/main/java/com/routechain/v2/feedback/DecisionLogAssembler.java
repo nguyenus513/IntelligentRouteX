@@ -26,6 +26,9 @@ public final class DecisionLogAssembler {
                 result.stageLatencies(),
                 result.latencyBudgetSummary(),
                 result.mlStageMetadata(),
+                result.mlStageMetadata().stream()
+                        .map(MlContributionTrace::from)
+                        .toList(),
                 result.liveStageMetadata(),
                 result.globalSelectionResult().selectedProposals().stream()
                         .map(selectedProposal -> selectedProposal.proposalId())

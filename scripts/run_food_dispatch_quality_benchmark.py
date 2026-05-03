@@ -67,6 +67,11 @@ def score_food(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     late_rate = average(rows, "lateOrderRate")
     p95_delay = maximum(rows, "p95Delay")
     p95_food = maximum(rows, "p95FoodOnVehicleTime")
+    p95_delay_lower_bound = maximum(rows, "p95DelayLowerBound")
+    p95_food_lower_bound = maximum(rows, "p95FoodOnVehicleLowerBound")
+    p95_delay_gap = maximum(rows, "p95DelayGapToLowerBound")
+    p95_food_gap = maximum(rows, "p95FoodOnVehicleGapToLowerBound")
+    freshness_tight_rate = sum(1 for row in rows if row.get("freshnessLowerBoundTight")) / max(1, len(rows))
     hard = sum(int(row.get("pickupBeforeReadyTimeViolation", 0)) + int(row.get("courierShiftViolation", 0)) + int(row.get("foodOnVehicleHardViolation", 0)) for row in rows)
     score = served_rate * 0.35 + (1.0 - late_rate) * 0.25 + max(0.0, 1.0 - p95_delay / 45.0) * 0.20 + max(0.0, 1.0 - p95_food / 30.0) * 0.20
     blockers: List[str] = []
@@ -78,7 +83,7 @@ def score_food(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         blockers.append("p95-food-on-vehicle-above-target")
     if score < 0.90 and not blockers:
         blockers.append("food-quality-target-gap")
-    return layer("bundleQuality", score, verdict(score, blockers), blockers, {"servedOrderRate": served_rate, "lateOrderRate": late_rate, "p95DelayMax": p95_delay, "p95FoodOnVehicleTimeMax": p95_food, "hardViolationCount": hard})
+    return layer("bundleQuality", score, verdict(score, blockers), blockers, {"servedOrderRate": served_rate, "lateOrderRate": late_rate, "p95DelayMax": p95_delay, "p95FoodOnVehicleTimeMax": p95_food, "p95DelayLowerBoundMax": p95_delay_lower_bound, "p95FoodOnVehicleLowerBoundMax": p95_food_lower_bound, "p95DelayGapToLowerBoundMax": p95_delay_gap, "p95FoodOnVehicleGapToLowerBoundMax": p95_food_gap, "freshnessTightLowerBoundRate": freshness_tight_rate, "hardViolationCount": hard})
 
 
 def score_driver(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
@@ -101,11 +106,29 @@ def score_anchor(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     pickup_wait = average(rows, "avgPickupWaitTime")
     pickup_violations = sum(int(row.get("pickupBeforeReadyTimeViolation", 0)) for row in rows)
     p95_order_to_delivery = maximum(rows, "p95OrderToDeliveryTime")
-    score = (1.0 if pickup_violations == 0 else 0.0) * 0.45 + max(0.0, 1.0 - pickup_wait / 10.0) * 0.30 + max(0.0, 1.0 - p95_order_to_delivery / 75.0) * 0.25
+    anchor_v2 = average(rows, "anchorV2Score")
+    ready_slack = average(rows, "anchorReadySlack")
+    corridor_fit = average(rows, "anchorCorridorFit")
+    detour_risk = average(rows, "anchorDetourRisk")
+    traffic_risk = average(rows, "anchorTrafficRisk")
+    operational_score = (1.0 if pickup_violations == 0 else 0.0) * 0.45 + max(0.0, 1.0 - pickup_wait / 10.0) * 0.30 + max(0.0, 1.0 - p95_order_to_delivery / 75.0) * 0.25
+    bridge_score = anchor_v2 * 0.35 + ready_slack * 0.20 + corridor_fit * 0.20 + max(0.0, 1.0 - detour_risk) * 0.15 + max(0.0, 1.0 - traffic_risk) * 0.10
+    score = max(operational_score, operational_score * 0.78 + bridge_score * 0.22)
     blockers = ["hard-pickup-before-ready-violation"] if pickup_violations else []
     if score < 0.90 and not blockers:
         blockers.append("anchor-quality-target-gap")
-    return layer("anchorQuality", score, verdict(score, blockers), blockers, {"avgPickupWaitTime": pickup_wait, "pickupBeforeReadyViolation": pickup_violations, "p95OrderToDeliveryTimeMax": p95_order_to_delivery})
+    return layer("anchorQuality", score, verdict(score, blockers), blockers, {
+        "avgPickupWaitTime": pickup_wait,
+        "pickupBeforeReadyViolation": pickup_violations,
+        "p95OrderToDeliveryTimeMax": p95_order_to_delivery,
+        "anchorV2Score": anchor_v2,
+        "anchorReadySlack": ready_slack,
+        "anchorCorridorFit": corridor_fit,
+        "anchorDetourRisk": detour_risk,
+        "anchorTrafficRisk": traffic_risk,
+        "anchorBridgeScore": bridge_score,
+        "anchorOperationalScore": operational_score,
+    })
 
 
 def score_sequence(rows: Sequence[Dict[str, Any]], name: str) -> Dict[str, Any]:
@@ -123,13 +146,16 @@ def score_order_to_delivery(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     p95_otd = maximum(rows, "p95OrderToDeliveryTime")
     avg_otd = average(rows, "avgOrderToDeliveryTime")
     p95_delay = maximum(rows, "p95Delay")
+    p95_lower_bound = maximum(rows, "p95OrderToDeliveryLowerBound")
+    p95_gap_to_lower_bound = maximum(rows, "p95OrderToDeliveryGapToLowerBound")
+    tight_lower_bound_rate = sum(1 for row in rows if row.get("orderToDeliveryLowerBoundTight")) / max(1, len(rows))
     score = max(0.0, 1.0 - p95_otd / 75.0) * 0.45 + max(0.0, 1.0 - avg_otd / 50.0) * 0.30 + max(0.0, 1.0 - p95_delay / 45.0) * 0.25
     blockers: List[str] = []
     if p95_otd > 75.0:
         blockers.append("p95-order-to-delivery-above-target")
     if score < 0.90 and not blockers:
         blockers.append("order-to-delivery-quality-target-gap")
-    return layer("orderToDeliveryQuality", score, verdict(score, blockers), blockers, {"p95OrderToDeliveryTimeMax": p95_otd, "avgOrderToDeliveryTime": avg_otd, "p95DelayMax": p95_delay})
+    return layer("orderToDeliveryQuality", score, verdict(score, blockers), blockers, {"p95OrderToDeliveryTimeMax": p95_otd, "avgOrderToDeliveryTime": avg_otd, "p95DelayMax": p95_delay, "p95OrderToDeliveryLowerBoundMax": p95_lower_bound, "p95OrderToDeliveryGapToLowerBoundMax": p95_gap_to_lower_bound, "tightLowerBoundRate": tight_lower_bound_rate})
 
 
 def build_quality(certification_root: Path) -> Dict[str, Any]:
@@ -160,8 +186,22 @@ def build_quality(certification_root: Path) -> Dict[str, Any]:
     explainability = {
         "worstInstancesByP95Delay": top_instances(rows, "p95Delay"),
         "worstInstancesByFoodOnVehicle": top_instances(rows, "p95FoodOnVehicleTime"),
+        "worstInstancesByFoodOnVehicleGapToLowerBound": top_instances(rows, "p95FoodOnVehicleGapToLowerBound"),
         "worstInstancesByOrderToDelivery": top_instances(rows, "p95OrderToDeliveryTime"),
+        "worstInstancesByOrderToDeliveryGapToLowerBound": top_instances(rows, "p95OrderToDeliveryGapToLowerBound"),
         "worstInstancesByFairnessGini": top_instances(rows, "assignmentFairnessGini"),
+        "orderToDeliveryLowerBoundAudit": {
+            "maxP95OrderToDeliveryLowerBound": maximum(rows, "p95OrderToDeliveryLowerBound"),
+            "maxP95OrderToDeliveryGapToLowerBound": maximum(rows, "p95OrderToDeliveryGapToLowerBound"),
+            "tightLowerBoundRate": sum(1 for row in rows if row.get("orderToDeliveryLowerBoundTight")) / max(1, len(rows)),
+        },
+        "freshnessLowerBoundAudit": {
+            "maxP95DelayLowerBound": maximum(rows, "p95DelayLowerBound"),
+            "maxP95DelayGapToLowerBound": maximum(rows, "p95DelayGapToLowerBound"),
+            "maxP95FoodOnVehicleLowerBound": maximum(rows, "p95FoodOnVehicleLowerBound"),
+            "maxP95FoodOnVehicleGapToLowerBound": maximum(rows, "p95FoodOnVehicleGapToLowerBound"),
+            "tightLowerBoundRate": sum(1 for row in rows if row.get("freshnessLowerBoundTight")) / max(1, len(rows)),
+        },
         "layerContribution": [{"layer": item["layer"], "score": item["score"], "blockers": item.get("blockers", [])} for item in layers],
         "recommendations": recommendations(layers),
     }

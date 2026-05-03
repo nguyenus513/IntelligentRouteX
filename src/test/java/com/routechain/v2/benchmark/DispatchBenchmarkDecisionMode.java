@@ -1,19 +1,10 @@
 package com.routechain.v2.benchmark;
 
-import com.routechain.v2.decision.DecisionStageName;
-
 import java.util.List;
 import java.util.Locale;
 
 public enum DispatchBenchmarkDecisionMode {
-    LEGACY("legacy", "legacy", List.of()),
-    LLM_SHADOW("llm-shadow", "llm-shadow", List.of()),
-    LLM_AUTHORITATIVE("llm-authoritative", "llm-authoritative", List.of(
-            DecisionStageName.PAIR_BUNDLE.wireName(),
-            DecisionStageName.DRIVER.wireName(),
-            DecisionStageName.ROUTE_CRITIQUE.wireName(),
-            DecisionStageName.SCENARIO.wireName(),
-            DecisionStageName.FINAL_SELECTION.wireName()));
+    LEGACY("legacy", "legacy", List.of());
 
     private final String wireName;
     private final String runtimeMode;
@@ -46,6 +37,9 @@ public enum DispatchBenchmarkDecisionMode {
             if (value.wireName.equals(normalized)) {
                 return value;
             }
+        }
+        if (normalized.startsWith("llm") || "hybrid".equals(normalized)) {
+            throw new IllegalArgumentException("LLM decision mode is disabled by policy: " + rawValue);
         }
         throw new IllegalArgumentException("Unknown decision mode: " + rawValue);
     }

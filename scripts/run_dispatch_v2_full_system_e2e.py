@@ -349,14 +349,20 @@ def check_llm(base_url: str, models: Sequence[str], api_key_env: str) -> Dict[st
 def run_preflight(args: argparse.Namespace) -> Dict[str, Any]:
     workers = check_workers()
     osrm = check_osrm(DEFAULT_OSRM_BASE_URL)
-    llm = check_llm(args.llm_base_url, (args.llm_model, args.llm_fallback_model), args.llm_api_key_env)
+    llm = {
+        "ready": False,
+        "providerResponsesReady": False,
+        "modelUsed": None,
+        "modelResolutionFallbackUsed": False,
+        "providerFailureClass": "llm-disabled-by-policy",
+        "apiKeyEnv": args.llm_api_key_env,
+        "results": [],
+    }
     blockers = []
     if not workers["ready"]:
         blockers.append("LOCAL_ML_NOT_ATTACHED")
     if not osrm["ready"]:
         blockers.append("OSRM_NOT_READY")
-    if args.llm == "on" and not llm["ready"]:
-        blockers.append("LLM_NOT_READY")
     return {
         "schemaVersion": "full-system-e2e-preflight/v1",
         "generatedAt": utc_now(),
@@ -420,10 +426,8 @@ def terminate_process_tree(process_id: int) -> None:
 
 
 def mode_env(cell: BenchmarkCell, args: argparse.Namespace, output_dir: Path) -> Dict[str, str]:
-    decision = "llm-authoritative"
+    decision = "legacy"
     baseline = "C"
-    if cell.mode in {"no-llm", "ortools-baseline"}:
-        decision = "legacy"
     if cell.mode == "ortools-baseline":
         baseline = "B"
     env = {
@@ -436,8 +440,8 @@ def mode_env(cell: BenchmarkCell, args: argparse.Namespace, output_dir: Path) ->
         "DISPATCH_QUALITY_AUTHORITY": "false",
         "DISPATCH_QUALITY_OUTPUT_DIR": str(output_dir),
         "DISPATCH_QUALITY_PROFILE": args.profile,
-        "ROUTECHAIN_DECISION_LLM_MODEL": args.llm_model,
-        "ROUTECHAIN_DECISION_LLM_BASE_URL": args.llm_base_url,
+        "ROUTECHAIN_DECISION_LLM_MODEL": "disabled-by-policy",
+        "ROUTECHAIN_DECISION_LLM_BASE_URL": "disabled-by-policy",
         "IRX_ROUTING_PROVIDER": args.routing_provider,
         "IRX_ROUTING_BASE_URL": DEFAULT_OSRM_BASE_URL,
         "IRX_TABULAR_BASE_URL": "http://127.0.0.1:8091",
@@ -635,16 +639,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--matrix", choices=("preset:smoke", "preset:core"), default="preset:smoke")
     parser.add_argument("--profile", default="dispatch-v2-full-adaptive")
     parser.add_argument("--prompt-family", default="v3")
-    parser.add_argument("--llm", choices=("on", "off"), default="on")
+    parser.add_argument("--llm", choices=("off",), default="off")
     parser.add_argument("--ml", choices=("local-real",), default="local-real")
     parser.add_argument("--selector", choices=("ortools",), default="ortools")
     parser.add_argument("--routing-provider", choices=("osrm",), default="osrm")
     parser.add_argument("--compare-modes", default="full-system,no-llm,no-heavy-ml,ortools-baseline")
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     parser.add_argument("--visual-output-root", default=str(DEFAULT_VISUAL_ROOT))
-    parser.add_argument("--llm-base-url", default=os.environ.get("ROUTECHAIN_DECISION_LLM_BASE_URL", DEFAULT_LLM_BASE_URL))
-    parser.add_argument("--llm-model", default="cx/gpt-5.5")
-    parser.add_argument("--llm-fallback-model", default="cx/gpt-5.4")
+    parser.add_argument("--llm-base-url", default="disabled-by-policy")
+    parser.add_argument("--llm-model", default="disabled-by-policy")
+    parser.add_argument("--llm-fallback-model", default="disabled-by-policy")
     parser.add_argument("--llm-api-key-env", default=os.environ.get("ROUTECHAIN_DECISION_LLM_API_KEY_ENV", "OPENAI_API_KEY"))
     parser.add_argument("--cell-timeout", default="12m")
     parser.add_argument("--preflight-only", action="store_true")

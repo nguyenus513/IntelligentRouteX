@@ -67,7 +67,7 @@ class LlmStageSchedulerTest {
         DecisionStageOutputV1 output = scheduler.evaluate(stageInput(DecisionStageName.FINAL_SELECTION));
 
         assertEquals(List.of("proposal-1"), output.selectedIds());
-        assertEquals("llm", output.meta().appliedSource());
+        assertEquals("legacy", output.meta().appliedSource());
     }
 
     private LlmStageScheduler scheduler(StubTransport transport) {
@@ -94,8 +94,8 @@ class LlmStageSchedulerTest {
                 Instant.parse("2026-04-20T00:00:00Z").toString(),
                 stageName,
                 Map.of(
-                        "decisionMode", "llm-authoritative",
-                        "authorityMode", "llm",
+                        "decisionMode", "legacy",
+                        "authorityMode", "legacy",
                         "authoritativeStages", List.of("route-critique", "final-selection")),
                 Map.of(
                         "topIds", topIds,

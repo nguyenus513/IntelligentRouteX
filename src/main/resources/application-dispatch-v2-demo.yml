@@ -30,13 +30,11 @@ routechain:
       storage-mode: FILE
       base-dir: data/dispatch-v2-feedback
     decision:
-      mode: llm
-      authoritative-stages:
-        - pair-bundle
-        - driver
-        - route-critique
-        - scenario
-        - final-selection
+      mode: legacy
+      authoritative-stages: []
+      context-selection:
+        dynamic-enabled: false
+        tool-fetch-enabled: false
       llm:
         base-url: http://127.0.0.1:20128/v1
         model: cx/gpt-5.5

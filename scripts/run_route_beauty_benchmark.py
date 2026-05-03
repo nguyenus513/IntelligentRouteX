@@ -43,7 +43,13 @@ def read_graph(path: Path, node_limit: int) -> Dict[int, List[Tuple[int, float]]
     return graph
 
 
-def shortest_path(graph: Dict[int, List[Tuple[int, float]]], source: int, target: int) -> Tuple[float, List[int]] | None:
+def shortest_path(
+    graph: Dict[int, List[Tuple[int, float]]],
+    source: int,
+    target: int,
+    edge_penalties: Dict[Tuple[int, int], float] | None = None,
+) -> Tuple[float, List[int]] | None:
+    penalties = edge_penalties or {}
     queue: List[Tuple[float, int]] = [(0.0, source)]
     distances = {source: 0.0}
     previous: Dict[int, int] = {}
@@ -58,12 +64,20 @@ def shortest_path(graph: Dict[int, List[Tuple[int, float]]], source: int, target
         if distance > distances.get(node, math.inf):
             continue
         for next_node, weight in graph.get(node, []):
-            candidate = distance + weight
+            candidate = distance + weight * penalties.get((node, next_node), 1.0)
             if candidate < distances.get(next_node, math.inf):
                 distances[next_node] = candidate
                 previous[next_node] = node
                 heapq.heappush(queue, (candidate, next_node))
     return None
+
+
+def path_weight(graph: Dict[int, List[Tuple[int, float]]], path: Sequence[int]) -> float:
+    total = 0.0
+    for left, right in zip(path, path[1:]):
+        edge_weight = next((weight for node, weight in graph.get(left, []) if node == right), math.inf)
+        total += edge_weight
+    return total
 
 
 def euclidean_path_distance(path: Sequence[int], coordinates: Dict[int, Tuple[float, float]]) -> float:
@@ -118,6 +132,107 @@ def route_shape_metrics(path: Sequence[int], coordinates: Dict[int, Tuple[float,
     }
 
 
+def route_quality_score(row: Dict[str, object]) -> float:
+    if not row.get("routePolylinePresent"):
+        return 0.0
+    straightness = max(0.0, min(1.0, float(row.get("straightnessScore", 0.0))))
+    detour_ratio = max(1.0, float(row.get("networkDetourRatio", 1.0)))
+    turn_count = float(row.get("turnCount", 0.0))
+    sharp_turn_count = float(row.get("sharpTurnCount", 0.0))
+    detour_score = max(0.0, 1.0 - max(0.0, detour_ratio - 1.0) / 3.0)
+    turn_score = max(0.0, 1.0 - turn_count / 50.0)
+    sharp_turn_score = max(0.0, 1.0 - sharp_turn_count / 10.0)
+    return max(0.0, min(1.0, straightness * 0.40 + detour_score * 0.35 + turn_score * 0.15 + sharp_turn_score * 0.10))
+
+
+def route_risk_primitives(row: Dict[str, object]) -> Dict[str, float]:
+    straightness = max(0.0, min(1.0, float(row.get("straightnessScore", 0.0))))
+    detour_ratio = max(1.0, float(row.get("networkDetourRatio", 1.0)))
+    turn_count = max(0.0, float(row.get("turnCount", 0.0)))
+    sharp_turn_count = max(0.0, float(row.get("sharpTurnCount", 0.0)))
+    detour_risk = max(0.0, min(1.0, (detour_ratio - 1.0) / 3.0))
+    turn_risk = max(0.0, min(1.0, turn_count / 50.0))
+    zigzag_penalty = max(0.0, min(1.0, sharp_turn_count / 10.0))
+    corridor_fit = max(0.0, min(1.0, straightness * 0.65 + (1.0 - detour_risk) * 0.35))
+    shape_penalty = max(0.0, min(1.0, detour_risk * 0.40 + (1.0 - straightness) * 0.30 + turn_risk * 0.15 + zigzag_penalty * 0.15))
+    return {
+        "routeShapePenalty": shape_penalty,
+        "routeDetourRisk": detour_risk,
+        "routeCorridorFit": corridor_fit,
+        "routeZigzagPenalty": zigzag_penalty,
+        "routeTurnRisk": turn_risk,
+        "trafficRiskPenalty": max(0.0, min(1.0, detour_risk * 0.55 + turn_risk * 0.25 + zigzag_penalty * 0.20)),
+        "weatherRiskPenalty": max(0.0, min(1.0, detour_risk * 0.35 + (1.0 - corridor_fit) * 0.45 + zigzag_penalty * 0.20)),
+    }
+
+
+def route_selection_score(row: Dict[str, object]) -> float:
+    quality = route_quality_score(row)
+    risks = route_risk_primitives(row)
+    distance_ratio = max(1.0, float(row.get("networkDetourRatio", 1.0)))
+    distance_guard = max(0.0, min(1.0, 1.0 - max(0.0, distance_ratio - 1.0) / 5.0))
+    return max(0.0, min(1.0, quality * 0.72 + risks["routeCorridorFit"] * 0.18 + distance_guard * 0.10 - risks["routeShapePenalty"] * 0.08))
+
+
+def penalized_route_candidates(
+    graph: Dict[int, List[Tuple[int, float]]],
+    source: int,
+    target: int,
+    max_candidates: int = 4,
+) -> List[Tuple[float, List[int], str]]:
+    candidates: List[Tuple[float, List[int], str]] = []
+    seen_paths: set[Tuple[int, ...]] = set()
+    base = shortest_path(graph, source, target)
+    if base is None:
+        return candidates
+    base_distance, base_path = base
+    candidates.append((base_distance, base_path, "shortest"))
+    seen_paths.add(tuple(base_path))
+    for index, penalty_factor in enumerate((1.12, 1.25, 1.40), start=1):
+        penalties: Dict[Tuple[int, int], float] = {}
+        stride = max(1, len(base_path) // (index + 2))
+        for left, right in zip(base_path[index::stride], base_path[index + 1::stride]):
+            penalties[(left, right)] = penalty_factor
+        alternative = shortest_path(graph, source, target, penalties)
+        if alternative is None:
+            continue
+        _, path = alternative
+        path_key = tuple(path)
+        if path_key in seen_paths:
+            continue
+        seen_paths.add(path_key)
+        candidates.append((path_weight(graph, path), path, f"corridor-penalty-{index}"))
+        if len(candidates) >= max_candidates:
+            break
+    return candidates
+
+
+def select_beauty_route(
+    graph: Dict[int, List[Tuple[int, float]]],
+    coordinates: Dict[int, Tuple[float, float]],
+    source: int,
+    target: int,
+) -> Dict[str, object] | None:
+    candidates = penalized_route_candidates(graph, source, target)
+    if not candidates:
+        return None
+    evaluated: List[Dict[str, object]] = []
+    for network_distance, path, source_label in candidates:
+        metrics = route_shape_metrics(path, coordinates, network_distance)
+        row: Dict[str, object] = {"sourceStrategy": source_label, **metrics}
+        row.update(route_risk_primitives(row))
+        row["routeQualityScore"] = route_quality_score(row)
+        row["routeSelectionScore"] = route_selection_score(row)
+        evaluated.append(row)
+    selected = max(evaluated, key=lambda row: (float(row["routeSelectionScore"]), float(row["routeQualityScore"]), -float(row.get("networkDistance", 0.0))))
+    selected["candidateRouteCount"] = len(evaluated)
+    selected["dominanceRejectedRoutes"] = len(evaluated) - 1
+    selected["candidateBestQualityScore"] = max(float(row["routeQualityScore"]) for row in evaluated)
+    selected["candidateShortestQualityScore"] = float(evaluated[0]["routeQualityScore"])
+    selected["beautySelectionImprovement"] = float(selected["routeQualityScore"]) - float(evaluated[0]["routeQualityScore"])
+    return selected
+
+
 def classify_route_shape(row: Dict[str, object]) -> Dict[str, str]:
     high_detour = float(row.get("networkDetourRatio", 0.0)) > 4.0
     low_straightness = float(row.get("straightnessScore", 0.0)) < 0.30
@@ -149,6 +264,9 @@ def top_bad_routes(rows: Sequence[Dict[str, object]], limit: int = 10) -> List[D
             "networkDetourRatio": row.get("networkDetourRatio"),
             "turnCount": row.get("turnCount"),
             "sharpTurnCount": row.get("sharpTurnCount"),
+            "routeShapePenalty": row.get("routeShapePenalty"),
+            "routeDetourRisk": row.get("routeDetourRisk"),
+            "routeCorridorFit": row.get("routeCorridorFit"),
             "routeShapeIssue": row.get("routeShapeIssue"),
             "routeShapeIssueClass": row.get("routeShapeIssueClass"),
         }
@@ -167,6 +285,8 @@ def region_summary(rows: Sequence[Dict[str, object]]) -> List[Dict[str, object]]
             "badRouteCount": sum(1 for row in region_rows if row.get("routeShapeIssue") != "clean"),
             "avgStraightnessScore": sum(float(row["straightnessScore"]) for row in region_rows) / len(region_rows) if region_rows else 0.0,
             "avgNetworkDetourRatio": sum(float(row["networkDetourRatio"]) for row in region_rows) / len(region_rows) if region_rows else 0.0,
+            "avgRouteShapePenalty": sum(float(row.get("routeShapePenalty", 0.0)) for row in region_rows) / len(region_rows) if region_rows else 0.0,
+            "avgRouteCorridorFit": sum(float(row.get("routeCorridorFit", 0.0)) for row in region_rows) / len(region_rows) if region_rows else 0.0,
         })
     return summary
 
@@ -244,12 +364,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         graph = read_graph(graph_path, args.node_limit)
         nodes = sorted(node for node in graph if graph[node] and node in coordinates)
         for source, target in benchmark_pairs(nodes, args.pairs):
-            path_result = shortest_path(graph, source, target)
-            if path_result is None:
+            selected_route = select_beauty_route(graph, coordinates, source, target)
+            if selected_route is None:
                 continue
-            network_distance, path = path_result
-            metrics = route_shape_metrics(path, coordinates, network_distance)
-            row = {"region": region, "source": source, "target": target, **metrics}
+            row = {"region": region, "source": source, "target": target, **selected_route}
             row.update(classify_route_shape(row))
             rows.append(row)
     final_verdict, reasons = verdict(rows)
@@ -271,6 +389,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         "avgStraightnessScore": sum(float(row["straightnessScore"]) for row in rows) / len(rows) if rows else 0.0,
         "avgNetworkDetourRatio": sum(float(row["networkDetourRatio"]) for row in rows) / len(rows) if rows else 0.0,
         "avgTurnCount": sum(int(row["turnCount"]) for row in rows) / len(rows) if rows else 0.0,
+        "avgRouteQualityScore": sum(float(row["routeQualityScore"]) for row in rows) / len(rows) if rows else 0.0,
+        "avgRouteSelectionScore": sum(float(row.get("routeSelectionScore", 0.0)) for row in rows) / len(rows) if rows else 0.0,
+        "avgRouteShapePenalty": sum(float(row.get("routeShapePenalty", 0.0)) for row in rows) / len(rows) if rows else 0.0,
+        "avgRouteDetourRisk": sum(float(row.get("routeDetourRisk", 0.0)) for row in rows) / len(rows) if rows else 0.0,
+        "avgRouteCorridorFit": sum(float(row.get("routeCorridorFit", 0.0)) for row in rows) / len(rows) if rows else 0.0,
+        "avgTrafficRiskPenalty": sum(float(row.get("trafficRiskPenalty", 0.0)) for row in rows) / len(rows) if rows else 0.0,
+        "avgWeatherRiskPenalty": sum(float(row.get("weatherRiskPenalty", 0.0)) for row in rows) / len(rows) if rows else 0.0,
+        "avgCandidateRouteCount": sum(int(row.get("candidateRouteCount", 1)) for row in rows) / len(rows) if rows else 0.0,
+        "dominanceRejectedRouteCount": sum(int(row.get("dominanceRejectedRoutes", 0)) for row in rows),
+        "beautyImprovedRouteCount": sum(1 for row in rows if float(row.get("beautySelectionImprovement", 0.0)) > 1e-9),
+        "avgBeautySelectionImprovement": sum(float(row.get("beautySelectionImprovement", 0.0)) for row in rows) / len(rows) if rows else 0.0,
         "badRouteCount": bad_route_count,
         "highDetourRouteCount": high_detour_count,
         "lowStraightnessRouteCount": low_straightness_count,

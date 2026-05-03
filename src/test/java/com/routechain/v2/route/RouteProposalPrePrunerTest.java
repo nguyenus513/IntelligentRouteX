@@ -4,6 +4,7 @@ import com.routechain.config.RouteChainDispatchV2Properties;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,7 +26,17 @@ class RouteProposalPrePrunerTest {
                 budget);
 
         assertTrue(result.candidateCountAfterPrune() <= result.candidateCountBeforePrune());
-        assertTrue(result.candidateCountAfterPrune() <= 2);
+        assertTrue(result.candidateCountAfterPrune() <= budget.maxTotalRouteProposals());
+        assertTrue(result.driverCandidates().stream()
+                .collect(Collectors.groupingBy(DriverCandidate::bundleId, Collectors.counting()))
+                .values()
+                .stream()
+                .allMatch(count -> count <= budget.maxDriversPerBundle()));
+        assertTrue(result.pickupAnchors().stream()
+                .collect(Collectors.groupingBy(PickupAnchor::bundleId, Collectors.counting()))
+                .values()
+                .stream()
+                .allMatch(count -> count <= budget.maxAnchorsPerBundle()));
         assertTrue(result.pruneReasonCounts().containsKey("driver-budget-exceeded")
                 || result.pruneReasonCounts().containsKey("anchor-budget-exceeded"));
     }

@@ -135,7 +135,7 @@ public final class OrToolsSetPackingSolver implements SelectorSolver {
         int orderCount = selectorCandidate.orderIds().size();
         double bundleSizeBonus = scarceBundling ? Math.max(0, orderCount - 2) * SCARCE_ORDER_COVERAGE_BONUS : 0.0;
         double coverageFirstBonus = scarceBundling ? orderCount * SCARCE_COVERAGE_FIRST_BONUS : 0.0;
-        return selectorCandidate.selectionScore() + coverageFirstBonus + bundleSizeBonus;
+        return SelectorCandidateRanking.objectiveUtility(selectorCandidate) + coverageFirstBonus + bundleSizeBonus;
     }
 
     private void addAtMostOneConstraints(CpModel model, Map<String, List<BoolVar>> groupedDecisions) {

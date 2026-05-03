@@ -44,7 +44,7 @@ class RouteProposalEngineTest {
 
         assertEquals(first.stream().map(candidate -> candidate.proposal().proposalId()).toList(), second.stream().map(candidate -> candidate.proposal().proposalId()).toList());
         assertEquals(
-                EnumSet.of(RouteProposalSource.HEURISTIC_FAST, RouteProposalSource.HEURISTIC_SAFE, RouteProposalSource.FALLBACK_SIMPLE),
+                EnumSet.of(RouteProposalSource.HEURISTIC_FAST, RouteProposalSource.HEURISTIC_SAFE, RouteProposalSource.FALLBACK_SIMPLE, RouteProposalSource.BEAUTY_CORRIDOR),
                 first.stream().map(candidate -> candidate.proposal().source()).collect(java.util.stream.Collectors.toCollection(() -> EnumSet.noneOf(RouteProposalSource.class))));
         assertTrue(first.stream().allMatch(candidate -> routeCandidateStage.driverCandidates().stream().anyMatch(driverCandidate ->
                 driverCandidate.bundleId().equals(candidate.proposal().bundleId())

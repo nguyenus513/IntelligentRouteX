@@ -21,7 +21,7 @@ SCENARIO_PACKS = (
     "live-source-degradation",
 )
 EXECUTION_MODES = ("controlled", "local-real")
-DECISION_MODES = ("legacy", "llm-shadow", "llm-authoritative")
+DECISION_MODES = ("legacy",)
 PROMPT_FAMILIES = ("v2", "v3")
 
 
@@ -182,6 +182,10 @@ def write_summary(results: Sequence[dict], output_dir: Path) -> Path:
     for result in results:
         if "baselineId" in result:
             metrics = result.get("metrics", {})
+            bundle = result.get("bundleDiversity", {})
+            selector = result.get("selectorTelemetry", {})
+            objective = result.get("objectiveTelemetry", {})
+            repair = result.get("activeRepair", {})
             lines.extend([
                 f"## `{result.get('scenarioPack')} / {result.get('baselineId')} / {result.get('workloadSize')}`",
                 "",
@@ -194,7 +198,26 @@ def write_summary(results: Sequence[dict], output_dir: Path) -> Path:
                 f"- selected proposals: `{metrics.get('selectedProposalCount', 0)}`",
                 f"- executed assignments: `{metrics.get('executedAssignmentCount', 0)}`",
                 f"- robust utility average: `{metrics.get('robustUtilityAverage', 0.0)}`",
-                f"- llm exact-match rate: `{result.get('llmShadowAgreement', {}).get('overallExactMatchRate', 0.0)}`",
+                f"- decision exact-match rate: `{result.get('decisionAgreement', {}).get('overallExactMatchRate', 0.0)}`",
+                f"- bundle candidates retained: `{bundle.get('candidateCount', 0)} -> {bundle.get('retainedCount', 0)}`",
+                f"- bundle family diversity count: `{bundle.get('familyDiversityCount', 0)}`",
+                f"- bundle late-risk rescue candidates: `{bundle.get('lateRiskRescueCandidateCount', 0)}`",
+                f"- bundle active-route addon candidates: `{bundle.get('activeRouteAddonCandidateCount', 0)}`",
+                f"- selector mode: `{selector.get('mode', 'UNKNOWN')}`",
+                f"- selector pool input/reduced/rejected: `{selector.get('poolInputCount', 0)} / {selector.get('poolReducedCount', 0)} / {selector.get('poolRejectedCount', 0)}`",
+                f"- selector fallback level: `{selector.get('fallbackLevel', 'NONE')}`",
+                f"- selector max pool/cap/loss: `{selector.get('selectorMaxPoolSize', 0)} / {selector.get('selectorPoolCapApplied', False)} / {selector.get('selectorPoolCapObjectiveLoss', 0.0)}`",
+                f"- acceptance gate passed: `{selector.get('acceptanceGatePassed', True)}`",
+                f"- objective breakdown count: `{objective.get('breakdownCount', 0)}`",
+                f"- objective selected total utility: `{objective.get('selectedTotalUtility', 0.0)}`",
+                f"- objective selected risk cost: `{objective.get('selectedRiskCost', 0.0)}`",
+                f"- repair mode: `{repair.get('mode', 'DISABLED_OR_EMPTY')}`",
+                f"- repair runtime ms: `{repair.get('runtimeMs', 0)}`",
+                f"- repair accepted/rejected moves: `{repair.get('acceptedMoves', 0)} / {repair.get('rejectedMoves', 0)}`",
+                f"- repair improvement delta: `{repair.get('bestImprovementDelta', 0.0)}`",
+                f"- repair frozen prefix violations: `{repair.get('frozenPrefixViolationCount', 0)}`",
+                f"- repair freshness improvement delta: `{repair.get('freshnessImprovementDelta', 0.0)}`",
+                f"- repair tail-risk improvement delta: `{repair.get('tailRiskImprovementDelta', 0.0)}`",
                 f"- token total: `{result.get('tokenUsageSummary', {}).get('totalTokens', 0)}`",
                 f"- route geometry coverage: `{result.get('routeVectorMetrics', {}).get('geometryCoverage', 0.0)}`",
                 "",
@@ -221,7 +244,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--baseline", default="all", help="A|B|C|all")
     parser.add_argument("--size", default="all", help="XS|S|M|L|XL|all")
     parser.add_argument("--scenario-pack", default="all", help="scenario pack or all")
-    parser.add_argument("--decision-mode", default="legacy", help="legacy|llm-shadow|llm-authoritative|all")
+    parser.add_argument("--decision-mode", default="legacy", help="legacy|all; LLM modes are disabled by policy")
     parser.add_argument("--prompt-family", default="v2", help="v2|v3|all")
     parser.add_argument("--authoritative-stage", action="append", default=[], help="Optional repeated authoritative stage override.")
     parser.add_argument("--execution-mode", default="controlled", help="controlled|local-real")

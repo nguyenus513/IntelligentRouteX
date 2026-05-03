@@ -12,7 +12,7 @@ public enum DecisionRuntimeMode {
 
     public static DecisionRuntimeMode fromMode(String rawMode) {
         if (rawMode == null || rawMode.isBlank()) {
-            return LLM;
+            return LEGACY;
         }
         return switch (rawMode.trim().toLowerCase(Locale.ROOT)) {
             case "legacy" -> LEGACY;
@@ -21,7 +21,7 @@ public enum DecisionRuntimeMode {
             case "hybrid" -> HYBRID;
             case "student" -> STUDENT;
             case "llm" -> LLM;
-            default -> LLM;
+            default -> LEGACY;
         };
     }
 }

@@ -36,5 +36,8 @@ class DispatchV2CoreBundleSliceTest {
         assertFalse(result.scenarioEvaluations().isEmpty());
         assertFalse(result.assignments().isEmpty());
         assertTrue(result.bundlePoolSummary().retainedCount() > 0);
+        assertFalse(result.bundlePoolSummary().familyGeneratedCounts().isEmpty());
+        assertFalse(result.bundlePoolSummary().familyRetainedCounts().isEmpty());
+        assertTrue(result.bundlePoolSummary().diversityRetainedCount() > 0);
     }
 }

@@ -2,6 +2,7 @@ package com.routechain.v2.selector;
 
 import com.routechain.config.RouteChainDispatchV2Properties;
 import com.routechain.v2.bundle.BundleCandidate;
+import com.routechain.v2.optimizer.HybridOptimizerObjective;
 import com.routechain.v2.route.DispatchCandidateContext;
 import com.routechain.v2.route.DispatchRouteProposalStage;
 import com.routechain.v2.route.DriverCandidate;
@@ -49,20 +50,23 @@ class SelectorCandidateBuilderTest {
                 .filter(current -> current.proposalId().equals(candidate.proposalId()))
                 .findFirst()
                 .orElseThrow();
-        double expectedSelectionScore = (0.60 * robustUtility.robustUtility())
-                + (0.20 * candidate.routeValue())
-                + (0.10 * driverCandidate.rerankScore())
-                + (0.10 * bundleCandidate.score())
+        RouteProposal selectedProposal = routeProposalStage.routeProposals().stream()
+                .filter(proposal -> proposal.proposalId().equals(candidate.proposalId()))
+                .findFirst()
+                .orElseThrow();
+        double expectedSelectionScore = HybridOptimizerObjective.selectorScore(
+                selectedProposal,
+                robustUtility,
+                driverCandidate,
+                context,
+                properties.getSelector().getFallbackPenalty())
                 + bundleSizeLift(routeProposalStage.routeProposals().stream()
                 .filter(proposal -> proposal.proposalId().equals(candidate.proposalId()))
                 .findFirst()
                 .orElseThrow())
-                - (bundleCandidate.boundaryCross() && context.acceptedBoundarySupport(candidate.bundleId()) < 0.60 ? 0.03 : 0.0)
-                - (candidate.source().name().equals("FALLBACK_SIMPLE") ? properties.getSelector().getFallbackPenalty() : 0.0)
-                - RouteShapeQuality.penalty(routeProposalStage.routeProposals().stream()
-                .filter(proposal -> proposal.proposalId().equals(candidate.proposalId()))
-                .findFirst()
-                .orElseThrow());
+                - (bundleCandidate.boundaryCross() && context.acceptedBoundarySupport(candidate.bundleId()) < 0.60 ? 0.02 : 0.0)
+                - (candidate.source().name().equals("FALLBACK_SIMPLE")
+                && "REJECT_SHAPE".equals(RouteShapeQuality.analyze(selectedProposal).verdict()) ? 0.08 : 0.0);
 
         assertEquals(bundleCandidate.orderIds(), candidate.orderIds());
         assertEquals(bundleCandidate.clusterId(), candidate.clusterId());
@@ -190,6 +194,62 @@ class SelectorCandidateBuilderTest {
     }
 
     @Test
+    void rejectsOracleInfeasibleRoutesBeforeSelection() {
+        RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
+        var pairClusterStage = RouteTestFixtures.pairClusterStage(properties);
+        var bundleStage = RouteTestFixtures.bundleStage(properties, pairClusterStage);
+        var routeCandidateStage = RouteTestFixtures.routeCandidateStage(properties);
+        var routeProposalStage = RouteTestFixtures.routeProposalStage(properties);
+        var scenarioStage = RouteTestFixtures.scenarioStage(properties);
+        DispatchCandidateContext context = new DispatchCandidateContext(
+                pairClusterStage.bufferedOrderWindow().orders(),
+                RouteTestFixtures.request().availableDrivers(),
+                pairClusterStage,
+                bundleStage);
+        RouteProposal original = routeProposalStage.routeProposals().stream().findFirst().orElseThrow();
+        RouteProposal infeasible = new RouteProposal(
+                original.schemaVersion(),
+                original.proposalId(),
+                original.bundleId(),
+                original.anchorOrderId(),
+                original.driverId(),
+                original.source(),
+                original.stopOrder(),
+                original.projectedPickupEtaMinutes(),
+                original.projectedCompletionEtaMinutes(),
+                original.routeValue(),
+                false,
+                original.reasons(),
+                original.degradeReasons(),
+                original.legCount(),
+                original.totalDistanceMeters(),
+                original.totalTravelTimeSeconds(),
+                original.routeCost(),
+                original.majorRoadRatio(),
+                original.minorRoadRatio(),
+                original.turnCount(),
+                original.uTurnCount(),
+                original.congestionScore(),
+                original.straightnessScore(),
+                original.geometryAvailable(),
+                original.legs());
+        DispatchRouteProposalStage infeasibleStage = new DispatchRouteProposalStage(
+                routeProposalStage.schemaVersion(),
+                java.util.List.of(infeasible),
+                routeProposalStage.routeProposalSummary(),
+                routeProposalStage.hotStartReuseSummary(),
+                routeProposalStage.stageLatencies(),
+                routeProposalStage.mlStageMetadata(),
+                routeProposalStage.degradeReasons());
+        SelectorCandidateBuilder builder = new SelectorCandidateBuilder(properties);
+
+        SelectorCandidateBuildResult buildResult = builder.build(infeasibleStage, scenarioStage, routeCandidateStage, context);
+
+        assertTrue(buildResult.candidateEnvelopes().isEmpty());
+        assertTrue(buildResult.degradeReasons().contains("selector-feasibility-oracle-rejected"));
+    }
+
+    @Test
     void rejectsDominatedSameOrderSetRoutesBeforeSelection() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         var pairClusterStage = RouteTestFixtures.pairClusterStage(properties);
@@ -281,7 +341,10 @@ class SelectorCandidateBuilderTest {
         int bundleSize = proposal.stopOrder().size();
         var analysis = RouteShapeQuality.analyze(proposal);
         if (bundleSize <= 2) {
-            return proposal.straightnessScore() < 0.55 || analysis.detourRatio() > RouteShapeQuality.DETOUR_WEAK_RATIO ? -0.04 : 0.0;
+            if (bundleSize < 2) {
+                return 0.0;
+            }
+            return proposal.straightnessScore() < 0.55 || analysis.detourRatio() > RouteShapeQuality.DETOUR_WEAK_RATIO ? -0.04 : 0.28;
         }
         if (proposal.straightnessScore() < 0.62
                 || proposal.turnCount() > (7 * bundleSize + 6)

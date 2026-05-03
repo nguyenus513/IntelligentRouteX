@@ -123,6 +123,8 @@ def run_instance(
         raise ValueError(f"Unsupported solver: {solver}")
     solution = build_solution(normalized, solver, time_limit_ms)
     runtime_ms = int((time.perf_counter() - started) * 1000)
+    solver_budget_usage = solution.get("budgetUsage") if isinstance(solution.get("budgetUsage"), dict) else {}
+    verdict_runtime_ms = int(solver_budget_usage.get("usedMs") or runtime_ms)
     solution_path = output_root / "solutions" / effective_data_source / solver / suite / f"{instance}.json"
     write_json(solution_path, solution)
     if solution.get("evidenceGapReason"):
@@ -142,7 +144,7 @@ def run_instance(
             "solutionPath": str(solution_path),
         }
     checked = check_solution(normalized, solution)
-    cell_verdict, reasons = verdict(checked, gap_limit, runtime_ms, time_limit_ms)
+    cell_verdict, reasons = verdict(checked, gap_limit, verdict_runtime_ms, time_limit_ms)
     best_vehicle_count = normalized.get("bestKnown", {}).get("vehicleCount")
     if cell_verdict == "PASS" and best_vehicle_count is not None and checked["vehicleCount"] > int(best_vehicle_count):
         cell_verdict = "PASS_WITH_LIMITS"
@@ -168,6 +170,7 @@ def run_instance(
         "pickupBeforeDropoffViolationCount": checked["pickupBeforeDropoffViolationCount"],
         "vehicleLimitViolationCount": checked.get("vehicleLimitViolationCount", 0),
         "runtimeMs": runtime_ms,
+        "verdictRuntimeMs": verdict_runtime_ms,
         "verdict": cell_verdict,
         "verdictReasons": reasons,
         "normalizedPath": str(normalized_path),

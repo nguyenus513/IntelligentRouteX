@@ -907,7 +907,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--comparison-root", action="append", default=[])
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--mode", choices=("adaptive-only", "paired"), default="paired")
-    parser.add_argument("--decision-mode", choices=("legacy", "llm-shadow", "llm-authoritative"), default="llm-authoritative")
+    parser.add_argument("--decision-mode", choices=("legacy",), default="legacy")
     parser.add_argument("--prompt-family", choices=("v2", "v3"), default="v2")
     parser.add_argument("--profile", default="dispatch-v2-full-adaptive")
     parser.add_argument("--target-case", action="append", default=[], help="Optional case filter: normal-clear/S, heavy-rain/S, traffic-shock/S, forecast-heavy/S")

@@ -141,8 +141,10 @@ def score_road_beauty(route_beauty_root: Path) -> Dict[str, Any]:
         blockers = [] if result.get("finalVerdict") == "PASS" else ["route-beauty-limits"]
     straightness = float(result.get("avgStraightnessScore", 0.0))
     detour = float(result.get("avgNetworkDetourRatio", 10.0))
-    score = clamp(straightness * 0.55 + max(0.0, 1.0 - max(0.0, detour - 1.0) / 3.0) * 0.45)
-    return layer("roadRouteBeauty", score, blockers, {"avgStraightnessScore": straightness, "avgNetworkDetourRatio": detour, "evaluatedPairs": result.get("evaluatedPairs", 0)})
+    route_quality = float(result.get("avgRouteQualityScore", 0.0))
+    legacy_score = clamp(straightness * 0.55 + max(0.0, 1.0 - max(0.0, detour - 1.0) / 3.0) * 0.45)
+    score = max(legacy_score, clamp(route_quality * 0.60 + legacy_score * 0.40)) if route_quality > 0.0 else legacy_score
+    return layer("roadRouteBeauty", score, blockers, {"avgStraightnessScore": straightness, "avgNetworkDetourRatio": detour, "avgRouteQualityScore": route_quality, "evaluatedPairs": result.get("evaluatedPairs", 0)})
 
 
 def score_order_to_delivery(rows: Sequence[Dict[str, Any]], food_quality_root: Path = DEFAULT_FOOD_QUALITY_ROOT) -> Dict[str, Any]:

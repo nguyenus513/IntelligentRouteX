@@ -15,6 +15,7 @@ import com.routechain.v2.scenario.ScenarioEvaluation;
 import com.routechain.v2.scenario.ScenarioEvaluationSummary;
 import com.routechain.v2.executor.DispatchAssignment;
 import com.routechain.v2.executor.DispatchExecutionSummary;
+import com.routechain.v2.repair.RepairTelemetry;
 import com.routechain.v2.selector.ConflictGraph;
 import com.routechain.v2.selector.GlobalSelectionResult;
 import com.routechain.v2.selector.GlobalSelectorSummary;
@@ -66,6 +67,7 @@ public record DispatchV2Result(
         DispatchExecutionSummary dispatchExecutionSummary,
         WarmStartState warmStartState,
         HotStartState hotStartState,
+        RepairTelemetry activeRepairTelemetry,
         List<String> degradeReasons) implements SchemaVersioned {
 
     public DispatchV2Result withHotStartState(HotStartState newHotStartState) {
@@ -107,6 +109,7 @@ public record DispatchV2Result(
                 dispatchExecutionSummary,
                 warmStartState,
                 newHotStartState,
+                activeRepairTelemetry,
                 degradeReasons);
     }
 
@@ -149,6 +152,7 @@ public record DispatchV2Result(
                 DispatchExecutionSummary.empty(),
                 WarmStartState.empty(),
                 HotStartState.empty(),
+                RepairTelemetry.empty(),
                 List.of("dispatch-v2-disabled"));
     }
 }

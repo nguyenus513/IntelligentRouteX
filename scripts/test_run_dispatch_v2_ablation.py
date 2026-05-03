@@ -25,6 +25,21 @@ class RunDispatchAblationTest(unittest.TestCase):
         self.assertIn("[MATRIX]", output)
         self.assertIn("component=tabular", output)
 
+    def test_dense_bundle_scenario_is_supported_for_focused_greedrl_loop(self) -> None:
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            exit_code = ablation_runner.main([
+                "--component", "greedrl",
+                "--scenario-pack", "dense-bundle-20x5",
+                "--size", "S",
+                "--dry-run",
+            ])
+
+        output = stdout.getvalue()
+        self.assertEqual(0, exit_code)
+        self.assertIn("component=greedrl", output)
+        self.assertIn("scenario-pack=dense-bundle-20x5", output)
+
     def test_runner_collects_json_and_writes_summary(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir)

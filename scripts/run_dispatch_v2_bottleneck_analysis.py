@@ -75,7 +75,7 @@ def perf_command(output_root: Path, size: str, mode: str) -> Tuple[str, ...]:
     ])
 
 
-def planned_steps(matrix: str, output_root: Path, include_llm_shadow: bool = False) -> List[RunStep]:
+def planned_steps(matrix: str, output_root: Path) -> List[RunStep]:
     if matrix == "collect-only":
         return []
     if matrix == "smoke":
@@ -92,9 +92,6 @@ def planned_steps(matrix: str, output_root: Path, include_llm_shadow: bool = Fal
     if matrix != "deep":
         raise ValueError(f"Unsupported matrix '{matrix}'")
 
-    llm_profiles = "llm-authoritative-gated"
-    if include_llm_shadow:
-        llm_profiles = "llm-shadow,llm-authoritative-gated"
     return [
         RunStep(
             "standard-s-ml-adaptive",
@@ -115,16 +112,6 @@ def planned_steps(matrix: str, output_root: Path, include_llm_shadow: bool = Fal
                 "heuristic-only,ml-only,full-adaptive",
                 "M"),
             3600,
-        ),
-        RunStep(
-            "llm-provider-focus",
-            standard_command(
-                output_root / "llm-focus",
-                "llm-gated",
-                "normal-clear,traffic-shock",
-                llm_profiles,
-                "S"),
-            900,
         ),
         RunStep("perf-cold-s", perf_command(output_root / "perf", "S", "cold"), 600),
         RunStep("perf-warm-s", perf_command(output_root / "perf", "S", "warm"), 600),
@@ -539,13 +526,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--matrix", choices=("smoke", "deep", "collect-only"), default="smoke")
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--include-llm-shadow", action="store_true")
     parser.add_argument("--skip-run", action="store_true", help="Only collect existing artifacts under output root.")
     args = parser.parse_args(argv)
 
     output_root = Path(args.output_root)
     try:
-        steps = planned_steps(args.matrix, output_root, args.include_llm_shadow)
+        steps = planned_steps(args.matrix, output_root)
     except ValueError as error:
         print(f"[ERROR] {error}")
         return 2

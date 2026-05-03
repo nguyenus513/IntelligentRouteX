@@ -59,7 +59,7 @@ class LlmProviderResponsesProbeTest(unittest.TestCase):
         self.assertEqual("cx/gpt-5.5", payload["selectedModel"])
         self.assertEqual(["cx/gpt-5.5"], calls)
 
-    def test_main_writes_not_ready_artifacts_without_api_key(self) -> None:
+    def test_main_writes_disabled_artifacts_without_provider_probe(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             dotenv = Path(temp_dir) / "missing.env"
             output_dir = Path(temp_dir) / "out"
@@ -70,12 +70,12 @@ class LlmProviderResponsesProbeTest(unittest.TestCase):
                 "--model", "cx/gpt-5.5",
             ])
 
-            self.assertEqual(1, exit_code)
+            self.assertEqual(2, exit_code)
             reports = list(output_dir.glob("responses_probe-*.json"))
             self.assertEqual(1, len(reports))
             payload = json.loads(reports[0].read_text(encoding="utf-8"))
             self.assertFalse(payload["ready"])
-            self.assertEqual("provider-auth-error", payload["results"][0]["failureClass"])
+            self.assertEqual("llm-disabled-by-policy", payload["results"][0]["failureClass"])
             self.assertTrue((output_dir / "responses_probe_report.md").is_file())
 
 

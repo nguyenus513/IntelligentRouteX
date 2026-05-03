@@ -39,6 +39,7 @@ public record DecisionLogRecord(
         List<DispatchStageLatency> stageLatencies,
         DispatchLatencyBudgetSummary latencyBudgetSummary,
         List<MlStageMetadata> mlStageMetadata,
+        List<MlContributionTrace> mlContributionTrace,
         List<LiveStageMetadata> liveStageMetadata,
         List<String> selectedProposalIds,
         List<String> executedAssignmentIds) implements SchemaVersioned {

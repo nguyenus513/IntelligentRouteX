@@ -30,11 +30,8 @@ DEFAULT_PROFILES = (
     "heuristic-only",
     "ml-only",
     "full-adaptive",
-    "llm-shadow",
-    "llm-authoritative-gated",
 )
 LIGHT_PROFILES = ("heuristic-only", "ml-only", "full-adaptive")
-LLM_PROFILES = ("llm-shadow", "llm-authoritative-gated")
 VERDICTS = ("PASS", "PASS_WITH_LIMITS", "EVIDENCE_GAP", "FAIL")
 
 
@@ -47,7 +44,6 @@ class ProfileSpec:
     execution_mode: str = "controlled"
     profile: str = ""
     authoritative_stages: Tuple[str, ...] = ()
-    requires_llm: bool = False
     timeout_seconds: int = 180
 
 
@@ -86,23 +82,6 @@ PROFILE_SPECS: Dict[str, ProfileSpec] = {
         profile="dispatch-v2-full-adaptive",
         timeout_seconds=180,
     ),
-    "llm-shadow": ProfileSpec(
-        "llm-shadow",
-        baseline="C",
-        decision_mode="llm-shadow",
-        profile="dispatch-v2-full-adaptive",
-        requires_llm=True,
-        timeout_seconds=180,
-    ),
-    "llm-authoritative-gated": ProfileSpec(
-        "llm-authoritative-gated",
-        baseline="C",
-        decision_mode="llm-authoritative",
-        profile="dispatch-v2-full-adaptive",
-        authoritative_stages=("route-critique", "final-selection"),
-        requires_llm=True,
-        timeout_seconds=240,
-    ),
 }
 
 
@@ -131,15 +110,6 @@ def benchmark_command(cell: StandardCell, output_dir: Path) -> List[str]:
     return command
 
 
-def probe_command(output_root: Path) -> List[str]:
-    return python_command() + [
-        str(REPO_ROOT / "scripts" / "probe_llm_provider_responses.py"),
-        "--output-dir", str(output_root / "provider-preflight"),
-        "--model", "cx/gpt-5.5",
-        "--model", "cx/gpt-5.4",
-    ]
-
-
 def split_csv(value: str) -> Tuple[str, ...]:
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
@@ -147,7 +117,7 @@ def split_csv(value: str) -> Tuple[str, ...]:
 def selected_scenarios(matrix: str, override: str) -> Tuple[str, ...]:
     if override:
         return split_csv(override)
-    if matrix in ("local-minimum", "ml-only-4case", "llm-gated"):
+    if matrix in ("local-minimum", "ml-only-4case"):
         return DEFAULT_SCENARIOS
     if matrix == "standard-v1":
         return STANDARD_SCENARIOS
@@ -158,7 +128,6 @@ def selected_profiles(matrix: str, override: str) -> Tuple[str, ...]:
     names = split_csv(override) if override else {
         "local-minimum": DEFAULT_PROFILES,
         "ml-only-4case": LIGHT_PROFILES,
-        "llm-gated": LLM_PROFILES,
         "standard-v1": DEFAULT_PROFILES,
     }.get(matrix)
     if names is None:
@@ -282,25 +251,13 @@ def classify_artifact(payload: Dict[str, object]) -> Tuple[str, Tuple[str, ...]]
     return "PASS", ("quality-artifact-valid",)
 
 
-def llm_preflight_ready(output_root: Path, runner=subprocess.run, skip: bool = False) -> Tuple[bool, str]:
-    if skip:
-        return True, "skipped-by-user"
-    completed = runner(probe_command(output_root), cwd=REPO_ROOT, text=True, check=False)
-    if completed.returncode == 0:
-        return True, "provider-responses-ready"
-    return False, "provider-responses-not-ready"
-
-
 def run_standard_cell(
         cell: StandardCell,
         output_root: Path,
-        provider_ready: bool,
-        provider_reason: str,
+        provider_ready: bool = False,
+        provider_reason: str = "llm-disabled-by-policy",
         runner=subprocess.run) -> CellRunResult:
     output_dir = cell_output_root(output_root, cell)
-    if cell.profile.requires_llm and not provider_ready:
-        return CellRunResult(
-            cell, "EVIDENCE_GAP", (provider_reason,), output_dir, None, None, False, {}, {})
     output_dir.mkdir(parents=True, exist_ok=True)
     command = benchmark_command(cell, output_dir)
     try:
@@ -319,8 +276,7 @@ def run_standard_cell(
     decision_log = load_decision_log(output_dir, payload)
     if completed.returncode != 0:
         reasons = (f"benchmark-return-code:{completed.returncode}",)
-        verdict = "FAIL" if not cell.profile.requires_llm else "EVIDENCE_GAP"
-        return CellRunResult(cell, verdict, reasons, output_dir, artifact_path, completed.returncode, False, payload, decision_log)
+        return CellRunResult(cell, "FAIL", reasons, output_dir, artifact_path, completed.returncode, False, payload, decision_log)
     verdict, reasons = classify_artifact(payload)
     return CellRunResult(cell, verdict, reasons, output_dir, artifact_path, completed.returncode, False, payload, decision_log)
 
@@ -501,13 +457,12 @@ def print_plan(cells: Sequence[StandardCell]) -> None:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Run the Dispatch V2 standard comparison benchmark matrix.")
-    parser.add_argument("--matrix", choices=("local-minimum", "ml-only-4case", "llm-gated", "standard-v1"), default="local-minimum")
+    parser.add_argument("--matrix", choices=("local-minimum", "ml-only-4case", "standard-v1"), default="local-minimum")
     parser.add_argument("--profiles", default="", help="Comma-separated logical profiles. Defaults depend on --matrix.")
     parser.add_argument("--scenarios", default="", help="Comma-separated scenario packs. Defaults depend on --matrix.")
     parser.add_argument("--size", default="", help="Comma-separated sizes. Defaults to S, or S,M for standard-v1.")
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--skip-llm-preflight", action="store_true", help="Do not probe /responses before LLM cells.")
     args = parser.parse_args(argv)
 
     try:
@@ -520,11 +475,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     output_root = Path(args.output_root)
-    has_llm_cells = any(cell.profile.requires_llm for cell in cells)
-    provider_ready, provider_reason = (True, "not-required")
-    if has_llm_cells:
-        provider_ready, provider_reason = llm_preflight_ready(output_root, skip=args.skip_llm_preflight)
-        print(f"[LLM PREFLIGHT] ready={str(provider_ready).lower()} reason={provider_reason}")
+    provider_ready, provider_reason = (False, "llm-disabled-by-policy")
 
     results: List[CellRunResult] = []
     for cell in cells:

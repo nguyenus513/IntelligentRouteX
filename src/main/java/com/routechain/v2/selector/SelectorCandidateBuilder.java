@@ -2,6 +2,8 @@ package com.routechain.v2.selector;
 
 import com.routechain.config.RouteChainDispatchV2Properties;
 import com.routechain.v2.bundle.BundleCandidate;
+import com.routechain.v2.constraints.ConstraintCheckResult;
+import com.routechain.v2.constraints.FeasibilityOracle;
 import com.routechain.v2.route.DispatchCandidateContext;
 import com.routechain.v2.route.DispatchRouteCandidateStage;
 import com.routechain.v2.route.DispatchRouteProposalStage;
@@ -11,6 +13,7 @@ import com.routechain.v2.route.RouteProposal;
 import com.routechain.v2.route.RouteProposalSource;
 import com.routechain.v2.route.RouteShapeAnalysis;
 import com.routechain.v2.route.RouteShapeQuality;
+import com.routechain.v2.optimizer.HybridOptimizerObjective;
 import com.routechain.v2.scenario.DispatchScenarioStage;
 import com.routechain.v2.scenario.RobustUtility;
 
@@ -25,9 +28,11 @@ public final class SelectorCandidateBuilder {
     private static final double WEAK_BOUNDARY_SUPPORT_THRESHOLD = 0.60;
 
     private final RouteChainDispatchV2Properties properties;
+    private final FeasibilityOracle feasibilityOracle;
 
     public SelectorCandidateBuilder(RouteChainDispatchV2Properties properties) {
         this.properties = properties;
+        this.feasibilityOracle = new FeasibilityOracle();
     }
 
     public SelectorCandidateBuildResult build(DispatchRouteProposalStage routeProposalStage,
@@ -94,6 +99,15 @@ public final class SelectorCandidateBuilder {
                     proposal.feasible(),
                     buildReasons(proposal, driverCandidate),
                     List.copyOf(proposal.degradeReasons()));
+            ConstraintCheckResult feasibility = feasibilityOracle.check(candidate);
+            if (!feasibility.feasible()) {
+                String reason = feasibility.violations().stream()
+                        .map(com.routechain.v2.constraints.ConstraintViolation::code)
+                        .collect(java.util.stream.Collectors.joining(","));
+                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), reason));
+                degradeReasons.add("selector-feasibility-oracle-rejected");
+                continue;
+            }
             SelectorCandidateEnvelope envelope = new SelectorCandidateEnvelope(candidate, proposal.projectedPickupEtaMinutes());
             SelectorCandidateIdentityKey identityKey = new SelectorCandidateIdentityKey(
                     proposal.bundleId(),
@@ -163,20 +177,22 @@ public final class SelectorCandidateBuilder {
                                   RobustUtility robustUtility,
                                   DriverCandidate driverCandidate,
                                   DispatchCandidateContext context) {
-        double score = (0.60 * robustUtility.robustUtility())
-                + (0.20 * proposal.routeValue())
-                + (0.10 * driverCandidate.rerankScore())
-                + (0.10 * context.bundleScore(proposal.bundleId()));
+        double score = HybridOptimizerObjective.selectorScore(
+                proposal,
+                robustUtility,
+                driverCandidate,
+                context,
+                properties.getSelector().getFallbackPenalty());
         score += bundleSizeLift(proposal);
-        if (proposal.source() == RouteProposalSource.FALLBACK_SIMPLE) {
-            score -= properties.getSelector().getFallbackPenalty();
-        }
-        if (context.bundle(proposal.bundleId()).boundaryCross()
-                && context.acceptedBoundarySupport(proposal.bundleId()) < WEAK_BOUNDARY_SUPPORT_THRESHOLD) {
-            score -= 0.03;
-        }
         RouteShapeAnalysis analysis = RouteShapeQuality.analyze(proposal);
-        score -= analysis.penalty();
+        if (context.bundle(proposal.bundleId()) != null
+                && context.bundle(proposal.bundleId()).boundaryCross()
+                && context.acceptedBoundarySupport(proposal.bundleId()) < WEAK_BOUNDARY_SUPPORT_THRESHOLD) {
+            score -= 0.02;
+        }
+        if (proposal.source() == RouteProposalSource.FALLBACK_SIMPLE && "REJECT_SHAPE".equals(analysis.verdict())) {
+            score -= 0.08;
+        }
         return score;
     }
 
@@ -184,7 +200,10 @@ public final class SelectorCandidateBuilder {
         int bundleSize = proposal.stopOrder().size();
         RouteShapeAnalysis analysis = RouteShapeQuality.analyze(proposal);
         if (bundleSize <= 2) {
-            return proposal.straightnessScore() < 0.55 || analysis.detourRatio() > RouteShapeQuality.DETOUR_WEAK_RATIO ? -0.04 : 0.0;
+            if (bundleSize < 2) {
+                return 0.0;
+            }
+            return proposal.straightnessScore() < 0.55 || analysis.detourRatio() > RouteShapeQuality.DETOUR_WEAK_RATIO ? -0.04 : 0.28;
         }
         double shapeGuard = proposal.straightnessScore() >= 0.62
                 && proposal.turnCount() <= (7 * bundleSize + 6)

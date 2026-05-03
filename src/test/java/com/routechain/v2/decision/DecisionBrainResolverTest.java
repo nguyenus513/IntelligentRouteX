@@ -10,9 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DecisionBrainResolverTest {
 
     @Test
-    void fallsBackToLegacyWhenLlmApiKeyIsMissing() {
+    void defaultModeUsesLegacyWithoutLlm() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
-        properties.getDecision().getLlm().setApiKeyEnv("IRX_TEST_MISSING_KEY");
         DecisionBrainResolver resolver = new DecisionBrainResolver(
                 properties,
                 new LegacyMlBrain(),
@@ -26,14 +25,15 @@ class DecisionBrainResolverTest {
 
         ResolvedDecisionBrain resolved = resolver.resolve();
 
-        assertEquals(DecisionBrainType.LLM, resolved.requestedType());
+        assertEquals(DecisionBrainType.LEGACY, resolved.requestedType());
         assertEquals(DecisionBrainType.LEGACY, resolved.appliedType());
-        assertTrue(resolved.fallbackUsed());
-        assertEquals("llm-api-key-missing", resolved.fallbackReason());
+        assertFalse(resolved.fallbackUsed());
+        assertEquals(DecisionRuntimeMode.LEGACY, resolved.runtimeMode());
+        assertFalse(resolved.shouldEvaluateWithLlm(DecisionStageName.PAIR_BUNDLE));
     }
 
     @Test
-    void llmAuthoritativeModeMarksGuardedPrimaryStagesAsAuthoritative() {
+    void llmAuthoritativeModeIsDisabledByPolicy() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         properties.getDecision().setMode("llm-authoritative");
         properties.getDecision().getLlm().setApiKeyEnv("PATH");
@@ -50,17 +50,22 @@ class DecisionBrainResolverTest {
 
         ResolvedDecisionBrain resolved = resolver.resolve();
 
+        assertEquals(DecisionBrainType.LLM, resolved.requestedType());
+        assertEquals(DecisionBrainType.LEGACY, resolved.appliedType());
         assertEquals(DecisionRuntimeMode.LLM_AUTHORITATIVE, resolved.runtimeMode());
-        assertTrue(resolved.shouldApplyAuthoritatively(DecisionStageName.PAIR_BUNDLE));
-        assertTrue(resolved.shouldApplyAuthoritatively(DecisionStageName.DRIVER));
-        assertTrue(resolved.shouldApplyAuthoritatively(DecisionStageName.ROUTE_CRITIQUE));
-        assertTrue(resolved.shouldApplyAuthoritatively(DecisionStageName.SCENARIO));
-        assertTrue(resolved.shouldApplyAuthoritatively(DecisionStageName.FINAL_SELECTION));
+        assertTrue(resolved.fallbackUsed());
+        assertEquals("llm-disabled-by-policy", resolved.fallbackReason());
+        assertFalse(resolved.shouldEvaluateWithLlm(DecisionStageName.PAIR_BUNDLE));
+        assertFalse(resolved.shouldApplyAuthoritatively(DecisionStageName.PAIR_BUNDLE));
+        assertFalse(resolved.shouldApplyAuthoritatively(DecisionStageName.DRIVER));
+        assertFalse(resolved.shouldApplyAuthoritatively(DecisionStageName.ROUTE_CRITIQUE));
+        assertFalse(resolved.shouldApplyAuthoritatively(DecisionStageName.SCENARIO));
+        assertFalse(resolved.shouldApplyAuthoritatively(DecisionStageName.FINAL_SELECTION));
         assertFalse(resolved.shouldApplyAuthoritatively(DecisionStageName.ROUTE_GENERATION));
     }
 
     @Test
-    void llmShadowModeRunsLlmWithoutApplyingAuthority() {
+    void llmShadowModeIsDisabledByPolicy() {
         RouteChainDispatchV2Properties properties = RouteChainDispatchV2Properties.defaults();
         properties.getDecision().setMode("llm-shadow");
         properties.getDecision().getLlm().setApiKeyEnv("PATH");
@@ -77,9 +82,13 @@ class DecisionBrainResolverTest {
 
         ResolvedDecisionBrain resolved = resolver.resolve();
 
+        assertEquals(DecisionBrainType.LLM, resolved.requestedType());
+        assertEquals(DecisionBrainType.LEGACY, resolved.appliedType());
         assertEquals(DecisionRuntimeMode.LLM_SHADOW, resolved.runtimeMode());
-        assertTrue(resolved.shouldEvaluateWithLlm(DecisionStageName.PAIR_BUNDLE));
-        assertTrue(resolved.shouldEvaluateWithLlm(DecisionStageName.DRIVER));
+        assertTrue(resolved.fallbackUsed());
+        assertEquals("llm-disabled-by-policy", resolved.fallbackReason());
+        assertFalse(resolved.shouldEvaluateWithLlm(DecisionStageName.PAIR_BUNDLE));
+        assertFalse(resolved.shouldEvaluateWithLlm(DecisionStageName.DRIVER));
         assertFalse(resolved.shouldApplyAuthoritatively(DecisionStageName.PAIR_BUNDLE));
         assertFalse(resolved.shouldApplyAuthoritatively(DecisionStageName.FINAL_SELECTION));
     }

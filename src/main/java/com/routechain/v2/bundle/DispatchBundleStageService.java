@@ -188,6 +188,8 @@ public final class DispatchBundleStageService {
                 boundaryExpansions);
         List<BundleSeed> seeds = bundleSeedGenerator.generate(pairClusterStage.microClusters(), context);
         List<BundleCandidate> feasibleCandidates = new ArrayList<>();
+        Map<BundleFamily, Integer> familyGeneratedCounts = new EnumMap<>(BundleFamily.class);
+        Map<String, Integer> rejectedByReasonCounts = new java.util.TreeMap<>();
         MlStageMetadataAccumulator greedRlMetadata = new MlStageMetadataAccumulator("bundle-pool");
         for (BundleSeed seed : seeds) {
             List<BundleCandidate> generatedCandidates = new ArrayList<>(bundleFamilyEnumerator.enumerate(seed, context));
@@ -214,10 +216,17 @@ public final class DispatchBundleStageService {
             } else if (!greedRlResult.degradeReason().isBlank() && !"greedrl-client-disabled".equals(greedRlResult.degradeReason())) {
                 degradeReasons.add(mapGreedRlDegradeReason(greedRlResult.degradeReason()));
             }
-            List<BundleCandidate> familyCandidates = generatedCandidates.stream()
-                    .map(candidate -> bundleValidator.validate(candidate, context))
-                    .filter(BundleCandidate::feasible)
-                    .map(candidate -> bundleScorer.score(candidate, context))
+            generatedCandidates.forEach(candidate -> familyGeneratedCounts.merge(candidate.family(), 1, Integer::sum));
+            List<BundleCandidate> scoredCandidates = new ArrayList<>();
+            for (BundleCandidate generatedCandidate : generatedCandidates) {
+                BundleCandidate validated = bundleValidator.validate(generatedCandidate, context);
+                if (!validated.feasible()) {
+                    validated.degradeReasons().forEach(reason -> rejectedByReasonCounts.merge(reason, 1, Integer::sum));
+                    continue;
+                }
+                scoredCandidates.add(bundleScorer.score(validated, context));
+            }
+            List<BundleCandidate> familyCandidates = scoredCandidates.stream()
                     .sorted(bundleDominancePruner.bundleComparator())
                     .limit(Math.max(1, properties.getBundle().getBeamWidth()))
                     .toList();
@@ -228,6 +237,8 @@ public final class DispatchBundleStageService {
         feasibleCandidates.forEach(candidate -> familyCounts.merge(candidate.family(), 1, Integer::sum));
         feasibleCandidates.forEach(candidate -> sourceCounts.merge(candidate.proposalSource(), 1, Integer::sum));
         List<BundleCandidate> retained = bundleDominancePruner.prune(feasibleCandidates);
+        Map<BundleFamily, Integer> familyRetainedCounts = new EnumMap<>(BundleFamily.class);
+        retained.forEach(candidate -> familyRetainedCounts.merge(candidate.family(), 1, Integer::sum));
         long bundlePoolElapsedMs = elapsedMs(bundlePoolStartedAt);
         BundlePoolSummary bundlePoolSummary = new BundlePoolSummary(
                 "bundle-pool-summary/v1",
@@ -236,7 +247,13 @@ public final class DispatchBundleStageService {
                 familyCounts,
                 sourceCounts,
                 retained.stream().mapToInt(candidate -> candidate.orderIds().size()).max().orElse(0),
-                List.copyOf(degradeReasons));
+                List.copyOf(degradeReasons),
+                familyGeneratedCounts,
+                familyRetainedCounts,
+                rejectedByReasonCounts,
+                diversityRetainedCount(retained),
+                familyRetainedCounts.getOrDefault(BundleFamily.LATE_RISK_RESCUE, 0),
+                familyRetainedCounts.getOrDefault(BundleFamily.ACTIVE_ROUTE_ADDON, 0));
         return new DispatchBundleStage(
                 "dispatch-bundle-stage/v1",
                 boundaryExpansions,
@@ -249,6 +266,14 @@ public final class DispatchBundleStageService {
                         DispatchStageLatency.measured("bundle-pool", bundlePoolElapsedMs, false)),
                 greedRlMetadata.build().stream().toList(),
                 List.copyOf(degradeReasons));
+    }
+
+
+    private int diversityRetainedCount(List<BundleCandidate> retained) {
+        java.util.Set<BundleFamily> families = retained.stream()
+                .map(BundleCandidate::family)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        return families.size();
     }
 
     private GreedRlBundleResult proposeGreedRlBundles(String traceId, BundleSeed seed) {

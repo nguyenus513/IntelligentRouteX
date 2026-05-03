@@ -3,14 +3,18 @@ package com.routechain.v2.selector;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Function;
+import com.routechain.v2.objective.UnifiedObjective;
 
 final class SelectorCandidateRanking {
+    private static final UnifiedObjective OBJECTIVE = new UnifiedObjective();
+
     private SelectorCandidateRanking() {
     }
 
     static Comparator<SelectorCandidateEnvelope> comparator() {
         return Comparator
-                .comparingDouble((SelectorCandidateEnvelope envelope) -> envelope.candidate().selectionScore()).reversed()
+                .comparingDouble((SelectorCandidateEnvelope envelope) -> objectiveUtility(envelope.candidate())).reversed()
+                .thenComparing(Comparator.comparingDouble((SelectorCandidateEnvelope envelope) -> envelope.candidate().selectionScore()).reversed())
                 .thenComparing(Comparator.comparingDouble((SelectorCandidateEnvelope envelope) -> envelope.candidate().robustUtility()).reversed())
                 .thenComparing(Comparator.comparingDouble((SelectorCandidateEnvelope envelope) -> envelope.candidate().routeValue()).reversed())
                 .thenComparingDouble(SelectorCandidateEnvelope::projectedPickupEtaMinutes)
@@ -35,7 +39,11 @@ final class SelectorCandidateRanking {
     static double objectiveValue(List<SelectorCandidateEnvelope> rankedSelection) {
         return rankedSelection.stream()
                 .map(SelectorCandidateEnvelope::candidate)
-                .mapToDouble(SelectorCandidate::selectionScore)
+                .mapToDouble(SelectorCandidateRanking::objectiveUtility)
                 .sum();
+    }
+
+    static double objectiveUtility(SelectorCandidate candidate) {
+        return OBJECTIVE.scoreSelectorCandidate(candidate).totalUtility();
     }
 }

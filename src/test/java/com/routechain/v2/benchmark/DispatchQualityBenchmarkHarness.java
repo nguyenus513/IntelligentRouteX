@@ -3,6 +3,8 @@ package com.routechain.v2.benchmark;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.routechain.config.RouteChainDispatchV2Properties;
+import com.routechain.domain.GeoPoint;
+import com.routechain.domain.Order;
 import com.routechain.domain.WeatherProfile;
 import com.routechain.v2.DispatchV2Request;
 import com.routechain.v2.DispatchV2Result;
@@ -109,6 +111,16 @@ public final class DispatchQualityBenchmarkHarness {
                     Map.of("deferred", "true"),
                     emptyMetrics,
                     emptyMetrics,
+                    com.routechain.v2.bundle.BundlePoolSummary.empty(),
+                    com.routechain.v2.bundle.BundlePoolSummary.empty(),
+                    Map.of(),
+                    Map.of(),
+                    com.routechain.v2.repair.RepairTelemetry.empty(),
+                    com.routechain.v2.repair.RepairTelemetry.empty(),
+                    Map.of(),
+                    Map.of(),
+                    List.of(),
+                    List.of(),
                     List.of("deferred-on-current-machine"));
         }
 
@@ -127,7 +139,104 @@ public final class DispatchQualityBenchmarkHarness {
                 controlConfig(request.component(), false),
                 controlMetrics,
                 variantMetrics,
+                controlResult.bundlePoolSummary(),
+                variantResult.bundlePoolSummary(),
+                selectorSourceSummary(controlResult),
+                selectorSourceSummary(variantResult),
+                controlResult.activeRepairTelemetry(),
+                variantResult.activeRepairTelemetry(),
+                runtimeTelemetry(controlResult),
+                runtimeTelemetry(variantResult),
+                controlResult.mlStageMetadata(),
+                variantResult.mlStageMetadata(),
                 deltaSummary(controlMetrics, variantMetrics));
+    }
+
+    private Map<String, Object> selectorSourceSummary(DispatchV2Result result) {
+        java.util.Set<String> selectedProposalIds = result.globalSelectionResult().selectedProposals().stream()
+                .map(com.routechain.v2.selector.SelectedProposal::proposalId)
+                .collect(java.util.stream.Collectors.toSet());
+        List<com.routechain.v2.selector.SelectorCandidate> greedRlCandidates = result.selectorCandidates().stream()
+                .filter(candidate -> candidate.bundleId() != null && candidate.bundleId().startsWith("GREEDRL|"))
+                .toList();
+        List<com.routechain.v2.selector.SelectorCandidate> mlRouteCandidates = result.selectorCandidates().stream()
+                .filter(candidate -> candidate.source() == com.routechain.v2.route.RouteProposalSource.ML_PROPOSAL
+                        || candidate.source() == com.routechain.v2.route.RouteProposalSource.ML_REFINED)
+                .toList();
+        List<Map<String, Object>> topGreedRlCandidates = greedRlCandidates.stream()
+                .sorted(java.util.Comparator.comparingDouble(com.routechain.v2.selector.SelectorCandidate::selectionScore).reversed())
+                .limit(5)
+                .map(candidate -> candidateTrace(candidate, selectedProposalIds))
+                .toList();
+        List<Map<String, Object>> topMlRouteCandidates = mlRouteCandidates.stream()
+                .sorted(java.util.Comparator.comparingDouble(com.routechain.v2.selector.SelectorCandidate::selectionScore).reversed())
+                .limit(5)
+                .map(candidate -> candidateTrace(candidate, selectedProposalIds))
+                .toList();
+        double bestGreedRlScore = greedRlCandidates.stream()
+                .mapToDouble(com.routechain.v2.selector.SelectorCandidate::selectionScore)
+                .max()
+                .orElse(0.0);
+        double bestMlRouteScore = mlRouteCandidates.stream()
+                .mapToDouble(com.routechain.v2.selector.SelectorCandidate::selectionScore)
+                .max()
+                .orElse(0.0);
+        double bestSelectedScore = result.selectorCandidates().stream()
+                .filter(candidate -> selectedProposalIds.contains(candidate.proposalId()))
+                .mapToDouble(com.routechain.v2.selector.SelectorCandidate::selectionScore)
+                .max()
+                .orElse(0.0);
+        Map<String, Object> summary = new java.util.LinkedHashMap<>();
+        summary.put("selectorCandidateCount", result.selectorCandidates().size());
+        summary.put("greedRlSelectorCandidateCount", greedRlCandidates.size());
+        summary.put("selectedGreedRlCandidateCount", greedRlCandidates.stream().filter(candidate -> selectedProposalIds.contains(candidate.proposalId())).count());
+        summary.put("bestGreedRlSelectionScore", bestGreedRlScore);
+        summary.put("mlRouteSelectorCandidateCount", mlRouteCandidates.size());
+        summary.put("selectedMlRouteCandidateCount", mlRouteCandidates.stream().filter(candidate -> selectedProposalIds.contains(candidate.proposalId())).count());
+        summary.put("bestMlRouteSelectionScore", bestMlRouteScore);
+        summary.put("bestSelectedSelectionScore", bestSelectedScore);
+        summary.put("topGreedRlCandidates", topGreedRlCandidates);
+        summary.put("topMlRouteCandidates", topMlRouteCandidates);
+        summary.put("routeProposalSourceCounts", result.routeProposalSummary().sourceCounts());
+        return summary;
+    }
+
+    private Map<String, Object> runtimeTelemetry(DispatchV2Result result) {
+        Map<String, Long> stageRuntimeMs = result.stageLatencies().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.routechain.v2.DispatchStageLatency::stageName,
+                        com.routechain.v2.DispatchStageLatency::elapsedMs,
+                        Long::sum,
+                        java.util.LinkedHashMap::new));
+        Map<String, Object> telemetry = new java.util.LinkedHashMap<>();
+        telemetry.put("totalDispatchLatencyMs", result.latencyBudgetSummary().totalDispatchLatencyMs());
+        telemetry.put("totalDispatchBudgetMs", result.latencyBudgetSummary().totalDispatchBudgetMs());
+        telemetry.put("totalBudgetBreached", result.latencyBudgetSummary().totalBudgetBreached());
+        telemetry.put("breachedStageNames", result.latencyBudgetSummary().breachedStageNames());
+        telemetry.put("stageRuntimeMs", stageRuntimeMs);
+        telemetry.put("routeProposalBudget", routeProposalBudgetMetrics(result));
+        telemetry.put("selectorTelemetry", DispatchSelectorTelemetryMetrics.from(result.globalSelectorSummary()));
+        telemetry.put("activeRepair", DispatchRepairTelemetryMetrics.from(result.activeRepairTelemetry()));
+        telemetry.put("runtimePolicyApplied", result.routeProposalSummary().budgetMetrics().budgetEnabled()
+                && result.routeProposalSummary().budgetMetrics().budgetMaxTotalRouteProposals() <= 160
+                && DispatchSelectorTelemetryMetrics.from(result.globalSelectorSummary()).selectorMaxPoolSize() <= 96);
+        telemetry.put("degradeReasons", result.degradeReasons());
+        return telemetry;
+    }
+
+    private Map<String, Object> candidateTrace(com.routechain.v2.selector.SelectorCandidate candidate,
+                                               java.util.Set<String> selectedProposalIds) {
+        return Map.<String, Object>of(
+                "proposalId", candidate.proposalId(),
+                "bundleId", candidate.bundleId(),
+                "source", candidate.source().name(),
+                "orderIds", candidate.orderIds(),
+                "selectionScore", candidate.selectionScore(),
+                "robustUtility", candidate.robustUtility(),
+                "routeValue", candidate.routeValue(),
+                "feasible", candidate.feasible(),
+                "selected", selectedProposalIds.contains(candidate.proposalId()),
+                "degradeReasons", candidate.degradeReasons());
     }
 
     private DispatchQualityBenchmarkResult runScenario(BenchmarkRequest request,
@@ -148,9 +257,6 @@ public final class DispatchQualityBenchmarkHarness {
             List<String> notes = new ArrayList<>();
             if (!request.authorityRun() && request.executionMode() == ExecutionMode.LOCAL_REAL) {
                 notes.add("non-authoritative-local-real-run");
-            }
-            if (request.decisionMode() == DispatchBenchmarkDecisionMode.LLM_AUTHORITATIVE) {
-                notes.add("authoritative-stage-intent-from-benchmark-mode");
             }
             if (execution.attachDiagnostics().mlAttachStatus() == DispatchQualityMlAttachStatus.ML_ATTACH_FAIL) {
                 notes.add("ML_ATTACH_FAIL");
@@ -197,7 +303,11 @@ public final class DispatchQualityBenchmarkHarness {
                     false,
                     metricsFrom(result),
                     intelligenceMetrics(result, feedbackSummary, request.scenarioPack()),
-                    feedbackSummary.llmShadowAgreement(),
+                    feedbackSummary.decisionAgreement(),
+                    DispatchBundleDiversityMetrics.from(result.bundlePoolSummary()),
+                    DispatchSelectorTelemetryMetrics.from(result.globalSelectorSummary()),
+                    DispatchObjectiveTelemetryMetrics.from(result.selectorCandidates(), result.globalSelectionResult()),
+                    DispatchRepairTelemetryMetrics.from(result.activeRepairTelemetry()),
                     routeVectorMetrics(result),
                     routeProposalBudgetMetrics(result),
                     feedbackSummary.tokenUsageSummary(),
@@ -334,7 +444,11 @@ public final class DispatchQualityBenchmarkHarness {
                 false,
                 emptyMetrics(),
                 DispatchIntelligenceMetrics.empty(),
-                DispatchLlmShadowAgreementSummary.empty(),
+                DispatchDecisionAgreementSummary.empty(),
+                DispatchBundleDiversityMetrics.empty(),
+                DispatchSelectorTelemetryMetrics.empty(),
+                DispatchObjectiveTelemetryMetrics.empty(),
+                DispatchRepairTelemetryMetrics.empty(),
                 DispatchRouteVectorMetrics.empty(),
                 DispatchRouteProposalBudgetMetrics.empty(),
                 DispatchTokenUsageSummary.empty(),
@@ -389,7 +503,11 @@ public final class DispatchQualityBenchmarkHarness {
                 true,
                 emptyMetrics(),
                 DispatchIntelligenceMetrics.empty(),
-                DispatchLlmShadowAgreementSummary.empty(),
+                DispatchDecisionAgreementSummary.empty(),
+                DispatchBundleDiversityMetrics.empty(),
+                DispatchSelectorTelemetryMetrics.empty(),
+                DispatchObjectiveTelemetryMetrics.empty(),
+                DispatchRepairTelemetryMetrics.empty(),
                 DispatchRouteVectorMetrics.empty(),
                 DispatchRouteProposalBudgetMetrics.empty(),
                 DispatchTokenUsageSummary.empty(),
@@ -453,6 +571,10 @@ public final class DispatchQualityBenchmarkHarness {
             properties.getFeedback().setBaseDir(feedbackDirectory(request, true).toString());
             properties.setHotStartEnabled(true);
             properties.getWarmHotStart().setLoadLatestSnapshotOnBoot(true);
+        } else if (request.component() == AblationComponent.RUNTIME_POLICY) {
+            applyRuntimePolicy(properties);
+        } else if (request.component() == AblationComponent.SELECTOR_GLOBAL) {
+            applySelectorGlobalPolicy(properties);
         }
 
         DispatchV2Request requestPayload = scenario.request(
@@ -461,6 +583,9 @@ public final class DispatchQualityBenchmarkHarness {
                 DispatchPerfBenchmarkHarness.BaselineId.C);
         if (request.component() == AblationComponent.HOT_START) {
             return executeHotStartAblation(properties, dependencies, requestPayload, control);
+        }
+        if (request.component() == AblationComponent.ACTIVE_REPAIR) {
+            return executeActiveRepairAblation(properties, dependencies, requestPayload);
         }
         TestDispatchV2Factory.TestDispatchRuntimeHarness harness = TestDispatchV2Factory.harness(
                 properties,
@@ -471,6 +596,50 @@ public final class DispatchQualityBenchmarkHarness {
                 dependencies.openMeteoClient(),
                 dependencies.tomTomTrafficRefineClient());
         return harness.core().dispatch(requestPayload);
+    }
+
+    private DispatchV2Result executeActiveRepairAblation(RouteChainDispatchV2Properties properties,
+                                                         ScenarioDependencies dependencies,
+                                                         DispatchV2Request requestPayload) {
+        TestDispatchV2Factory.TestDispatchRuntimeHarness harness = TestDispatchV2Factory.harness(
+                properties,
+                dependencies.tabularScoringClient(),
+                dependencies.routeFinderClient(),
+                dependencies.greedRlClient(),
+                dependencies.forecastClient(),
+                dependencies.openMeteoClient(),
+                dependencies.tomTomTrafficRefineClient());
+        harness.core().dispatch(DispatchHotStartCertificationHarness.copyWithTraceId(requestPayload, requestPayload.traceId() + "-active-seed"));
+        return harness.core().dispatch(activeRepairFollowUpRequest(requestPayload));
+    }
+
+    private DispatchV2Request activeRepairFollowUpRequest(DispatchV2Request seedRequest) {
+        Instant decisionTime = seedRequest.decisionTime().plusSeconds(120);
+        List<Order> repairOrders = List.of(
+                new Order(
+                        "active-repair-order-1",
+                        new GeoPoint(10.8010, 106.7000),
+                        new GeoPoint(10.8060, 106.6900),
+                        decisionTime,
+                        decisionTime,
+                        25,
+                        true),
+                new Order(
+                        "active-repair-order-2",
+                        new GeoPoint(10.8018, 106.7005),
+                        new GeoPoint(10.7960, 106.7105),
+                        decisionTime,
+                        decisionTime.plusSeconds(420),
+                        25,
+                        true));
+        return new DispatchV2Request(
+                seedRequest.schemaVersion(),
+                seedRequest.traceId() + "-active-repair",
+                repairOrders,
+                seedRequest.availableDrivers(),
+                seedRequest.regions(),
+                seedRequest.weatherProfile(),
+                decisionTime);
     }
 
     private DispatchV2Result executeHotStartAblation(RouteChainDispatchV2Properties properties,
@@ -552,7 +721,47 @@ public final class DispatchQualityBenchmarkHarness {
                 properties.getFeedback().setStorageMode(FeedbackStorageMode.IN_MEMORY);
                 yield dependencies;
             }
+            case ACTIVE_REPAIR -> {
+                properties.getSelector().setActiveRouteRepairEnabled(false);
+                yield dependencies;
+            }
+            case RUNTIME_POLICY -> {
+                properties.getSelector().setRuntimePolicyEnabled(false);
+                yield dependencies;
+            }
+            case SELECTOR_GLOBAL -> {
+                properties.getSelector().setGlobalSelectorEnabled(false);
+                properties.setSelectorOrtoolsEnabled(false);
+                yield dependencies;
+            }
         };
+    }
+
+    private void applyRuntimePolicy(RouteChainDispatchV2Properties properties) {
+        properties.getSelector().setRuntimePolicyEnabled(true);
+        properties.setSelectorOrtoolsEnabled(false);
+        properties.getSelector().setMaxPoolSize(96);
+        properties.getCandidate().getRouteProposalBudget().setEnabled(true);
+        properties.getCandidate().getRouteProposalBudget().setFullAdaptiveSMaxTotal(96);
+        properties.getCandidate().getRouteProposalBudget().setFullAdaptiveMMaxTotal(160);
+        properties.getCandidate().getRouteProposalBudget().setMaxDriversPerBundle(3);
+        properties.getCandidate().getRouteProposalBudget().setMaxAnchorsPerBundle(2);
+        properties.getCandidate().getRouteProposalBudget().setMaxAlternativesPerTuple(2);
+        properties.getCompute().getAdaptive().setRoutefinderMaxTuplesPerDispatch(2);
+    }
+
+    private void applySelectorGlobalPolicy(RouteChainDispatchV2Properties properties) {
+        properties.getSelector().setGlobalSelectorEnabled(true);
+        properties.getSelector().setRuntimePolicyEnabled(true);
+        properties.getSelector().setMaxPoolSize(128);
+        properties.setSelectorOrtoolsEnabled(false);
+        properties.getCandidate().getRouteProposalBudget().setEnabled(true);
+        properties.getCandidate().getRouteProposalBudget().setFullAdaptiveSMaxTotal(128);
+        properties.getCandidate().getRouteProposalBudget().setFullAdaptiveMMaxTotal(192);
+        properties.getCandidate().getRouteProposalBudget().setMaxDriversPerBundle(4);
+        properties.getCandidate().getRouteProposalBudget().setMaxAnchorsPerBundle(3);
+        properties.getCandidate().getRouteProposalBudget().setMaxAlternativesPerTuple(2);
+        properties.getCompute().getAdaptive().setRoutefinderMaxTuplesPerDispatch(3);
     }
 
     private Map<String, String> controlConfig(AblationComponent component, boolean control) {
@@ -565,6 +774,9 @@ public final class DispatchQualityBenchmarkHarness {
             case OPEN_METEO -> Map.of("open-meteo", control ? "on" : "off");
             case ORTOOLS -> Map.of("selector-mode", control ? "ortools" : "degraded-greedy");
             case HOT_START -> Map.of("hot-start", control ? "on" : "off");
+            case ACTIVE_REPAIR -> Map.of("active-repair", control ? "on" : "off");
+            case RUNTIME_POLICY -> Map.of("runtime-policy", control ? "on" : "off");
+            case SELECTOR_GLOBAL -> Map.of("selector-global", control ? "on" : "off");
         };
     }
 
@@ -1185,9 +1397,9 @@ public final class DispatchQualityBenchmarkHarness {
         }
     }
 
-    private DispatchLlmShadowAgreementSummary agreementSummary(List<JsonNode> joins) {
+    private DispatchDecisionAgreementSummary agreementSummary(List<JsonNode> joins) {
         if (joins.isEmpty()) {
-            return DispatchLlmShadowAgreementSummary.empty();
+            return DispatchDecisionAgreementSummary.empty();
         }
         Map<String, DispatchStageAgreementAccumulator> byStage = new LinkedHashMap<>();
         for (JsonNode join : joins) {
@@ -1215,8 +1427,8 @@ public final class DispatchQualityBenchmarkHarness {
         int comparedStages = stageAgreements.stream().mapToInt(DispatchDecisionStageAgreement::comparisonCount).sum();
         int exactMatches = stageAgreements.stream().mapToInt(DispatchDecisionStageAgreement::exactMatchCount).sum();
         double overallRate = comparedStages == 0 ? 0.0 : exactMatches / (double) comparedStages;
-        return new DispatchLlmShadowAgreementSummary(
-                "dispatch-llm-shadow-agreement-summary/v1",
+        return new DispatchDecisionAgreementSummary(
+                "dispatch-decision-agreement-summary/v1",
                 comparedStages,
                 exactMatches,
                 overallRate,
@@ -1312,9 +1524,6 @@ public final class DispatchQualityBenchmarkHarness {
         boolean authoritativeCandidate = authoritativeStages.contains(stageName)
                 || request.decisionMode().authoritativeStages().contains(stageName);
         List<String> blockerReasons = new ArrayList<>();
-        if (!authoritativeCandidate && request.decisionMode() == DispatchBenchmarkDecisionMode.LLM_AUTHORITATIVE) {
-            blockerReasons.add("not-in-authoritative-stage-set");
-        }
         if (fallbackCount > 0) {
             blockerReasons.add("fallback-count:" + fallbackCount);
         }
@@ -1323,9 +1532,6 @@ public final class DispatchQualityBenchmarkHarness {
         }
         if (requiresRouteVectorCoverage(stageName) && routeCoverage < 1.0) {
             blockerReasons.add("route-vector-coverage-below-1.0");
-        }
-        if (request.decisionMode() != DispatchBenchmarkDecisionMode.LEGACY && !tokenUsagePresent) {
-            blockerReasons.add("token-usage-missing");
         }
         if (diagnostics.mlAttachStatus() != DispatchQualityMlAttachStatus.ATTACHED) {
             blockerReasons.add("ml-attach-" + diagnostics.mlAttachStatus().name().toLowerCase(Locale.ROOT));
@@ -1540,7 +1746,7 @@ public final class DispatchQualityBenchmarkHarness {
         int tokenTotal = (int) feedbackSummary.tokenUsageSummary().totalTokens();
         int goodDecisionCount = Math.max(1, result.dispatchExecutionSummary().executedAssignmentCount());
         double contextEfficiency = goodDecisionCount / (double) Math.max(1, tokenTotal);
-        double stageCoherence = feedbackSummary.llmShadowAgreement().overallExactMatchRate();
+        double stageCoherence = feedbackSummary.decisionAgreement().overallExactMatchRate();
         if (stageCoherence == 0.0 && !result.decisionStages().isEmpty()) {
             stageCoherence = 1.0 - routeFallbackRate(result);
         }
@@ -1563,10 +1769,6 @@ public final class DispatchQualityBenchmarkHarness {
     private String runtimeClassification(DispatchBenchmarkDecisionMode decisionMode, List<String> authoritativeStages) {
         return switch (decisionMode) {
             case LEGACY -> "legacy-baseline";
-            case LLM_SHADOW -> "llm-shadow";
-            case LLM_AUTHORITATIVE -> authoritativeStages.contains(DecisionStageName.ROUTE_GENERATION.wireName())
-                    ? "llm-full-primary"
-                    : "llm-guarded-primary";
         };
     }
 
@@ -2187,7 +2389,10 @@ public final class DispatchQualityBenchmarkHarness {
         TOMTOM("tomtom"),
         OPEN_METEO("open-meteo"),
         ORTOOLS("ortools"),
-        HOT_START("hot-start");
+        HOT_START("hot-start"),
+        ACTIVE_REPAIR("active-repair"),
+        RUNTIME_POLICY("runtime-policy"),
+        SELECTOR_GLOBAL("selector-global");
 
         private final String wireName;
 

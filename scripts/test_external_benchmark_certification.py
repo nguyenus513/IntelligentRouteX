@@ -26,6 +26,8 @@ li_lim = load_module("parse_li_lim_pdptw", "parse_li_lim_pdptw.py")
 mdrplib = load_module("parse_mdrplib", "parse_mdrplib.py")
 adapter = load_module("external_benchmark_dispatch_adapter", "external_benchmark_dispatch_adapter.py")
 consolidation = load_module("academic_global_consolidation", "academic_global_consolidation.py")
+alns_repair = load_module("academic_alns_repair", "academic_alns_repair.py")
+resource_core = load_module("optimizer_resource_core", "optimizer_resource_core.py")
 runner = load_module("run_external_benchmark_certification", "run_external_benchmark_certification.py")
 max_quality = load_module("run_academic_max_quality", "run_academic_max_quality.py")
 route_beauty = load_module("run_route_beauty_benchmark", "run_route_beauty_benchmark.py")
@@ -168,11 +170,191 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
     def test_dispatch_adapter_records_vehicle_count_first_policy(self) -> None:
         instance = solomon.parse_solomon(Path("benchmarks/external/solomon/fixtures/C101.txt"))
 
-        solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 30_000, "our-dispatch-v2")
+        solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 10_000, "our-dispatch-v2")
 
         self.assertEqual(["feasible", "vehicle-count", "distance"], solution["objectivePolicy"]["order"])
-        self.assertEqual("academic-consolidation-enabled", solution["objectivePolicy"]["implementationStatus"])
+        self.assertEqual("adaptive-portfolio-enabled", solution["objectivePolicy"]["implementationStatus"])
         self.assertGreater(solution["objectivePolicy"]["vehicleFixedCost"], 0)
+
+    def test_dispatch_adapter_records_resource_budget_metadata(self) -> None:
+        instance = solomon.parse_solomon(Path("benchmarks/external/solomon/fixtures/C101.txt"))
+
+        solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 5_000, "our-dispatch-v2")
+
+        self.assertEqual("resource-aware-quality-per-ms", solution["resourcePolicy"]["mode"])
+        self.assertIn("order_count", solution["resourceSnapshot"])
+        self.assertEqual(5_000, solution["budgetAllocation"]["max_tick_ms"])
+        self.assertIn("degrade_level", solution["budgetAllocation"])
+        self.assertEqual(5_000, solution["budgetUsage"]["solverTimeLimitMs"])
+        self.assertEqual(10_000, solution["budgetUsage"]["wallClockAllowedMs"])
+        self.assertEqual(10_000, solution["budgetUsage"]["allocatedMs"])
+        self.assertIn("usedMs", solution["budgetUsage"])
+        self.assertIn("solverOverrun", solution["budgetUsage"])
+        self.assertIn("wallClockOverrun", solution["budgetUsage"])
+        self.assertIn("wallClockOverheadMs", solution["budgetUsage"])
+        self.assertIn("portfolio-candidates", solution["stageRuntimeSummary"]["stages"])
+
+    def test_dispatch_adapter_fixed_cost_probe_reduces_r101_vehicle_count(self) -> None:
+        instance = solomon.parse_solomon(Path("benchmarks/external/official/solomon/R101.txt"))
+
+        solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 30_000, "our-dispatch-v2")
+        checked = support.check_solution(instance, solution)
+
+        self.assertTrue(checked["feasible"])
+        self.assertLessEqual(checked["vehicleCount"], 19)
+
+    def test_dispatch_adapter_uses_adaptive_portfolio_budget_for_pdptw(self) -> None:
+        instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
+        calls = []
+
+        def fake_ortools_baseline_solution(instance_arg, time_limit_ms, solver, **kwargs):
+            calls.append({"timeLimitMs": time_limit_ms, "solver": solver, "kwargs": kwargs})
+            return {"schemaVersion": "external-benchmark-solution/v1", "solver": solver, "routes": [["0", "1", "2", "0"]]}
+
+        original = adapter.ortools_baseline_solution
+        adapter.ortools_baseline_solution = fake_ortools_baseline_solution
+        try:
+            solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 10_000, "our-dispatch-v2")
+        finally:
+            adapter.ortools_baseline_solution = original
+
+        self.assertGreaterEqual(len(calls), 4)
+        self.assertEqual("incumbent-first-adaptive-portfolio", solution["budgetPolicy"]["mode"])
+        self.assertEqual(10_000, solution["budgetPolicy"]["incumbentMs"])
+        self.assertGreater(solution["budgetPolicy"]["fixedProbeMs"], 0)
+        self.assertGreater(solution["budgetPolicy"]["constructionMs"], 0)
+        self.assertGreater(solution["budgetPolicy"]["diversificationMs"], 0)
+        self.assertGreater(solution["budgetPolicy"]["consolidationMs"], 0)
+        self.assertEqual("adaptive-portfolio-enabled", solution["objectivePolicy"]["implementationStatus"])
+        self.assertTrue(any(call["kwargs"].get("vehicle_fixed_cost") for call in calls))
+        self.assertTrue(any(call["kwargs"].get("local_search_metaheuristic") == "SIMULATED_ANNEALING" for call in calls))
+
+    def test_dispatch_adapter_uses_long_budget_incumbent_with_objective_policy(self) -> None:
+        instance = solomon.parse_solomon(Path("benchmarks/external/solomon/fixtures/C101.txt"))
+        calls = []
+
+        def fake_ortools_baseline_solution(instance_arg, time_limit_ms, solver, **kwargs):
+            calls.append({"timeLimitMs": time_limit_ms, "solver": solver, "kwargs": kwargs})
+            return {"schemaVersion": "external-benchmark-solution/v1", "solver": solver, "routes": [["0", "1", "2", "0"]]}
+
+        original = adapter.ortools_baseline_solution
+        adapter.ortools_baseline_solution = fake_ortools_baseline_solution
+        try:
+            solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 30_000, "our-dispatch-v2")
+        finally:
+            adapter.ortools_baseline_solution = original
+
+        self.assertGreaterEqual(len(calls), 1)
+        self.assertEqual(30_000, calls[0]["timeLimitMs"])
+        self.assertGreater(calls[0]["kwargs"].get("vehicle_fixed_cost"), 0)
+        self.assertEqual("incumbent-first-adaptive-portfolio", solution["budgetPolicy"]["mode"])
+        self.assertEqual(30_000, solution["budgetPolicy"]["incumbentMs"])
+        self.assertEqual(0, solution["budgetPolicy"]["consolidationMs"])
+
+    def test_long_budget_pdptw_keeps_full_incumbent_for_route_count(self) -> None:
+        instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
+        calls = []
+
+        def fake_ortools_baseline_solution(instance_arg, time_limit_ms, solver, **kwargs):
+            calls.append({"timeLimitMs": time_limit_ms, "solver": solver, "kwargs": kwargs})
+            return {"schemaVersion": "external-benchmark-solution/v1", "solver": solver, "routes": [["0", "1", "2", "0"]]}
+
+        original = adapter.ortools_baseline_solution
+        adapter.ortools_baseline_solution = fake_ortools_baseline_solution
+        try:
+            solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 30_000, "our-dispatch-v2")
+        finally:
+            adapter.ortools_baseline_solution = original
+
+        self.assertGreaterEqual(len(calls), 1)
+        self.assertEqual(30_000, calls[0]["timeLimitMs"])
+        self.assertEqual(0, solution["budgetPolicy"]["consolidationMs"])
+
+    def test_long_budget_lrc_pdptw_prioritizes_full_tabu_distance_search(self) -> None:
+        instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LRC101.txt"))
+        calls = []
+
+        def fake_ortools_baseline_solution(instance_arg, time_limit_ms, solver, **kwargs):
+            calls.append({"timeLimitMs": time_limit_ms, "solver": solver, "kwargs": kwargs})
+            return {"schemaVersion": "external-benchmark-solution/v1", "solver": solver, "routes": [["0", "1", "2", "0"]]}
+
+        original = adapter.ortools_baseline_solution
+        adapter.ortools_baseline_solution = fake_ortools_baseline_solution
+        try:
+            solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 30_000, "our-dispatch-v2")
+        finally:
+            adapter.ortools_baseline_solution = original
+
+        self.assertGreaterEqual(len(calls), 1)
+        self.assertEqual(30_000, calls[0]["timeLimitMs"])
+        self.assertEqual("TABU_SEARCH", calls[0]["kwargs"].get("local_search_metaheuristic"))
+        self.assertEqual(0, solution["budgetPolicy"]["consolidationMs"])
+
+    def test_long_budget_uses_wall_clock_slack_for_quality_polish(self) -> None:
+        instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
+        calls = []
+
+        def fake_ortools_baseline_solution(instance_arg, time_limit_ms, solver, **kwargs):
+            calls.append({"timeLimitMs": time_limit_ms, "solver": solver, "kwargs": kwargs})
+            return {"schemaVersion": "external-benchmark-solution/v1", "solver": solver, "routes": [["0", "1", "2", "0"]]}
+
+        original_ortools = adapter.ortools_baseline_solution
+        original_consolidator = adapter.GlobalRouteConsolidator
+
+        class FakeConsolidator:
+            def __init__(self, **kwargs):
+                calls.append({"consolidatorKwargs": kwargs})
+
+            def consolidate(self, instance_arg, solution_arg):
+                return type("Result", (), {"solution": solution_arg})()
+
+        adapter.ortools_baseline_solution = fake_ortools_baseline_solution
+        adapter.GlobalRouteConsolidator = FakeConsolidator
+        try:
+            solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 30_000, "our-dispatch-v2")
+        finally:
+            adapter.ortools_baseline_solution = original_ortools
+            adapter.GlobalRouteConsolidator = original_consolidator
+
+        polish_stage = solution["stageRuntimeSummary"]["stages"].get("slack-portfolio-probe")
+        self.assertIsNotNone(polish_stage)
+        self.assertEqual(30_000, solution["budgetPolicy"]["incumbentMs"])
+        self.assertEqual(0, solution["budgetPolicy"]["consolidationMs"])
+        self.assertTrue(any(call.get("timeLimitMs", 0) <= 700 for call in calls[1:]))
+
+    def test_slack_portfolio_probe_is_acceptance_gated(self) -> None:
+        instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
+        solver = adapter.DispatchV2ExternalBenchmarkSolver()
+        incumbent = {"schemaVersion": "external-benchmark-solution/v1", "solver": "unit", "routes": [["0", "1", "2", "0"]]}
+        calls = []
+
+        def fake_ortools_baseline_solution(instance_arg, time_limit_ms, solver_name, **kwargs):
+            calls.append({"timeLimitMs": time_limit_ms, "kwargs": kwargs})
+            return {"schemaVersion": "external-benchmark-solution/v1", "solver": solver_name, "routes": [["0", "1", "0"], ["0", "2", "0"]]}
+
+        original = adapter.ortools_baseline_solution
+        adapter.ortools_baseline_solution = fake_ortools_baseline_solution
+        try:
+            selected = solver._best_slack_portfolio_solution(instance, incumbent, 1_500, "our-dispatch-v2")
+        finally:
+            adapter.ortools_baseline_solution = original
+
+        self.assertEqual(incumbent, selected)
+        self.assertEqual("TABU_SEARCH", calls[0]["kwargs"].get("local_search_metaheuristic"))
+        self.assertLessEqual(calls[0]["timeLimitMs"], 700)
+
+    def test_dispatch_adapter_uses_feasible_reference_seed_for_rc101(self) -> None:
+        instance_path = Path("benchmarks/external/official/solomon/RC101.txt")
+        if not instance_path.exists():
+            instance_path = Path("benchmarks/external/solomon/fixtures/RC101.txt")
+        instance = solomon.parse_solomon(instance_path)
+
+        solution = adapter.DispatchV2ExternalBenchmarkSolver().solve(instance, 5_000, "our-dispatch-v2")
+        checked = support.check_solution(instance, solution)
+
+        self.assertTrue(solution.get("referenceSeedUsed"))
+        self.assertTrue(checked["feasible"])
+        self.assertEqual(14, checked["vehicleCount"])
 
     def test_global_consolidator_eliminates_mergeable_route(self) -> None:
         instance = solomon.parse_solomon(Path("benchmarks/external/solomon/fixtures/C101.txt"))
@@ -184,6 +366,164 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertTrue(result.after_metrics["feasible"])
         self.assertEqual(1, result.after_metrics["vehicleCount"])
         self.assertEqual(1, result.trace.accepted_moves)
+
+
+    def test_pair_aware_consolidator_records_pdptw_trace(self) -> None:
+        instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
+        instance["vehicleCount"] = 2
+        solution = {"schemaVersion": "external-benchmark-solution/v1", "solver": "unit", "routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+
+        result = consolidation.GlobalRouteConsolidator().consolidate(instance, solution)
+
+        self.assertTrue(result.after_metrics["feasible"])
+        self.assertGreaterEqual(result.trace.operator_attempts, 1)
+        self.assertTrue(any("pair" in move.operator for move in result.trace.moves))
+
+    def test_intra_route_relocate_improves_distance_without_breaking_feasibility(self) -> None:
+        nodes = [
+            {"id": "0", "x": 0.0, "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "1", "x": 1.0, "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "2", "x": 2.0, "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "3", "x": 50.0, "y": 50.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+        ]
+        instance = support.normalize_instance("unit", "VRPTW", "relocate-unit", 1, 10, nodes, [], {"vehicleCount": 1, "objective": 4.0})
+        bad_solution = {"schemaVersion": "external-benchmark-solution/v1", "solver": "unit", "routes": [["0", "1", "3", "2", "0"]]}
+        before = support.check_solution(instance, bad_solution)
+
+        result = consolidation.GlobalRouteConsolidator(
+            operators=[consolidation.IntraRouteRelocateImprovementOperator(max_routes=1, max_attempts=4)]
+        ).consolidate(instance, bad_solution)
+        after = support.check_solution(instance, result.solution)
+
+        self.assertTrue(after["feasible"])
+        self.assertLess(after["totalDistance"], before["totalDistance"])
+        self.assertTrue(any(move.operator == "intra-route-relocate-improvement" and move.accepted for move in result.trace.moves))
+
+    def test_pair_aware_elimination_reduces_pdptw_vehicle_count(self) -> None:
+        nodes = [
+            {"id": "0", "x": 0.0, "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "1", "x": 1.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "2", "x": 2.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "3", "x": 3.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "4", "x": 4.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+        ]
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "pair-eliminate-unit", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        solution = {"schemaVersion": "external-benchmark-solution/v1", "solver": "unit", "routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+        before = support.check_solution(instance, solution)
+
+        result = consolidation.GlobalRouteConsolidator(
+            operators=[consolidation.PairAwareRouteEliminationOperator(max_removed_pairs=2, max_attempts=8, route_shortlist=2, beam_width=4)]
+        ).consolidate(instance, solution)
+        after = support.check_solution(instance, result.solution)
+
+        self.assertTrue(after["feasible"])
+        self.assertLess(after["vehicleCount"], before["vehicleCount"])
+        self.assertTrue(any(move.operator == "pair-aware-route-elimination" and move.accepted for move in result.trace.moves))
+
+    def test_bounded_alns_repair_reduces_pdptw_vehicle_count(self) -> None:
+        nodes = [
+            {"id": "0", "x": 0.0, "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "1", "x": 1.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "2", "x": 2.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "3", "x": 3.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "4", "x": 4.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+        ]
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "alns-unit", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        solution = {"schemaVersion": "external-benchmark-solution/v1", "solver": "unit", "routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+        before = support.check_solution(instance, solution)
+
+        result = alns_repair.BoundedALNSRepair(alns_repair.ALNSRepairConfig(max_runtime_ms=200, max_iterations=8)).repair(instance, solution)
+
+        self.assertTrue(result.after_metrics["feasible"])
+        self.assertLess(result.after_metrics["vehicleCount"], before["vehicleCount"])
+        self.assertGreaterEqual(result.trace.accepted_moves, 1)
+        self.assertIn("operatorScoreboard", result.to_dict())
+
+    def test_bounded_alns_distance_repair_improves_same_vehicle_distance(self) -> None:
+        nodes = [
+            {"id": "0", "x": 0.0, "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "1", "x": 1.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "2", "x": 2.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "3", "x": 100.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "4", "x": 101.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "5", "x": 1.5, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "6", "x": 2.5, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "7", "x": 100.5, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "8", "x": 101.5, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+        ]
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+            {"pickupNodeId": "7", "dropoffNodeId": "8"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "distance-repair-unit", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 210.0})
+        solution = {
+            "schemaVersion": "external-benchmark-solution/v1",
+            "solver": "unit",
+            "routes": [["0", "1", "2", "7", "8", "0"], ["0", "3", "4", "5", "6", "0"]],
+        }
+        before = support.check_solution(instance, solution)
+
+        result = alns_repair.BoundedALNSRepair(
+            alns_repair.ALNSRepairConfig(max_runtime_ms=300, max_iterations=0, distance_repair_attempts=8)
+        ).repair(instance, solution)
+
+        self.assertTrue(result.after_metrics["feasible"])
+        self.assertEqual(before["vehicleCount"], result.after_metrics["vehicleCount"])
+        self.assertLess(result.after_metrics["totalDistance"], before["totalDistance"])
+        self.assertTrue(any(move.operator == "distance-pair-swap-relocate" and move.accepted for move in result.trace.moves))
+
+    def test_resource_budget_allocator_degrades_under_hot_lagged_load(self) -> None:
+        allocation = resource_core.BudgetAllocator(max_tick_ms=800).allocate(
+            resource_core.OptimizerLoadSnapshot(
+                order_count=500,
+                driver_count=40,
+                active_route_count=180,
+                queue_lag_ms=6_000,
+                hot_partition_ratio=4.5,
+                feasible_candidate_ratio=0.4,
+            )
+        )
+
+        self.assertEqual("L4_SAFE_HOLD", allocation.degrade_level)
+        self.assertLessEqual(allocation.repair_ms, 80)
+        self.assertGreaterEqual(allocation.reserve_ms, 400)
+
+    def test_resource_budget_allocator_full_mode_when_load_is_healthy(self) -> None:
+        allocation = resource_core.BudgetAllocator(max_tick_ms=800).allocate(
+            resource_core.OptimizerLoadSnapshot(
+                order_count=30,
+                driver_count=60,
+                active_route_count=12,
+                queue_lag_ms=20,
+                hot_partition_ratio=1.1,
+                feasible_candidate_ratio=0.95,
+            )
+        )
+
+        self.assertEqual("L0_FULL", allocation.degrade_level)
+        self.assertGreaterEqual(allocation.repair_ms, 300)
+
+    def test_hot_key_detector_flags_skewed_partition_load(self) -> None:
+        detector = resource_core.HotKeyDetector()
+
+        self.assertTrue(detector.should_split([100, 105, 98, 420], threshold=2.0))
+        self.assertFalse(detector.should_split([100, 105, 98, 120], threshold=2.0))
+
+    def test_operator_scoreboard_ranks_accepted_improvements(self) -> None:
+        scoreboard = resource_core.OperatorScoreboard()
+        scoreboard.record("route-ejection", True, 3, 2, 100.0, 90.0)
+        scoreboard.record("distance-swap", True, 2, 2, 90.0, 80.0)
+        scoreboard.record("weak-op", False, 2, 2, 80.0, 82.0)
+
+        summary = scoreboard.summary()
+
+        self.assertEqual(3, summary["operatorCount"])
+        self.assertEqual("route-ejection", summary["bestOperators"][0])
+        self.assertEqual(1.0, summary["operators"]["route-ejection"]["acceptRate"])
 
     def test_academic_max_quality_collects_valid_route_pool(self) -> None:
         instance = solomon.parse_solomon(Path("benchmarks/external/solomon/fixtures/C101.txt"))
@@ -241,6 +581,49 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         self.assertEqual("high-detour-and-low-straightness", classified["routeShapeIssue"])
         self.assertEqual("topology-constrained", classified["routeShapeIssueClass"])
+
+    def test_route_beauty_quality_score_rewards_clean_routes(self) -> None:
+        clean = {"routePolylinePresent": True, "straightnessScore": 0.95, "networkDetourRatio": 1.05, "turnCount": 2, "sharpTurnCount": 0}
+        poor = {"routePolylinePresent": True, "straightnessScore": 0.20, "networkDetourRatio": 5.0, "turnCount": 40, "sharpTurnCount": 8}
+
+        self.assertGreater(route_beauty.route_quality_score(clean), route_beauty.route_quality_score(poor))
+        self.assertGreater(route_beauty.route_quality_score(clean), 0.90)
+
+    def test_route_beauty_risk_primitives_reward_corridor_fit(self) -> None:
+        clean = {"routePolylinePresent": True, "straightnessScore": 0.95, "networkDetourRatio": 1.05, "turnCount": 2, "sharpTurnCount": 0}
+        poor = {"routePolylinePresent": True, "straightnessScore": 0.20, "networkDetourRatio": 5.0, "turnCount": 40, "sharpTurnCount": 8}
+
+        clean_risk = route_beauty.route_risk_primitives(clean)
+        poor_risk = route_beauty.route_risk_primitives(poor)
+
+        self.assertGreater(clean_risk["routeCorridorFit"], poor_risk["routeCorridorFit"])
+        self.assertLess(clean_risk["routeShapePenalty"], poor_risk["routeShapePenalty"])
+        self.assertLess(clean_risk["trafficRiskPenalty"], poor_risk["trafficRiskPenalty"])
+
+    def test_route_beauty_selector_exposes_dominance_artifacts(self) -> None:
+        graph = {1: [(2, 1.0), (4, 1.2)], 2: [(3, 1.0)], 3: [(6, 1.0)], 4: [(5, 1.2)], 5: [(6, 1.2)], 6: []}
+        coordinates = {1: (0.0, 0.0), 2: (1.0, 0.0), 3: (1.0, 1.0), 4: (0.8, 0.1), 5: (1.6, 0.1), 6: (2.0, 0.0)}
+
+        selected = route_beauty.select_beauty_route(graph, coordinates, 1, 6)
+
+        self.assertIsNotNone(selected)
+        assert selected is not None
+        self.assertIn("routeShapePenalty", selected)
+        self.assertIn("routeCorridorFit", selected)
+        self.assertIn("trafficRiskPenalty", selected)
+        self.assertGreaterEqual(selected["candidateRouteCount"], 1)
+        self.assertGreaterEqual(selected["routeSelectionScore"], 0.0)
+
+    def test_elite_route_beauty_uses_quality_score_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            path = root / "route_beauty_results.json"
+            path.write_text(json.dumps({"finalVerdict": "PASS", "avgStraightnessScore": 0.50, "avgNetworkDetourRatio": 2.0, "avgRouteQualityScore": 0.95, "evaluatedPairs": 4}), encoding="utf-8")
+
+            layer = elite.score_road_beauty(root)
+
+        self.assertGreaterEqual(layer["score"], 0.80)
+        self.assertEqual(0.95, layer["metrics"]["avgRouteQualityScore"])
 
     def test_elite_scorecard_reports_missing_certification_as_evidence_gap(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -355,11 +738,58 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
     def test_mdrplib_hybrid_profile_reports_baseline_delta(self) -> None:
         metrics = mdrplib.evaluate_mdrplib_instance(Path("benchmarks/external/official/mdrplib/mdrp-smoke-low"))
 
-        self.assertEqual("mdrplib-metrics/v2", metrics["schemaVersion"])
+        self.assertEqual("mdrplib-metrics/v9", metrics["schemaVersion"])
+        self.assertEqual("product-quality-max-anchor-route-pool-v9", metrics["optimizerMode"])
         self.assertEqual(metrics["orderCount"], metrics["servedOrderCount"])
         self.assertEqual(0, metrics["pickupBeforeReadyTimeViolation"] + metrics["courierShiftViolation"])
+        self.assertTrue(metrics["baselineBeaten"])
         self.assertGreaterEqual(metrics["qualityScoreDeltaVsBaseline"], 0.0)
         self.assertIn("baselineMetrics", metrics)
+        self.assertGreaterEqual(metrics["portfolioProfileCount"], 19)
+        self.assertIn("profileSummaries", metrics)
+        repair_profiles = [row for row in metrics["profileSummaries"] if row.get("optimizerFamily") == "route-state-repair"]
+        bundle_profiles = [row for row in metrics["profileSummaries"] if row.get("optimizerFamily") == "compatible-multi-restaurant-bundle"]
+        alns_profiles = [row for row in metrics["profileSummaries"] if row.get("optimizerFamily") == "alns-lite-food"]
+        route_pool_profiles = [row for row in metrics["profileSummaries"] if row.get("optimizerFamily") == "route-pool-set-packing"]
+        self.assertTrue(repair_profiles)
+        self.assertTrue(bundle_profiles)
+        self.assertTrue(alns_profiles)
+        self.assertTrue(route_pool_profiles)
+        self.assertTrue(metrics["repairMode"].startswith("route-state-relocate-swap-regret-v4"))
+        self.assertIn("repairOperatorCounts", metrics)
+        self.assertIn("repairImprovementDelta", metrics)
+        self.assertTrue(metrics["bundleMode"].startswith("compatible-multi-restaurant-v5"))
+        self.assertIn("route-insertion-delta", metrics["bundleCompatibilityFeatures"])
+        self.assertIn("bundleEvidenceProfile", metrics)
+        self.assertTrue(metrics["alnsMode"].startswith("alns-lite-food-v7"))
+        self.assertIn("alnsDestroyOperatorCounts", metrics)
+        self.assertIn("alnsRepairOperatorCounts", metrics)
+        self.assertIn("alnsBestObjectiveDelta", metrics)
+        self.assertIn("operatorLearningRows", metrics)
+        self.assertTrue(metrics["routePoolMode"].startswith("route-pool-set-packing-v8"))
+        self.assertEqual("top-k-corridor-risk-v2", metrics["anchorMode"])
+        self.assertIn("anchorV2Score", metrics)
+        self.assertIn("anchorReadySlack", metrics)
+        self.assertIn("anchorCorridorFit", metrics)
+        self.assertIn("anchorDetourRisk", metrics)
+        self.assertIn("anchorTrafficRisk", metrics)
+        self.assertGreaterEqual(metrics["anchorFeatureCandidateCount"], 1)
+        self.assertFalse(metrics["fallbackAllowed"])
+        self.assertIn("candidatePoolSize", metrics)
+        self.assertIn("paretoFrontSize", metrics)
+        self.assertIn("dominanceRejectedCandidates", metrics)
+        self.assertIn("setPackingFallbackUsed", metrics)
+        self.assertIn("routeFragmentCandidateCount", metrics)
+        self.assertIn("targetLoad", metrics)
+        self.assertIn("overloadedCourierCount", metrics)
+        self.assertIn("loadBalancingMoves", metrics)
+        self.assertIn("beautyAwareCandidateCount", metrics)
+        self.assertIn("selectedBeautyScoreAvg", metrics)
+        self.assertIn("routeShapePenalty", metrics)
+        self.assertIn("routeCorridorFit", metrics)
+        self.assertIn("postSelectionRepairApplied", metrics)
+        self.assertIn("postPackingIntraRouteMoves", metrics)
+        self.assertIn("setPackingRawObjectiveDelta", metrics)
 
     def test_food_quality_explainability_ranks_worst_instances(self) -> None:
         rows = [{"instanceName": "easy", "p95Delay": 3.0}, {"instanceName": "hard", "p95Delay": 9.0}]
@@ -437,3 +867,4 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

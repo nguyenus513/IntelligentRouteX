@@ -45,7 +45,11 @@ public record DispatchQualityBenchmarkResult(
         boolean deferred,
         DispatchQualityMetrics metrics,
         DispatchIntelligenceMetrics intelligenceMetrics,
-        DispatchLlmShadowAgreementSummary llmShadowAgreement,
+        DispatchDecisionAgreementSummary decisionAgreement,
+        DispatchBundleDiversityMetrics bundleDiversity,
+        DispatchSelectorTelemetryMetrics selectorTelemetry,
+        DispatchObjectiveTelemetryMetrics objectiveTelemetry,
+        DispatchRepairTelemetryMetrics activeRepair,
         DispatchRouteVectorMetrics routeVectorMetrics,
         DispatchRouteProposalBudgetMetrics routeProposalBudgetMetrics,
         DispatchTokenUsageSummary tokenUsageSummary,
@@ -59,6 +63,10 @@ public record DispatchQualityBenchmarkResult(
         authoritativeStages = authoritativeStages == null ? List.of() : List.copyOf(authoritativeStages);
         promotionBlockers = promotionBlockers == null ? List.of() : List.copyOf(promotionBlockers);
         timeoutPhase = timeoutPhase == null ? DispatchQualityTimeoutPhase.NONE : timeoutPhase;
+        bundleDiversity = bundleDiversity == null ? DispatchBundleDiversityMetrics.empty() : bundleDiversity;
+        selectorTelemetry = selectorTelemetry == null ? DispatchSelectorTelemetryMetrics.empty() : selectorTelemetry;
+        objectiveTelemetry = objectiveTelemetry == null ? DispatchObjectiveTelemetryMetrics.empty() : objectiveTelemetry;
+        activeRepair = activeRepair == null ? DispatchRepairTelemetryMetrics.empty() : activeRepair;
     }
 
     public DispatchQualityBenchmarkResult withArtifactWriteCompletedAt(Instant artifactWriteCompletedAt) {
@@ -100,7 +108,11 @@ public record DispatchQualityBenchmarkResult(
                 deferred,
                 metrics,
                 intelligenceMetrics,
-                llmShadowAgreement,
+                decisionAgreement,
+                bundleDiversity,
+                selectorTelemetry,
+                objectiveTelemetry,
+                activeRepair,
                 routeVectorMetrics,
                 routeProposalBudgetMetrics,
                 tokenUsageSummary,

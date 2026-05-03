@@ -49,6 +49,9 @@ class ReplayComparisonResultTest {
                 result.stageLatencies(),
                 result.latencyBudgetSummary(),
                 result.mlStageMetadata(),
+                result.mlStageMetadata().stream()
+                        .map(MlContributionTrace::from)
+                        .toList(),
                 result.liveStageMetadata(),
                 List.of("other-proposal"),
                 List.of("other-assignment"));

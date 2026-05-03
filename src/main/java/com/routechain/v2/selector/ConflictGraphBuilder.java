@@ -27,6 +27,9 @@ public final class ConflictGraphBuilder {
                 if (left.bundleId().equals(right.bundleId()) && !left.proposalId().equals(right.proposalId())) {
                     addEdge(edges, seenEdges, left.proposalId(), right.proposalId(), ConflictReason.BUNDLE_OVERLAP);
                 }
+                if (activeRouteMutationOverlap(left, right)) {
+                    addEdge(edges, seenEdges, left.proposalId(), right.proposalId(), ConflictReason.ACTIVE_ROUTE_MUTATION_OVERLAP);
+                }
             }
         }
         List<ConflictEdge> normalizedEdges = edges.stream()
@@ -49,5 +52,13 @@ public final class ConflictGraphBuilder {
         if (seenEdges.add(key)) {
             edges.add(new ConflictEdge(leftProposalId, rightProposalId, reason));
         }
+    }
+
+    private boolean activeRouteMutationOverlap(SelectorCandidate left, SelectorCandidate right) {
+        if (left.source() != com.routechain.v2.route.RouteProposalSource.ACTIVE_ROUTE_INSERTION
+                || right.source() != com.routechain.v2.route.RouteProposalSource.ACTIVE_ROUTE_INSERTION) {
+            return false;
+        }
+        return left.clusterId() != null && left.clusterId().equals(right.clusterId());
     }
 }

@@ -83,6 +83,9 @@ class DispatchV2CoreLatencyBudgetSliceTest {
                 List.of(new DispatchStageLatency("dispatch-stage-latency/v1", "eta/context", 999L, 1L, true, false, 0L)),
                 new DispatchLatencyBudgetSummary("dispatch-latency-budget-summary/v1", 999L, 1L, true, List.of("eta/context"), 0L),
                 result.mlStageMetadata(),
+                result.mlStageMetadata().stream()
+                        .map(com.routechain.v2.feedback.MlContributionTrace::from)
+                        .toList(),
                 result.liveStageMetadata(),
                 result.globalSelectionResult().selectedProposals().stream().map(selected -> selected.proposalId()).toList(),
                 result.assignments().stream().map(assignment -> assignment.assignmentId()).toList());

@@ -81,8 +81,8 @@ class PromptPackRegistryTest {
                 Instant.parse("2026-04-20T00:00:00Z").toString(),
                 stageName,
                 Map.of(
-                        "decisionMode", "llm",
-                        "authorityMode", "llm-shadow",
+                        "decisionMode", "legacy",
+                        "authorityMode", "legacy",
                         "authoritativeStages", List.of("pair-bundle"),
                         "weatherClass", "clear",
                         "trafficClass", "normal",

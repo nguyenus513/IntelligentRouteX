@@ -10,6 +10,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,9 +18,9 @@ class DispatchV2CoreSelectorSliceTest {
 
     @Test
     void enabledPathReturnsSelectorOutputsAndSelectedSetHasNoOrderOrDriverConflicts() {
-        DispatchV2Core core = TestDispatchV2Factory.core(RouteChainDispatchV2Properties.defaults());
+        DispatchV2Core core = TestDispatchV2Factory.core(TestDispatchV2Factory.selectorSmokeProperties());
 
-        DispatchV2Result result = core.dispatch(TestDispatchV2Factory.requestWithOrdersAndDriver());
+        DispatchV2Result result = core.dispatch(TestDispatchV2Factory.selectorSmokeRequest());
 
         assertEquals(List.of("eta/context", "order-buffer", "pair-graph", "micro-cluster", "boundary-expansion", "bundle-pool", "pickup-anchor", "driver-shortlist/rerank", "route-proposal-pool", "scenario-evaluation", "global-selector", "dispatch-executor"), result.decisionStages());
         assertFalse(result.fallbackUsed());
@@ -27,6 +28,7 @@ class DispatchV2CoreSelectorSliceTest {
         assertFalse(result.selectorCandidates().isEmpty());
         assertTrue(result.globalSelectionResult().selectedCount() > 0);
         assertTrue(result.globalSelectorSummary().selectedCount() > 0);
+        assertNotNull(result.activeRepairTelemetry());
         assertFalse(result.assignments().isEmpty());
 
         Set<String> selectedDrivers = new HashSet<>();

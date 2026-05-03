@@ -1,13 +1,13 @@
 package com.routechain.v2.benchmark;
 
 record DispatchQualityFeedbackSummary(
-        DispatchLlmShadowAgreementSummary llmShadowAgreement,
+        DispatchDecisionAgreementSummary decisionAgreement,
         DispatchTokenUsageSummary tokenUsageSummary,
         DispatchStageFallbackSummary stageFallbackSummary) {
 
     static DispatchQualityFeedbackSummary empty() {
         return new DispatchQualityFeedbackSummary(
-                DispatchLlmShadowAgreementSummary.empty(),
+                DispatchDecisionAgreementSummary.empty(),
                 DispatchTokenUsageSummary.empty(),
                 DispatchStageFallbackSummary.empty());
     }
