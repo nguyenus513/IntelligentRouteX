@@ -51,6 +51,7 @@ residual_repair = load_module("run_phase35_residual_exact_cover_repair", "run_ph
 focused_repair = load_module("run_phase36_residual_focused_repair", "run_phase36_residual_focused_repair.py")
 conflict_guided = load_module("run_phase37_conflict_guided_replacement", "run_phase37_conflict_guided_replacement.py")
 residual_partition = load_module("run_phase38_residual_partition_generator", "run_phase38_residual_partition_generator.py")
+target_vehicle = load_module("run_phase38b_target_vehicle_feasibility", "run_phase38b_target_vehicle_feasibility.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -2005,6 +2006,78 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertGreater(len(columns), 0)
         self.assertTrue(any(column.allowed_for_claim for column in collector.pool.columns))
         self.assertTrue(all(column.allowed_for_claim for column in collector.pool.columns if column.source == "phase37-generated-replacement" or column.source == "phase38-residual-partition"))
+
+    def test_phase38b_target_k_constructor_builds_feasible_synthetic_pdptw(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase38b-feasible", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+
+        result = target_vehicle.construct_target_k(instance, 1, "global-regret-3")
+        score = target_vehicle.score_routes(instance, result["routes"])
+
+        self.assertTrue(score["feasible"])
+        self.assertEqual(0, score["missingCount"])
+
+    def test_phase38b_target_k_constructor_reports_infeasible_when_k_too_small(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 2
+        nodes[2]["demand"] = -2
+        nodes[3]["demand"] = 2
+        nodes[4]["demand"] = -2
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase38b-too-small", 1, 1, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+
+        result = target_vehicle.construct_target_k(instance, 1, "global-regret-3")
+        score = target_vehicle.score_routes(instance, result["routes"])
+
+        self.assertFalse(score["feasible"])
+
+    def test_phase38b_alns_repair_improves_missing_count_on_synthetic_case(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase38b-repair", 3, 3, nodes, requests, {"vehicleCount": 1, "objective": 12.0})
+        initial = [["0", "1", "2", "0"]]
+        before = target_vehicle.score_routes(instance, initial)
+
+        repaired = target_vehicle.target_k_alns_repair(instance, initial, [("3", "4"), ("5", "6")], max_runtime_ms=500, max_iterations=10)
+
+        self.assertLessEqual(repaired["score"]["missingCount"], before["missingCount"])
+
+    def test_phase38b_routes_preserve_pickup_before_dropoff(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase38b-precedence", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+
+        result = target_vehicle.construct_target_k(instance, 1, "earliest-due")
+
+        for route in result["routes"]:
+            for pickup, dropoff in target_vehicle.route_pairs(instance, route):
+                self.assertLess(route.index(pickup), route.index(dropoff))
+
+    def test_phase38b_deterministic_seed_gives_stable_result(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase38b-deterministic", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+
+        first = target_vehicle.construct_target_k(instance, 1, "seeded-shuffle", seed=99)
+        second = target_vehicle.construct_target_k(instance, 1, "seeded-shuffle", seed=99)
+
+        self.assertEqual(first["routes"], second["routes"])
 
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
