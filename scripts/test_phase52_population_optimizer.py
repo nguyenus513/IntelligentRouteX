@@ -5,7 +5,7 @@ from pathlib import Path
 
 import external_benchmark_support as support
 from run_phase40_natural_pdptw_optimizer import _exact_pair_coverage, objective_components, objective_config
-from run_phase52_population_natural_optimizer import RouteSetPopulationGenerator, add_individual, make_individual, recombine_route_sets
+from run_phase52_population_natural_optimizer import RouteSetPopulationGenerator, add_individual, classify_offspring_attempt, make_individual, recombine_route_sets
 
 
 def tiny_instance() -> dict:
@@ -70,6 +70,21 @@ class Phase52PopulationOptimizerTest(unittest.TestCase):
         self.assertNotIn("ortools-baseline", source)
         self.assertNotIn("BKS", source)
         self.assertNotIn("reference", source.lower())
+
+    def test_classifies_objective_not_improved_offspring(self) -> None:
+        classification = classify_offspring_attempt({"feasible": True, "objectiveDelta": 5.0, "childVehicleCount": 2, "currentVehicleCount": 2})
+
+        self.assertEqual("feasible-but-objective-worse", classification)
+
+    def test_classifies_missing_repair_failed_offspring(self) -> None:
+        classification = classify_offspring_attempt({"failReason": "missing-repair-failed"})
+
+        self.assertEqual("infeasible-missing-repair", classification)
+
+    def test_classifies_duplicate_signature_offspring(self) -> None:
+        classification = classify_offspring_attempt({"failReason": "duplicate-signature"})
+
+        self.assertEqual("duplicate-signature", classification)
 
 
 if __name__ == "__main__":

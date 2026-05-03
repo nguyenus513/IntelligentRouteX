@@ -81,11 +81,13 @@ def _route_pairs_as_set(instance: Dict[str, Any], route: List[str]) -> Set[Tuple
     return set(route_request_pairs(instance, route))
 
 
-def recombine_route_sets(instance: Dict[str, Any], parent_a: PopulationIndividual, parent_b: PopulationIndividual, config: Any, max_candidate_checks: int = 1_500) -> Dict[str, Any] | None:
+def recombine_route_sets(instance: Dict[str, Any], parent_a: PopulationIndividual, parent_b: PopulationIndividual, config: Any, max_candidate_checks: int = 1_500, diagnostics: Dict[str, Any] | None = None) -> Dict[str, Any] | None:
     all_pairs = set(request_pairs(instance))
     selected_routes: List[List[str]] = []
     covered: Set[Tuple[str, str]] = set()
     checks = 0
+    if diagnostics is not None:
+        diagnostics.update({"parentSources": [parent_a.source, parent_b.source], "parentVehicleCounts": [parent_a.vehicle_count, parent_b.vehicle_count], "repairInsertionSuccessCount": 0, "repairInsertionFailCount": 0})
     parent_a_routes = [[str(stop) for stop in route] for route in parent_a.solution.get("routes", []) if len(route) > 2]
     parent_b_routes = [[str(stop) for stop in route] for route in parent_b.solution.get("routes", []) if len(route) > 2]
     for route in sorted(parent_a_routes, key=lambda row: (len(route_request_pairs(instance, row)), route_distance(instance, row)), reverse=True):
@@ -101,7 +103,10 @@ def recombine_route_sets(instance: Dict[str, Any], parent_a: PopulationIndividua
         if route_pairs and route_pairs <= missing:
             selected_routes.append(route[:])
             covered |= route_pairs
-            missing = all_pairs - covered
+    missing = all_pairs - covered
+    if diagnostics is not None:
+        diagnostics["selectedRouteCount"] = len(selected_routes)
+        diagnostics["missingRequestCountAfterParentSelection"] = len(missing)
     if missing:
         if not selected_routes:
             depot = str(instance.get("depotNodeId", "0"))
@@ -112,6 +117,8 @@ def recombine_route_sets(instance: Dict[str, Any], parent_a: PopulationIndividua
             best_delta = 1e18
             for index, route in enumerate(selected_routes):
                 if checks >= max_candidate_checks:
+                    if diagnostics is not None:
+                        diagnostics["failReason"] = "candidate-cap"
                     return None
                 checks += 1
                 candidate = _insert_pair_best(instance, route, pair, max_checks=220)
@@ -126,16 +133,48 @@ def recombine_route_sets(instance: Dict[str, Any], parent_a: PopulationIndividua
                 depot = str(instance.get("depotNodeId", "0"))
                 singleton = _insert_pair_best(instance, [depot, depot], pair, max_checks=220)
                 if singleton is None:
+                    if diagnostics is not None:
+                        diagnostics["repairInsertionFailCount"] = int(diagnostics.get("repairInsertionFailCount", 0)) + 1
+                        diagnostics["failReason"] = "missing-repair-failed"
                     return None
                 selected_routes.append(singleton)
+                if diagnostics is not None:
+                    diagnostics["repairInsertionSuccessCount"] = int(diagnostics.get("repairInsertionSuccessCount", 0)) + 1
             else:
                 selected_routes[best_index] = best_route
+                if diagnostics is not None:
+                    diagnostics["repairInsertionSuccessCount"] = int(diagnostics.get("repairInsertionSuccessCount", 0)) + 1
     candidate_solution = solution_from_routes(selected_routes)
     if not _exact_pair_coverage(instance, candidate_solution).get("valid"):
+        if diagnostics is not None:
+            diagnostics["failReason"] = "duplicate-coverage"
         return None
     if not check_solution(instance, candidate_solution).get("feasible"):
+        if diagnostics is not None:
+            diagnostics["failReason"] = "hard-violation"
         return None
+    if diagnostics is not None:
+        components = objective_components(instance, candidate_solution, config)
+        diagnostics.update({"failReason": None, "childVehicleCount": components["vehicleCount"], "childDistance": components["totalDistance"], "childObjective": components["objective"]})
     return candidate_solution
+
+
+def classify_offspring_attempt(attempt: Dict[str, Any]) -> str:
+    reason = attempt.get("failReason")
+    if reason == "candidate-cap":
+        return "candidate-cap"
+    if reason == "missing-repair-failed":
+        return "infeasible-missing-repair"
+    if reason == "duplicate-signature":
+        return "duplicate-signature"
+    if reason in {"duplicate-coverage", "hard-violation"}:
+        return str(reason)
+    if attempt.get("feasible") and attempt.get("objectiveDelta") is not None:
+        if int(attempt.get("childVehicleCount", 0) or 0) > int(attempt.get("currentVehicleCount", 0) or 0):
+            return "feasible-but-vehicle-regression"
+        if float(attempt.get("objectiveDelta", 0.0) or 0.0) >= 0:
+            return "feasible-but-objective-worse"
+    return "unknown"
 
 
 class RouteSetPopulationGenerator:
@@ -159,26 +198,57 @@ class RouteSetPopulationGenerator:
         attempts = 0
         feasible_offspring = 0
         accepted_offspring = 0
+        offspring_attempts: List[Dict[str, Any]] = []
         best_offspring = None
         best_offspring_individual = None
         while len(population) >= 2 and attempts < self.max_recombination_attempts and int((time.perf_counter() - started) * 1000) < self.max_runtime_ms:
             attempts += 1
             parent_a, parent_b = rng.sample(population, 2)
-            child = recombine_route_sets(instance, parent_a, parent_b, config, max_candidate_checks=max(100, self.max_candidate_checks // max(1, self.max_recombination_attempts)))
+            attempt_diagnostics: Dict[str, Any] = {"attempt": attempts}
+            child = recombine_route_sets(instance, parent_a, parent_b, config, max_candidate_checks=max(100, self.max_candidate_checks // max(1, self.max_recombination_attempts)), diagnostics=attempt_diagnostics)
             if child is None:
+                attempt_diagnostics["feasible"] = False
+                attempt_diagnostics["classification"] = classify_offspring_attempt(attempt_diagnostics)
+                offspring_attempts.append(attempt_diagnostics)
                 continue
             feasible_offspring += 1
             child_individual = make_individual(instance, child, config, "route-set-recombination")
             if child_individual is None:
+                attempt_diagnostics["feasible"] = False
+                attempt_diagnostics["failReason"] = "hard-violation"
+                attempt_diagnostics["classification"] = classify_offspring_attempt(attempt_diagnostics)
+                offspring_attempts.append(attempt_diagnostics)
+                continue
+            current_components = objective_components(instance, current_solution, config)
+            attempt_diagnostics.update({"feasible": True, "currentVehicleCount": current_components["vehicleCount"], "currentObjective": current_components["objective"], "objectiveDelta": child_individual.objective - current_components["objective"]})
+            if any(existing.diversity_signature == child_individual.diversity_signature for existing in population):
+                attempt_diagnostics["failReason"] = "duplicate-signature"
+                attempt_diagnostics["classification"] = classify_offspring_attempt(attempt_diagnostics)
+                offspring_attempts.append(attempt_diagnostics)
+                duplicate_rejections["count"] = duplicate_rejections.get("count", 0) + 1
                 continue
             add_individual(population, child_individual, self.max_population_size, duplicate_rejections)
             if natural_solution_key(instance, child, config) < natural_solution_key(instance, current_solution, config):
                 accepted_offspring += 1
+                attempt_diagnostics["accepted"] = True
                 if best_offspring_individual is None or child_individual.objective < best_offspring_individual.objective:
                     best_offspring = child
                     best_offspring_individual = child_individual
+            else:
+                attempt_diagnostics["failReason"] = "objective-not-improved"
+                attempt_diagnostics["accepted"] = False
+            attempt_diagnostics["classification"] = classify_offspring_attempt(attempt_diagnostics)
+            offspring_attempts.append(attempt_diagnostics)
         best = min(population, key=lambda item: (item.vehicle_count, item.objective, item.distance)) if population else None
         accepted = best_offspring is not None and natural_solution_key(instance, best_offspring, config) < natural_solution_key(instance, current_solution, config)
+        classification_counts: Dict[str, int] = {}
+        for attempt in offspring_attempts:
+            classification = str(attempt.get("classification", "unknown"))
+            classification_counts[classification] = classification_counts.get(classification, 0) + 1
+        if not classification_counts:
+            classification_counts["infeasible-missing-repair"] = 1
+        feasible_attempts = [attempt for attempt in offspring_attempts if attempt.get("feasible")]
+        best_rejected = min((attempt for attempt in feasible_attempts if not attempt.get("accepted")), key=lambda row: float(row.get("objectiveDelta", 1e18) or 1e18), default=None)
         return {
             "solution": best_offspring if accepted else current_solution,
             "accepted": accepted,
@@ -196,6 +266,12 @@ class RouteSetPopulationGenerator:
                 "objectiveDelta": (best_offspring_individual.objective - objective_components(instance, current_solution, config)["objective"]) if best_offspring_individual else None,
                 "accepted": accepted,
                 "rejectReason": None if accepted else "no-improving-offspring" if feasible_offspring else "no-feasible-offspring",
+                "offspringAttemptSummary": offspring_attempts,
+                "offspringClassifierCounts": classification_counts,
+                "topFailReasons": classification_counts,
+                "bestRejectedOffspring": best_rejected,
+                "bestFeasibleOffspringObjectiveDelta": min((float(attempt.get("objectiveDelta")) for attempt in feasible_attempts if attempt.get("objectiveDelta") is not None), default=None),
+                "bestFeasibleOffspringVehicleCount": min((int(attempt.get("childVehicleCount")) for attempt in feasible_attempts if attempt.get("childVehicleCount") is not None), default=None),
             },
         }
 
@@ -239,7 +315,10 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
     def apply(stage_name: str, result: Dict[str, Any] | None, collect_source: str | None = None) -> None:
         nonlocal current
         if result is None:
-            operator_trace[stage_name] = {"skipped": True}
+            if stage_name == "routeSetPopulation":
+                operator_trace[stage_name] = {"skipped": True, "trace": {"offspringClassifierCounts": {"candidate-cap": 1}, "rejectReason": "stage-skipped-budget-or-profile"}}
+            else:
+                operator_trace[stage_name] = {"skipped": True}
             return
         candidate = result.get("solution", current)
         if collect_source is not None and check_solution(instance, candidate).get("feasible"):
@@ -315,7 +394,15 @@ def run(instances: List[str], output_dir: Path, data_source: str, time_limit_ms:
     total_vehicle_reduction = sum(max(0, int(row.get("vehicleCountBefore", 0) or 0) - int(row.get("vehicleCountAfter", 0) or 0)) for row in rows)
     safety_ok = counts.get("FAIL", 0) == 0 and all(int(row.get("hardViolations", 0) or 0) == 0 and not row.get("leakageDetected") and not row.get("stageRuntimeSummary", {}).get("overBudget") for row in rows)
     gate = "FAIL" if not safety_ok else "PASS_STRONG" if total_vehicle_reduction > 3 else "PASS" if total_vehicle_reduction == 3 else "PASS_WITH_LIMITS"
-    summary = {"schemaVersion": "phase52-population-natural-summary/v1", "instances": instances, "mode": mode, "results": rows, "verdictCounts": counts, "totalVehicleReduction": total_vehicle_reduction, "phase52Gate": gate}
+    pass_with_limits = [row for row in rows if row.get("verdict") == "PASS_WITH_LIMITS"]
+    unknown_offspring_blockers = 0
+    for row in pass_with_limits:
+        route_set_trace = row.get("operatorTrace", {}).get("routeSetPopulation", {})
+        counts = route_set_trace.get("trace", {}).get("offspringClassifierCounts", {}) if isinstance(route_set_trace, dict) else {}
+        if not counts or "unknown" in counts:
+            unknown_offspring_blockers += 1
+    phase53_gate = "PASS" if pass_with_limits and unknown_offspring_blockers == 0 else "PASS_WITH_LIMITS" if pass_with_limits else "PASS"
+    summary = {"schemaVersion": "phase52-population-natural-summary/v1", "instances": instances, "mode": mode, "results": rows, "verdictCounts": counts, "totalVehicleReduction": total_vehicle_reduction, "phase52Gate": gate, "phase53OffspringDiagnosticsGate": phase53_gate, "unknownOffspringBlockerCount": unknown_offspring_blockers}
     write_json(output_dir / "phase52_population_natural_summary.json", summary)
     (output_dir / "phase52_population_natural_summary.md").write_text(markdown(rows), encoding="utf-8")
     return summary
