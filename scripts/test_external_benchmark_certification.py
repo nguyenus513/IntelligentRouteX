@@ -2215,6 +2215,79 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertNotIn("instanceName ==", source)
         self.assertNotIn("startswith(\"LRC\")", source)
 
+    def test_phase41_route_elimination_accepts_when_objective_improves(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase41-accept", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        solution = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+
+        result = natural_pdptw.objective_driven_route_elimination_repair(instance, solution, natural_pdptw.objective_config("academic_certification"))
+
+        self.assertTrue(result["accepted"])
+        self.assertEqual(1, len(result["solution"]["routes"]))
+
+    def test_phase41_route_elimination_rejects_objective_regression(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase41-reject", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        solution = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+
+        result = natural_pdptw.objective_driven_route_elimination_repair(instance, solution, natural_pdptw.objective_config("production_food_dispatch"))
+
+        self.assertFalse(result["accepted"])
+
+    def test_phase41_ejection_chain_repairs_synthetic_eliminated_route(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase41-ejection", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        fixed = [["0", "1", "2", "3", "4", "0"]]
+
+        result = natural_pdptw.objective_aware_ejection_repair(instance, fixed, [("5", "6")], natural_pdptw.objective_config("academic_certification"))
+
+        self.assertIsNotNone(result["solution"])
+        self.assertEqual(0, result["missingAfterRepair"])
+
+    def test_phase41_affected_sp_does_not_leak_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase41-sp", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+
+        result = natural_pdptw.affected_route_pool_repair(instance, [], [("1", "2"), ("3", "4")], natural_pdptw.objective_config("academic_certification"))
+
+        self.assertIn(result["rejectReason"], {None, "sp-infeasible", "invalid-repair"})
+        if result.get("poolStats"):
+            self.assertEqual(0, result["poolStats"]["allowedForClaimCounts"].get("disallowed", 0))
+
+    def test_phase41_invalid_repair_is_never_accepted(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 1, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase41-invalid", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        solution = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+
+        result = natural_pdptw.objective_driven_route_elimination_repair(instance, solution, natural_pdptw.objective_config("academic_certification"))
+
+        if result["accepted"]:
+            self.assertTrue(support.check_solution(instance, result["solution"]).get("feasible"))
+
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
 

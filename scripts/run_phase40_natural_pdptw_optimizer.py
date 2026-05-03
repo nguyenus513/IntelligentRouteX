@@ -146,6 +146,142 @@ def remove_route_and_repair(instance: Dict[str, Any], routes: List[List[str]], r
     return {"solution": solution_from_routes(remaining), "candidateChecks": checks, "removedPairCount": len(removed_pairs)}
 
 
+def _route_without_pairs(route: List[str], pairs: Iterable[tuple[str, str]]) -> List[str]:
+    removed = {stop for pair in pairs for stop in pair}
+    return [stop for stop in route if stop not in removed]
+
+
+def _pair_relatedness(instance: Dict[str, Any], left: tuple[str, str], right: tuple[str, str]) -> float:
+    left_features = request_features(instance, left)
+    right_features = request_features(instance, right)
+    return abs(left_features["pickupX"] - right_features["pickupX"]) + abs(left_features["pickupY"] - right_features["pickupY"]) + abs(left_features["due"] - right_features["due"]) * 0.01
+
+
+def _insert_with_ejection(instance: Dict[str, Any], routes: List[List[str]], pair: tuple[str, str], max_eject: int = 2) -> tuple[List[List[str]] | None, List[tuple[str, str]], int]:
+    checks = 0
+    best_routes = None
+    best_ejected: List[tuple[str, str]] = []
+    best_delta = 1e18
+    for route_index, route in enumerate(routes):
+        direct = _insert_pair_best(instance, route, pair, max_checks=240)
+        checks += 1
+        if direct is not None:
+            delta = route_distance(instance, direct) - route_distance(instance, route)
+            if delta < best_delta:
+                candidate_routes = [candidate[:] for candidate in routes]
+                candidate_routes[route_index] = direct
+                best_routes = candidate_routes
+                best_ejected = []
+                best_delta = delta
+        route_pairs = sorted(route_request_pairs(instance, route), key=lambda candidate_pair: _pair_relatedness(instance, pair, candidate_pair))[:6]
+        for eject_count in range(1, max_eject + 1):
+            for offset in range(0, max(0, len(route_pairs) - eject_count + 1)):
+                ejected = route_pairs[offset:offset + eject_count]
+                reduced = _route_without_pairs(route, ejected)
+                inserted = _insert_pair_best(instance, reduced, pair, max_checks=240)
+                checks += 1
+                if inserted is None:
+                    continue
+                delta = route_distance(instance, inserted) - route_distance(instance, route)
+                if delta < best_delta:
+                    candidate_routes = [candidate[:] for candidate in routes]
+                    candidate_routes[route_index] = inserted
+                    best_routes = candidate_routes
+                    best_ejected = ejected
+                    best_delta = delta
+    return best_routes, best_ejected, checks
+
+
+def objective_aware_ejection_repair(instance: Dict[str, Any], routes: List[List[str]], removed_pairs: List[tuple[str, str]], config: NaturalPDPTWObjectiveConfig, max_steps: int = 36) -> Dict[str, Any]:
+    queue = sorted(removed_pairs, key=lambda pair: request_features(instance, pair)["due"])
+    current = [route[:] for route in routes]
+    checks = 0
+    direct_success = 0
+    ejection_success = 0
+    ejected_count = 0
+    steps = 0
+    while queue and steps < max_steps:
+        steps += 1
+        pair = queue.pop(0)
+        candidate_routes, ejected, used_checks = _insert_with_ejection(instance, current, pair, max_eject=1)
+        checks += used_checks
+        if candidate_routes is None:
+            queue.append(pair)
+            if steps > len(removed_pairs) + 12:
+                return {"solution": None, "missingAfterRepair": len(queue), "candidateChecks": checks, "directInsertionSuccess": direct_success, "ejectionInsertionSuccess": ejection_success, "ejectedRequestCount": ejected_count, "rejectReason": "no-feasible-repair"}
+            continue
+        current = candidate_routes
+        if ejected:
+            ejection_success += 1
+            ejected_count += len(ejected)
+            queue.extend(ejected)
+        else:
+            direct_success += 1
+    if queue:
+        return {"solution": None, "missingAfterRepair": len(queue), "candidateChecks": checks, "directInsertionSuccess": direct_success, "ejectionInsertionSuccess": ejection_success, "ejectedRequestCount": ejected_count, "rejectReason": "candidate-cap"}
+    solution = solution_from_routes(current)
+    components = objective_components(instance, solution, config)
+    if not components["feasible"]:
+        return {"solution": None, "missingAfterRepair": 0, "candidateChecks": checks, "directInsertionSuccess": direct_success, "ejectionInsertionSuccess": ejection_success, "ejectedRequestCount": ejected_count, "rejectReason": "invalid-repair"}
+    return {"solution": solution, "missingAfterRepair": 0, "candidateChecks": checks, "directInsertionSuccess": direct_success, "ejectionInsertionSuccess": ejection_success, "ejectedRequestCount": ejected_count, "rejectReason": None}
+
+
+def affected_route_pool_repair(instance: Dict[str, Any], fixed_routes: List[List[str]], affected_pairs: List[tuple[str, str]], config: NaturalPDPTWObjectiveConfig) -> Dict[str, Any]:
+    collector = RouteColumnCollector(instance, source_run_id="phase41-affected")
+    base_route = [str(instance.get("depotNodeId", "0")), str(instance.get("depotNodeId", "0"))]
+    for pair in affected_pairs:
+        inserted = _insert_pair_best(instance, base_route, pair, max_checks=300)
+        if inserted is not None:
+            collector.collect(inserted, "phase41-singleton")
+    route = [str(instance.get("depotNodeId", "0")), str(instance.get("depotNodeId", "0"))]
+    for pair in sorted(affected_pairs, key=lambda item: request_features(instance, item)["due"]):
+        inserted = _insert_pair_best(instance, route, pair, max_checks=300)
+        if inserted is None:
+            break
+        route = inserted
+        collector.collect(route, "phase41-prefix")
+    pool = collector.pool
+    sp_result = PDPTWSetPartitioningSolver(time_limit_ms=1_000).solve(instance, [column for column in pool.columns if column.allowed_for_claim])
+    if not sp_result.get("feasible"):
+        return {"solution": None, "spStatus": sp_result.get("status"), "rejectReason": "sp-infeasible", "poolStats": pool.stats()}
+    solution = {"routes": fixed_routes + sp_result["solution"].get("routes", [])}
+    components = objective_components(instance, solution, config)
+    if not components["feasible"]:
+        return {"solution": None, "spStatus": sp_result.get("status"), "rejectReason": "invalid-repair", "poolStats": pool.stats()}
+    return {"solution": solution, "spStatus": sp_result.get("status"), "rejectReason": None, "poolStats": pool.stats()}
+
+
+def objective_driven_route_elimination_repair(instance: Dict[str, Any], solution: Dict[str, Any], config: NaturalPDPTWObjectiveConfig, max_routes: int = 3) -> Dict[str, Any]:
+    routes = [[str(stop) for stop in route] for route in solution.get("routes", []) if len(route) > 2]
+    before_components = objective_components(instance, solution, config)
+    best_solution = solution
+    best_key = natural_solution_key(instance, solution, config)
+    trace = []
+    candidate_indexes = sorted(range(len(routes)), key=lambda index: (len(route_request_pairs(instance, routes[index])), evaluate_route_state(instance, routes[index])["slackRisk"]))[:max_routes]
+    for route_index in candidate_indexes:
+        removed_pairs = route_request_pairs(instance, routes[route_index])
+        fixed_routes = [route[:] for index, route in enumerate(routes) if index != route_index]
+        repair = objective_aware_ejection_repair(instance, fixed_routes, removed_pairs, config)
+        candidate_solution = repair.get("solution")
+        affected_sp_status = None
+        if candidate_solution is None:
+            sp_repair = {"solution": None, "spStatus": "skipped", "rejectReason": "no-feasible-repair"}
+            candidate_solution = sp_repair.get("solution")
+            affected_sp_status = sp_repair.get("spStatus")
+            if candidate_solution is None:
+                trace.append({"eliminatedRouteIndex": route_index, "eliminatedRequestCount": len(removed_pairs), "directInsertionSuccess": repair.get("directInsertionSuccess"), "ejectionInsertionSuccess": repair.get("ejectionInsertionSuccess"), "relatedDestroyCount": 0, "affectedSpStatus": affected_sp_status, "missingAfterRepair": repair.get("missingAfterRepair"), "objectiveBefore": before_components["objective"], "objectiveAfter": None, "vehicleCountBefore": before_components["vehicleCount"], "vehicleCountAfter": None, "rejectReason": sp_repair.get("rejectReason")})
+                continue
+        after_components = objective_components(instance, candidate_solution, config)
+        candidate_key = natural_solution_key(instance, candidate_solution, config)
+        accepted = candidate_key < best_key
+        trace.append({"eliminatedRouteIndex": route_index, "eliminatedRequestCount": len(removed_pairs), "directInsertionSuccess": repair.get("directInsertionSuccess"), "ejectionInsertionSuccess": repair.get("ejectionInsertionSuccess"), "relatedDestroyCount": repair.get("ejectedRequestCount"), "affectedSpStatus": affected_sp_status, "missingAfterRepair": repair.get("missingAfterRepair"), "objectiveBefore": before_components["objective"], "objectiveAfter": after_components["objective"], "vehicleCountBefore": before_components["vehicleCount"], "vehicleCountAfter": after_components["vehicleCount"], "rejectReason": None if accepted else "objective-not-improved"})
+        if accepted:
+            best_solution = candidate_solution
+            best_key = candidate_key
+            break
+    return {"solution": best_solution, "trace": trace, "accepted": best_solution is not solution}
+
+
 def natural_route_elimination(instance: Dict[str, Any], solution: Dict[str, Any], config: NaturalPDPTWObjectiveConfig) -> Dict[str, Any]:
     routes = [[str(stop) for stop in route] for route in solution.get("routes", []) if len(route) > 2]
     best_solution = solution
@@ -204,7 +340,8 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
     incumbent = DispatchV2ExternalBenchmarkSolver().solve(instance, time_limit_ms, "our-dispatch-v2")
     before = objective_components(instance, incumbent, config)
     route_elimination = natural_route_elimination(instance, incumbent, config)
-    alns = natural_alns_probe(instance, route_elimination["solution"], config, max_runtime_ms=min(3_000, max(500, time_limit_ms // 8)))
+    objective_elimination = objective_driven_route_elimination_repair(instance, route_elimination["solution"], config)
+    alns = natural_alns_probe(instance, objective_elimination["solution"], config, max_runtime_ms=min(3_000, max(500, time_limit_ms // 8)))
     pool = route_pool_improvement(instance, alns["solution"], config)
     final_solution = pool["solution"]
     after = objective_components(instance, final_solution, config)
@@ -234,7 +371,7 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
         "vehicleCountImproved": vehicle_improved,
         "hardViolations": hard_violations,
         "leakageDetected": leakage,
-        "operatorTrace": {"routeElimination": route_elimination["attempts"], "alnsAccepted": alns["accepted"], "routePoolAccepted": pool["accepted"]},
+        "operatorTrace": {"routeElimination": route_elimination["attempts"], "objectiveDrivenRouteElimination": objective_elimination["trace"], "objectiveDrivenAccepted": objective_elimination["accepted"], "alnsAccepted": alns["accepted"], "routePoolAccepted": pool["accepted"]},
         "routePoolStats": pool.get("poolStats"),
         "routePoolSpStatus": pool.get("spStatus"),
         "runtimeMs": int((time.perf_counter() - started) * 1000),
