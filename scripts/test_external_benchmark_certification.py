@@ -52,6 +52,7 @@ focused_repair = load_module("run_phase36_residual_focused_repair", "run_phase36
 conflict_guided = load_module("run_phase37_conflict_guided_replacement", "run_phase37_conflict_guided_replacement.py")
 residual_partition = load_module("run_phase38_residual_partition_generator", "run_phase38_residual_partition_generator.py")
 target_vehicle = load_module("run_phase38b_target_vehicle_feasibility", "run_phase38b_target_vehicle_feasibility.py")
+missing_targetk = load_module("run_phase39_missing_driven_targetk_repair", "run_phase39_missing_driven_targetk_repair.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -2076,6 +2077,77 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         first = target_vehicle.construct_target_k(instance, 1, "seeded-shuffle", seed=99)
         second = target_vehicle.construct_target_k(instance, 1, "seeded-shuffle", seed=99)
+
+        self.assertEqual(first["routes"], second["routes"])
+
+    def test_phase39_missing_insertion_repairs_partial_targetk_solution(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase39-insert", 3, 3, nodes, requests, {"vehicleCount": 1, "objective": 12.0})
+        routes = [["0", "1", "2", "0"]]
+
+        repaired = missing_targetk.forced_missing_repair(instance, routes)
+
+        self.assertEqual(0, repaired["score"]["missingCount"])
+        self.assertTrue(repaired["score"]["feasible"])
+
+    def test_phase39_ejection_insertion_can_eject_and_reinsert_request(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase39-eject", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        routes = [["0", "1", "2", "3", "4", "0"], ["0", "0"]]
+
+        options = missing_targetk.enumerate_missing_options(instance, routes, ("5", "6"), max_eject=1)
+
+        self.assertTrue(options)
+        self.assertTrue(any(option.option_type in {"direct", "eject-1"} for option in options))
+
+    def test_phase39_missing_priority_orders_few_option_requests_first(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        nodes[5]["dueTime"] = 100
+        nodes[6]["dueTime"] = 100
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase39-priority", 3, 3, nodes, requests, {"vehicleCount": 1, "objective": 12.0})
+        routes = [["0", "1", "2", "0"]]
+
+        ordered = missing_targetk.priority_missing_pairs(instance, routes, [("3", "4"), ("5", "6")])
+
+        self.assertEqual(("5", "6"), ordered[0])
+
+    def test_phase39_perturbation_does_not_increase_missing_count(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase39-perturb", 3, 3, nodes, requests, {"vehicleCount": 1, "objective": 12.0})
+        routes = [["0", "1", "2", "0"]]
+        before = target_vehicle.score_routes(instance, routes)
+
+        repaired = missing_targetk.perturbation_repair(instance, routes, seed=39, max_attempts=4)
+
+        self.assertLessEqual(repaired["score"]["missingCount"], before["missingCount"])
+
+    def test_phase39_repair_is_deterministic_under_seed(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase39-deterministic", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+
+        first = missing_targetk.run_missing_driven_repair(instance, [["0", "1", "2", "0"]])
+        second = missing_targetk.run_missing_driven_repair(instance, [["0", "1", "2", "0"]])
 
         self.assertEqual(first["routes"], second["routes"])
 
