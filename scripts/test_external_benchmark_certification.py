@@ -251,7 +251,7 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertEqual(30_000, solution["budgetPolicy"]["incumbentMs"])
         self.assertEqual(0, solution["budgetPolicy"]["consolidationMs"])
 
-    def test_long_budget_pdptw_keeps_full_incumbent_for_route_count(self) -> None:
+    def test_long_budget_pdptw_reserves_consolidation_for_route_count(self) -> None:
         instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
         calls = []
 
@@ -267,8 +267,10 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
             adapter.ortools_baseline_solution = original
 
         self.assertGreaterEqual(len(calls), 1)
-        self.assertEqual(30_000, calls[0]["timeLimitMs"])
-        self.assertEqual(0, solution["budgetPolicy"]["consolidationMs"])
+        self.assertEqual(24_000, calls[0]["timeLimitMs"])
+        self.assertEqual(24_000, solution["budgetPolicy"]["incumbentMs"])
+        self.assertGreaterEqual(solution["budgetPolicy"]["diversificationMs"], 1_000)
+        self.assertGreaterEqual(solution["budgetPolicy"]["consolidationMs"], 2_500)
 
     def test_long_budget_lrc_pdptw_prioritizes_full_tabu_distance_search(self) -> None:
         instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LRC101.txt"))
@@ -286,9 +288,9 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
             adapter.ortools_baseline_solution = original
 
         self.assertGreaterEqual(len(calls), 1)
-        self.assertEqual(30_000, calls[0]["timeLimitMs"])
+        self.assertEqual(24_000, calls[0]["timeLimitMs"])
         self.assertEqual("TABU_SEARCH", calls[0]["kwargs"].get("local_search_metaheuristic"))
-        self.assertEqual(0, solution["budgetPolicy"]["consolidationMs"])
+        self.assertGreaterEqual(solution["budgetPolicy"]["consolidationMs"], 2_500)
 
     def test_long_budget_uses_wall_clock_slack_for_quality_polish(self) -> None:
         instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
@@ -318,9 +320,33 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         polish_stage = solution["stageRuntimeSummary"]["stages"].get("slack-portfolio-probe")
         self.assertIsNotNone(polish_stage)
-        self.assertEqual(30_000, solution["budgetPolicy"]["incumbentMs"])
-        self.assertEqual(0, solution["budgetPolicy"]["consolidationMs"])
+        self.assertEqual(24_000, solution["budgetPolicy"]["incumbentMs"])
+        self.assertGreaterEqual(solution["budgetPolicy"]["consolidationMs"], 2_500)
         self.assertTrue(any(call.get("timeLimitMs", 0) <= 700 for call in calls[1:]))
+
+    def test_pdptw_consolidation_uses_bounded_operator_set_under_four_seconds(self) -> None:
+        instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
+        solution = {"schemaVersion": "external-benchmark-solution/v1", "solver": "unit", "routes": [["0", "1", "2", "0"]]}
+        calls = []
+        original_consolidator = adapter.GlobalRouteConsolidator
+
+        class FakeConsolidator:
+            def __init__(self, **kwargs):
+                calls.append(kwargs)
+
+            def consolidate(self, instance_arg, solution_arg):
+                return type("Result", (), {"solution": solution_arg})()
+
+        adapter.GlobalRouteConsolidator = FakeConsolidator
+        try:
+            selected = adapter.DispatchV2ExternalBenchmarkSolver()._best_consolidated_solution(instance, solution, 3_000, "our-dispatch-v2")
+        finally:
+            adapter.GlobalRouteConsolidator = original_consolidator
+
+        self.assertEqual(solution, selected)
+        self.assertEqual(1, len(calls))
+        self.assertEqual(0, calls[0]["alns_repair_max_runtime_ms"])
+        self.assertEqual(1, len(calls[0]["operators"]))
 
     def test_slack_portfolio_probe_is_acceptance_gated(self) -> None:
         instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
@@ -475,6 +501,73 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertEqual(before["vehicleCount"], result.after_metrics["vehicleCount"])
         self.assertLess(result.after_metrics["totalDistance"], before["totalDistance"])
         self.assertTrue(any(move.operator == "distance-pair-swap-relocate" and move.accepted for move in result.trace.moves))
+
+    def test_alns_hardest_pairs_prioritizes_few_options_before_easy_pairs(self) -> None:
+        repair = alns_repair.BoundedALNSRepair()
+        instance = {"nodes": [], "distanceMatrix": []}
+        pairs = [("easy-p", "easy-d"), ("hard-p", "hard-d"), ("blocked-p", "blocked-d")]
+        costs = {
+            ("easy-p", "easy-d"): [1.0, 2.0, 3.0],
+            ("hard-p", "hard-d"): [10.0],
+            ("blocked-p", "blocked-d"): [],
+        }
+        original_costs = repair._pair_insertion_costs
+        original_distance = repair._pair_direct_distance
+        repair._pair_insertion_costs = lambda instance_arg, routes_arg, pickup, dropoff: costs[(pickup, dropoff)]
+        repair._pair_direct_distance = lambda instance_arg, pickup, dropoff: 0.0
+        try:
+            ordered = repair._hardest_pairs_first(instance, [], pairs)
+        finally:
+            repair._pair_insertion_costs = original_costs
+            repair._pair_direct_distance = original_distance
+
+        self.assertEqual(("blocked-p", "blocked-d"), ordered[0])
+        self.assertEqual(("hard-p", "hard-d"), ordered[1])
+        self.assertEqual(("easy-p", "easy-d"), ordered[2])
+
+    def test_pair_aware_elimination_hardest_pairs_prioritizes_few_options_first(self) -> None:
+        operator = consolidation.PairAwareRouteEliminationOperator()
+        instance = {"nodes": [], "distanceMatrix": []}
+        pairs = [("easy-p", "easy-d"), ("hard-p", "hard-d"), ("blocked-p", "blocked-d")]
+        costs = {
+            ("easy-p", "easy-d"): [1.0, 2.0],
+            ("hard-p", "hard-d"): [10.0],
+            ("blocked-p", "blocked-d"): [],
+        }
+        original_costs = operator._pair_insertion_costs
+        original_distance = operator._pair_direct_distance
+        operator._pair_insertion_costs = lambda instance_arg, routes_arg, pickup, dropoff, limit: costs[(pickup, dropoff)]
+        operator._pair_direct_distance = lambda instance_arg, pickup, dropoff: 0.0
+        try:
+            ordered = operator._hardest_pairs_first(instance, [], pairs)
+        finally:
+            operator._pair_insertion_costs = original_costs
+            operator._pair_direct_distance = original_distance
+
+        self.assertEqual(("blocked-p", "blocked-d"), ordered[0])
+        self.assertEqual(("hard-p", "hard-d"), ordered[1])
+        self.assertEqual(("easy-p", "easy-d"), ordered[2])
+
+    def test_pair_aware_elimination_caps_pair_insertion_checks(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(12)]
+        instance = support.normalize_instance("unit", "PDPTW", "cap-unit", 2, 10, nodes, [{"pickupNodeId": "1", "dropoffNodeId": "2"}], {"vehicleCount": 1, "objective": 10.0})
+        routes = [["0"] + [str(index) for index in range(3, 11)] + ["0"]]
+        operator = consolidation.PairAwareRouteEliminationOperator(route_shortlist=1, max_candidate_checks_per_pair=5)
+        calls = {"count": 0}
+        original_check = consolidation.check_solution
+
+        def fake_check(instance_arg, solution_arg):
+            calls["count"] += 1
+            return {"feasible": True, "vehicleCount": 1, "totalDistance": float(calls["count"])}
+
+        consolidation.check_solution = fake_check
+        try:
+            costs = operator._pair_insertion_costs(instance, routes, "1", "2", limit=2)
+        finally:
+            consolidation.check_solution = original_check
+
+        self.assertLessEqual(calls["count"], 6)
+        self.assertEqual(2, len(costs))
 
     def test_resource_budget_allocator_degrades_under_hot_lagged_load(self) -> None:
         allocation = resource_core.BudgetAllocator(max_tick_ms=800).allocate(

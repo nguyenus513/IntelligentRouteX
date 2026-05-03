@@ -24,6 +24,13 @@ TIER_TARGETS: dict[str, dict[str, list[str]]] = {
         "solomon": ["C101", "C102", "C201", "R101", "R102", "R201", "RC101", "RC102", "RC201"],
         "li-lim": ["LC101", "LC102", "LC103", "LR101", "LR102", "LR103", "LRC101", "LRC102", "LRC103"],
     },
+    "phase27-losses": {
+        "li-lim": [
+            "lrc202", "lrc206", "lrc106", "LRC1_2_7", "lrc104", "lrc108", "LRC281", "LC1_4_8",
+            "lrc208", "lrc102", "lrc207", "LR2_2_8", "LC1_4_4", "LRC2_2_4", "LC2_4_2",
+            "LC281", "LC1_6_2", "LC283", "LC181",
+        ],
+    },
 }
 
 
@@ -182,7 +189,7 @@ def markdown(payload: dict[str, Any]) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run Phase 15 resumable large community benchmark.")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    parser.add_argument("--tier", choices=("fast", "medium", "large", "gap"), default="fast")
+    parser.add_argument("--tier", choices=("fast", "medium", "large", "gap", "phase27-losses"), default="fast")
     parser.add_argument("--solvers", default="our-dispatch-v2,ortools-baseline")
     parser.add_argument("--time-limit", default="15s")
     parser.add_argument("--data-source", choices=("official", "auto", "fixture"), default="auto")

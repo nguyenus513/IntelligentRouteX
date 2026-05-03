@@ -204,6 +204,17 @@ class DispatchV2ExternalBenchmarkSolver:
                 "consolidationMs": 0,
             }
         if time_limit_ms >= 30_000:
+            if dispatch_case.problem_type == "PDPTW":
+                incumbent_ms = min(time_limit_ms, max(1, int(time_limit_ms * 0.80)))
+                diversification_ms = min(2_000, max(1_000, int(time_limit_ms * 0.06)))
+                consolidation_ms = min(3_500, max(2_500, int(time_limit_ms * 0.10)))
+                return {
+                    "incumbentMs": incumbent_ms,
+                    "fixedProbeMs": 0,
+                    "constructionMs": 0,
+                    "diversificationMs": diversification_ms,
+                    "consolidationMs": consolidation_ms,
+                }
             repair_reserve_ms = 0
             return {
                 "incumbentMs": max(1, time_limit_ms - repair_reserve_ms),
@@ -248,7 +259,7 @@ class DispatchV2ExternalBenchmarkSolver:
                     "first_solution_strategy": "PARALLEL_CHEAPEST_INSERTION",
                     "local_search_metaheuristic": "GUIDED_LOCAL_SEARCH",
                 }
-            elif instance.get("problemType") == "PDPTW" and incumbent_limit_ms >= 28_000:
+            elif instance.get("problemType") == "PDPTW" and incumbent_limit_ms >= 20_000:
                 incumbent_kwargs = {"local_search_metaheuristic": self._pdptw_metaheuristic_policy(instance)}
             candidates.append(ortools_baseline_solution(instance, incumbent_limit_ms, solver, **incumbent_kwargs))
         if fixed_probe_limit_ms > 0:
@@ -342,13 +353,12 @@ class DispatchV2ExternalBenchmarkSolver:
         time_limit_ms: int,
         solver: str,
     ) -> Dict[str, Any]:
-        if time_limit_ms <= 1_500:
-            from academic_global_consolidation import CrossRoutePairRelocateImprovementOperator, IntraRouteRelocateImprovementOperator
+        if time_limit_ms <= 4_000:
+            from academic_global_consolidation import PairAwareRouteEliminationOperator
 
             consolidator = GlobalRouteConsolidator(
                 operators=[
-                    IntraRouteRelocateImprovementOperator(max_routes=12, max_route_stops=48, max_attempts=24),
-                    CrossRoutePairRelocateImprovementOperator(max_source_routes=12, max_target_routes=4, max_attempts=24, max_candidate_checks_per_pair=24),
+                    PairAwareRouteEliminationOperator(max_removed_pairs=6, max_attempts=6, route_shortlist=4, beam_width=2, max_candidate_checks_per_pair=16),
                 ],
                 alns_repair_max_runtime_ms=0,
             )

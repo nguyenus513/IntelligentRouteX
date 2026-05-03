@@ -265,11 +265,12 @@ class ContiguousBlockRouteEliminationOperator:
 class PairAwareRouteEliminationOperator:
     name = "pair-aware-route-elimination"
 
-    def __init__(self, max_removed_pairs: int = 12, max_attempts: int = 120, route_shortlist: int = 18, beam_width: int = 8) -> None:
+    def __init__(self, max_removed_pairs: int = 12, max_attempts: int = 120, route_shortlist: int = 18, beam_width: int = 8, max_candidate_checks_per_pair: int = 512) -> None:
         self._max_removed_pairs = max_removed_pairs
         self._max_attempts = max_attempts
         self._route_shortlist = route_shortlist
         self._beam_width = beam_width
+        self._max_candidate_checks_per_pair = max_candidate_checks_per_pair
 
     def apply(self, instance: Dict[str, Any], routes: List[List[str]]) -> tuple[List[List[str]], List[ConsolidationMove]]:
         moves: List[ConsolidationMove] = []
@@ -352,26 +353,38 @@ class PairAwareRouteEliminationOperator:
         return None if best is None else best[1]
 
     def _hardest_pairs_first(self, instance: Dict[str, Any], routes: List[List[str]], route_pairs: List[tuple[str, str]]) -> List[tuple[str, str]]:
-        scored: List[tuple[tuple[int, float], tuple[str, str]]] = []
+        scored: List[tuple[tuple[int, float, float], tuple[str, str]]] = []
         for pickup, dropoff in route_pairs:
             insertions = self._pair_insertion_costs(instance, routes, pickup, dropoff, limit=2)
             if not insertions:
-                scored.append(((10**9, 1e18), (pickup, dropoff)))
+                scored.append(((0, -1e18, -self._pair_direct_distance(instance, pickup, dropoff)), (pickup, dropoff)))
                 continue
             regret = insertions[1] - insertions[0] if len(insertions) > 1 else insertions[0]
-            scored.append(((-len(insertions), -regret), (pickup, dropoff)))
+            scored.append(((len(insertions), -regret, -self._pair_direct_distance(instance, pickup, dropoff)), (pickup, dropoff)))
         scored.sort(key=lambda item: item[0])
         return [pair for _, pair in scored]
+
+    def _pair_direct_distance(self, instance: Dict[str, Any], pickup: str, dropoff: str) -> float:
+        try:
+            indexes = {str(node["id"]): index for index, node in enumerate(instance.get("nodes", []))}
+            return float(instance.get("distanceMatrix", [])[indexes[pickup]][indexes[dropoff]])
+        except Exception:
+            return 0.0
 
     def _pair_insertion_costs(self, instance: Dict[str, Any], routes: List[List[str]], pickup: str, dropoff: str, limit: int) -> List[float]:
         costs: List[float] = []
         baseline_distance = self._distance(instance, routes)
+        checked_candidates = 0
         for route_index, route in self._ranked_receiver_routes(instance, routes, pickup, dropoff):
             for pickup_position in range(1, len(route)):
                 for dropoff_position in range(pickup_position + 1, len(route) + 1):
+                    if checked_candidates >= self._max_candidate_checks_per_pair:
+                        costs.sort()
+                        return costs[:limit]
                     candidate = [item[:] for item in routes]
                     candidate_route = route[:pickup_position] + [pickup] + route[pickup_position:dropoff_position] + [dropoff] + route[dropoff_position:]
                     candidate[route_index] = candidate_route
+                    checked_candidates += 1
                     checked = check_solution(instance, _solution(candidate, "academic-global-consolidation"))
                     if checked.get("feasible"):
                         costs.append(float(checked.get("totalDistance", 0.0)) - baseline_distance)
@@ -381,12 +394,17 @@ class PairAwareRouteEliminationOperator:
     def _insert_pair_candidates(self, instance: Dict[str, Any], routes: List[List[str]], pickup: str, dropoff: str) -> List[List[List[str]]]:
         feasible: List[tuple[float, List[List[str]]]] = []
         baseline_distance = self._distance(instance, routes)
+        checked_candidates = 0
         for route_index, route in self._ranked_receiver_routes(instance, routes, pickup, dropoff):
             for pickup_position in range(1, len(route)):
                 for dropoff_position in range(pickup_position + 1, len(route) + 1):
+                    if checked_candidates >= self._max_candidate_checks_per_pair:
+                        feasible.sort(key=lambda item: item[0])
+                        return [candidate for _, candidate in feasible[:self._beam_width]]
                     candidate = [item[:] for item in routes]
                     candidate_route = route[:pickup_position] + [pickup] + route[pickup_position:dropoff_position] + [dropoff] + route[dropoff_position:]
                     candidate[route_index] = candidate_route
+                    checked_candidates += 1
                     checked = check_solution(instance, _solution(candidate, "academic-global-consolidation"))
                     if checked.get("feasible"):
                         feasible.append((float(checked.get("totalDistance", 0.0)) - baseline_distance, candidate))

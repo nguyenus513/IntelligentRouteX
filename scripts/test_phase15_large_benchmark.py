@@ -74,6 +74,8 @@ def write_solution(root: Path, name: str, budget_used_ms: int, overrun: bool, de
 def test_target_tiers_and_solver_parser() -> None:
     assert ("solomon", "RC101") in target_instances("gap")
     assert ("li-lim", "LR101") in target_instances("gap")
+    assert ("li-lim", "lrc202") in target_instances("phase27-losses")
+    assert ("li-lim", "LC181") in target_instances("phase27-losses")
     assert target_instances("fast", 2) == [("solomon", "C101"), ("solomon", "R101")]
     assert parse_solvers("our-dispatch-v2,ortools-baseline") == ["our-dispatch-v2", "ortools-baseline"]
 

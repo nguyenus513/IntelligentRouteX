@@ -377,16 +377,23 @@ class BoundedALNSRepair:
         return sorted(enumerate(routes), key=lambda item: (affinity(item), len(item[1])))[:self._config.receiver_route_shortlist]
 
     def _hardest_pairs_first(self, instance: Dict[str, Any], routes: List[List[str]], pairs: List[tuple[str, str]]) -> List[tuple[str, str]]:
-        scored: List[tuple[tuple[int, float], tuple[str, str]]] = []
+        scored: List[tuple[tuple[int, float, float], tuple[str, str]]] = []
         for pickup, dropoff in pairs:
             costs = self._pair_insertion_costs(instance, routes, pickup, dropoff)
             if not costs:
-                scored.append(((10**9, 1e18), (pickup, dropoff)))
+                scored.append(((0, -1e18, -self._pair_direct_distance(instance, pickup, dropoff)), (pickup, dropoff)))
                 continue
             regret = costs[1] - costs[0] if len(costs) > 1 else costs[0]
-            scored.append(((-len(costs), -regret), (pickup, dropoff)))
+            scored.append(((len(costs), -regret, -self._pair_direct_distance(instance, pickup, dropoff)), (pickup, dropoff)))
         scored.sort(key=lambda item: item[0])
         return [pair for _, pair in scored]
+
+    def _pair_direct_distance(self, instance: Dict[str, Any], pickup: str, dropoff: str) -> float:
+        try:
+            indexes = {str(node["id"]): index for index, node in enumerate(instance.get("nodes", []))}
+            return float(instance.get("distanceMatrix", [])[indexes[pickup]][indexes[dropoff]])
+        except Exception:
+            return 0.0
 
     def _pair_insertion_costs(self, instance: Dict[str, Any], routes: List[List[str]], pickup: str, dropoff: str) -> List[float]:
         baseline_distance = float(check_solution(instance, _solution(routes)).get("totalDistance", 0.0))
