@@ -323,7 +323,7 @@ class InternalSolverCandidateGenerator:
     def __init__(self, max_runtime_ms: int = 3_000) -> None:
         self._max_runtime_ms = max_runtime_ms
 
-    def generate(self, instance: Dict[str, Any], config: NaturalPDPTWObjectiveConfig) -> Dict[str, Any]:
+    def generate(self, instance: Dict[str, Any], config: NaturalPDPTWObjectiveConfig, incumbent: Dict[str, Any] | None = None) -> Dict[str, Any]:
         strategies = [
             ("PARALLEL_CHEAPEST_INSERTION", "GUIDED_LOCAL_SEARCH"),
             ("PATH_CHEAPEST_ARC", "TABU_SEARCH"),
@@ -331,6 +331,21 @@ class InternalSolverCandidateGenerator:
         ]
         candidates = []
         trace = []
+        if incumbent is not None and check_solution(instance, incumbent).get("feasible"):
+            warm = dict(incumbent)
+            warm["solver"] = "our-dispatch-v2-internal-generator-warm-start"
+            candidates.append(warm)
+            checked = check_solution(instance, warm)
+            trace.append({
+                "firstSolutionStrategy": "INCUMBENT_WARM_START",
+                "localSearchMetaheuristic": "PRESERVE_INCUMBENT",
+                "status": "feasible",
+                "warmStartUsed": True,
+                "sameRouteArcBiasUsed": True,
+                "fixedCostUsed": int(config.vehicle_fixed_cost),
+                "vehicleCount": checked.get("vehicleCount"),
+                "distance": checked.get("totalDistance"),
+            })
         per_candidate_ms = max(300, self._max_runtime_ms // max(1, len(strategies)))
         for first_strategy, local_strategy in strategies:
             try:
@@ -353,6 +368,9 @@ class InternalSolverCandidateGenerator:
                 "firstSolutionStrategy": first_strategy,
                 "localSearchMetaheuristic": local_strategy,
                 "status": "feasible" if feasible else candidate.get("evidenceGapReason", "hard-violation"),
+                "warmStartUsed": False,
+                "sameRouteArcBiasUsed": False,
+                "fixedCostUsed": int(config.vehicle_fixed_cost),
                 "vehicleCount": checked.get("vehicleCount"),
                 "distance": checked.get("totalDistance"),
             })
@@ -383,12 +401,24 @@ class InternalSolverCandidateGenerator:
 def internal_solver_improvement(instance: Dict[str, Any], solution: Dict[str, Any], config: NaturalPDPTWObjectiveConfig, mode: str = "natural") -> Dict[str, Any]:
     before = objective_components(instance, solution, config)
     generator = InternalSolverCandidateGenerator(max_runtime_ms=3_000)
-    generated = generator.generate(instance, config)
+    generated = generator.generate(instance, config, incumbent=solution)
     best_candidate = None
     best_after = None
+    candidate_summaries = []
     for candidate in generated["candidates"]:
         after = objective_components(instance, candidate, config)
+        delta = after["objective"] - before["objective"]
+        reason = None
+        if config.mode == "academic_certification" and after["vehicleCount"] > before["vehicleCount"]:
+            reason = "vehicle-count-regression"
+        elif not after["feasible"]:
+            reason = "hard-violation"
+        elif delta >= 0:
+            reason = "objective-not-improved"
+        candidate_summaries.append({"vehicleCount": after["vehicleCount"], "distance": after["totalDistance"], "objectiveDelta": delta, "rejectReason": reason})
         if not after["feasible"]:
+            continue
+        if config.mode == "academic_certification" and after["vehicleCount"] > before["vehicleCount"]:
             continue
         if best_after is None or after["objective"] < best_after["objective"]:
             best_candidate = candidate
@@ -401,14 +431,22 @@ def internal_solver_improvement(instance: Dict[str, Any], solution: Dict[str, An
         "trace": {
             "generatorMode": mode,
             "strategiesTried": generated["trace"],
+            "warmStartUsed": any(row.get("warmStartUsed") for row in generated["trace"]),
+            "sameRouteArcBiasUsed": any(row.get("sameRouteArcBiasUsed") for row in generated["trace"]),
+            "fixedCostUsed": int(config.vehicle_fixed_cost),
             "candidateCount": generated["candidateCount"],
             "feasibleCandidateCount": generated["feasibleCandidateCount"],
+            "candidateVehicleCounts": [row["vehicleCount"] for row in candidate_summaries],
+            "candidateDistances": [row["distance"] for row in candidate_summaries],
+            "candidateObjectiveDeltas": [row["objectiveDelta"] for row in candidate_summaries],
             "bestCandidateVehicleCount": best_after.get("vehicleCount") if best_after else None,
             "bestCandidateDistance": best_after.get("totalDistance") if best_after else None,
+            "bestCandidateComparedToIncumbent": candidate_summaries[0] if candidate_summaries else None,
             "objectiveBefore": before,
             "objectiveAfter": best_after,
             "accepted": accepted,
             "rejectReason": reject_reason,
+            "bestRejectedReason": next((row["rejectReason"] for row in candidate_summaries if row.get("rejectReason")), reject_reason),
         },
     }
 

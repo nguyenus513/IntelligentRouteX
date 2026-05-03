@@ -2351,6 +2351,68 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertNotIn("instanceName ==", source)
         self.assertNotIn("startswith(\"LRC\")", source)
 
+    def test_phase43_warm_start_candidate_preserves_incumbent_routes(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase43-warm", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        incumbent = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+
+        generated = natural_pdptw.InternalSolverCandidateGenerator(max_runtime_ms=300).generate(instance, natural_pdptw.objective_config("academic_certification"), incumbent=incumbent)
+
+        self.assertEqual(incumbent["routes"], generated["candidates"][0]["routes"])
+        self.assertTrue(generated["trace"][0]["warmStartUsed"])
+
+    def test_phase43_academic_fixed_cost_rejects_vehicle_count_regression(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase43-fixed", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        incumbent = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+
+        result = natural_pdptw.internal_solver_improvement(instance, incumbent, natural_pdptw.objective_config("academic_certification"))
+
+        self.assertFalse(result["accepted"])
+        self.assertIn(result["trace"]["rejectReason"], {"objective-not-improved", "no-feasible-candidate"})
+
+    def test_phase43_production_tail_penalty_still_visible_with_warm_start(self) -> None:
+        coords = [(0.0, 0.0), (10.0, 0.0), (11.0, 0.0), (-10.0, 0.0), (-11.0, 0.0)]
+        nodes = [{"id": str(index), "x": coords[index][0], "y": coords[index][1], "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase43-prod", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        config = natural_pdptw.objective_config("production_food_dispatch")
+
+        compressed = natural_pdptw.objective_components(instance, {"routes": [["0", "1", "2", "3", "4", "0"]]}, config)
+        split = natural_pdptw.objective_components(instance, {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}, config)
+
+        self.assertGreater(compressed["tailPenalty"], split["tailPenalty"])
+
+    def test_phase43_generator_trace_reports_fixed_cost_and_candidate_deltas(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase43-trace", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        incumbent = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+
+        result = natural_pdptw.internal_solver_improvement(instance, incumbent, natural_pdptw.objective_config("academic_certification"))
+
+        self.assertGreater(result["trace"]["fixedCostUsed"], 0)
+        self.assertTrue(result["trace"]["warmStartUsed"])
+        self.assertTrue(result["trace"]["candidateObjectiveDeltas"])
+
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
 
