@@ -47,6 +47,7 @@ route_pool_sp = load_module("run_phase31_pdptw_route_pool_sp", "run_phase31_pdpt
 internal_columns = load_module("run_phase32_internal_column_generation", "run_phase32_internal_column_generation.py")
 route_set_guided = load_module("run_phase33_route_set_guided_generation", "run_phase33_route_set_guided_generation.py")
 missing_large_columns = load_module("run_phase34_missing_request_large_columns", "run_phase34_missing_request_large_columns.py")
+residual_repair = load_module("run_phase35_residual_exact_cover_repair", "run_phase35_residual_exact_cover_repair.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -1549,6 +1550,109 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         self.assertTrue(collector.pool.columns)
         self.assertTrue(all(column.provenance == "internal" and column.allowed_for_claim for column in collector.pool.columns))
+
+    def test_phase35_missing_request_insertion_repairs_synthetic_packing(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase35-insertion", 3, 3, nodes, requests, {"vehicleCount": 1, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "3", "4", "0"], "unit")
+        selected = collector.pool.columns[:]
+
+        result = residual_repair.missing_request_insertion_repair(instance, collector, selected, target_vehicle_count=1)
+
+        self.assertTrue(result["exact"])
+        self.assertEqual(0, residual_repair.coverage_state(instance, result["columns"])["missingCount"])
+
+    def test_phase35_one_column_swap_repairs_synthetic_residual(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase35-one-swap", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "selected")
+        collector.collect(["0", "3", "4", "0"], "selected")
+        selected = collector.pool.columns[:]
+        collector.collect(["0", "3", "4", "5", "6", "0"], "replacement")
+
+        result = residual_repair.one_column_swap_repair(instance, collector, selected, target_vehicle_count=2)
+
+        self.assertTrue(result["exact"])
+        self.assertEqual(0, residual_repair.coverage_state(instance, result["columns"])["missingCount"])
+
+    def test_phase35_two_column_swap_repairs_synthetic_residual(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(9)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6), (7, 8)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+            {"pickupNodeId": "7", "dropoffNodeId": "8"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase35-two-swap", 4, 4, nodes, requests, {"vehicleCount": 2, "objective": 16.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "selected")
+        collector.collect(["0", "3", "4", "0"], "selected")
+        selected = collector.pool.columns[:]
+
+        result = residual_repair.two_column_swap_repair(instance, collector, selected, target_vehicle_count=2)
+
+        self.assertGreaterEqual(result["successes"], 1)
+        self.assertLessEqual(residual_repair.coverage_state(instance, result["columns"])["missingCount"], 2)
+
+    def test_phase35_k_minus_one_complement_creates_valid_final_route(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase35-complement", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "selected")
+        collector.collect(["0", "3", "4", "0"], "selected")
+        selected = collector.pool.columns[:]
+
+        result = residual_repair.k_minus_one_complement_repair(instance, collector, selected, target_vehicle_count=2)
+
+        self.assertTrue(result["exact"])
+        self.assertTrue(check_solution := support.check_solution(instance, result["columns"] and {"routes": [column.route for column in result["columns"]]}).get("feasible"))
+
+    def test_phase35_local_search_never_uses_disallowed_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase35-no-leak", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "selected")
+        selected = collector.pool.columns[:]
+        collector.pool.add_route(["0", "3", "4", "0"], "comparator", source_solver="baseline", provenance="comparator", allowed_for_claim=False)
+
+        result = residual_repair.residual_exact_cover_local_search(instance, collector, selected, target_vehicle_count=1)
+
+        chosen_ids = set(result.get("bestSelectedColumnIds", []))
+        self.assertFalse(any(column.column_id in chosen_ids and not column.allowed_for_claim for column in collector.pool.columns))
 
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
