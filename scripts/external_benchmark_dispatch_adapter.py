@@ -354,11 +354,28 @@ class DispatchV2ExternalBenchmarkSolver:
         solver: str,
     ) -> Dict[str, Any]:
         if time_limit_ms <= 4_000:
-            from academic_global_consolidation import PairAwareRouteEliminationOperator
+            from academic_global_consolidation import MultiRouteDestroyRepairOperator, PairAwareRouteEliminationOperator, PairEjectionChainOperator
 
             consolidator = GlobalRouteConsolidator(
                 operators=[
                     PairAwareRouteEliminationOperator(max_removed_pairs=6, max_attempts=6, route_shortlist=4, beam_width=2, max_candidate_checks_per_pair=16),
+                    PairEjectionChainOperator(
+                        max_removed_pairs=12,
+                        max_runtime_ms=min(650, max(200, time_limit_ms // 4)),
+                        max_states=96,
+                        beam_width=8,
+                        max_depth=2,
+                        max_candidate_checks=1_024,
+                    ),
+                    MultiRouteDestroyRepairOperator(
+                        max_runtime_ms=min(650, max(200, time_limit_ms // 4)),
+                        max_neighbor_routes=3,
+                        max_removed_pairs=12,
+                        beam_width=8,
+                        max_states=96,
+                        ejection_depth=2,
+                        max_candidate_checks=1_024,
+                    ),
                 ],
                 alns_repair_max_runtime_ms=0,
             )

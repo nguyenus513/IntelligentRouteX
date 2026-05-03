@@ -42,6 +42,7 @@ dynamic_quality = load_module("run_dynamic_dispatch_quality_benchmark", "run_dyn
 stochastic_data = load_module("download_stochastic_benchmark_data", "download_stochastic_benchmark_data.py")
 stochastic_benchmark = load_module("run_stochastic_community_benchmark", "run_stochastic_community_benchmark.py")
 ml_quality = load_module("run_ml_intelligence_benchmark", "run_ml_intelligence_benchmark.py")
+loss_certificate = load_module("run_phase31_loss_certificate", "run_phase31_loss_certificate.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -346,7 +347,10 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertEqual(solution, selected)
         self.assertEqual(1, len(calls))
         self.assertEqual(0, calls[0]["alns_repair_max_runtime_ms"])
-        self.assertEqual(1, len(calls[0]["operators"]))
+        self.assertEqual(3, len(calls[0]["operators"]))
+        self.assertEqual("pair-aware-route-elimination", calls[0]["operators"][0].name)
+        self.assertEqual("pair-ejection-chain", calls[0]["operators"][1].name)
+        self.assertEqual("multi-route-destroy-repair", calls[0]["operators"][2].name)
 
     def test_slack_portfolio_probe_is_acceptance_gated(self) -> None:
         instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
@@ -446,6 +450,85 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertTrue(after["feasible"])
         self.assertLess(after["vehicleCount"], before["vehicleCount"])
         self.assertTrue(any(move.operator == "pair-aware-route-elimination" and move.accepted for move in result.trace.moves))
+
+    def test_pair_insertion_index_reuses_cached_options_and_respects_caps(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(8)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}]
+        instance = support.normalize_instance("unit", "PDPTW", "pair-index-unit", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 10.0})
+        routes = [["0", "3", "4", "0"], ["0", "5", "6", "7", "0"]]
+        index = consolidation.PairInsertionIndex.build(instance, routes, max_candidate_checks=5, max_routes=2, max_positions_per_route=10)
+
+        first = index.options_for_pair(("1", "2"), top_k=10)
+        first_checks = index.candidate_checks
+        second = index.options_for_pair(("1", "2"), top_k=10)
+
+        self.assertLessEqual(first_checks, 5)
+        self.assertEqual(first_checks, index.candidate_checks)
+        self.assertEqual(1, index.cache_hits)
+        self.assertEqual(first, second)
+        self.assertTrue(all(option.feasible for option in first))
+
+    def test_pair_ejection_chain_operator_reduces_vehicle_count_on_synthetic_pdptw(self) -> None:
+        nodes = [
+            {"id": "0", "x": 0.0, "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "1", "x": 1.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "2", "x": 2.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "3", "x": 9.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "4", "x": 10.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "5", "x": 4.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "6", "x": 5.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+        ]
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "pair-ejection-unit", 3, 2, nodes, requests, {"vehicleCount": 2, "objective": 20.0})
+        solution = {"schemaVersion": "external-benchmark-solution/v1", "solver": "unit", "routes": [["0", "1", "2", "0"], ["0", "5", "6", "0"], ["0", "3", "4", "0"]]}
+        before = support.check_solution(instance, solution)
+
+        result = consolidation.GlobalRouteConsolidator(
+            operators=[consolidation.PairEjectionChainOperator(max_removed_pairs=1, max_runtime_ms=1_000, max_states=64, beam_width=8, max_depth=2, max_candidate_checks=256)]
+        ).consolidate(instance, solution)
+        after = support.check_solution(instance, result.solution)
+
+        self.assertTrue(after["feasible"])
+        self.assertLess(after["vehicleCount"], before["vehicleCount"])
+        accepted = [move for move in result.trace.moves if move.operator == "pair-ejection-chain" and move.accepted]
+        self.assertTrue(accepted)
+        self.assertGreaterEqual(accepted[0].metadata["statesExpanded"], 1)
+
+    def test_multi_route_destroy_repair_removes_related_neighbor_pair(self) -> None:
+        nodes = [
+            {"id": "0", "x": 0.0, "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "1", "x": 1.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "2", "x": 2.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "3", "x": 3.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "4", "x": 4.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "5", "x": 5.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+            {"id": "6", "x": 6.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0},
+        ]
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "multi-destroy-unit", 3, 2, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        solution = {"schemaVersion": "external-benchmark-solution/v1", "solver": "unit", "routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"], ["0", "5", "6", "0"]]}
+        before = support.check_solution(instance, solution)
+
+        result = consolidation.GlobalRouteConsolidator(
+            operators=[consolidation.MultiRouteDestroyRepairOperator(max_runtime_ms=1_000, max_neighbor_routes=2, max_removed_pairs=3, beam_width=8, max_states=128, ejection_depth=2, max_candidate_checks=512)]
+        ).consolidate(instance, solution)
+        after = support.check_solution(instance, result.solution)
+
+        self.assertTrue(after["feasible"])
+        self.assertLess(after["vehicleCount"], before["vehicleCount"])
+        accepted = [move for move in result.trace.moves if move.operator == "multi-route-destroy-repair" and move.accepted]
+        self.assertTrue(accepted)
+        self.assertGreaterEqual(accepted[0].metadata["relatedPairCount"], 1)
 
     def test_bounded_alns_repair_reduces_pdptw_vehicle_count(self) -> None:
         nodes = [
@@ -948,6 +1031,41 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         self.assertEqual("PASS_WITH_LIMITS", verdict["finalVerdict"])
         self.assertIn("ml-value-not-proven", verdict["verdictReasons"])
+
+    def test_phase31_certificate_detects_candidate_cap(self) -> None:
+        stats = [{"zeroOptionPairCount": 1, "candidateCapHit": True}, {"zeroOptionPairCount": 1, "candidateCapHit": False}]
+
+        blocker = loss_certificate.classify_blocker(stats, {"candidate-cap": 1, "time-window": 0, "capacity": 0}, state_cap_hit=True, runtime_cap_hit=False)
+
+        self.assertEqual("state-cap", blocker)
+
+    def test_phase31_certificate_detects_route_shortlist_over_pruning(self) -> None:
+        stats = [{"zeroOptionPairCount": 2, "candidateCapHit": False}, {"zeroOptionPairCount": 0, "candidateCapHit": False}]
+
+        blocker = loss_certificate.classify_blocker(stats, {"candidate-cap": 0, "time-window": 0, "capacity": 0}, state_cap_hit=False, runtime_cap_hit=False)
+
+        self.assertEqual("over-pruning", blocker)
+
+    def test_phase31_certificate_distinguishes_true_time_window_block(self) -> None:
+        stats = [{"zeroOptionPairCount": 2, "candidateCapHit": False}, {"zeroOptionPairCount": 2, "candidateCapHit": False}]
+
+        blocker = loss_certificate.classify_blocker(stats, {"candidate-cap": 0, "time-window": 9, "capacity": 0}, state_cap_hit=False, runtime_cap_hit=False)
+
+        self.assertEqual("true-time-window-block", blocker)
+
+    def test_phase31_certificate_wider_shortlist_reveals_feasible_insertion(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(8)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}]
+        instance = support.normalize_instance("unit", "PDPTW", "shortlist-certificate-unit", 3, 2, nodes, requests, {"vehicleCount": 1, "objective": 10.0})
+        routes = [["0", "6", "7", "0"], ["0", "3", "4", "0"], ["0", "5", "0"]]
+
+        narrow = loss_certificate.pair_option_stats(instance, routes, [("1", "2")], route_shortlist=1, max_candidate_checks=64)
+        wide = loss_certificate.pair_option_stats(instance, routes, [("1", "2")], route_shortlist=3, max_candidate_checks=256)
+
+        self.assertGreaterEqual(narrow["zeroOptionPairCount"], wide["zeroOptionPairCount"])
+        self.assertGreater(wide["max"], 0)
 
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
