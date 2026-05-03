@@ -198,6 +198,78 @@ class Phase56BStablePromotedRunnerTest(unittest.TestCase):
 
         self.assertEqual(sorted_once, sorted_twice)
 
+    def test_stable_internal_candidate_key_tie_breaks_by_signature(self) -> None:
+        instance = tiny_instance()
+        config = __import__("run_phase40_natural_pdptw_optimizer").objective_config("academic_certification")
+        left = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+        right = {"routes": [["0", "3", "4", "0"], ["0", "1", "2", "0"]]}
+
+        self.assertEqual(phase56b.stable_internal_candidate_key(instance, left, config), phase56b.stable_internal_candidate_key(instance, right, config))
+
+    def test_stable_internal_solver_rejects_invalid_candidates(self) -> None:
+        instance = tiny_instance()
+        config = __import__("run_phase40_natural_pdptw_optimizer").objective_config("academic_certification")
+        solution = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+        invalid = {"routes": [["0", "1", "0"]]}
+        valid = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+
+        original = phase56b.InternalSolverCandidateGenerator
+
+        class FakeGenerator:
+            def __init__(self, max_runtime_ms: int = 0) -> None:
+                self.max_runtime_ms = max_runtime_ms
+
+            def generate(self, instance_arg, config_arg, incumbent=None):
+                return {"candidates": [invalid, valid], "trace": [], "candidateCount": 2, "feasibleCandidateCount": 1}
+
+        phase56b.InternalSolverCandidateGenerator = FakeGenerator
+        try:
+            result = phase56b.stable_internal_solver_improvement(instance, solution, config, deterministic_seed=56)
+        finally:
+            phase56b.InternalSolverCandidateGenerator = original
+
+        rows = result["trace"]["candidateRows"]
+        self.assertIn("hard-violation", {row.get("rejectReason") for row in rows})
+
+    def test_stable_internal_solver_records_seed_in_diagnostics(self) -> None:
+        instance = tiny_instance()
+        config = __import__("run_phase40_natural_pdptw_optimizer").objective_config("academic_certification")
+        solution = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+
+        original = phase56b.InternalSolverCandidateGenerator
+
+        class FakeGenerator:
+            def __init__(self, max_runtime_ms: int = 0) -> None:
+                self.max_runtime_ms = max_runtime_ms
+
+            def generate(self, instance_arg, config_arg, incumbent=None):
+                return {"candidates": [solution], "trace": [{"firstSolutionStrategy": "INCUMBENT", "localSearchMetaheuristic": "NONE"}], "candidateCount": 1, "feasibleCandidateCount": 1}
+
+        phase56b.InternalSolverCandidateGenerator = FakeGenerator
+        try:
+            result = phase56b.stable_internal_solver_improvement(instance, solution, config, deterministic_seed=123)
+        finally:
+            phase56b.InternalSolverCandidateGenerator = original
+
+        self.assertEqual(123, result["trace"]["deterministicSeed"])
+        self.assertEqual([["INCUMBENT", "NONE"]], result["trace"]["internalSolverStrategyOrder"])
+
+    def test_stable_internal_solver_reuses_candidate_cache(self) -> None:
+        instance = tiny_instance()
+        config = __import__("run_phase40_natural_pdptw_optimizer").objective_config("academic_certification")
+        solution = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_path = Path(temp_dir) / "internal.json"
+            first = phase56b.stable_internal_solver_improvement(instance, solution, config, deterministic_seed=56, candidate_cache_path=cache_path)
+            second = phase56b.stable_internal_solver_improvement(instance, solution, config, deterministic_seed=56, candidate_cache_path=cache_path)
+
+        self.assertFalse(first["trace"]["internalSolverCacheHit"])
+        self.assertTrue(second["trace"]["internalSolverCacheHit"])
+        self.assertEqual(
+            first["trace"]["selectedInternalSolverCandidateSignature"],
+            second["trace"]["selectedInternalSolverCandidateSignature"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,6 +13,7 @@ from external_benchmark_dispatch_adapter import DispatchV2ExternalBenchmarkSolve
 from external_benchmark_support import check_solution, route_distance
 from run_external_benchmark_certification import parse_instance, parse_time_limit, resolve_instance_path
 from run_phase40_natural_pdptw_optimizer import (
+    InternalSolverCandidateGenerator,
     internal_solver_improvement,
     natural_route_elimination,
     natural_solution_key,
@@ -74,6 +75,132 @@ def solution_signature(instance: Dict[str, Any], solution: Dict[str, Any]) -> st
     canonical = canonicalize_solution(instance, solution)
     payload = json.dumps(canonical.get("routes", []), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def stable_internal_candidate_key(instance: Dict[str, Any], solution: Dict[str, Any], config: Any) -> tuple[int, float, float, str]:
+    canonical = canonicalize_solution(instance, solution)
+    components = objective_components(instance, canonical, config)
+    return (
+        int(components.get("vehicleCount", 0) or 0),
+        round(float(components.get("objective", 0.0) or 0.0), 6),
+        round(float(components.get("totalDistance", 0.0) or 0.0), 6),
+        solution_signature(instance, canonical),
+    )
+
+
+def stable_internal_solver_improvement(
+    instance: Dict[str, Any],
+    solution: Dict[str, Any],
+    config: Any,
+    deterministic_seed: int = 56,
+    max_runtime_ms: int = 3_000,
+    candidate_cache_path: Path | None = None,
+) -> Dict[str, Any]:
+    if candidate_cache_path is not None and candidate_cache_path.exists():
+        cached = load_incumbent_cache(candidate_cache_path)
+        if cached is not None:
+            cached_solution = canonicalize_solution(instance, cached.get("solution", cached))
+            cached_after = objective_components(instance, cached_solution, config)
+            return {
+                "solution": cached_solution,
+                "accepted": bool(cached.get("accepted", False)),
+                "trace": {
+                    "generatorMode": "stable-internal-solver-cache",
+                    "deterministicSeed": deterministic_seed,
+                    "internalSolverCacheHit": True,
+                    "selectedInternalSolverCandidateSignature": solution_signature(instance, cached_solution),
+                    "selectedInternalSolverCandidateKey": list(stable_internal_candidate_key(instance, cached_solution, config)),
+                    "objectiveAfter": cached_after,
+                    "accepted": bool(cached.get("accepted", False)),
+                    "rejectReason": cached.get("rejectReason"),
+                },
+            }
+    before = objective_components(instance, solution, config)
+    before_feasible = bool(before.get("feasible"))
+    current_key = natural_solution_key(instance, solution, config)
+    generator = InternalSolverCandidateGenerator(max_runtime_ms=max_runtime_ms)
+    generated = generator.generate(instance, config, incumbent=canonicalize_solution(instance, solution))
+    strategy_order = [
+        [row.get("firstSolutionStrategy"), row.get("localSearchMetaheuristic")]
+        for row in generated.get("trace", [])
+    ]
+    candidate_rows = []
+    feasible_candidates = []
+    for candidate in generated.get("candidates", []):
+        canonical = canonicalize_solution(instance, candidate)
+        checked = check_solution(instance, canonical)
+        if not checked.get("feasible"):
+            candidate_rows.append({"signature": solution_signature(instance, canonical), "key": None, "rejectReason": "hard-violation"})
+            continue
+        after = objective_components(instance, canonical, config)
+        candidate_key = stable_internal_candidate_key(instance, canonical, config)
+        delta = float(after.get("objective", 0.0) or 0.0) - float(before.get("objective", 0.0) or 0.0)
+        reject_reason = None
+        if before_feasible and config.mode == "academic_certification" and int(after.get("vehicleCount", 0) or 0) > int(before.get("vehicleCount", 0) or 0):
+            reject_reason = "vehicle-count-regression"
+        elif delta >= 0:
+            reject_reason = "objective-not-improved"
+        row = {
+            "signature": candidate_key[-1],
+            "key": list(candidate_key),
+            "vehicleCount": after.get("vehicleCount"),
+            "distance": after.get("totalDistance"),
+            "objective": after.get("objective"),
+            "objectiveDelta": delta,
+            "rejectReason": reject_reason,
+        }
+        candidate_rows.append(row)
+        if reject_reason is None:
+            feasible_candidates.append((candidate_key, canonical, after, row))
+    feasible_candidates.sort(key=lambda item: item[0])
+    selected = feasible_candidates[0] if feasible_candidates else None
+    accepted = bool(selected) and natural_solution_key(instance, selected[1], config) < current_key
+    selected_solution = selected[1] if accepted and selected else solution
+    selected_after = selected[2] if selected else None
+    selected_row = selected[3] if selected else None
+    selected_signature = selected_row.get("signature") if selected_row else solution_signature(instance, selected_solution)
+    selected_key = selected_row.get("key") if selected_row else list(stable_internal_candidate_key(instance, selected_solution, config))
+    payload = {
+        "solution": selected_solution,
+        "accepted": accepted,
+        "trace": {
+            "generatorMode": "stable-internal-solver",
+            "deterministicSeed": deterministic_seed,
+            "strategiesTried": generated.get("trace", []),
+            "internalSolverStrategyOrder": strategy_order,
+            "internalSolverCandidateSignatures": [row["signature"] for row in sorted(candidate_rows, key=lambda item: item.get("key") or [999999, 1e99, 1e99, item["signature"]])],
+            "internalSolverCandidateKeys": [row["key"] for row in sorted(candidate_rows, key=lambda item: item.get("key") or [999999, 1e99, 1e99, item["signature"]])],
+            "candidateRows": sorted(candidate_rows, key=lambda item: item.get("key") or [999999, 1e99, 1e99, item["signature"]]),
+            "selectedInternalSolverCandidateSignature": selected_signature,
+            "selectedInternalSolverCandidateKey": selected_key,
+            "candidateCount": generated.get("candidateCount"),
+            "feasibleCandidateCount": len(feasible_candidates),
+            "bestCandidateVehicleCount": selected_after.get("vehicleCount") if selected_after else None,
+            "bestCandidateDistance": selected_after.get("totalDistance") if selected_after else None,
+            "objectiveBefore": before,
+            "objectiveAfter": selected_after,
+            "accepted": accepted,
+            "rejectReason": None if accepted else ("no-feasible-candidate" if not feasible_candidates else "objective-not-improved"),
+        },
+    }
+    payload["trace"]["internalSolverCacheHit"] = False
+    if candidate_cache_path is not None:
+        candidate_cache_path.parent.mkdir(parents=True, exist_ok=True)
+        candidate_cache_path.write_text(
+            json.dumps(
+                {
+                    "solution": canonicalize_solution(instance, selected_solution),
+                    "accepted": accepted,
+                    "rejectReason": payload["trace"].get("rejectReason"),
+                    "selectedInternalSolverCandidateSignature": selected_signature,
+                    "selectedInternalSolverCandidateKey": selected_key,
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+    return payload
 
 
 def save_incumbent_cache(path: Path, instance: Dict[str, Any], solution: Dict[str, Any]) -> None:
@@ -240,7 +367,25 @@ def run_instance(
         operator_trace["naturalRouteElimination"] = {"skipped": True, "skipReason": natural_guard["reason"]}
         protected_skips.append({"stage": "natural-route-elimination", "reason": natural_guard["reason"], "stageBudgetBefore": natural_guard["remainingBefore"], "stageBudgetAfter": protected_remaining_ms(scheduler)})
 
-    apply("internalSolverGenerator", protected_stage_call(scheduler, plan, policy, "internal-solver-generator", lambda _budget: internal_solver_improvement(instance, current, config), protected_skips, route_pool_pending=False))
+    apply(
+        "internalSolverGenerator",
+        protected_stage_call(
+            scheduler,
+            plan,
+            policy,
+            "internal-solver-generator",
+            lambda budget: stable_internal_solver_improvement(
+                instance,
+                current,
+                config,
+                deterministic_seed=deterministic_seed,
+                max_runtime_ms=budget,
+                candidate_cache_path=(incumbent_cache_path.parent / f"internal-{instance_name.lower()}-{mode}-{deterministic_seed}-{solution_signature(instance, current)[:16]}.json"),
+            ) if stable_incumbent_replay else internal_solver_improvement(instance, current, config),
+            protected_skips,
+            route_pool_pending=False,
+        ),
+    )
     apply("boundedLargeRouteElimination", protected_stage_call(scheduler, plan, policy, "bounded-large-route-elimination", lambda budget: bounded_large_route_elimination(instance, current, config, max_runtime_ms=budget), protected_skips, route_pool_pending=True))
     apply("routePoolImprovement", route_pool_stage_call(scheduler, policy, lambda _budget: route_pool_improvement(instance, current, config)))
     apply("fastIncumbentNeighborhoodRepair", protected_stage_call(scheduler, plan, policy, "fast-incumbent-neighborhood-repair", lambda budget: fast_incumbent_neighborhood_repair(instance, current, config, max_runtime_ms=budget), protected_skips, route_pool_pending=False))
