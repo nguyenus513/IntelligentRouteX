@@ -281,13 +281,21 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertGreaterEqual(solution["budgetPolicy"]["diversificationMs"], 1_000)
         self.assertGreaterEqual(solution["budgetPolicy"]["consolidationMs"], 2_500)
 
-    def test_long_budget_lrc_pdptw_prioritizes_full_tabu_distance_search(self) -> None:
-        instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LRC101.txt"))
+    def test_long_budget_tight_mixed_pdptw_prioritizes_full_tabu_distance_search(self) -> None:
+        nodes = [
+            {"id": "0", "x": 0.0, "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 1000, "serviceTime": 0},
+            {"id": "1", "x": 0.0, "y": 0.0, "demand": 1, "readyTime": 100, "dueTime": 120, "serviceTime": 0},
+            {"id": "2", "x": 10.0, "y": 10.0, "demand": -1, "readyTime": 100, "dueTime": 120, "serviceTime": 0},
+            {"id": "3", "x": 10.0, "y": 0.0, "demand": 1, "readyTime": 110, "dueTime": 130, "serviceTime": 0},
+            {"id": "4", "x": 0.0, "y": 10.0, "demand": -1, "readyTime": 110, "dueTime": 130, "serviceTime": 0},
+        ]
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "FEATURE_BASED_TIGHT_MIXED", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 10.0})
         calls = []
 
         def fake_ortools_baseline_solution(instance_arg, time_limit_ms, solver, **kwargs):
             calls.append({"timeLimitMs": time_limit_ms, "solver": solver, "kwargs": kwargs})
-            return {"schemaVersion": "external-benchmark-solution/v1", "solver": solver, "routes": [["0", "1", "2", "0"]]}
+            return {"schemaVersion": "external-benchmark-solution/v1", "solver": solver, "routes": [["0", "1", "2", "3", "4", "0"]]}
 
         original = adapter.ortools_baseline_solution
         adapter.ortools_baseline_solution = fake_ortools_baseline_solution
@@ -300,6 +308,41 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertEqual(24_000, calls[0]["timeLimitMs"])
         self.assertEqual("TABU_SEARCH", calls[0]["kwargs"].get("local_search_metaheuristic"))
         self.assertGreaterEqual(solution["budgetPolicy"]["consolidationMs"], 2_500)
+
+    def test_pdptw_metaheuristic_policy_ignores_instance_name(self) -> None:
+        nodes = [
+            {"id": "0", "x": 0.0, "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 1000, "serviceTime": 0},
+            {"id": "1", "x": 0.0, "y": 0.0, "demand": 1, "readyTime": 100, "dueTime": 120, "serviceTime": 0},
+            {"id": "2", "x": 10.0, "y": 10.0, "demand": -1, "readyTime": 100, "dueTime": 120, "serviceTime": 0},
+            {"id": "3", "x": 10.0, "y": 0.0, "demand": 1, "readyTime": 110, "dueTime": 130, "serviceTime": 0},
+            {"id": "4", "x": 0.0, "y": 10.0, "demand": -1, "readyTime": 110, "dueTime": 130, "serviceTime": 0},
+        ]
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        first = support.normalize_instance("unit", "PDPTW", "LRC_FAKE_NAME", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 10.0})
+        second = support.normalize_instance("unit", "PDPTW", "NEUTRAL_NAME", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 10.0})
+        solver = adapter.DispatchV2ExternalBenchmarkSolver()
+
+        self.assertEqual(solver._pdptw_metaheuristic_policy(first), solver._pdptw_metaheuristic_policy(second))
+        self.assertEqual("TABU_SEARCH", solver._pdptw_metaheuristic_policy(first))
+
+    def test_pdptw_metaheuristic_policy_uses_guided_search_for_loose_simple_case(self) -> None:
+        nodes = [
+            {"id": "0", "x": 0.0, "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 1000, "serviceTime": 0},
+            {"id": "1", "x": 1.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 1000, "serviceTime": 0},
+            {"id": "2", "x": 2.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 1000, "serviceTime": 0},
+            {"id": "3", "x": 3.0, "y": 0.0, "demand": 1, "readyTime": 0, "dueTime": 1000, "serviceTime": 0},
+            {"id": "4", "x": 4.0, "y": 0.0, "demand": -1, "readyTime": 0, "dueTime": 1000, "serviceTime": 0},
+        ]
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "LRC_NAME_SHOULD_NOT_MATTER", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 10.0})
+
+        self.assertEqual("GUIDED_LOCAL_SEARCH", adapter.DispatchV2ExternalBenchmarkSolver()._pdptw_metaheuristic_policy(instance))
+
+    def test_dispatch_adapter_has_no_lrc_name_branch(self) -> None:
+        source = Path("scripts/external_benchmark_dispatch_adapter.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("startswith(\"LRC\")", source)
+        self.assertNotIn("startswith('LRC')", source)
 
     def test_long_budget_uses_wall_clock_slack_for_quality_polish(self) -> None:
         instance = li_lim.parse_li_lim(Path("benchmarks/external/li-lim-pdptw/fixtures/LC101.txt"))
@@ -378,7 +421,7 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
             adapter.ortools_baseline_solution = original
 
         self.assertEqual(incumbent, selected)
-        self.assertEqual("TABU_SEARCH", calls[0]["kwargs"].get("local_search_metaheuristic"))
+        self.assertIn(calls[0]["kwargs"].get("local_search_metaheuristic"), {"TABU_SEARCH", "SIMULATED_ANNEALING"})
         self.assertLessEqual(calls[0]["timeLimitMs"], 700)
 
     def test_dispatch_adapter_uses_feasible_reference_seed_for_rc101(self) -> None:

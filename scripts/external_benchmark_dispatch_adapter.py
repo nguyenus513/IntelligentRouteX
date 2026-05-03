@@ -282,10 +282,78 @@ class DispatchV2ExternalBenchmarkSolver:
         return candidates
 
     def _pdptw_metaheuristic_policy(self, instance: Dict[str, Any]) -> str:
-        instance_name = str(instance.get("instanceName", "")).upper()
-        if instance_name.startswith("LRC"):
+        features = self._pdptw_instance_features(instance)
+        if features["timeWindowTightnessRatio"] >= 0.72 or features["mixednessScore"] >= 0.58:
             return "TABU_SEARCH"
         return "GUIDED_LOCAL_SEARCH"
+
+    def _pdptw_instance_features(self, instance: Dict[str, Any]) -> Dict[str, float]:
+        nodes = {str(node.get("id")): node for node in instance.get("nodes", [])}
+        requests = instance.get("requests", [])
+        depot_id = str(instance.get("depotNodeId", "0"))
+        depot = nodes.get(depot_id, {})
+        depot_horizon = max(1.0, float(depot.get("dueTime", 0.0)) - float(depot.get("readyTime", 0.0)))
+        pickup_points: list[tuple[float, float]] = []
+        dropoff_points: list[tuple[float, float]] = []
+        widths: list[float] = []
+        overlaps = 0
+        for request in requests:
+            pickup = nodes.get(str(request.get("pickupNodeId")), {})
+            dropoff = nodes.get(str(request.get("dropoffNodeId")), {})
+            pickup_points.append((float(pickup.get("x", 0.0)), float(pickup.get("y", 0.0))))
+            dropoff_points.append((float(dropoff.get("x", 0.0)), float(dropoff.get("y", 0.0))))
+            ready = max(float(pickup.get("readyTime", 0.0)), float(dropoff.get("readyTime", 0.0)))
+            due = min(float(pickup.get("dueTime", depot_horizon)), float(dropoff.get("dueTime", depot_horizon)))
+            widths.append(max(0.0, due - ready))
+        for left_index in range(len(widths)):
+            left_request = requests[left_index]
+            left_pickup = nodes.get(str(left_request.get("pickupNodeId")), {})
+            left_dropoff = nodes.get(str(left_request.get("dropoffNodeId")), {})
+            left_ready = max(float(left_pickup.get("readyTime", 0.0)), float(left_dropoff.get("readyTime", 0.0)))
+            left_due = min(float(left_pickup.get("dueTime", depot_horizon)), float(left_dropoff.get("dueTime", depot_horizon)))
+            for right_index in range(left_index + 1, len(widths)):
+                right_request = requests[right_index]
+                right_pickup = nodes.get(str(right_request.get("pickupNodeId")), {})
+                right_dropoff = nodes.get(str(right_request.get("dropoffNodeId")), {})
+                right_ready = max(float(right_pickup.get("readyTime", 0.0)), float(right_dropoff.get("readyTime", 0.0)))
+                right_due = min(float(right_pickup.get("dueTime", depot_horizon)), float(right_dropoff.get("dueTime", depot_horizon)))
+                if max(left_ready, right_ready) <= min(left_due, right_due):
+                    overlaps += 1
+        median_width = sorted(widths)[len(widths) // 2] if widths else depot_horizon
+        pickup_dispersion = self._point_dispersion(pickup_points)
+        dropoff_dispersion = self._point_dispersion(dropoff_points)
+        mixedness = self._pdptw_mixedness(pickup_points, dropoff_points)
+        pair_count = max(1, len(requests) * (len(requests) - 1) // 2)
+        return {
+            "requestCount": float(len(requests)),
+            "vehicleCount": float(max(1, int(instance.get("vehicleCount", 1)))),
+            "pickupDispersion": pickup_dispersion,
+            "dropoffDispersion": dropoff_dispersion,
+            "timeWindowWidthMedian": median_width,
+            "timeWindowTightnessRatio": max(0.0, min(1.0, 1.0 - median_width / depot_horizon)),
+            "readyDueOverlapDensity": overlaps / pair_count,
+            "mixednessScore": mixedness,
+        }
+
+    @staticmethod
+    def _point_dispersion(points: list[tuple[float, float]]) -> float:
+        if not points:
+            return 0.0
+        center_x = sum(point[0] for point in points) / len(points)
+        center_y = sum(point[1] for point in points) / len(points)
+        return sum(((point[0] - center_x) ** 2 + (point[1] - center_y) ** 2) ** 0.5 for point in points) / len(points)
+
+    @staticmethod
+    def _pdptw_mixedness(pickups: list[tuple[float, float]], dropoffs: list[tuple[float, float]]) -> float:
+        if not pickups or not dropoffs:
+            return 0.0
+        pickup_center = (sum(point[0] for point in pickups) / len(pickups), sum(point[1] for point in pickups) / len(pickups))
+        dropoff_center = (sum(point[0] for point in dropoffs) / len(dropoffs), sum(point[1] for point in dropoffs) / len(dropoffs))
+        separation = ((pickup_center[0] - dropoff_center[0]) ** 2 + (pickup_center[1] - dropoff_center[1]) ** 2) ** 0.5
+        dispersion = DispatchV2ExternalBenchmarkSolver._point_dispersion(pickups + dropoffs)
+        if dispersion <= 0:
+            return 0.0
+        return max(0.0, min(1.0, 1.0 - separation / (dispersion * 2.0)))
 
     def _reference_solution(self, instance: Dict[str, Any], solver: str) -> Dict[str, Any] | None:
         if instance.get("benchmarkFamily") != "solomon":
