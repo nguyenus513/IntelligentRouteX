@@ -43,6 +43,10 @@ stochastic_data = load_module("download_stochastic_benchmark_data", "download_st
 stochastic_benchmark = load_module("run_stochastic_community_benchmark", "run_stochastic_community_benchmark.py")
 ml_quality = load_module("run_ml_intelligence_benchmark", "run_ml_intelligence_benchmark.py")
 loss_certificate = load_module("run_phase31_loss_certificate", "run_phase31_loss_certificate.py")
+route_pool_sp = load_module("run_phase31_pdptw_route_pool_sp", "run_phase31_pdptw_route_pool_sp.py")
+internal_columns = load_module("run_phase32_internal_column_generation", "run_phase32_internal_column_generation.py")
+route_set_guided = load_module("run_phase33_route_set_guided_generation", "run_phase33_route_set_guided_generation.py")
+missing_large_columns = load_module("run_phase34_missing_request_large_columns", "run_phase34_missing_request_large_columns.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -1039,6 +1043,15 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         self.assertEqual("state-cap", blocker)
 
+    def test_phase31_certificate_surfaces_runtime_and_state_cap_together(self) -> None:
+        stats = [{"zeroOptionPairCount": 1, "candidateCapHit": True}]
+
+        blocker = loss_certificate.classify_blocker(stats, {"candidate-cap": 1}, state_cap_hit=True, runtime_cap_hit=True)
+        secondary = loss_certificate.secondary_blockers(blocker, state_cap_hit=True, runtime_cap_hit=True)
+
+        self.assertEqual("search-budget-cap", blocker)
+        self.assertEqual(["runtime-cap", "state-cap"], secondary)
+
     def test_phase31_certificate_detects_route_shortlist_over_pruning(self) -> None:
         stats = [{"zeroOptionPairCount": 2, "candidateCapHit": False}, {"zeroOptionPairCount": 0, "candidateCapHit": False}]
 
@@ -1066,6 +1079,476 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
 
         self.assertGreaterEqual(narrow["zeroOptionPairCount"], wide["zeroOptionPairCount"])
         self.assertGreater(wide["max"], 0)
+
+    def test_phase31_certificate_reports_unmeasured_pairs_due_to_cap(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(10)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "cap-certificate-unit", 3, 2, nodes, requests, {"vehicleCount": 1, "objective": 10.0})
+        routes = [["0", "5", "6", "7", "8", "9", "0"]]
+
+        stats = loss_certificate.pair_option_stats(instance, routes, [("1", "2"), ("3", "4")], route_shortlist=1, max_candidate_checks=1)
+
+        self.assertTrue(stats["candidateCapHit"])
+        self.assertEqual(1, stats["measuredPairCount"])
+        self.assertEqual(2, stats["totalPairCount"])
+        self.assertEqual(["3->4"], stats["unmeasuredPairsDueToCap"])
+        self.assertNotIn("3->4", stats["zeroOptionPairs"])
+        self.assertFalse(stats["measurementComplete"])
+
+    def test_phase31b_route_column_covers_complete_pd_pairs_only(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}]
+        instance = support.normalize_instance("unit", "PDPTW", "column-unit", 1, 2, nodes, requests, {"vehicleCount": 1, "objective": 4.0})
+
+        valid = route_pool_sp.build_column(instance, ["0", "1", "2", "0"], "unit", "c0", provenance="internal", allowed_for_claim=True)
+        invalid = route_pool_sp.build_column(instance, ["0", "1", "0"], "unit", "c1")
+
+        self.assertIsNotNone(valid)
+        self.assertEqual(frozenset({"0"}), valid.request_ids)
+        self.assertTrue(valid.allowed_for_claim)
+        self.assertIsNone(invalid)
+
+    def test_phase31b_route_pool_deduplicates_and_detects_uncovered(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup in [1, 3]:
+            nodes[pickup]["demand"] = 1
+        for dropoff in [2, 4]:
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "pool-unit", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        pool = route_pool_sp.PDPTWRoutePool(instance)
+
+        self.assertTrue(pool.add_route(["0", "1", "2", "0"], "unit"))
+        self.assertFalse(pool.add_route(["0", "1", "2", "0"], "unit"))
+        stats = pool.stats()
+
+        self.assertEqual(1, stats["columnCount"])
+        self.assertEqual(1, stats["duplicateRouteCount"])
+        self.assertEqual(["1"], stats["uncoveredRequests"])
+
+    def test_phase31b_sp_selects_exact_cover_and_respects_target(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "sp-unit", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        pool = route_pool_sp.PDPTWRoutePool(instance)
+        pool.add_route(["0", "1", "2", "0"], "single")
+        pool.add_route(["0", "3", "4", "0"], "single")
+        pool.add_route(["0", "1", "2", "3", "4", "0"], "combined")
+
+        result = route_pool_sp.PDPTWSetPartitioningSolver(time_limit_ms=1_000).solve(instance, pool.columns, target_vehicle_count=1)
+
+        self.assertTrue(result["feasible"])
+        self.assertEqual(1, result["selectedRouteCount"])
+
+    def test_phase31b_pool_rejects_infeasible_column(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(3)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}]
+        instance = support.normalize_instance("unit", "PDPTW", "reject-unit", 1, 2, nodes, requests, {"vehicleCount": 1, "objective": 4.0})
+        pool = route_pool_sp.PDPTWRoutePool(instance)
+
+        self.assertFalse(pool.add_route(["0", "2", "1", "0"], "bad"))
+        self.assertEqual(1, pool.stats()["rejectedInfeasibleCount"])
+
+    def test_phase31c_comparator_columns_are_excluded_from_internal_pool(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "provenance-unit", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        pool = route_pool_sp.PDPTWRoutePool(instance)
+        pool.add_route(["0", "1", "2", "0"], "internal", provenance="internal", allowed_for_claim=True)
+        pool.add_route(["0", "3", "4", "0"], "comparator", provenance="comparator", allowed_for_claim=False)
+
+        internal_pool = pool.filtered(allowed_for_claim=True)
+
+        self.assertEqual(1, len(internal_pool.columns))
+        self.assertEqual(2, len(pool.columns))
+        self.assertTrue(all(column.allowed_for_claim for column in internal_pool.columns))
+
+    def test_phase31c_internal_sp_cannot_use_disallowed_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "internal-sp-unit", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        pool = route_pool_sp.PDPTWRoutePool(instance)
+        pool.add_route(["0", "1", "2", "0"], "internal", provenance="internal", allowed_for_claim=True)
+        pool.add_route(["0", "3", "4", "0"], "comparator", provenance="comparator", allowed_for_claim=False)
+
+        internal_result = route_pool_sp.PDPTWSetPartitioningSolver(time_limit_ms=1_000).solve(instance, pool.filtered(allowed_for_claim=True).columns, target_vehicle_count=2)
+        oracle_result = route_pool_sp.PDPTWSetPartitioningSolver(time_limit_ms=1_000).solve(instance, pool.columns, target_vehicle_count=2)
+
+        self.assertFalse(internal_result["feasible"])
+        self.assertTrue(oracle_result["feasible"])
+
+    def test_phase31c_provenance_summary_reports_comparator_leakage(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(3)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}]
+        instance = support.normalize_instance("unit", "PDPTW", "leakage-unit", 1, 2, nodes, requests, {"vehicleCount": 1, "objective": 4.0})
+        pool = route_pool_sp.PDPTWRoutePool(instance)
+        pool.add_route(["0", "1", "2", "0"], "comparator", provenance="comparator", allowed_for_claim=False)
+        oracle_result = route_pool_sp.PDPTWSetPartitioningSolver(time_limit_ms=1_000).solve(instance, pool.columns, target_vehicle_count=1)
+
+        summary = route_pool_sp.provenance_summary(pool.filtered(allowed_for_claim=True), pool, {"feasible": False}, oracle_result)
+
+        self.assertTrue(summary["oracleTargetFeasible"])
+        self.assertTrue(summary["comparatorColumnUsedByOracleSolution"])
+
+    def test_phase32_collector_rejects_partial_pickup_dropoff_route(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(3)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase32-partial", 1, 2, nodes, requests, {"vehicleCount": 1, "objective": 4.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+
+        accepted = collector.collect(["0", "1", "0"], "unit")
+
+        self.assertFalse(accepted)
+        self.assertEqual(0, len(collector.pool.columns))
+
+    def test_phase32_collector_accepts_internal_complete_feasible_route(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(3)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase32-complete", 1, 2, nodes, requests, {"vehicleCount": 1, "objective": 4.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+
+        accepted = collector.collect(["0", "1", "2", "0"], "repair-intermediate")
+
+        self.assertTrue(accepted)
+        self.assertEqual("internal", collector.pool.columns[0].provenance)
+        self.assertTrue(collector.pool.columns[0].allowed_for_claim)
+        self.assertEqual(1, collector.stage_counts["repair-intermediate"])
+
+    def test_phase32_failed_full_repair_can_contribute_route_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(3)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase32-failed", 1, 2, nodes, requests, {"vehicleCount": 1, "objective": 4.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+
+        collector.collect(["0", "1", "2", "0"], "repair-intermediate", failed_repair=True)
+
+        self.assertEqual(1, collector.harvested_from_failed_repairs)
+        self.assertEqual(1, len(collector.pool.columns))
+
+    def test_phase32_route_variant_generator_increases_columns_without_hard_violations(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup in [1, 3, 5]:
+            nodes[pickup]["demand"] = 1
+        for dropoff in [2, 4, 6]:
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase32-variant", 1, 3, nodes, requests, {"vehicleCount": 1, "objective": 12.0})
+        solution = {"routes": [["0", "1", "2", "3", "4", "5", "6", "0"]]}
+
+        collector, diagnostics = internal_columns.generate_internal_columns(instance, solution, budget_ms=500, max_variants_per_route=20)
+
+        self.assertGreaterEqual(len(collector.pool.columns), 1)
+        self.assertEqual([], collector.pool.stats()["uncoveredRequests"])
+        self.assertGreaterEqual(diagnostics["columnGenerationRuntimeMs"], 0)
+
+    def test_phase32_subset_route_generator_creates_feasible_request_subsets(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(9)]
+        for pickup in [1, 3, 5, 7]:
+            nodes[pickup]["demand"] = 1
+        for dropoff in [2, 4, 6, 8]:
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}, {"pickupNodeId": "7", "dropoffNodeId": "8"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase32-subset", 1, 4, nodes, requests, {"vehicleCount": 1, "objective": 16.0})
+
+        variants = internal_columns.subset_route_columns(instance, ["0", "1", "2", "3", "4", "5", "6", "7", "8", "0"], max_columns=10, max_pairs_per_route=3)
+
+        self.assertTrue(variants)
+        self.assertTrue(all(consolidation._route_is_feasible(instance, route)[0] for route in variants))
+
+    def test_phase32_sp_selected_solution_uses_only_allowed_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase32-sp", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "unit")
+        collector.collect(["0", "3", "4", "0"], "unit")
+
+        result = route_pool_sp.PDPTWSetPartitioningSolver(time_limit_ms=1_000).solve(instance, collector.pool.columns, target_vehicle_count=2)
+
+        self.assertTrue(result["feasible"])
+        details = internal_columns.selected_column_details(collector.pool, result)
+        self.assertTrue(all(details["selectedAllowedForClaim"]))
+
+    def test_phase32_request_set_diversity_stats_detect_duplicate_sets(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase32-diversity", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "unit")
+        collector.collect(["0", "1", "2", "3", "4", "0"], "unit")
+        collector.pool.add_route(["0", "1", "2", "0"], "diagnostic-duplicate", provenance="internal", allowed_for_claim=True)
+
+        stats = internal_columns.request_set_diversity_stats(collector.pool)
+
+        self.assertGreaterEqual(stats["uniqueRequestSetCount"], 2)
+        self.assertIn("1", stats["requestSetSizeHistogram"])
+
+    def test_phase32_cluster_generator_creates_complete_feasible_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(9)]
+        for pickup in [1, 3, 5, 7]:
+            nodes[pickup]["demand"] = 1
+        for dropoff in [2, 4, 6, 8]:
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}, {"pickupNodeId": "7", "dropoffNodeId": "8"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase32-cluster", 2, 4, nodes, requests, {"vehicleCount": 1, "objective": 16.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+
+        generated = internal_columns.cluster_route_columns(instance, collector, max_columns=10, max_pairs_per_route=3, related_k=4, seed=31)
+
+        self.assertGreater(generated, 0)
+        self.assertTrue(all(column.allowed_for_claim for column in collector.pool.columns))
+        self.assertTrue(all(column.feasible for column in collector.pool.columns))
+
+    def test_phase32_weak_route_replacement_creates_non_identical_sets(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(9)]
+        for pickup in [1, 3, 5, 7]:
+            nodes[pickup]["demand"] = 1
+        for dropoff in [2, 4, 6, 8]:
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}, {"pickupNodeId": "7", "dropoffNodeId": "8"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase32-weak", 2, 4, nodes, requests, {"vehicleCount": 1, "objective": 16.0})
+        solution = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "5", "6", "7", "8", "0"]]}
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect_solution(solution, "incumbent")
+
+        generated = internal_columns.weak_route_replacement_columns(instance, solution, collector, target_vehicle_count=1, max_columns=10)
+
+        self.assertGreaterEqual(generated, 0)
+        self.assertGreaterEqual(internal_columns.request_set_diversity_stats(collector.pool)["uniqueRequestSetCount"], 2)
+
+    def test_phase32_cluster_generator_is_deterministic_under_fixed_seed(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup in [1, 3, 5]:
+            nodes[pickup]["demand"] = 1
+        for dropoff in [2, 4, 6]:
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase32-deterministic", 2, 3, nodes, requests, {"vehicleCount": 1, "objective": 12.0})
+        first = internal_columns.RouteColumnCollector(instance)
+        second = internal_columns.RouteColumnCollector(instance)
+
+        internal_columns.cluster_route_columns(instance, first, max_columns=8, max_pairs_per_route=3, related_k=3, seed=31)
+        internal_columns.cluster_route_columns(instance, second, max_columns=8, max_pairs_per_route=3, related_k=3, seed=31)
+
+        self.assertEqual([column.route for column in first.pool.columns], [column.route for column in second.pool.columns])
+
+    def test_phase33_max_cover_identifies_uncovered_requests(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup in [1, 3, 5]:
+            nodes[pickup]["demand"] = 1
+        for dropoff in [2, 4, 6]:
+            nodes[dropoff]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}, {"pickupNodeId": "5", "dropoffNodeId": "6"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase33-max-cover", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "unit")
+        collector.collect(["0", "3", "4", "0"], "unit")
+
+        result = route_set_guided.max_cover_packing(instance, collector.pool.columns, target_vehicle_count=1)
+
+        self.assertEqual(1, result["maxCoveredRequestCount"])
+        self.assertGreaterEqual(len(result["uncoveredRequestsInBestPacking"]), 2)
+
+    def test_phase33_min_slack_reports_missing_and_duplicate_requests(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase33-slack", 1, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "unit")
+        collector.collect(["0", "1", "2", "3", "4", "0"], "unit")
+
+        result = route_set_guided.min_slack_relaxation(instance, collector.pool.columns[:1], target_vehicle_count=1)
+
+        self.assertTrue(result["feasible"])
+        self.assertIn("1", result["missingRequests"])
+
+    def test_phase33_compatibility_graph_detects_incompatible_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase33-graph", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "unit")
+        collector.collect(["0", "1", "2", "3", "4", "0"], "unit")
+
+        stats = route_set_guided.compatibility_graph_stats(collector.pool.columns)
+
+        self.assertEqual(0, stats["compatibleEdgeCount"])
+        self.assertGreaterEqual(stats["isolatedColumnCount"], 1)
+
+    def test_phase33_complement_generator_creates_valid_internal_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase33-complement", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        max_cover = {"uncoveredRequestsInBestPacking": ["1"]}
+
+        generated = route_set_guided.complement_route_generator(instance, collector, max_cover, max_columns=3)
+
+        self.assertGreater(generated, 0)
+        self.assertTrue(all(column.allowed_for_claim for column in collector.pool.columns))
+
+    def test_phase33_compression_rejects_infeasible_union_routes(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["x"] = 100.0
+        nodes[2]["x"] = 101.0
+        nodes[3]["x"] = -100.0
+        nodes[4]["x"] = -101.0
+        nodes[1]["demand"] = 2
+        nodes[2]["demand"] = -2
+        nodes[3]["demand"] = 2
+        nodes[4]["demand"] = -2
+        nodes[1]["dueTime"] = 120
+        nodes[2]["dueTime"] = 125
+        nodes[3]["dueTime"] = 120
+        nodes[4]["dueTime"] = 125
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase33-compression", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "unit")
+        collector.collect(["0", "3", "4", "0"], "unit")
+
+        generated = route_set_guided.compression_column_generator(instance, collector, max_columns=5)
+
+        self.assertEqual(0, generated)
+
+    def test_phase33_guided_generation_is_deterministic(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase33-guided", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        first = internal_columns.RouteColumnCollector(instance)
+        second = internal_columns.RouteColumnCollector(instance)
+        relaxation = {"missingRequests": ["0"], "duplicateRequests": ["1"]}
+
+        route_set_guided.guided_penalty_generation(instance, first, relaxation, max_columns=5)
+        route_set_guided.guided_penalty_generation(instance, second, relaxation, max_columns=5)
+
+        self.assertEqual([column.route for column in first.pool.columns], [column.route for column in second.pool.columns])
+
+    def test_phase34_missing_request_generator_targets_large_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(9)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6), (7, 8)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+            {"pickupNodeId": "7", "dropoffNodeId": "8"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase34-missing", 4, 4, nodes, requests, {"vehicleCount": 1, "objective": 16.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+
+        generated = missing_large_columns.missing_request_focused_generator(instance, collector, ["0"], avg_target_route_size=3, max_columns=4)
+
+        self.assertGreater(generated, 0)
+        self.assertTrue(any("0" in column.request_ids and len(column.request_ids) >= 2 for column in collector.pool.columns))
+        self.assertTrue(all(column.allowed_for_claim for column in collector.pool.columns))
+
+    def test_phase34_compatible_complement_stays_disjoint_from_selected_cover(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase34-complement", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        max_cover = {"selectedColumnRequestSets": [["0", "1"]], "uncoveredRequestsInBestPacking": ["2"]}
+
+        generated = missing_large_columns.compatible_complement_generator(instance, collector, max_cover, avg_target_route_size=2, max_columns=3)
+
+        self.assertGreater(generated, 0)
+        self.assertTrue(any(set(column.request_ids).isdisjoint({"0", "1"}) and "2" in column.request_ids for column in collector.pool.columns))
+
+    def test_phase34_large_compatible_column_stats_counts_target_band_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase34-large-stats", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "3", "4", "0"], "unit")
+        collector.collect(["0", "5", "6", "0"], "unit")
+
+        stats = missing_large_columns.large_compatible_column_stats(collector.pool.columns, avg_target_route_size=2)
+
+        self.assertGreaterEqual(stats["largeColumnCount"], 2)
+        self.assertGreaterEqual(stats["largeCompatibleColumnCount"], 1)
+
+    def test_phase34_generation_preserves_internal_only_pool(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase34-internal", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+
+        missing_large_columns.missing_request_focused_generator(instance, collector, ["0"], avg_target_route_size=2, max_columns=2)
+
+        self.assertTrue(collector.pool.columns)
+        self.assertTrue(all(column.provenance == "internal" and column.allowed_for_claim for column in collector.pool.columns))
 
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]

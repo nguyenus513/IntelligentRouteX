@@ -95,23 +95,37 @@ def pair_option_stats(instance: Dict[str, Any], routes: List[List[str]], pairs: 
     feasible_route_counts: Dict[str, int] = {}
     candidate_checks = 0
     candidate_cap_hit = False
-    for pair in pairs:
-        remaining_checks = max(1, max_candidate_checks - candidate_checks)
+    measured_pairs: List[str] = []
+    unmeasured_pairs_due_to_cap: List[str] = []
+    for index_in_pairs, pair in enumerate(pairs):
+        if candidate_checks >= max_candidate_checks:
+            candidate_cap_hit = True
+            unmeasured_pairs_due_to_cap.extend(f"{pickup}->{dropoff}" for pickup, dropoff in pairs[index_in_pairs:])
+            break
+        remaining_checks = max_candidate_checks - candidate_checks
         index = PairInsertionIndex.build(instance, routes, max_candidate_checks=remaining_checks, max_routes=route_shortlist, max_positions_per_route=96)
         options = index.options_for_pair(pair, top_k=128)
         candidate_checks += index.candidate_checks
         pair_key = f"{pair[0]}->{pair[1]}"
+        measured_pairs.append(pair_key)
         counts[pair_key] = len(options)
         feasible_route_counts[pair_key] = len({option.route_index for option in options})
         if candidate_checks >= max_candidate_checks:
             candidate_cap_hit = True
+            unmeasured_pairs_due_to_cap.extend(f"{pickup}->{dropoff}" for pickup, dropoff in pairs[index_in_pairs + 1:])
             break
     values = list(counts.values())
     zero_option_pairs = [pair for pair, count in counts.items() if count == 0]
+    measured_pair_count = len(measured_pairs)
+    total_pair_count = len(pairs)
     return {
         "routeShortlist": route_shortlist,
         "pairOptionCounts": counts,
         "feasibleRouteCounts": feasible_route_counts,
+        "measuredPairs": measured_pairs,
+        "measuredPairCount": measured_pair_count,
+        "totalPairCount": total_pair_count,
+        "unmeasuredPairsDueToCap": unmeasured_pairs_due_to_cap,
         "min": min(values) if values else None,
         "median": statistics.median(values) if values else None,
         "max": max(values) if values else None,
@@ -119,6 +133,7 @@ def pair_option_stats(instance: Dict[str, Any], routes: List[List[str]], pairs: 
         "zeroOptionPairCount": len(zero_option_pairs),
         "candidateChecks": candidate_checks,
         "candidateCapHit": candidate_cap_hit,
+        "measurementComplete": measured_pair_count == total_pair_count and not candidate_cap_hit,
     }
 
 
@@ -151,6 +166,8 @@ def rejection_probe(instance: Dict[str, Any], routes: List[List[str]], pairs: Li
 
 
 def classify_blocker(shortlist_sensitivity: List[Dict[str, Any]], reject_reasons: Dict[str, int], state_cap_hit: bool, runtime_cap_hit: bool) -> str:
+    if runtime_cap_hit and state_cap_hit:
+        return "search-budget-cap"
     if runtime_cap_hit:
         return "runtime-cap"
     if state_cap_hit:
@@ -168,6 +185,15 @@ def classify_blocker(shortlist_sensitivity: List[Dict[str, Any]], reject_reasons
     if reject_reasons.get("candidate-cap", 0) > 0:
         return "state-cap"
     return "pool-missing"
+
+
+def secondary_blockers(primary_blocker: str, state_cap_hit: bool, runtime_cap_hit: bool) -> List[str]:
+    blockers = []
+    if runtime_cap_hit and primary_blocker != "runtime-cap":
+        blockers.append("runtime-cap")
+    if state_cap_hit and primary_blocker != "state-cap":
+        blockers.append("state-cap")
+    return blockers
 
 
 def build_loss_certificate(instance: Dict[str, Any], solution: Dict[str, Any], current_route_shortlist: int = 4, max_removed_pairs: int = 12, max_candidate_checks: int = 2_000, runtime_cap_ms: int = 2_000) -> Dict[str, Any]:
@@ -211,6 +237,7 @@ def build_loss_certificate(instance: Dict[str, Any], solution: Dict[str, Any], c
     state_cap_hit = any(stats.get("candidateCapHit") for stats in shortlist_sensitivity)
     runtime_cap_hit = int((time.perf_counter() - started) * 1000) >= runtime_cap_ms
     blocker = classify_blocker(shortlist_sensitivity, reject_reasons, state_cap_hit, runtime_cap_hit)
+    secondary = secondary_blockers(blocker, state_cap_hit, runtime_cap_hit)
     return {
         "schemaVersion": "phase31-loss-certificate/v1",
         "instance": instance.get("instanceName"),
@@ -227,6 +254,8 @@ def build_loss_certificate(instance: Dict[str, Any], solution: Dict[str, Any], c
         "runtimeCapHit": runtime_cap_hit,
         "runtimeMs": int((time.perf_counter() - started) * 1000),
         "blocker": blocker,
+        "primaryBlocker": blocker,
+        "secondaryBlockers": secondary,
     }
 
 
@@ -234,12 +263,13 @@ def markdown(certificates: List[Dict[str, Any]]) -> str:
     lines = [
         "# Phase 31 Loss Certificate Summary",
         "",
-        "| Instance | Incumbent | Target | Weak Route | Removed Pairs | Blocker | Runtime ms |",
-        "|---|---:|---:|---:|---:|---|---:|",
+        "| Instance | Incumbent | Target | Weak Route | Removed Pairs | Blocker | Secondary | Complete | Runtime ms |",
+        "|---|---:|---:|---:|---:|---|---|---:|---:|",
     ]
     for certificate in certificates:
+        pair_stats = certificate.get("pairOptionStats", {}) if isinstance(certificate.get("pairOptionStats"), dict) else {}
         lines.append(
-            f"| {certificate.get('instance')} | {certificate.get('incumbentVehicleCount')} | {certificate.get('targetVehicleCount')} | {certificate.get('weakRouteIndex')} | {len(certificate.get('removedPairs', []))} | {certificate.get('blocker')} | {certificate.get('runtimeMs')} |"
+            f"| {certificate.get('instance')} | {certificate.get('incumbentVehicleCount')} | {certificate.get('targetVehicleCount')} | {certificate.get('weakRouteIndex')} | {len(certificate.get('removedPairs', []))} | {certificate.get('primaryBlocker', certificate.get('blocker'))} | {certificate.get('secondaryBlockers', [])} | {pair_stats.get('measurementComplete')} | {certificate.get('runtimeMs')} |"
         )
     lines.extend(["", "## Notes", "", "This diagnostic rail does not affect solver output or benchmark claims."])
     return "\n".join(lines) + "\n"
@@ -259,8 +289,8 @@ def run(instances: List[str], output_dir: Path, data_source: str, time_limit_ms:
         "schemaVersion": "phase31-loss-certificate-summary/v1",
         "instances": instances,
         "certificates": certificates,
-        "blockerCounts": {blocker: sum(1 for certificate in certificates if certificate.get("blocker") == blocker) for blocker in sorted({str(certificate.get("blocker")) for certificate in certificates})},
-        "pass": all(certificate.get("blocker") in {"over-pruning", "true-time-window-block", "capacity-block", "state-cap", "runtime-cap", "pool-missing"} for certificate in certificates),
+        "blockerCounts": {blocker: sum(1 for certificate in certificates if certificate.get("primaryBlocker", certificate.get("blocker")) == blocker) for blocker in sorted({str(certificate.get("primaryBlocker", certificate.get("blocker"))) for certificate in certificates})},
+        "pass": all(certificate.get("primaryBlocker", certificate.get("blocker")) in {"over-pruning", "true-time-window-block", "capacity-block", "state-cap", "runtime-cap", "search-budget-cap", "pool-missing"} for certificate in certificates),
     }
     write_json(output_dir / "phase31_loss_certificate_summary.json", summary)
     (output_dir / "phase31_loss_certificate_summary.md").write_text(markdown(certificates), encoding="utf-8")
