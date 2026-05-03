@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import statistics
 import time
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List
 
 from external_benchmark_dispatch_adapter import DispatchV2ExternalBenchmarkSolver
-from external_benchmark_support import check_solution
+from external_benchmark_support import check_solution, route_distance
 from run_external_benchmark_certification import parse_instance, parse_time_limit, resolve_instance_path
 from run_phase40_natural_pdptw_optimizer import (
     internal_solver_improvement,
@@ -50,6 +51,40 @@ class StableBudgetPolicy:
 
 def route_pair_counts(instance: Dict[str, Any], solution: Dict[str, Any]) -> List[int]:
     return [len(route_request_pairs(instance, [str(stop) for stop in route])) for route in solution.get("routes", []) if len(route) > 2]
+
+
+def route_request_signature(instance: Dict[str, Any], route: List[str]) -> tuple[str, ...]:
+    pairs = route_request_pairs(instance, [str(stop) for stop in route])
+    return tuple(sorted(f"{pickup}->{dropoff}" for pickup, dropoff in pairs))
+
+
+def stable_route_sort_key(instance: Dict[str, Any], route: List[str]) -> tuple[tuple[str, ...], float, int, tuple[str, ...]]:
+    normalized = [str(stop) for stop in route]
+    return (route_request_signature(instance, normalized), round(route_distance(instance, normalized), 6), len(normalized), tuple(normalized))
+
+
+def canonicalize_solution(instance: Dict[str, Any], solution: Dict[str, Any]) -> Dict[str, Any]:
+    canonical = dict(solution or {})
+    routes = [[str(stop) for stop in route] for route in canonical.get("routes", []) if len(route) > 2]
+    canonical["routes"] = sorted(routes, key=lambda route: stable_route_sort_key(instance, route))
+    return canonical
+
+
+def solution_signature(instance: Dict[str, Any], solution: Dict[str, Any]) -> str:
+    canonical = canonicalize_solution(instance, solution)
+    payload = json.dumps(canonical.get("routes", []), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def save_incumbent_cache(path: Path, instance: Dict[str, Any], solution: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(canonicalize_solution(instance, solution), indent=2, sort_keys=True), encoding="utf-8")
+
+
+def load_incumbent_cache(path: Path) -> Dict[str, Any] | None:
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def protected_remaining_ms(scheduler: StageBudgetScheduler) -> int:
@@ -138,7 +173,17 @@ def route_pool_stage_call(scheduler: StageBudgetScheduler, policy: StableBudgetP
         scheduler.record_stage("route-pool-sp", budget, int((time.perf_counter() - started) * 1000))
 
 
-def run_instance(instance_name: str, output_dir: Path, data_source: str, time_limit_ms: int, mode: str) -> Dict[str, Any]:
+def run_instance(
+    instance_name: str,
+    output_dir: Path,
+    data_source: str,
+    time_limit_ms: int,
+    mode: str,
+    *,
+    stable_incumbent_replay: bool = False,
+    incumbent_cache_dir: Path | None = None,
+    deterministic_seed: int = 56,
+) -> Dict[str, Any]:
     started = time.perf_counter()
     instance = parse_instance("li-lim", resolve_instance_path("li-lim", instance_name, data_source))
     config = objective_config(mode)
@@ -148,9 +193,20 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
     protected_skips: List[Dict[str, Any]] = []
 
     incumbent_budget = min(policy.incumbentMaxMs, int(time_limit_ms * policy.incumbentMaxShare))
-    incumbent_plan = {"stages": {"incumbent": {"enabled": True, "preferredMs": incumbent_budget, "minMs": 1_000}}}
-    incumbent_result = protected_stage_call(scheduler, incumbent_plan, policy, "incumbent", lambda budget: {"solution": DispatchV2ExternalBenchmarkSolver().solve(instance, budget, "our-dispatch-v2")}, protected_skips, route_pool_pending=False)
-    incumbent = incumbent_result["solution"] if incumbent_result else {"routes": []}
+    incumbent_cache_path = (incumbent_cache_dir or output_dir.parent / "incumbent-cache") / f"{instance_name.lower()}-{mode}-{deterministic_seed}.json"
+    incumbent_cache_hit = False
+    cached_incumbent = load_incumbent_cache(incumbent_cache_path) if stable_incumbent_replay else None
+    if cached_incumbent is not None:
+        incumbent = canonicalize_solution(instance, cached_incumbent)
+        scheduler.skip("incumbent", "stable-incumbent-replay-cache-hit", min_ms=0)
+        incumbent_cache_hit = True
+    else:
+        incumbent_plan = {"stages": {"incumbent": {"enabled": True, "preferredMs": incumbent_budget, "minMs": 1_000}}}
+        incumbent_result = protected_stage_call(scheduler, incumbent_plan, policy, "incumbent", lambda budget: {"solution": DispatchV2ExternalBenchmarkSolver().solve(instance, budget, "our-dispatch-v2")}, protected_skips, route_pool_pending=False)
+        incumbent = incumbent_result["solution"] if incumbent_result else {"routes": []}
+        incumbent = canonicalize_solution(instance, incumbent)
+        if stable_incumbent_replay:
+            save_incumbent_cache(incumbent_cache_path, instance, incumbent)
     current = incumbent
     before = objective_components(instance, incumbent, config)
     features = instance_features(instance, incumbent)
@@ -166,11 +222,14 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
         if result is None:
             operator_trace[stage_name] = {"skipped": True}
             return
-        candidate = result.get("solution", current)
+        candidate = canonicalize_solution(instance, result.get("solution", current))
         current, accepted, reject_reason = _try_accept(instance, current, candidate, config)
         trace = {key: value for key, value in result.items() if key != "solution"}
+        trace["candidateSignature"] = solution_signature(instance, candidate)
         trace["acceptedByBudgetedRunner"] = accepted
         trace["budgetedRejectReason"] = None if accepted else reject_reason
+        if accepted:
+            trace["acceptedStageSignature"] = solution_signature(instance, current)
         operator_trace[stage_name] = trace
 
     natural_guard = stable_natural_route_elimination_guard(features, route_pair_counts(instance, current), scheduler, policy)
@@ -205,9 +264,12 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
     else:
         verdict = "PASS_WITH_LIMITS"
     diagnostics = {
-        "schemaVersion": "phase56b-stable-promoted-runner-diagnostics/v1",
+        "schemaVersion": "phase56c-stable-replay-promoted-runner-diagnostics/v1" if stable_incumbent_replay else "phase56b-stable-promoted-runner-diagnostics/v1",
         "instance": instance.get("instanceName"),
         "mode": mode,
+        "stableIncumbentReplay": stable_incumbent_replay,
+        "incumbentCacheHit": incumbent_cache_hit,
+        "incumbentCachePath": str(incumbent_cache_path) if stable_incumbent_replay else None,
         "stableBudgetPolicy": asdict(policy),
         "routePoolBudgetReserved": True,
         "routePoolReserveMs": policy.routePoolReserveMs,
@@ -218,7 +280,11 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
         "stageBudgetBeforeAfter": [{"stage": stage.get("name"), "remainingMsAfter": stage.get("remainingMsAfter"), "budgetMs": stage.get("budgetMs"), "runtimeMs": stage.get("runtimeMs")} for stage in stage_summary.get("stages", [])],
         "routePoolRan": route_pool_ran,
         "routePoolSkipReason": route_pool_stage.get("skippedReason"),
-        "deterministicSeed": None,
+        "deterministicSeed": deterministic_seed,
+        "incumbentSignature": solution_signature(instance, incumbent),
+        "finalSolutionSignature": solution_signature(instance, current),
+        "routePoolCandidateSignature": operator_trace.get("routePoolImprovement", {}).get("candidateSignature"),
+        "acceptedStageSignatures": {name: trace.get("acceptedStageSignature") for name, trace in operator_trace.items() if isinstance(trace, dict) and trace.get("acceptedStageSignature")},
         "vehicleCountBefore": before["vehicleCount"],
         "vehicleCountAfter": after["vehicleCount"],
         "distanceBefore": before["totalDistance"],
@@ -241,9 +307,11 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
 
 def phase56b_gate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     duplicate_outcomes: Dict[str, set[str]] = {}
+    duplicate_signatures: Dict[str, set[str]] = {}
     for row in rows:
         key = str(row.get("instance") or "").lower()
         duplicate_outcomes.setdefault(key, set()).add(f"{row.get('vehicleCountBefore')}->{row.get('vehicleCountAfter')}:{row.get('objectiveImproved')}")
+        duplicate_signatures.setdefault(key, set()).add(str(row.get("finalSolutionSignature") or "missing-signature"))
     checks = {
         "failCountZero": all(row.get("verdict") != "FAIL" for row in rows),
         "hardViolationsZero": all(int(row.get("hardViolations", 0) or 0) == 0 for row in rows),
@@ -252,8 +320,10 @@ def phase56b_gate(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "routePoolNotBudgetSkipped": all(row.get("routePoolSkipReason") != "budget-too-low" for row in rows),
         "noAcceptedObjectiveRegression": all(float(row.get("objectiveAfter", 0.0) or 0.0) <= float(row.get("objectiveBefore", 0.0) or 0.0) for row in rows),
         "duplicateOutcomesStable": all(len(outcomes) <= 1 for outcomes in duplicate_outcomes.values()),
+        "duplicateFinalSignaturesStable": all(len(signatures) <= 1 for signatures in duplicate_signatures.values()),
+        "routePoolRanWhenRepeated": all(row.get("routePoolRan") for row in rows) if len(rows) > 1 else True,
     }
-    return {"verdict": "PASS" if all(checks.values()) else "FAIL", "checks": checks, "duplicateOutcomes": {key: sorted(value) for key, value in duplicate_outcomes.items()}}
+    return {"verdict": "PASS" if all(checks.values()) else "FAIL", "checks": checks, "duplicateOutcomes": {key: sorted(value) for key, value in duplicate_outcomes.items()}, "duplicateFinalSignatures": {key: sorted(value) for key, value in duplicate_signatures.items()}}
 
 
 def markdown(rows: List[Dict[str, Any]], gate: Dict[str, Any]) -> str:
@@ -263,18 +333,38 @@ def markdown(rows: List[Dict[str, Any]], gate: Dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run(instances: List[str], output_dir: Path, data_source: str, time_limit_ms: int, mode: str, repeat: int = 1) -> Dict[str, Any]:
+def run(
+    instances: List[str],
+    output_dir: Path,
+    data_source: str,
+    time_limit_ms: int,
+    mode: str,
+    repeat: int = 1,
+    *,
+    stable_incumbent_replay: bool = False,
+    incumbent_cache_dir: Path | None = None,
+    deterministic_seed: int = 56,
+) -> Dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     rows = []
     for repeat_index in range(1, max(1, int(repeat)) + 1):
         run_output_dir = output_dir if repeat == 1 else output_dir / f"run-{repeat_index:02d}"
         for instance in instances:
-            row = run_instance(instance, run_output_dir, data_source, time_limit_ms, mode)
+            row = run_instance(
+                instance,
+                run_output_dir,
+                data_source,
+                time_limit_ms,
+                mode,
+                stable_incumbent_replay=stable_incumbent_replay,
+                incumbent_cache_dir=incumbent_cache_dir or output_dir / "incumbent-cache",
+                deterministic_seed=deterministic_seed,
+            )
             row["runIndex"] = repeat_index
             rows.append(row)
     counts = {verdict: sum(1 for row in rows if row.get("verdict") == verdict) for verdict in ("PASS_STRONG", "PASS", "PASS_WITH_LIMITS", "FAIL")}
     gate = phase56b_gate(rows)
-    summary = {"schemaVersion": "phase56b-stable-promoted-runner-summary/v1", "instances": instances, "repeat": max(1, int(repeat)), "mode": mode, "results": rows, "verdictCounts": counts, "phase56bGate": gate}
+    summary = {"schemaVersion": "phase56c-stable-replay-promoted-runner-summary/v1" if stable_incumbent_replay else "phase56b-stable-promoted-runner-summary/v1", "instances": instances, "repeat": max(1, int(repeat)), "mode": mode, "stableIncumbentReplay": stable_incumbent_replay, "deterministicSeed": deterministic_seed, "incumbentCacheDir": str(incumbent_cache_dir or output_dir / "incumbent-cache") if stable_incumbent_replay else None, "results": rows, "verdictCounts": counts, "phase56bGate": gate}
     write_json(output_dir / "phase56b_stable_promoted_summary.json", summary)
     (output_dir / "phase56b_stable_promoted_summary.md").write_text(markdown(rows, gate), encoding="utf-8")
     return summary
@@ -287,10 +377,23 @@ def main() -> int:
     parser.add_argument("--mode", choices=("academic_certification", "production_food_dispatch"), default="academic_certification")
     parser.add_argument("--time-limit", default="30s")
     parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument("--stable-incumbent-replay", action="store_true")
+    parser.add_argument("--incumbent-cache-dir", default="")
+    parser.add_argument("--deterministic-seed", type=int, default=56)
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     args = parser.parse_args()
     instances = [part.strip() for part in args.instances.split(",") if part.strip()]
-    summary = run(instances, Path(args.output_dir), args.data_source, parse_time_limit(args.time_limit), args.mode, repeat=args.repeat)
+    summary = run(
+        instances,
+        Path(args.output_dir),
+        args.data_source,
+        parse_time_limit(args.time_limit),
+        args.mode,
+        repeat=args.repeat,
+        stable_incumbent_replay=args.stable_incumbent_replay,
+        incumbent_cache_dir=Path(args.incumbent_cache_dir) if args.incumbent_cache_dir else None,
+        deterministic_seed=args.deterministic_seed,
+    )
     print(f"[PHASE56B STABLE PROMOTED] wrote {args.output_dir}")
     return 0 if summary["phase56bGate"]["verdict"] == "PASS" else 1
 
