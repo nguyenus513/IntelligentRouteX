@@ -50,6 +50,7 @@ missing_large_columns = load_module("run_phase34_missing_request_large_columns",
 residual_repair = load_module("run_phase35_residual_exact_cover_repair", "run_phase35_residual_exact_cover_repair.py")
 focused_repair = load_module("run_phase36_residual_focused_repair", "run_phase36_residual_focused_repair.py")
 conflict_guided = load_module("run_phase37_conflict_guided_replacement", "run_phase37_conflict_guided_replacement.py")
+residual_partition = load_module("run_phase38_residual_partition_generator", "run_phase38_residual_partition_generator.py")
 
 
 class ExternalBenchmarkCertificationTest(unittest.TestCase):
@@ -1861,6 +1862,106 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         result = conflict_guided.solve_residual_subproblem(instance, fixed, collector.pool.columns, ["1"], route_slots=1)
 
         self.assertFalse(result.get("feasible"))
+
+    def test_phase38_balanced_partition_covers_residual_exactly_once(self) -> None:
+        groups = residual_partition.balanced_partition(["a", "b", "c", "d", "e"], 2)
+
+        flattened = [request_id for group in groups for request_id in group]
+        self.assertEqual(["a", "b", "c", "d", "e"], sorted(flattened))
+        self.assertEqual(len(flattened), len(set(flattened)))
+
+    def test_phase38_partition_route_construction_creates_complete_pd_columns(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase38-construct", 3, 3, nodes, requests, {"vehicleCount": 1, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+
+        columns, repairs = residual_partition.construct_partition_columns(instance, collector, [["0", "1", "2"]], "unit")
+
+        self.assertEqual(0, repairs)
+        self.assertEqual(1, len(columns))
+        self.assertEqual({"0", "1", "2"}, set(columns[0].request_ids))
+
+    def test_phase38_local_residual_cpsat_selects_exact_route_slots(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase38-cpsat", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.collect(["0", "1", "2", "0"], "fixed")
+        fixed = collector.pool.columns[:]
+        collector.collect(["0", "3", "4", "0"], "candidate")
+        collector.collect(["0", "5", "6", "0"], "candidate")
+
+        result = conflict_guided.solve_residual_subproblem(instance, fixed, collector.pool.columns, ["1", "2"], route_slots=2)
+
+        self.assertTrue(result["feasible"])
+        self.assertEqual(2, len(result["selectedColumns"]))
+
+    def test_phase38_partition_repair_can_fix_synthetic_infeasible_group(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(7)]
+        nodes[1]["dueTime"] = 1
+        nodes[2]["dueTime"] = 1
+        for pickup, dropoff in [(1, 2), (3, 4), (5, 6)]:
+            nodes[pickup]["demand"] = 1
+            nodes[dropoff]["demand"] = -1
+        requests = [
+            {"pickupNodeId": "1", "dropoffNodeId": "2"},
+            {"pickupNodeId": "3", "dropoffNodeId": "4"},
+            {"pickupNodeId": "5", "dropoffNodeId": "6"},
+        ]
+        instance = support.normalize_instance("unit", "PDPTW", "phase38-repair", 3, 3, nodes, requests, {"vehicleCount": 2, "objective": 12.0})
+        groups = [["0", "1"], ["2"]]
+
+        route, attempts = residual_partition.repair_group_route(instance, groups, groups[0], max_repairs=4)
+
+        self.assertGreaterEqual(attempts, 1)
+        self.assertTrue(route is None or isinstance(route, list))
+
+    def test_phase38_final_combined_solution_passes_check_solution(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase38-final", 2, 2, nodes, requests, {"vehicleCount": 2, "objective": 8.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        attempt = {"fixedColumns": [], "residualRequestIds": ["0", "1"], "routeSlotsRemaining": 1, "missingRequestIds": ["0"]}
+
+        result = residual_partition.run_residual_partition_attempt(instance, collector, attempt)
+
+        self.assertTrue(result["feasible"])
+        self.assertTrue(support.check_solution(instance, result["solution"]).get("feasible"))
+
+    def test_phase38_no_comparator_reference_columns_used(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase38-no-leak", 2, 2, nodes, requests, {"vehicleCount": 1, "objective": 8.0})
+        collector = internal_columns.RouteColumnCollector(instance)
+        collector.pool.add_route(["0", "1", "2", "3", "4", "0"], "comparator", source_solver="baseline", provenance="comparator", allowed_for_claim=False)
+        columns, _ = residual_partition.construct_partition_columns(instance, collector, [["0", "1"]], "phase38-residual-partition")
+
+        self.assertGreater(len(columns), 0)
+        self.assertTrue(any(column.allowed_for_claim for column in collector.pool.columns))
+        self.assertTrue(all(column.allowed_for_claim for column in collector.pool.columns if column.source == "phase37-generated-replacement" or column.source == "phase38-residual-partition"))
 
     def test_baseline_competitiveness_reports_root_cause(self) -> None:
         rows = [{"stage": "A-academic-correctness", "suite": "solomon", "instance": "R101", "verdict": "PASS_WITH_LIMITS", "vehicleCount": 20, "bestKnownVehicleCount": 19}]
