@@ -632,6 +632,7 @@ def incumbent_neighborhood_repair(instance: Dict[str, Any], solution: Dict[str, 
 
 def internal_solver_improvement(instance: Dict[str, Any], solution: Dict[str, Any], config: NaturalPDPTWObjectiveConfig, mode: str = "natural") -> Dict[str, Any]:
     before = objective_components(instance, solution, config)
+    before_feasible = bool(before["feasible"])
     generator = InternalSolverCandidateGenerator(max_runtime_ms=3_000)
     generated = generator.generate(instance, config, incumbent=solution)
     best_candidate = None
@@ -641,7 +642,7 @@ def internal_solver_improvement(instance: Dict[str, Any], solution: Dict[str, An
         after = objective_components(instance, candidate, config)
         delta = after["objective"] - before["objective"]
         reason = None
-        if config.mode == "academic_certification" and after["vehicleCount"] > before["vehicleCount"]:
+        if before_feasible and config.mode == "academic_certification" and after["vehicleCount"] > before["vehicleCount"]:
             reason = "vehicle-count-regression"
         elif not after["feasible"]:
             reason = "hard-violation"
@@ -650,7 +651,7 @@ def internal_solver_improvement(instance: Dict[str, Any], solution: Dict[str, An
         candidate_summaries.append({"vehicleCount": after["vehicleCount"], "distance": after["totalDistance"], "objectiveDelta": delta, "rejectReason": reason})
         if not after["feasible"]:
             continue
-        if config.mode == "academic_certification" and after["vehicleCount"] > before["vehicleCount"]:
+        if before_feasible and config.mode == "academic_certification" and after["vehicleCount"] > before["vehicleCount"]:
             continue
         if best_after is None or after["objective"] < best_after["objective"]:
             best_candidate = candidate

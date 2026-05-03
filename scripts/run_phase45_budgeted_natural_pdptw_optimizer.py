@@ -161,16 +161,20 @@ def run_instance(instance_name: str, output_dir: Path, data_source: str, time_li
         trace["budgetedRejectReason"] = None if accepted else reject_reason
         operator_trace[stage_name] = trace
 
-    apply_stage_result(
-        "naturalRouteElimination",
-        _stage_call(
-            scheduler,
-            "natural-route-elimination",
-            preferred_ms=1_500,
-            min_ms=400,
-            call=lambda _budget: natural_route_elimination(instance, current, config),
-        ),
-    )
+    if before["vehicleCount"] > 16:
+        scheduler.skip("natural-route-elimination", "route-count-too-large-for-unbounded-stage", min_ms=400)
+        operator_trace["naturalRouteElimination"] = {"skipped": True, "skippedReason": "route-count-too-large-for-unbounded-stage", "vehicleCount": before["vehicleCount"]}
+    else:
+        apply_stage_result(
+            "naturalRouteElimination",
+            _stage_call(
+                scheduler,
+                "natural-route-elimination",
+                preferred_ms=1_500,
+                min_ms=400,
+                call=lambda _budget: natural_route_elimination(instance, current, config),
+            ),
+        )
 
     apply_stage_result(
         "objectiveDrivenRouteElimination",

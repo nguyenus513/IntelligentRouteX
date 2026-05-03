@@ -2381,6 +2381,21 @@ class ExternalBenchmarkCertificationTest(unittest.TestCase):
         self.assertFalse(result["accepted"])
         self.assertIn(result["trace"]["rejectReason"], {"objective-not-improved", "no-feasible-candidate"})
 
+    def test_phase45_infeasible_incumbent_can_accept_feasible_generator_candidate(self) -> None:
+        nodes = [{"id": str(index), "x": float(index), "y": 0.0, "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
+        nodes[1]["demand"] = 1
+        nodes[2]["demand"] = -1
+        nodes[3]["demand"] = 1
+        nodes[4]["demand"] = -1
+        requests = [{"pickupNodeId": "1", "dropoffNodeId": "2"}, {"pickupNodeId": "3", "dropoffNodeId": "4"}]
+        instance = support.normalize_instance("unit", "PDPTW", "phase45-infeasible-incumbent", 2, 2, nodes, requests, {"vehicleCount": 0, "objective": 0.0})
+        infeasible = {"routes": []}
+
+        result = natural_pdptw.internal_solver_improvement(instance, infeasible, natural_pdptw.objective_config("academic_certification"))
+
+        self.assertTrue(result["accepted"])
+        self.assertEqual(1, natural_pdptw.objective_components(instance, result["solution"], natural_pdptw.objective_config("academic_certification"))["vehicleCount"])
+
     def test_phase43_production_tail_penalty_still_visible_with_warm_start(self) -> None:
         coords = [(0.0, 0.0), (10.0, 0.0), (11.0, 0.0), (-10.0, 0.0), (-11.0, 0.0)]
         nodes = [{"id": str(index), "x": coords[index][0], "y": coords[index][1], "demand": 0, "readyTime": 0, "dueTime": 10_000, "serviceTime": 0} for index in range(5)]
