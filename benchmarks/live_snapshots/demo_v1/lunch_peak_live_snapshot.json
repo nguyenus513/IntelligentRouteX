@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "live-dispatch-snapshot/v1",
+  "snapshotId": "lunch_peak_live_snapshot",
+  "timestamp": "2026-05-04T11:30:00+07:00",
+  "region": "hcm-district-1",
+  "nodeIds": ["depot", "restaurant-a", "customer-a", "restaurant-b", "customer-b", "driver-2-start"],
+  "orders": [
+    {
+      "orderId": "lunch-001",
+      "pickupNodeId": "restaurant-a",
+      "dropoffNodeId": "customer-a",
+      "restaurantId": "restaurant-a",
+      "readyTime": 10,
+      "dueTime": 55,
+      "serviceTimePickup": 2,
+      "serviceTimeDropoff": 1,
+      "demand": 1
+    },
+    {
+      "orderId": "lunch-002",
+      "pickupNodeId": "restaurant-b",
+      "dropoffNodeId": "customer-b",
+      "restaurantId": "restaurant-b",
+      "readyTime": 15,
+      "dueTime": 70,
+      "serviceTimePickup": 2,
+      "serviceTimeDropoff": 1,
+      "demand": 1
+    }
+  ],
+  "drivers": [
+    {"driverId": "driver-1", "startNodeId": "depot", "capacity": 2, "shiftStart": 0, "shiftEnd": 120},
+    {"driverId": "driver-2", "startNodeId": "driver-2-start", "capacity": 2, "shiftStart": 0, "shiftEnd": 120}
+  ],
+  "activeRoutes": [],
+  "durationMatrix": [
+    [0, 8, 18, 12, 24, 5],
+    [8, 0, 10, 7, 16, 9],
+    [18, 10, 0, 13, 8, 20],
+    [12, 7, 13, 0, 11, 14],
+    [24, 16, 8, 11, 0, 26],
+    [5, 9, 20, 14, 26, 0]
+  ],
+  "trafficContext": {"scenario": "lunch_peak", "multiplier": 1.0, "peak": true},
+  "restaurantDelay": {"restaurant-a": 0, "restaurant-b": 3},
+  "cancellationRisk": {"lunch-001": 0.08, "lunch-002": 0.11}
+}

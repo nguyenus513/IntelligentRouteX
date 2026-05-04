@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "live-dispatch-snapshot/v1",
+  "snapshotId": "capability_bundle_live_snapshot",
+  "timestamp": "2026-05-04T12:05:00+07:00",
+  "region": "hcm-capability-demo",
+  "nodeIds": ["depot", "restaurant-cap-a", "customer-cap-a", "restaurant-cap-b", "customer-cap-b"],
+  "orders": [
+    {
+      "orderId": "bundle-001",
+      "pickupNodeId": "restaurant-cap-a",
+      "dropoffNodeId": "customer-cap-a",
+      "restaurantId": "restaurant-cap-a",
+      "readyTime": 5,
+      "dueTime": 70,
+      "serviceTimePickup": 2,
+      "serviceTimeDropoff": 1,
+      "demand": 1
+    },
+    {
+      "orderId": "bundle-002",
+      "pickupNodeId": "restaurant-cap-b",
+      "dropoffNodeId": "customer-cap-b",
+      "restaurantId": "restaurant-cap-b",
+      "readyTime": 8,
+      "dueTime": 75,
+      "serviceTimePickup": 2,
+      "serviceTimeDropoff": 1,
+      "demand": 1
+    }
+  ],
+  "drivers": [
+    {"driverId": "driver-bundle-1", "startNodeId": "depot", "capacity": 2, "shiftStart": 0, "shiftEnd": 120}
+  ],
+  "activeRoutes": [],
+  "durationMatrix": [
+    [0, 6, 15, 7, 16],
+    [6, 0, 9, 4, 12],
+    [15, 9, 0, 10, 5],
+    [7, 4, 10, 0, 8],
+    [16, 12, 5, 8, 0]
+  ],
+  "trafficContext": {"scenario": "capability_bundle", "multiplier": 1.0, "clusteredDropoffs": true},
+  "restaurantDelay": {"restaurant-cap-a": 0, "restaurant-cap-b": 0},
+  "cancellationRisk": {"bundle-001": 0.04, "bundle-002": 0.05}
+}

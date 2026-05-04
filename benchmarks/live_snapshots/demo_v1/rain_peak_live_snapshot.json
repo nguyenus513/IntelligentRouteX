@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "live-dispatch-snapshot/v1",
+  "snapshotId": "rain_peak_live_snapshot",
+  "timestamp": "2026-05-04T18:45:00+07:00",
+  "region": "hcm-district-3",
+  "nodeIds": ["depot", "restaurant-rain-a", "customer-rain-a", "restaurant-rain-b", "customer-rain-b", "restaurant-rain-c", "customer-rain-c"],
+  "orders": [
+    {
+      "orderId": "rain-001",
+      "pickupNodeId": "restaurant-rain-a",
+      "dropoffNodeId": "customer-rain-a",
+      "restaurantId": "restaurant-rain-a",
+      "readyTime": 12,
+      "dueTime": 80,
+      "serviceTimePickup": 3,
+      "serviceTimeDropoff": 2,
+      "demand": 1
+    },
+    {
+      "orderId": "rain-002",
+      "pickupNodeId": "restaurant-rain-b",
+      "dropoffNodeId": "customer-rain-b",
+      "restaurantId": "restaurant-rain-b",
+      "readyTime": 20,
+      "dueTime": 95,
+      "serviceTimePickup": 3,
+      "serviceTimeDropoff": 2,
+      "demand": 1
+    },
+    {
+      "orderId": "rain-003",
+      "pickupNodeId": "restaurant-rain-c",
+      "dropoffNodeId": "customer-rain-c",
+      "restaurantId": "restaurant-rain-c",
+      "readyTime": 25,
+      "dueTime": 110,
+      "serviceTimePickup": 3,
+      "serviceTimeDropoff": 2,
+      "demand": 1
+    }
+  ],
+  "drivers": [
+    {"driverId": "driver-rain-1", "startNodeId": "depot", "capacity": 2, "shiftStart": 0, "shiftEnd": 150},
+    {"driverId": "driver-rain-2", "startNodeId": "depot", "capacity": 2, "shiftStart": 0, "shiftEnd": 150}
+  ],
+  "activeRoutes": [
+    {"driverId": "driver-rain-1", "route": ["depot"], "lockedPrefixLength": 1}
+  ],
+  "durationMatrix": [
+    [0, 14, 30, 18, 35, 22, 42],
+    [14, 0, 16, 9, 24, 12, 30],
+    [30, 16, 0, 19, 10, 24, 15],
+    [18, 9, 19, 0, 14, 8, 22],
+    [35, 24, 10, 14, 0, 18, 9],
+    [22, 12, 24, 8, 18, 0, 13],
+    [42, 30, 15, 22, 9, 13, 0]
+  ],
+  "trafficContext": {"scenario": "rain_peak", "multiplier": 1.45, "rain": true},
+  "restaurantDelay": {"restaurant-rain-a": 4, "restaurant-rain-b": 6, "restaurant-rain-c": 5},
+  "cancellationRisk": {"rain-001": 0.18, "rain-002": 0.2, "rain-003": 0.16}
+}
