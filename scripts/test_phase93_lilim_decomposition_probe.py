@@ -7,6 +7,7 @@ from optimizer.phase84_unified_objective import UnifiedNaturalObjective
 from optimizer.phase95_slot_aware_subproblem import SlotAwareSubproblemBuilder, build_slot_aware_config
 from optimizer.phase96_coverage_repair import ResidualCoverageRepair, coverage_diff
 from optimizer.phase97_time_window_repair import TimeWindowRepair, evaluate_route_schedule, solution_time_window_stats
+from optimizer.phase98_schedule_feasible_subproblem import ScheduleFeasibleSubproblemBuilder, score_solution
 from run_phase93_lilim_decomposition_probe import active_route_count, affected_route_request_closure, exact_request_coverage, extract_subproblem, recombine_solution, run, select_requests_by_features, slot_limited_incumbent, strict_recombination_validator
 from test_phase90_final_quality_completion import instance
 
@@ -58,6 +59,7 @@ def test_hard_wall_clock_writes_safe_artifact(tmp_path: Path) -> None:
 def test_no_instance_name_branch() -> None:
     source = Path("scripts/run_phase93_lilim_decomposition_probe.py").read_text(encoding="utf-8")
     source += Path("scripts/optimizer/phase97_time_window_repair.py").read_text(encoding="utf-8")
+    source += Path("scripts/optimizer/phase98_schedule_feasible_subproblem.py").read_text(encoding="utf-8")
     forbidden = ["instance ==", "instanceName ==", "startswith(\"LRC", "startswith('LRC"]
 
     assert not any(token in source for token in forbidden)
@@ -248,3 +250,57 @@ def test_time_window_repair_never_increases_active_route_count() -> None:
 
     assert repaired is not None
     assert active_route_count(repaired) <= active_route_count(bad)
+
+
+
+def test_schedule_aware_insertion_chooses_lower_lateness_than_distance_only() -> None:
+    inst = time_window_repair_instance()
+    builder = ScheduleFeasibleSubproblemBuilder()
+    route = ["0", "3", "4", "0"]
+    early = inst["requests"][0]
+    distance_first = ["0", "3", "4", "1", "2", "0"]
+    schedule_route = builder.best_pair_insertion(inst, route, early)
+
+    assert schedule_route is not None
+    assert solution_time_window_stats(inst, {"routes": [schedule_route]})["totalLateness"] < solution_time_window_stats(inst, {"routes": [distance_first]})["totalLateness"]
+
+
+def test_schedule_builder_stays_within_slot_limit() -> None:
+    inst = time_window_repair_instance()
+    config = build_slot_aware_config("same-slot-polish", affected_route_count=1, selected_request_count=2)
+    incumbent = ScheduleFeasibleSubproblemBuilder().build_incumbent(inst, config)
+
+    assert incumbent is not None
+    assert active_route_count(incumbent) <= config.maxSubproblemRoutes
+
+
+def test_schedule_builder_preserves_exact_subproblem_coverage() -> None:
+    inst = time_window_repair_instance()
+    config = build_slot_aware_config("same-slot-polish", affected_route_count=1, selected_request_count=2)
+    incumbent = ScheduleFeasibleSubproblemBuilder().build_incumbent(inst, config)
+
+    assert incumbent is not None
+    assert exact_request_coverage(inst, incumbent)
+
+
+def test_schedule_builder_improves_synthetic_tw_violation() -> None:
+    inst = time_window_repair_instance()
+    config = build_slot_aware_config("same-slot-polish", affected_route_count=1, selected_request_count=2)
+    fallback = {"routes": [["0", "3", "4", "1", "2", "0"]]}
+    builder = ScheduleFeasibleSubproblemBuilder()
+    incumbent = builder.build_incumbent(inst, config, fallback)
+
+    assert incumbent is not None
+    assert score_solution(inst, incumbent).to_tuple() < score_solution(inst, fallback).to_tuple()
+    assert builder.lastTelemetry["scheduleBuilderSuccess"] is True
+
+
+def test_schedule_builder_fallback_used_when_no_schedule_improvement_exists() -> None:
+    inst = time_window_repair_instance()
+    config = build_slot_aware_config("same-slot-polish", affected_route_count=1, selected_request_count=2)
+    fallback = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+    builder = ScheduleFeasibleSubproblemBuilder()
+    incumbent = builder.build_incumbent(inst, config, fallback)
+
+    assert incumbent == fallback
+    assert builder.lastTelemetry["scheduleBuilderSuccess"] is False

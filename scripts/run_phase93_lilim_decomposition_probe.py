@@ -14,6 +14,7 @@ from optimizer.phase94_slot_recombination_policy import SlotPreservingRecombinat
 from optimizer.phase95_slot_aware_subproblem import SlotAwareSubproblemBuilder, build_slot_aware_config
 from optimizer.phase96_coverage_repair import ResidualCoverageRepair, coverage_diff, remove_duplicate_pairs
 from optimizer.phase97_time_window_repair import TimeWindowRepair, solution_time_window_stats
+from optimizer.phase98_schedule_feasible_subproblem import ScheduleFeasibleSubproblemBuilder
 from phase67_synthetic_instance_loader import load_benchmark_instance
 from run_external_benchmark_certification import parse_time_limit
 from run_phase55_promotion_guard import write_json
@@ -78,7 +79,16 @@ def slot_limited_incumbent(instance: Dict[str, Any]) -> Dict[str, Any]:
     depot = str(instance.get("depotNodeId", "0"))
     slot_count = max(1, int(instance.get("vehicleCount", 1) or 1))
     routes = [[depot, depot] for _ in range(slot_count)]
-    requests = sorted(instance.get("requests", []), key=lambda request: request_id(request))
+    nodes = {str(node.get("id")): node for node in instance.get("nodes", [])}
+
+    def schedule_key(request: Dict[str, Any]) -> tuple[float, float, str]:
+        pickup = nodes.get(str(request.get("pickupNodeId")), {})
+        dropoff = nodes.get(str(request.get("dropoffNodeId")), {})
+        due = min(float(pickup.get("dueTime", 1e18) or 1e18), float(dropoff.get("dueTime", 1e18) or 1e18))
+        ready = min(float(pickup.get("readyTime", 0.0) or 0.0), float(dropoff.get("readyTime", 0.0) or 0.0))
+        return (due, ready, request_id(request))
+
+    requests = sorted(instance.get("requests", []), key=schedule_key)
     for index, request in enumerate(requests):
         route_index = index % slot_count
         route = routes[route_index]
@@ -160,15 +170,20 @@ def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], requ
     subproblem, new_to_old = extract_subproblem(instance, selected)
     subproblem["vehicleCount"] = slot_config.maxSubproblemRoutes
     slot_builder = SlotAwareSubproblemBuilder()
-    sub_incumbent = slot_builder.build_incumbent(subproblem, slot_config)
+    base_sub_incumbent = slot_builder.build_incumbent(subproblem, slot_config)
     construction_telemetry = dict(slot_builder.lastTelemetry)
+    schedule_builder = ScheduleFeasibleSubproblemBuilder()
+    sub_incumbent = schedule_builder.build_incumbent(subproblem, slot_config, base_sub_incumbent)
+    schedule_telemetry = dict(schedule_builder.lastTelemetry)
     if sub_incumbent is None:
-        return {"mode": slot_config.mode, "selectedSeedRequestCount": len(seed_selected), "selectedRequestCount": len(seed_selected), "expandedAffectedRequestCount": len(selected), "affectedRouteRequestCount": len(selected), "subproblemRequestCount": len(subproblem.get("requests", [])), "subDiagnostics": {}, "recombinedSolution": incumbent, "recombinedFeasible": False, "recombinedViolations": ["slot-aware-construction-blocked"], "exactCoverage": True, "objectiveImproves": False, "objectiveDelta": None, "affectedRouteCount": affected_route_count, "availableRouteSlots": slot_config.availableRouteSlots, "maxSubproblemRoutes": slot_config.maxSubproblemRoutes, "subproblemVehicleCount": subproblem.get("vehicleCount"), "incumbentSubproblemRouteCount": 0, "candidateSubproblemRouteCount": 0, "slotAwareConstructionBlocked": True, "slotCompressionAttempts": 0, "slotCompressionSuccess": False, "rejectedBySlotOverflow": False, "rejectedByCoverage": False, "rejectedByCheckSolution": False, "bestRejectedReason": "slot-aware-construction-blocked"}
+        return {"mode": slot_config.mode, "selectedSeedRequestCount": len(seed_selected), "selectedRequestCount": len(seed_selected), "expandedAffectedRequestCount": len(selected), "affectedRouteRequestCount": len(selected), "subproblemRequestCount": len(subproblem.get("requests", [])), "subDiagnostics": {}, "recombinedSolution": incumbent, "recombinedFeasible": False, "recombinedViolations": ["slot-aware-construction-blocked"], "exactCoverage": True, "objectiveImproves": False, "objectiveDelta": None, "affectedRouteCount": affected_route_count, "availableRouteSlots": slot_config.availableRouteSlots, "maxSubproblemRoutes": slot_config.maxSubproblemRoutes, "subproblemVehicleCount": subproblem.get("vehicleCount"), "incumbentSubproblemRouteCount": 0, "candidateSubproblemRouteCount": 0, "slotAwareConstructionBlocked": True, "slotCompressionAttempts": 0, "slotCompressionSuccess": False, "scheduleBuilderAttempts": 0, "scheduleBuilderSuccess": False, "scheduleBuilderStrategy": None, "subproblemTWBefore": 0, "subproblemTWAfter": 0, "subproblemLatenessBefore": 0.0, "subproblemLatenessAfter": 0.0, "scheduleBuiltCandidateUsed": False, "rejectedBySlotOverflow": False, "rejectedByCoverage": False, "rejectedByCheckSolution": False, "bestRejectedReason": "slot-aware-construction-blocked"}
     result = UnifiedIntelligentOptimizer().optimize(subproblem, sub_incumbent, sub_time_ms)
-    sub_candidate = slot_builder.compress_to_slots(subproblem, result["solution"], slot_config.maxSubproblemRoutes)
+    optimizer_solution = schedule_builder.choose_candidate(subproblem, result["solution"], sub_incumbent)
+    schedule_telemetry = dict(schedule_builder.lastTelemetry)
+    sub_candidate = slot_builder.compress_to_slots(subproblem, optimizer_solution, slot_config.maxSubproblemRoutes)
     compression_telemetry = dict(slot_builder.lastTelemetry)
     if sub_candidate is None:
-        sub_candidate = result["solution"]
+        sub_candidate = optimizer_solution
     sub_solution_old = remap_solution_to_full(sub_candidate, new_to_old)
     candidate_subproblem_route_count = active_route_count(sub_solution_old)
     recombined = recombine_solution(instance, incumbent, selected, sub_solution_old)
@@ -238,6 +253,14 @@ def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], requ
         "slotAwareConstructionBlocked": bool(construction_telemetry.get("slotAwareConstructionBlocked", False)),
         "slotCompressionAttempts": int(compression_telemetry.get("slotCompressionAttempts", 0) or 0),
         "slotCompressionSuccess": bool(compression_telemetry.get("slotCompressionSuccess", False)),
+        "scheduleBuilderAttempts": int(schedule_telemetry.get("scheduleBuilderAttempts", 0) or 0),
+        "scheduleBuilderSuccess": bool(schedule_telemetry.get("scheduleBuilderSuccess", False)),
+        "scheduleBuilderStrategy": schedule_telemetry.get("scheduleBuilderStrategy"),
+        "subproblemTWBefore": int(schedule_telemetry.get("subproblemTWBefore", 0) or 0),
+        "subproblemTWAfter": int(schedule_telemetry.get("subproblemTWAfter", 0) or 0),
+        "subproblemLatenessBefore": float(schedule_telemetry.get("subproblemLatenessBefore", 0.0) or 0.0),
+        "subproblemLatenessAfter": float(schedule_telemetry.get("subproblemLatenessAfter", 0.0) or 0.0),
+        "scheduleBuiltCandidateUsed": bool(schedule_telemetry.get("scheduleBuiltCandidateUsed", False)),
         "rejectedBySlotOverflow": reject_reason == "subproblem-route-slot-overflow",
         "rejectedByCoverage": str(reject_reason).startswith("coverage-"),
         "coverageMissingCount": int(precheck.get("missingCount", 0) or 0),
@@ -305,6 +328,13 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     repair_attempts = sum(int(item.get("residualCoverageRepairAttempts", 0) or 0) for item in trace)
     repair_successes = sum(1 for item in trace if item.get("residualCoverageRepairSuccess"))
     rejected_check = sum(1 for item in trace if item.get("rejectedByCheckSolution"))
+    schedule_attempts = sum(int(item.get("scheduleBuilderAttempts", 0) or 0) for item in trace)
+    schedule_successes = sum(1 for item in trace if item.get("scheduleBuilderSuccess"))
+    subproblem_tw_before = sum(int(item.get("subproblemTWBefore", 0) or 0) for item in trace)
+    subproblem_tw_after = sum(int(item.get("subproblemTWAfter", 0) or 0) for item in trace)
+    subproblem_lateness_before = sum(float(item.get("subproblemLatenessBefore", 0.0) or 0.0) for item in trace)
+    subproblem_lateness_after = sum(float(item.get("subproblemLatenessAfter", 0.0) or 0.0) for item in trace)
+    schedule_built_used = sum(1 for item in trace if item.get("scheduleBuiltCandidateUsed"))
     rejected_time_window = sum(1 for item in trace if item.get("rejectedByTimeWindow"))
     tw_repair_attempts = sum(int(item.get("timeWindowRepairAttempts", 0) or 0) for item in trace)
     tw_repair_successes = sum(1 for item in trace if item.get("timeWindowRepairSuccess"))
@@ -322,6 +352,8 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
         gate = "FAIL"
     elif accepted > 0:
         gate = "PASS_STRONG"
+    elif int(getattr(args, "phase97_time_window_after_baseline", 0) or 0) > 0 and tw_after < int(getattr(args, "phase97_time_window_after_baseline", 0) or 0) and unknown == 0:
+        gate = "PASS"
     elif tw_after < tw_before and unknown == 0:
         gate = "PASS"
     elif recombined_feasible > 0 and unknown == 0:
@@ -330,7 +362,7 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
         gate = "PASS"
     else:
         gate = "PASS_WITH_LIMITS"
-    summary = {"schemaVersion": "phase93-lilim-decomposition-probe/v1", "gate": gate, "instance": instance_name, "decompositionTrace": [{key: value for key, value in item.items() if key not in {"subDiagnostics", "recombinedSolution"}} for item in trace], "subproblemCount": len(trace), "recombinedCandidates": recombined, "acceptedRecombinedCandidates": accepted, "unknownCount": unknown, "hardViolations": hard, "rejectedRecombinedHardViolations": rejected_hard, "rejectedCheckSolutionViolations": rejected_check_violations, "rejectedBySlotOverflow": rejected_slot, "rejectedByCoverage": rejected_coverage, "coverageMissingCount": coverage_missing, "coverageDuplicateCount": coverage_duplicate, "coveragePartialPairCount": coverage_partial, "residualCoverageRepairAttempts": repair_attempts, "residualCoverageRepairSuccesses": repair_successes, "rejectedByCheckSolution": rejected_check, "rejectedByTimeWindow": rejected_time_window, "timeWindowRepairAttempts": tw_repair_attempts, "timeWindowRepairSuccesses": tw_repair_successes, "timeWindowViolationCountBefore": tw_before, "timeWindowViolationCountAfter": tw_after, "totalLatenessBefore": lateness_before, "totalLatenessAfter": lateness_after, "firstViolationNode": first_violation_node, "repairStrategyUsed": repair_strategy_used, "candidateChecksUsed": tw_candidate_checks, "recombinedFeasibleCandidates": recombined_feasible, "bestRejectedReason": best_rejected_reason, "antiHardcodeGate": anti.get("gate"), **telemetry}
+    summary = {"schemaVersion": "phase93-lilim-decomposition-probe/v1", "gate": gate, "instance": instance_name, "decompositionTrace": [{key: value for key, value in item.items() if key not in {"subDiagnostics", "recombinedSolution"}} for item in trace], "subproblemCount": len(trace), "recombinedCandidates": recombined, "acceptedRecombinedCandidates": accepted, "unknownCount": unknown, "hardViolations": hard, "rejectedRecombinedHardViolations": rejected_hard, "rejectedCheckSolutionViolations": rejected_check_violations, "rejectedBySlotOverflow": rejected_slot, "rejectedByCoverage": rejected_coverage, "coverageMissingCount": coverage_missing, "coverageDuplicateCount": coverage_duplicate, "coveragePartialPairCount": coverage_partial, "residualCoverageRepairAttempts": repair_attempts, "residualCoverageRepairSuccesses": repair_successes, "rejectedByCheckSolution": rejected_check, "scheduleBuilderAttempts": schedule_attempts, "scheduleBuilderSuccesses": schedule_successes, "subproblemTWBefore": subproblem_tw_before, "subproblemTWAfter": subproblem_tw_after, "subproblemLatenessBefore": subproblem_lateness_before, "subproblemLatenessAfter": subproblem_lateness_after, "scheduleBuiltCandidateUsed": schedule_built_used, "rejectedByTimeWindow": rejected_time_window, "phase97TimeWindowAfterBaseline": int(getattr(args, "phase97_time_window_after_baseline", 0) or 0), "timeWindowRepairAttempts": tw_repair_attempts, "timeWindowRepairSuccesses": tw_repair_successes, "timeWindowViolationCountBefore": tw_before, "timeWindowViolationCountAfter": tw_after, "totalLatenessBefore": lateness_before, "totalLatenessAfter": lateness_after, "firstViolationNode": first_violation_node, "repairStrategyUsed": repair_strategy_used, "candidateChecksUsed": tw_candidate_checks, "recombinedFeasibleCandidates": recombined_feasible, "bestRejectedReason": best_rejected_reason, "antiHardcodeGate": anti.get("gate"), **telemetry}
     write_json(output_dir / "phase93_lilim_decomposition_probe_summary.json", summary)
     write_json(output_dir / "decomposition_trace.json", {"rows": summary["decompositionTrace"]})
     write_json(output_dir / "operator_telemetry.json", {"rows": [item.get("subDiagnostics", {}).get("budgetTelemetry", []) for item in trace]})
@@ -350,6 +382,7 @@ def main() -> int:
     parser.add_argument("--subproblem-time-limit", default="5s")
     parser.add_argument("--hard-wall-clock-ms", type=int, default=30_000)
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    parser.add_argument("--phase97-time-window-after-baseline", type=int, default=0)
     args = parser.parse_args()
     summary = run(args)
     print(f"[PHASE93 LILIM DECOMPOSITION PROBE] {summary['gate']} wrote {args.output_dir}")
@@ -358,6 +391,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
 
