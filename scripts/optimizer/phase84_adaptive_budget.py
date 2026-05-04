@@ -10,10 +10,12 @@ class OperatorBudget:
     allocatedMs: int
     usedMs: int = 0
     candidateChecks: int = 0
+    generatedCandidates: int = 0
     feasibleCandidateCount: int = 0
     acceptedCount: int = 0
     roi: float = 0.0
     earlyStopReason: str | None = None
+    failReasons: Dict[str, int] | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

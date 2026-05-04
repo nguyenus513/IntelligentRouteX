@@ -47,6 +47,7 @@ def run_instance(source: str, instance_name: str, output_dir: Path, time_limit_m
         "signature": solution_signature(instance, solution),
         "routePoolStats": result["diagnostics"].get("routePoolStats", {}),
         "operatorTelemetry": result["diagnostics"].get("operatorTelemetry", {}),
+        "budgetTelemetry": result["diagnostics"].get("budgetTelemetry", []),
     }
 
 

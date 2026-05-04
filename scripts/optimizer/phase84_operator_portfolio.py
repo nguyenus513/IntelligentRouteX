@@ -47,12 +47,14 @@ class OperatorPortfolio:
         spec = self.spec(name)
         started = time.perf_counter()
         candidates = self._generate(name, instance, canonicalize_solution(instance, solution), spec, route_pool)
+        generated = 0
         best = solution
         best_key = self._candidate_key(instance, solution)
         checks = 0
         feasible = 0
         fail_reasons: Dict[str, int] = {}
         for candidate in candidates:
+            generated += 1
             if int((time.perf_counter() - started) * 1000) > spec.maxRuntimeMs:
                 fail_reasons["runtime-cap"] = fail_reasons.get("runtime-cap", 0) + 1
                 break
@@ -71,7 +73,7 @@ class OperatorPortfolio:
             if key < best_key:
                 best = candidate
                 best_key = key
-        telemetry = {"candidateChecks": checks, "feasibleCandidates": feasible, "acceptedCandidates": 1 if best is not solution else 0, "failReasons": fail_reasons}
+        telemetry = {"generatedCandidates": generated, "candidateChecks": checks, "feasibleCandidates": feasible, "acceptedCandidates": 1 if best is not solution else 0, "failReasons": fail_reasons}
         return {"solution": best, "telemetry": telemetry}
 
     def _generate(self, name: str, instance: Dict[str, Any], solution: Dict[str, Any], spec: OperatorSpec, route_pool: Any | None) -> Iterable[Dict[str, Any]]:

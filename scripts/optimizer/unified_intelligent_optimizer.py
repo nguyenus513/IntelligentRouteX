@@ -52,10 +52,15 @@ class UnifiedIntelligentOptimizer:
             self.hyper.record(name, reward, runtime_ms, bool(candidate_eval.get("feasible")), accepted)
             if name in budgets:
                 budgets[name].usedMs += runtime_ms
+                budgets[name].generatedCandidates += int(operator_telemetry.get("generatedCandidates", 0) or 0)
                 budgets[name].candidateChecks += int(operator_telemetry.get("candidateChecks", 1) or 0)
                 budgets[name].feasibleCandidateCount += int(operator_telemetry.get("feasibleCandidates", 1 if candidate_eval.get("feasible") else 0) or 0)
                 budgets[name].acceptedCount += int(operator_telemetry.get("acceptedCandidates", 1 if accepted else 0) or 0)
                 budgets[name].roi = reward / max(1, runtime_ms)
+                merged_reasons = dict(budgets[name].failReasons or {})
+                for reason, count in operator_telemetry.get("failReasons", {}).items():
+                    merged_reasons[str(reason)] = merged_reasons.get(str(reason), 0) + int(count or 0)
+                budgets[name].failReasons = merged_reasons
             pool.add_solution(instance, candidate, name)
         selected = self.selector.select(instance, current, pool)
         if self.objective.improves(instance, current, selected) and self.lock.accepts(instance, selected):
