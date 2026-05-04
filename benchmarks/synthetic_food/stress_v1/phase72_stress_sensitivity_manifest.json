@@ -1,0 +1,5190 @@
+{
+  "schemaVersion": "phase72-stress-sensitivity-suite/v1",
+  "variantCount": 576,
+  "variants": [
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 20,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "quality-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 40,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "quality-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 80,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "loose",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "runtime-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "balanced",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": false,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.2
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 1.5
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "loose",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "normal",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "vehicle-shortage-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "tight",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.1,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.5,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    },
+    {
+      "clusterRatio": 0.8,
+      "driverMode": "tight",
+      "expectedFailureMode": "time-window-risk",
+      "orders": 120,
+      "rain": true,
+      "timeWindowTightness": "extreme",
+      "trafficMultiplier": 2.0
+    }
+  ]
+}
