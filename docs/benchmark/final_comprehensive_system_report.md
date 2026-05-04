@@ -171,6 +171,19 @@ Use this wording:
 
 > On synthetic food scenarios, Phase 56F produces feasible routes for all six cases with hard violations `0` and overBudget `0`. VROOM returns no internally feasible solution in this run; Phase 67B confirms four true VROOM time-window violations and two matrix-duration semantic mismatches. This supports a feasibility/stability advantage for IntelligentRouteX on this synthetic suite. Quality superiority remains inconclusive because VROOM has no feasible synthetic solution for distance or vehicle-count comparison.
 
+## Phase 76 VROOM Capability Micro-Suite
+
+Phase 76 verifies VROOM and Phase 56F on 15 capability micro-tests. Both solvers are feasible `15/15`; semantic audit is `PASS`.
+
+| Metric | Result |
+|---|---:|
+| both-feasible | 15/15 |
+| fair quality tie | 10 |
+| Phase 56F distance wins | 5 |
+| VROOM distance wins | 0 |
+
+Phase 76 shows that VROOM supports core optimizer capabilities such as shipment bundling, driver/vehicle assignment, pickup-delivery precedence, capacity, time windows, waiting, service time, skill matching, shift windows, breaks, open route, priority, custom/asymmetric matrix, and multi-driver load balancing. It also shows Phase 56F is competitive when both solvers are feasible on micro-capability cases.
+
 ## Known Limitations
 
 No live production adapter, no fallback/canary policy, no real replay logs, and synthetic quality vs VROOM is inconclusive when VROOM is infeasible.
