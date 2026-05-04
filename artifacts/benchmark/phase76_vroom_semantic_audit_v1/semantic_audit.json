@@ -1,0 +1,85 @@
+{
+  "classificationCounts": {
+    "both-feasible": 15
+  },
+  "gate": "PASS",
+  "inputDir": "artifacts\\final\\vroom_capability_full_v1",
+  "rows": [
+    {
+      "instance": "single_shipment",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "tie"
+    },
+    {
+      "instance": "two_shipments_same_driver_bundle",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "challenger-win"
+    },
+    {
+      "instance": "capacity_blocks_bundle",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "challenger-win"
+    },
+    {
+      "instance": "time_window_blocks_bundle",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "tie"
+    },
+    {
+      "instance": "waiting_required",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "tie"
+    },
+    {
+      "instance": "service_time_required",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "tie"
+    },
+    {
+      "instance": "driver_selection_nearest",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "tie"
+    },
+    {
+      "instance": "driver_skill_matching",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "tie"
+    },
+    {
+      "instance": "vehicle_shift_window",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "tie"
+    },
+    {
+      "instance": "driver_break",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "challenger-win"
+    },
+    {
+      "instance": "open_route",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "tie"
+    },
+    {
+      "instance": "priority_unassigned",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "challenger-win"
+    },
+    {
+      "instance": "custom_matrix_asymmetric",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "tie"
+    },
+    {
+      "instance": "pickup_delivery_precedence",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "challenger-win"
+    },
+    {
+      "instance": "multi_driver_load_balance",
+      "semanticClassification": "both-feasible",
+      "sourceClassification": "tie"
+    }
+  ],
+  "schemaVersion": "phase76-vroom-semantic-audit/v1"
+}

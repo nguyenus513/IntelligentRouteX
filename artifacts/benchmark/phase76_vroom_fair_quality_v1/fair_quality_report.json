@@ -1,0 +1,85 @@
+{
+  "classificationCounts": {
+    "both-feasible-challenger-distance-win": 5,
+    "both-feasible-tie": 10
+  },
+  "inputDir": "artifacts\\final\\vroom_capability_full_v1",
+  "rows": [
+    {
+      "fairClassification": "both-feasible-tie",
+      "instance": "single_shipment",
+      "sourceClassification": "tie"
+    },
+    {
+      "fairClassification": "both-feasible-challenger-distance-win",
+      "instance": "two_shipments_same_driver_bundle",
+      "sourceClassification": "challenger-win"
+    },
+    {
+      "fairClassification": "both-feasible-challenger-distance-win",
+      "instance": "capacity_blocks_bundle",
+      "sourceClassification": "challenger-win"
+    },
+    {
+      "fairClassification": "both-feasible-tie",
+      "instance": "time_window_blocks_bundle",
+      "sourceClassification": "tie"
+    },
+    {
+      "fairClassification": "both-feasible-tie",
+      "instance": "waiting_required",
+      "sourceClassification": "tie"
+    },
+    {
+      "fairClassification": "both-feasible-tie",
+      "instance": "service_time_required",
+      "sourceClassification": "tie"
+    },
+    {
+      "fairClassification": "both-feasible-tie",
+      "instance": "driver_selection_nearest",
+      "sourceClassification": "tie"
+    },
+    {
+      "fairClassification": "both-feasible-tie",
+      "instance": "driver_skill_matching",
+      "sourceClassification": "tie"
+    },
+    {
+      "fairClassification": "both-feasible-tie",
+      "instance": "vehicle_shift_window",
+      "sourceClassification": "tie"
+    },
+    {
+      "fairClassification": "both-feasible-challenger-distance-win",
+      "instance": "driver_break",
+      "sourceClassification": "challenger-win"
+    },
+    {
+      "fairClassification": "both-feasible-tie",
+      "instance": "open_route",
+      "sourceClassification": "tie"
+    },
+    {
+      "fairClassification": "both-feasible-challenger-distance-win",
+      "instance": "priority_unassigned",
+      "sourceClassification": "challenger-win"
+    },
+    {
+      "fairClassification": "both-feasible-tie",
+      "instance": "custom_matrix_asymmetric",
+      "sourceClassification": "tie"
+    },
+    {
+      "fairClassification": "both-feasible-challenger-distance-win",
+      "instance": "pickup_delivery_precedence",
+      "sourceClassification": "challenger-win"
+    },
+    {
+      "fairClassification": "both-feasible-tie",
+      "instance": "multi_driver_load_balance",
+      "sourceClassification": "tie"
+    }
+  ],
+  "schemaVersion": "phase76-vroom-fair-quality-report/v1"
+}
