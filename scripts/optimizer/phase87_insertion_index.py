@@ -5,13 +5,30 @@ from typing import Any, Dict, List
 from external_benchmark_support import route_distance
 from optimizer.phase85_pair_utils import insert_pair_positions, request_id
 from optimizer.phase87_candidate_ranker import CandidateRanker
+from optimizer.phase88_delta_feasibility import DeltaFeasibilityEstimator
 
 
 class InsertionIndex:
+    def __init__(self) -> None:
+        self.estimator = DeltaFeasibilityEstimator()
+        self.lastTelemetry: Dict[str, int] = {}
+
     def enumerate_options(self, instance: Dict[str, Any], route: List[str], request: Dict[str, Any], top_k: int = 8) -> List[Dict[str, Any]]:
         base_distance = route_distance(instance, route)
         moves = []
+        telemetry = {"generatedOptions": 0, "prunedByCapacity": 0, "prunedByTimeWindow": 0, "prunedByLock": 0, "topKReturned": 0}
         for pickup_pos, dropoff_pos, candidate_route in insert_pair_positions(route, request):
+            telemetry["generatedOptions"] += 1
+            estimate = self.estimator.estimate_pair_insertion(instance, route, request, pickup_pos, dropoff_pos)
+            if not estimate.capacityOk:
+                telemetry["prunedByCapacity"] += 1
+                continue
+            if not estimate.timeWindowLikelyOk:
+                telemetry["prunedByTimeWindow"] += 1
+                continue
+            if not estimate.lockOk:
+                telemetry["prunedByLock"] += 1
+                continue
             distance_delta = route_distance(instance, candidate_route) - base_distance
             capacity_risk = self._capacity_risk(instance, candidate_route)
             slack_risk = self._slack_risk(instance, candidate_route)
@@ -25,13 +42,20 @@ class InsertionIndex:
                     "estimatedDistanceDelta": distance_delta,
                     "capacityRisk": capacity_risk,
                     "slackRisk": slack_risk,
+                    "estimatedSlackMin": estimate.estimatedSlackMin,
+                    "riskScore": estimate.riskScore,
+                    "objectivePotential": -distance_delta,
+                    "feasibilityProbability": 1.0 / (1.0 + estimate.riskScore),
                     "routeCompatibility": 1.0 / (1.0 + max(0.0, distance_delta)),
                     "clusterRelatedness": 0.0,
                     "trafficRobustness": 1.0 / (1.0 + slack_risk),
                     "lockSafety": 1.0,
                 }
             )
-        return CandidateRanker().rank(moves)[:top_k]
+        ranked = CandidateRanker().rank(moves)[:top_k]
+        telemetry["topKReturned"] = len(ranked)
+        self.lastTelemetry = telemetry
+        return ranked
 
     def _capacity_risk(self, instance: Dict[str, Any], route: List[str]) -> float:
         nodes = {str(node.get("id")): node for node in instance.get("nodes", [])}

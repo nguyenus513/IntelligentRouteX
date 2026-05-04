@@ -53,10 +53,26 @@ class UnifiedIntelligentOptimizer:
             if name in budgets:
                 budgets[name].usedMs += runtime_ms
                 budgets[name].generatedCandidates += int(operator_telemetry.get("generatedCandidates", 0) or 0)
+                budgets[name].generatedMoves += int(operator_telemetry.get("generatedMoves", 0) or 0)
+                budgets[name].rankedMoves += int(operator_telemetry.get("rankedMoves", 0) or 0)
+                budgets[name].prunedMoves += int(operator_telemetry.get("prunedMoves", 0) or 0)
                 budgets[name].candidateChecks += int(operator_telemetry.get("candidateChecks", 1) or 0)
                 budgets[name].feasibleCandidateCount += int(operator_telemetry.get("feasibleCandidates", 1 if candidate_eval.get("feasible") else 0) or 0)
                 budgets[name].acceptedCount += int(operator_telemetry.get("acceptedCandidates", 1 if accepted else 0) or 0)
                 budgets[name].roi = reward / max(1, runtime_ms)
+                budgets[name].prunedByCapacity += int(operator_telemetry.get("prunedByCapacity", 0) or 0)
+                budgets[name].prunedByTimeWindow += int(operator_telemetry.get("prunedByTimeWindow", 0) or 0)
+                budgets[name].prunedByLock += int(operator_telemetry.get("prunedByLock", 0) or 0)
+                budgets[name].estimatedFeasibleMoves += int(operator_telemetry.get("estimatedFeasibleMoves", 0) or 0)
+                budgets[name].fullCheckPassRate = float(operator_telemetry.get("fullCheckPassRate", budgets[name].fullCheckPassRate) or 0.0)
+                budgets[name].nearFeasibleRepairAttempts += int(operator_telemetry.get("nearFeasibleRepairAttempts", 0) or 0)
+                budgets[name].nearFeasibleRepairSuccesses += int(operator_telemetry.get("nearFeasibleRepairSuccesses", 0) or 0)
+                if operator_telemetry.get("bestEstimatedDistanceDelta") is not None:
+                    value = float(operator_telemetry["bestEstimatedDistanceDelta"])
+                    budgets[name].bestEstimatedDistanceDelta = value if budgets[name].bestEstimatedDistanceDelta is None else min(budgets[name].bestEstimatedDistanceDelta, value)
+                if operator_telemetry.get("bestActualDistanceDelta") is not None:
+                    value = float(operator_telemetry["bestActualDistanceDelta"])
+                    budgets[name].bestActualDistanceDelta = value if budgets[name].bestActualDistanceDelta is None else min(budgets[name].bestActualDistanceDelta, value)
                 merged_reasons = dict(budgets[name].failReasons or {})
                 for reason, count in operator_telemetry.get("failReasons", {}).items():
                     merged_reasons[str(reason)] = merged_reasons.get(str(reason), 0) + int(count or 0)

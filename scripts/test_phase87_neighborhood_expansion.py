@@ -39,9 +39,10 @@ def test_insertion_index_ranks_lower_distance_first() -> None:
 
 
 def test_insertion_index_exposes_capacity_risk() -> None:
-    options = InsertionIndex().enumerate_options(instance(), ["0", "3", "4", "0"], {"orderId": "a", "pickupNodeId": "1", "dropoffNodeId": "2"}, top_k=10)
+    index = InsertionIndex()
+    index.enumerate_options(instance(), ["0", "3", "4", "0"], {"orderId": "a", "pickupNodeId": "1", "dropoffNodeId": "2"}, top_k=10)
 
-    assert any(option["capacityRisk"] > 0 for option in options)
+    assert index.lastTelemetry["prunedByCapacity"] > 0
 
 
 def test_pair_selection_prioritizes_high_detour_generically() -> None:

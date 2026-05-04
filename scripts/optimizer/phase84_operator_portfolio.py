@@ -43,6 +43,7 @@ class OperatorPortfolio:
         self.objective = UnifiedNaturalObjective()
         self.insertion_index = InsertionIndex()
         self.ranker = CandidateRanker()
+        self._pruneTelemetry: Dict[str, int] = {}
 
     def names(self) -> List[str]:
         return [spec.name for spec in self.specs]
@@ -55,6 +56,7 @@ class OperatorPortfolio:
         started = time.perf_counter()
         candidates = self._generate(name, instance, canonicalize_solution(instance, solution), spec, route_pool)
         generated = 0
+        self._pruneTelemetry = {"prunedByCapacity": 0, "prunedByTimeWindow": 0, "prunedByLock": 0, "estimatedFeasibleMoves": 0, "nearFeasibleRepairAttempts": 0, "nearFeasibleRepairSuccesses": 0}
         best = solution
         best_key = self._candidate_key(instance, solution)
         checks = 0
@@ -82,7 +84,7 @@ class OperatorPortfolio:
             if key < best_key:
                 best = candidate
                 best_key = key
-        telemetry = {"generatedCandidates": generated, "generatedMoves": generated, "rankedMoves": generated, "prunedMoves": max(0, generated - checks), "candidateChecks": checks, "checkedCandidates": checks, "feasibleCandidates": feasible, "acceptedCandidates": 1 if best is not solution else 0, "failReasons": fail_reasons, "topRejectedReason": max(fail_reasons.items(), key=lambda item: item[1])[0] if fail_reasons else None, "bestEstimatedDistanceDelta": best_estimated_distance_delta, "bestActualDistanceDelta": None}
+        telemetry = {"generatedCandidates": generated, "generatedMoves": generated, "rankedMoves": generated, "prunedMoves": max(0, generated - checks), "candidateChecks": checks, "checkedCandidates": checks, "feasibleCandidates": feasible, "acceptedCandidates": 1 if best is not solution else 0, "failReasons": fail_reasons, "topRejectedReason": max(fail_reasons.items(), key=lambda item: item[1])[0] if fail_reasons else None, "bestEstimatedDistanceDelta": best_estimated_distance_delta, "bestActualDistanceDelta": None, "fullCheckPassRate": feasible / max(1, checks), **self._pruneTelemetry}
         return {"solution": best, "telemetry": telemetry}
 
     def _generate(self, name: str, instance: Dict[str, Any], solution: Dict[str, Any], spec: OperatorSpec, route_pool: Any | None) -> Iterable[Dict[str, Any]]:
@@ -109,7 +111,7 @@ class OperatorPortfolio:
             route_index = pair["routeIndex"]
             route = routes[route_index]
             stripped = remove_pair_from_route(route, pair["request"])
-            for option in self.insertion_index.enumerate_options(instance, stripped, pair["request"], spec.maxBeam):
+            for option in self._insertion_options(instance, stripped, pair["request"], spec.maxBeam):
                 candidate_route = option["route"]
                 if candidate_route == route:
                     continue
@@ -126,7 +128,7 @@ class OperatorPortfolio:
                 if target_index == source_index:
                     continue
                 source_route = remove_pair_from_route(routes[source_index], pair["request"])
-                for option in self.insertion_index.enumerate_options(instance, target_route, pair["request"], spec.maxBeam):
+                for option in self._insertion_options(instance, target_route, pair["request"], spec.maxBeam):
                     inserted = option["route"]
                     candidate_routes = [list(item) for item in routes]
                     candidate_routes[source_index] = source_route
@@ -142,8 +144,8 @@ class OperatorPortfolio:
                     continue
                 left_base = remove_pair_from_route(routes[left["routeIndex"]], left["request"])
                 right_base = remove_pair_from_route(routes[right["routeIndex"]], right["request"])
-                left_insertions = self.insertion_index.enumerate_options(instance, left_base, right["request"], 2)
-                right_insertions = self.insertion_index.enumerate_options(instance, right_base, left["request"], 2)
+                left_insertions = self._insertion_options(instance, left_base, right["request"], 2)
+                right_insertions = self._insertion_options(instance, right_base, left["request"], 2)
                 for left_option in left_insertions:
                     for right_option in right_insertions:
                         left_route = left_option["route"]
@@ -169,7 +171,7 @@ class OperatorPortfolio:
                 best_routes = None
                 best_key = None
                 for target_index, target_route in enumerate(candidate_routes):
-                    for option in self.insertion_index.enumerate_options(instance, target_route, pair["request"], spec.maxBeam):
+                    for option in self._insertion_options(instance, target_route, pair["request"], spec.maxBeam):
                         inserted = option["route"]
                         attempt = [list(route) for route in candidate_routes]
                         attempt[target_index] = inserted
@@ -206,6 +208,14 @@ class OperatorPortfolio:
             route_distance = float(checked_routes.get(pair["routeIndex"], 0.0) or 0.0)
             moves.append({**pair, "moveId": pair["requestId"], "estimatedDistanceDelta": -route_distance / max(1, len(routes[pair["routeIndex"]]) - 2), "slackRisk": 0.0, "capacityRisk": 0.0, "routeCompatibility": 0.0})
         return self.ranker.rank(moves)
+
+    def _insertion_options(self, instance: Dict[str, Any], route: List[str], request: Dict[str, Any], top_k: int) -> List[Dict[str, Any]]:
+        options = self.insertion_index.enumerate_options(instance, route, request, top_k)
+        telemetry = self.insertion_index.lastTelemetry
+        for key in ("prunedByCapacity", "prunedByTimeWindow", "prunedByLock"):
+            self._pruneTelemetry[key] = self._pruneTelemetry.get(key, 0) + int(telemetry.get(key, 0) or 0)
+        self._pruneTelemetry["estimatedFeasibleMoves"] = self._pruneTelemetry.get("estimatedFeasibleMoves", 0) + len(options)
+        return options
 
     def _candidate_key(self, instance: Dict[str, Any], candidate: Dict[str, Any]) -> tuple[float, float, float, str]:
         checked = check_solution(instance, candidate)

@@ -11,11 +11,23 @@ class OperatorBudget:
     usedMs: int = 0
     candidateChecks: int = 0
     generatedCandidates: int = 0
+    generatedMoves: int = 0
+    rankedMoves: int = 0
+    prunedMoves: int = 0
     feasibleCandidateCount: int = 0
     acceptedCount: int = 0
     roi: float = 0.0
     earlyStopReason: str | None = None
     failReasons: Dict[str, int] | None = None
+    prunedByCapacity: int = 0
+    prunedByTimeWindow: int = 0
+    prunedByLock: int = 0
+    estimatedFeasibleMoves: int = 0
+    fullCheckPassRate: float = 0.0
+    nearFeasibleRepairAttempts: int = 0
+    nearFeasibleRepairSuccesses: int = 0
+    bestEstimatedDistanceDelta: float | None = None
+    bestActualDistanceDelta: float | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
