@@ -1,0 +1,111 @@
+{
+  "caseCount": 15,
+  "cases": [
+    {
+      "case": "single_shipment",
+      "expected": {
+        "vroomExpected": "one-feasible-route"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\single_shipment.json"
+    },
+    {
+      "case": "two_shipments_same_driver_bundle",
+      "expected": {
+        "vroomExpected": "bundle-two-shipments"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\two_shipments_same_driver_bundle.json"
+    },
+    {
+      "case": "capacity_blocks_bundle",
+      "expected": {
+        "vroomExpected": "requires-more-than-one-route"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\capacity_blocks_bundle.json"
+    },
+    {
+      "case": "time_window_blocks_bundle",
+      "expected": {
+        "vroomExpected": "time-windows-block-single-bundle"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\time_window_blocks_bundle.json"
+    },
+    {
+      "case": "waiting_required",
+      "expected": {
+        "vroomExpected": "waiting-required"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\waiting_required.json"
+    },
+    {
+      "case": "service_time_required",
+      "expected": {
+        "vroomExpected": "service-affects-arrival"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\service_time_required.json"
+    },
+    {
+      "case": "driver_selection_nearest",
+      "expected": {
+        "vroomExpected": "nearest-driver-selected"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\driver_selection_nearest.json"
+    },
+    {
+      "case": "driver_skill_matching",
+      "expected": {
+        "vroomExpected": "skill-matched-driver"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\driver_skill_matching.json"
+    },
+    {
+      "case": "vehicle_shift_window",
+      "expected": {
+        "vroomExpected": "respect-driver-shift"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\vehicle_shift_window.json"
+    },
+    {
+      "case": "driver_break",
+      "expected": {
+        "vroomExpected": "break-respected"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\driver_break.json"
+    },
+    {
+      "case": "open_route",
+      "expected": {
+        "vroomExpected": "open-route-supported"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\open_route.json"
+    },
+    {
+      "case": "priority_unassigned",
+      "expected": {
+        "vroomExpected": "priority-controls-unassigned"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\priority_unassigned.json"
+    },
+    {
+      "case": "custom_matrix_asymmetric",
+      "expected": {
+        "vroomExpected": "asymmetric-matrix-respected"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\custom_matrix_asymmetric.json"
+    },
+    {
+      "case": "pickup_delivery_precedence",
+      "expected": {
+        "vroomExpected": "pickup-before-delivery"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\pickup_delivery_precedence.json"
+    },
+    {
+      "case": "multi_driver_load_balance",
+      "expected": {
+        "vroomExpected": "multiple-drivers-used-if-beneficial"
+      },
+      "path": "benchmarks\\vroom_capability\\generated_v1\\multi_driver_load_balance.json"
+    }
+  ],
+  "schemaVersion": "phase76-vroom-capability-cases/v1"
+}

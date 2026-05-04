@@ -65,37 +65,43 @@ def convert_pdptw_to_vroom(instance: Dict[str, Any], time_scale: float = 1.0, ro
         pickup = nodes[pickup_id]
         dropoff = nodes[dropoff_id]
         amount = abs(int(round(float(pickup.get("demand", request.get("demand", 1) or 1))))) or 1
-        shipments.append(
-            {
-                "pickup": {
-                    "id": request_index * 2 - 1,
-                    "location_index": indexes[pickup_id],
-                    "service": rounded(float(pickup.get("serviceTime", 0.0)) * time_scale, rounding),
-                    "time_windows": time_window(pickup, time_scale, rounding),
-                    "description": pickup_id,
-                },
-                "delivery": {
-                    "id": request_index * 2,
-                    "location_index": indexes[dropoff_id],
-                    "service": rounded(float(dropoff.get("serviceTime", 0.0)) * time_scale, rounding),
-                    "time_windows": time_window(dropoff, time_scale, rounding),
-                    "description": dropoff_id,
-                },
-                "amount": [amount],
-            }
-        )
-    vehicles = []
-    depot_node = nodes[depot]
-    for vehicle_id in range(1, vehicle_count + 1):
-        vehicles.append(
-            {
-                "id": vehicle_id,
-                "start_index": indexes[depot],
-                "end_index": indexes[depot],
-                "capacity": [capacity],
-                "time_window": time_window(depot_node, time_scale, rounding)[0],
-            }
-        )
+        shipment = {
+            "pickup": {
+                "id": request_index * 2 - 1,
+                "location_index": indexes[pickup_id],
+                "service": rounded(float(pickup.get("serviceTime", 0.0)) * time_scale, rounding),
+                "time_windows": time_window(pickup, time_scale, rounding),
+                "description": pickup_id,
+            },
+            "delivery": {
+                "id": request_index * 2,
+                "location_index": indexes[dropoff_id],
+                "service": rounded(float(dropoff.get("serviceTime", 0.0)) * time_scale, rounding),
+                "time_windows": time_window(dropoff, time_scale, rounding),
+                "description": dropoff_id,
+            },
+            "amount": [amount],
+        }
+        if request.get("skills"):
+            shipment["skills"] = [int(skill) for skill in request.get("skills", [])]
+        if request.get("priority") is not None:
+            shipment["priority"] = int(request.get("priority"))
+        shipments.append(shipment)
+    if instance.get("vroomVehicles"):
+        vehicles = instance["vroomVehicles"]
+    else:
+        vehicles = []
+        depot_node = nodes[depot]
+        for vehicle_id in range(1, vehicle_count + 1):
+            vehicles.append(
+                {
+                    "id": vehicle_id,
+                    "start_index": indexes[depot],
+                    "end_index": indexes[depot],
+                    "capacity": [capacity],
+                    "time_window": time_window(depot_node, time_scale, rounding)[0],
+                }
+            )
     return {
         "vehicles": vehicles,
         "shipments": shipments,
@@ -469,7 +475,7 @@ def markdown(summary: Dict[str, Any]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compare Phase 56F stable runner against VROOM industry-standard champion.")
     parser.add_argument("--instances", default="lrc202,lrc106")
-    parser.add_argument("--benchmark-source", choices=("li-lim", "synthetic-food"), default="li-lim")
+    parser.add_argument("--benchmark-source", choices=("li-lim", "synthetic-food", "vroom-capability"), default="li-lim")
     parser.add_argument("--data-source", choices=("fixture", "official", "auto"), default="auto")
     parser.add_argument("--mode", choices=("academic_certification", "production_food_dispatch"), default="academic_certification")
     parser.add_argument("--challenger-time-limit", default="30s")

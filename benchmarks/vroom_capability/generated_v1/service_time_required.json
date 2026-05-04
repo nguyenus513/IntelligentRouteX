@@ -1,0 +1,83 @@
+{
+  "benchmarkFamily": "vroom-capability",
+  "bestKnown": {},
+  "capabilityExpected": {
+    "vroomExpected": "service-affects-arrival"
+  },
+  "capacity": 2,
+  "depotNodeId": "0",
+  "distanceMatrix": [
+    [
+      0.0,
+      1.0,
+      2.0
+    ],
+    [
+      1.0,
+      0.0,
+      1.0
+    ],
+    [
+      2.0,
+      1.0,
+      0.0
+    ]
+  ],
+  "durationMatrix": [
+    [
+      0.0,
+      1.0,
+      2.0
+    ],
+    [
+      1.0,
+      0.0,
+      1.0
+    ],
+    [
+      2.0,
+      1.0,
+      0.0
+    ]
+  ],
+  "instanceName": "service_time_required",
+  "nodes": [
+    {
+      "demand": 0,
+      "dueTime": 300,
+      "id": "0",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "demand": 1,
+      "dueTime": 100,
+      "id": "1",
+      "readyTime": 0,
+      "serviceTime": 20,
+      "x": 1,
+      "y": 0
+    },
+    {
+      "demand": -1,
+      "dueTime": 130,
+      "id": "2",
+      "readyTime": 0,
+      "serviceTime": 10,
+      "x": 2,
+      "y": 0
+    }
+  ],
+  "problemType": "PDPTW",
+  "requests": [
+    {
+      "dropoffNodeId": "2",
+      "pickupNodeId": "1"
+    }
+  ],
+  "schemaVersion": "external-benchmark-normalized/v1",
+  "vehicleCount": 1,
+  "vroomVehicles": []
+}

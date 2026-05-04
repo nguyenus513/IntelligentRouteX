@@ -9,6 +9,7 @@ from run_external_benchmark_certification import parse_instance, resolve_instanc
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SYNTHETIC_DIR = REPO_ROOT / "benchmarks" / "synthetic_food" / "generated_v1"
+DEFAULT_VROOM_CAPABILITY_DIR = REPO_ROOT / "benchmarks" / "vroom_capability" / "generated_v1"
 
 
 def load_normalized_json(path: Path) -> Dict[str, Any]:
@@ -27,8 +28,17 @@ def resolve_synthetic_path(instance_name: str, synthetic_dir: Path = DEFAULT_SYN
     return path
 
 
+def resolve_vroom_capability_path(instance_name: str, capability_dir: Path = DEFAULT_VROOM_CAPABILITY_DIR) -> Path:
+    path = capability_dir / f"{instance_name}.json"
+    if not path.exists():
+        raise FileNotFoundError(f"VROOM capability instance not found: {path}")
+    return path
+
+
 def load_benchmark_instance(source: str, instance_name: str, data_source: str = "auto", synthetic_dir: Path = DEFAULT_SYNTHETIC_DIR) -> Dict[str, Any]:
     normalized_source = source.lower().replace("_", "-")
     if normalized_source in {"synthetic-food", "synthetic_food"}:
         return load_normalized_json(resolve_synthetic_path(instance_name, synthetic_dir))
+    if normalized_source in {"vroom-capability", "vroom_capability"}:
+        return load_normalized_json(resolve_vroom_capability_path(instance_name))
     return parse_instance("li-lim", resolve_instance_path("li-lim", instance_name, data_source))

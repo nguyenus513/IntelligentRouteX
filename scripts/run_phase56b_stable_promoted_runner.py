@@ -587,7 +587,7 @@ def run(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Phase 56B stable promoted natural optimizer diagnostics.")
     parser.add_argument("--instances", default="lrc202")
-    parser.add_argument("--benchmark-source", choices=("li-lim", "synthetic-food"), default="li-lim")
+    parser.add_argument("--benchmark-source", choices=("li-lim", "synthetic-food", "vroom-capability"), default="li-lim")
     parser.add_argument("--data-source", choices=("fixture", "official", "auto"), default="auto")
     parser.add_argument("--mode", choices=("academic_certification", "production_food_dispatch"), default="academic_certification")
     parser.add_argument("--time-limit", default="30s")

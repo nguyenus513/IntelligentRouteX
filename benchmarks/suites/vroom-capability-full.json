@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "benchmark-suite-manifest/v1",
+  "suite": "vroom-capability-full",
+  "description": "Full VROOM capability suite for shipments, capacity, time windows, service, skills, shifts, breaks, open routes, priority, custom matrix, and load balance.",
+  "source": "vroom-capability",
+  "problemType": "PDPTW",
+  "dataSource": "generated",
+  "instances": ["single_shipment", "two_shipments_same_driver_bundle", "capacity_blocks_bundle", "time_window_blocks_bundle", "waiting_required", "service_time_required", "driver_selection_nearest", "driver_skill_matching", "vehicle_shift_window", "driver_break", "open_route", "priority_unassigned", "custom_matrix_asymmetric", "pickup_delivery_precedence", "multi_driver_load_balance"],
+  "expectedStress": {
+    "capabilityMicroTests": true,
+    "vroomComparator": true
+  }
+}

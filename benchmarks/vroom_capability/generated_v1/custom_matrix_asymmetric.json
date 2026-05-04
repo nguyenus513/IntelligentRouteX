@@ -1,0 +1,147 @@
+{
+  "benchmarkFamily": "vroom-capability",
+  "bestKnown": {},
+  "capabilityExpected": {
+    "vroomExpected": "asymmetric-matrix-respected"
+  },
+  "capacity": 4,
+  "depotNodeId": "0",
+  "distanceMatrix": [
+    [
+      0.0,
+      3.606,
+      5.0,
+      4.472,
+      5.657
+    ],
+    [
+      6.49,
+      0.0,
+      2.0,
+      1.0,
+      2.236
+    ],
+    [
+      9.0,
+      3.6,
+      0.0,
+      2.236,
+      1.0
+    ],
+    [
+      8.05,
+      1.8,
+      4.025,
+      0.0,
+      2.0
+    ],
+    [
+      10.182,
+      4.025,
+      1.8,
+      3.6,
+      0.0
+    ]
+  ],
+  "durationMatrix": [
+    [
+      0.0,
+      3.606,
+      5.0,
+      4.472,
+      5.657
+    ],
+    [
+      6.49,
+      0.0,
+      2.0,
+      1.0,
+      2.236
+    ],
+    [
+      9.0,
+      3.6,
+      0.0,
+      2.236,
+      1.0
+    ],
+    [
+      8.05,
+      1.8,
+      4.025,
+      0.0,
+      2.0
+    ],
+    [
+      10.182,
+      4.025,
+      1.8,
+      3.6,
+      0.0
+    ]
+  ],
+  "instanceName": "custom_matrix_asymmetric",
+  "nodes": [
+    {
+      "demand": 0,
+      "dueTime": 300,
+      "id": "0",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "demand": 1,
+      "dueTime": 200,
+      "id": "1",
+      "readyTime": 0,
+      "serviceTime": 1,
+      "x": 3,
+      "y": 2
+    },
+    {
+      "demand": -1,
+      "dueTime": 220,
+      "id": "2",
+      "readyTime": 0,
+      "serviceTime": 1,
+      "x": 3,
+      "y": 4
+    },
+    {
+      "demand": 1,
+      "dueTime": 200,
+      "id": "3",
+      "readyTime": 0,
+      "serviceTime": 1,
+      "x": 4,
+      "y": 2
+    },
+    {
+      "demand": -1,
+      "dueTime": 220,
+      "id": "4",
+      "readyTime": 0,
+      "serviceTime": 1,
+      "x": 4,
+      "y": 4
+    }
+  ],
+  "problemType": "PDPTW",
+  "requests": [
+    {
+      "demand": 1,
+      "dropoffNodeId": "2",
+      "pickupNodeId": "1"
+    },
+    {
+      "demand": 1,
+      "dropoffNodeId": "4",
+      "pickupNodeId": "3"
+    }
+  ],
+  "schemaVersion": "external-benchmark-normalized/v1",
+  "vehicleCount": 1,
+  "vroomVehicles": []
+}

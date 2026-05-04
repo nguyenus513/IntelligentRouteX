@@ -1,0 +1,101 @@
+{
+  "benchmarkFamily": "vroom-capability",
+  "bestKnown": {},
+  "capabilityExpected": {
+    "vroomExpected": "nearest-driver-selected"
+  },
+  "capacity": 4,
+  "depotNodeId": "0",
+  "distanceMatrix": [
+    [
+      0.0,
+      3.606,
+      5.0
+    ],
+    [
+      3.606,
+      0.0,
+      2.0
+    ],
+    [
+      5.0,
+      2.0,
+      0.0
+    ]
+  ],
+  "durationMatrix": [
+    [
+      0.0,
+      3.606,
+      5.0
+    ],
+    [
+      3.606,
+      0.0,
+      2.0
+    ],
+    [
+      5.0,
+      2.0,
+      0.0
+    ]
+  ],
+  "instanceName": "driver_selection_nearest",
+  "nodes": [
+    {
+      "demand": 0,
+      "dueTime": 300,
+      "id": "0",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "demand": 1,
+      "dueTime": 200,
+      "id": "1",
+      "readyTime": 0,
+      "serviceTime": 1,
+      "x": 3,
+      "y": 2
+    },
+    {
+      "demand": -1,
+      "dueTime": 220,
+      "id": "2",
+      "readyTime": 0,
+      "serviceTime": 1,
+      "x": 3,
+      "y": 4
+    }
+  ],
+  "problemType": "PDPTW",
+  "requests": [
+    {
+      "demand": 1,
+      "dropoffNodeId": "2",
+      "pickupNodeId": "1"
+    }
+  ],
+  "schemaVersion": "external-benchmark-normalized/v1",
+  "vehicleCount": 2,
+  "vroomVehicles": [
+    {
+      "capacity": [
+        4
+      ],
+      "end_index": 0,
+      "id": 1,
+      "start_index": 0
+    },
+    {
+      "capacity": [
+        4
+      ],
+      "end_index": 0,
+      "id": 2,
+      "start_index": 1
+    }
+  ]
+}

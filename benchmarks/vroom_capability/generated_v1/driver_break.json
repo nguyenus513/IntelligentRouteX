@@ -1,0 +1,168 @@
+{
+  "benchmarkFamily": "vroom-capability",
+  "bestKnown": {},
+  "capabilityExpected": {
+    "vroomExpected": "break-respected"
+  },
+  "capacity": 4,
+  "depotNodeId": "0",
+  "distanceMatrix": [
+    [
+      0.0,
+      3.606,
+      5.0,
+      4.472,
+      5.657
+    ],
+    [
+      3.606,
+      0.0,
+      2.0,
+      1.0,
+      2.236
+    ],
+    [
+      5.0,
+      2.0,
+      0.0,
+      2.236,
+      1.0
+    ],
+    [
+      4.472,
+      1.0,
+      2.236,
+      0.0,
+      2.0
+    ],
+    [
+      5.657,
+      2.236,
+      1.0,
+      2.0,
+      0.0
+    ]
+  ],
+  "durationMatrix": [
+    [
+      0.0,
+      3.606,
+      5.0,
+      4.472,
+      5.657
+    ],
+    [
+      3.606,
+      0.0,
+      2.0,
+      1.0,
+      2.236
+    ],
+    [
+      5.0,
+      2.0,
+      0.0,
+      2.236,
+      1.0
+    ],
+    [
+      4.472,
+      1.0,
+      2.236,
+      0.0,
+      2.0
+    ],
+    [
+      5.657,
+      2.236,
+      1.0,
+      2.0,
+      0.0
+    ]
+  ],
+  "instanceName": "driver_break",
+  "nodes": [
+    {
+      "demand": 0,
+      "dueTime": 300,
+      "id": "0",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "demand": 1,
+      "dueTime": 200,
+      "id": "1",
+      "readyTime": 0,
+      "serviceTime": 1,
+      "x": 3,
+      "y": 2
+    },
+    {
+      "demand": -1,
+      "dueTime": 220,
+      "id": "2",
+      "readyTime": 0,
+      "serviceTime": 1,
+      "x": 3,
+      "y": 4
+    },
+    {
+      "demand": 1,
+      "dueTime": 200,
+      "id": "3",
+      "readyTime": 0,
+      "serviceTime": 1,
+      "x": 4,
+      "y": 2
+    },
+    {
+      "demand": -1,
+      "dueTime": 220,
+      "id": "4",
+      "readyTime": 0,
+      "serviceTime": 1,
+      "x": 4,
+      "y": 4
+    }
+  ],
+  "problemType": "PDPTW",
+  "requests": [
+    {
+      "demand": 1,
+      "dropoffNodeId": "2",
+      "pickupNodeId": "1"
+    },
+    {
+      "demand": 1,
+      "dropoffNodeId": "4",
+      "pickupNodeId": "3"
+    }
+  ],
+  "schemaVersion": "external-benchmark-normalized/v1",
+  "vehicleCount": 1,
+  "vroomVehicles": [
+    {
+      "breaks": [
+        {
+          "id": 1,
+          "service": 5,
+          "time_windows": [
+            [
+              20,
+              60
+            ]
+          ]
+        }
+      ],
+      "capacity": [
+        4
+      ],
+      "end_index": 0,
+      "id": 1,
+      "start_index": 0
+    }
+  ]
+}

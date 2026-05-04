@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "benchmark-suite-manifest/v1",
+  "suite": "vroom-capability-smoke",
+  "description": "Small VROOM capability smoke suite for pickup-delivery and basic bundling semantics.",
+  "source": "vroom-capability",
+  "problemType": "PDPTW",
+  "dataSource": "generated",
+  "instances": ["single_shipment", "two_shipments_same_driver_bundle", "waiting_required", "custom_matrix_asymmetric"],
+  "expectedStress": {
+    "capabilityMicroTests": true,
+    "vroomComparator": true
+  }
+}
