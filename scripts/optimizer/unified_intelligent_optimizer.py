@@ -38,7 +38,9 @@ class UnifiedIntelligentOptimizer:
             if name is None:
                 break
             op_started = time.perf_counter()
-            candidate = self.portfolio.apply(name, instance, current, features)
+            operator_result = self.portfolio.apply(name, instance, current, features, budgets.get(name), pool)
+            candidate = operator_result.get("solution", current)
+            operator_telemetry = operator_result.get("telemetry", {})
             runtime_ms = int((time.perf_counter() - op_started) * 1000)
             candidate_eval = self.objective.evaluate(instance, candidate)
             accepted = bool(candidate_eval.get("feasible")) and self.objective.improves(instance, current, candidate)
@@ -50,9 +52,9 @@ class UnifiedIntelligentOptimizer:
             self.hyper.record(name, reward, runtime_ms, bool(candidate_eval.get("feasible")), accepted)
             if name in budgets:
                 budgets[name].usedMs += runtime_ms
-                budgets[name].candidateChecks += 1
-                budgets[name].feasibleCandidateCount += 1 if candidate_eval.get("feasible") else 0
-                budgets[name].acceptedCount += 1 if accepted else 0
+                budgets[name].candidateChecks += int(operator_telemetry.get("candidateChecks", 1) or 0)
+                budgets[name].feasibleCandidateCount += int(operator_telemetry.get("feasibleCandidates", 1 if candidate_eval.get("feasible") else 0) or 0)
+                budgets[name].acceptedCount += int(operator_telemetry.get("acceptedCandidates", 1 if accepted else 0) or 0)
                 budgets[name].roi = reward / max(1, runtime_ms)
             pool.add_solution(instance, candidate, name)
         selected = self.selector.select(instance, current, pool)
