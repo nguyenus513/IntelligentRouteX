@@ -6,6 +6,7 @@ from pathlib import Path
 from optimizer.phase84_unified_objective import UnifiedNaturalObjective
 from optimizer.phase95_slot_aware_subproblem import SlotAwareSubproblemBuilder, build_slot_aware_config
 from optimizer.phase96_coverage_repair import ResidualCoverageRepair, coverage_diff
+from optimizer.phase97_time_window_repair import TimeWindowRepair, evaluate_route_schedule, solution_time_window_stats
 from run_phase93_lilim_decomposition_probe import active_route_count, affected_route_request_closure, exact_request_coverage, extract_subproblem, recombine_solution, run, select_requests_by_features, slot_limited_incumbent, strict_recombination_validator
 from test_phase90_final_quality_completion import instance
 
@@ -56,6 +57,7 @@ def test_hard_wall_clock_writes_safe_artifact(tmp_path: Path) -> None:
 
 def test_no_instance_name_branch() -> None:
     source = Path("scripts/run_phase93_lilim_decomposition_probe.py").read_text(encoding="utf-8")
+    source += Path("scripts/optimizer/phase97_time_window_repair.py").read_text(encoding="utf-8")
     forbidden = ["instance ==", "instanceName ==", "startswith(\"LRC", "startswith('LRC"]
 
     assert not any(token in source for token in forbidden)
@@ -164,3 +166,85 @@ def test_residual_coverage_repair_inserts_missing_complete_pair_when_slot_allows
 
     assert repaired is not None
     assert exact_request_coverage(inst, repaired)
+
+
+
+def time_window_repair_instance() -> dict:
+    nodes = [
+        {"id": "0", "x": 0, "y": 0, "readyTime": 0, "dueTime": 100, "serviceTime": 0, "demand": 0},
+        {"id": "1", "x": 1, "y": 0, "readyTime": 0, "dueTime": 3, "serviceTime": 0, "demand": 1},
+        {"id": "2", "x": 2, "y": 0, "readyTime": 0, "dueTime": 4, "serviceTime": 0, "demand": -1},
+        {"id": "3", "x": 3, "y": 0, "readyTime": 0, "dueTime": 100, "serviceTime": 0, "demand": 1},
+        {"id": "4", "x": 4, "y": 0, "readyTime": 0, "dueTime": 100, "serviceTime": 0, "demand": -1},
+    ]
+    matrix = [[abs(i - j) for j in range(5)] for i in range(5)]
+    return {
+        "schemaVersion": "external-benchmark-normalized/v1",
+        "problemType": "PDPTW",
+        "depotNodeId": "0",
+        "vehicleCount": 1,
+        "capacity": 2,
+        "nodes": nodes,
+        "requests": [
+            {"orderId": "early", "pickupNodeId": "1", "dropoffNodeId": "2", "demand": 1},
+            {"orderId": "late", "pickupNodeId": "3", "dropoffNodeId": "4", "demand": 1},
+        ],
+        "distanceMatrix": matrix,
+        "durationMatrix": matrix,
+        "bestKnown": {},
+    }
+
+
+def test_schedule_evaluator_detects_due_time_violation() -> None:
+    inst = time_window_repair_instance()
+    schedule = evaluate_route_schedule(inst, ["0", "3", "4", "1", "2", "0"])
+
+    assert schedule.timeWindowViolationCount > 0
+    assert schedule.firstViolationNode in {"1", "2"}
+
+
+def test_time_window_repair_fixes_synthetic_violation() -> None:
+    inst = time_window_repair_instance()
+    bad = {"routes": [["0", "3", "4", "1", "2", "0"]]}
+    repaired = TimeWindowRepair().repair(inst, bad, {"early", "late"}, max_routes=1)
+
+    assert repaired is not None
+    assert solution_time_window_stats(inst, repaired)["timeWindowViolationCount"] == 0
+
+
+def test_pair_relocate_candidate_can_reduce_synthetic_lateness() -> None:
+    inst = time_window_repair_instance()
+    route = ["0", "3", "1", "4", "2", "0"]
+    repair = TimeWindowRepair()
+    candidates = repair._within_route_relocate_candidates(inst, [route], [0], {"early", "late"}, 2)
+
+    assert any(solution_time_window_stats(inst, candidate)["totalLateness"] < solution_time_window_stats(inst, {"routes": [route]})["totalLateness"] for candidate in candidates)
+
+
+def test_time_window_repair_preserves_pickup_before_dropoff() -> None:
+    inst = time_window_repair_instance()
+    bad = {"routes": [["0", "3", "4", "1", "2", "0"]]}
+    repaired = TimeWindowRepair().repair(inst, bad, {"early", "late"}, max_routes=1)
+
+    assert repaired is not None
+    route = repaired["routes"][0]
+    assert route.index("1") < route.index("2")
+    assert route.index("3") < route.index("4")
+
+
+def test_time_window_repair_preserves_exact_coverage() -> None:
+    inst = time_window_repair_instance()
+    bad = {"routes": [["0", "3", "4", "1", "2", "0"]]}
+    repaired = TimeWindowRepair().repair(inst, bad, {"early", "late"}, max_routes=1)
+
+    assert repaired is not None
+    assert exact_request_coverage(inst, repaired)
+
+
+def test_time_window_repair_never_increases_active_route_count() -> None:
+    inst = time_window_repair_instance()
+    bad = {"routes": [["0", "3", "4", "1", "2", "0"]]}
+    repaired = TimeWindowRepair().repair(inst, bad, {"early", "late"}, max_routes=1)
+
+    assert repaired is not None
+    assert active_route_count(repaired) <= active_route_count(bad)
