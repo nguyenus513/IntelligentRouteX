@@ -11,6 +11,7 @@ from optimizer.unified_intelligent_optimizer import UnifiedIntelligentOptimizer
 from optimizer.phase84_unified_objective import UnifiedNaturalObjective
 from optimizer.phase85_pair_utils import extract_request_pairs, request_id, solution_signature
 from optimizer.phase94_slot_recombination_policy import SlotPreservingRecombinationPolicy
+from optimizer.phase95_slot_aware_subproblem import SlotAwareSubproblemBuilder, build_slot_aware_config
 from phase67_synthetic_instance_loader import load_benchmark_instance
 from run_external_benchmark_certification import parse_time_limit
 from run_phase55_promotion_guard import write_json
@@ -71,6 +72,18 @@ def naive_incumbent(subproblem: Dict[str, Any]) -> Dict[str, Any]:
     return {"routes": [[depot, str(request.get("pickupNodeId")), str(request.get("dropoffNodeId")), depot] for request in subproblem.get("requests", [])]}
 
 
+def slot_limited_incumbent(instance: Dict[str, Any]) -> Dict[str, Any]:
+    depot = str(instance.get("depotNodeId", "0"))
+    slot_count = max(1, int(instance.get("vehicleCount", 1) or 1))
+    routes = [[depot, depot] for _ in range(slot_count)]
+    requests = sorted(instance.get("requests", []), key=lambda request: request_id(request))
+    for index, request in enumerate(requests):
+        route_index = index % slot_count
+        route = routes[route_index]
+        routes[route_index] = route[:-1] + [str(request.get("pickupNodeId")), str(request.get("dropoffNodeId")), depot]
+    return {"routes": [route for route in routes if len(route) > 2]}
+
+
 def remap_solution_to_full(sub_solution: Dict[str, Any], new_to_old: Dict[str, str]) -> Dict[str, Any]:
     return {"routes": [[new_to_old[str(stop)] for stop in route] for route in sub_solution.get("routes", [])]}
 
@@ -119,11 +132,20 @@ def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], requ
     affected = affected_routes(incumbent, selected)
     affected_route_count = max(1, len(affected))
     slot_policy = SlotPreservingRecombinationPolicy().build(affected_route_count, len(selected), mode)
+    slot_config = build_slot_aware_config(slot_policy.mode, affected_route_count, len(selected))
     subproblem, new_to_old = extract_subproblem(instance, selected)
-    subproblem["vehicleCount"] = slot_policy.maxAllowedSubproblemRoutes
-    sub_incumbent = naive_incumbent(subproblem)
+    subproblem["vehicleCount"] = slot_config.maxSubproblemRoutes
+    slot_builder = SlotAwareSubproblemBuilder()
+    sub_incumbent = slot_builder.build_incumbent(subproblem, slot_config)
+    construction_telemetry = dict(slot_builder.lastTelemetry)
+    if sub_incumbent is None:
+        return {"mode": slot_config.mode, "selectedRequestCount": len(selected), "subproblemRequestCount": len(subproblem.get("requests", [])), "subDiagnostics": {}, "recombinedSolution": incumbent, "recombinedFeasible": False, "recombinedViolations": ["slot-aware-construction-blocked"], "exactCoverage": True, "objectiveImproves": False, "objectiveDelta": None, "affectedRouteCount": affected_route_count, "availableRouteSlots": slot_config.availableRouteSlots, "maxSubproblemRoutes": slot_config.maxSubproblemRoutes, "subproblemVehicleCount": subproblem.get("vehicleCount"), "incumbentSubproblemRouteCount": 0, "candidateSubproblemRouteCount": 0, "slotAwareConstructionBlocked": True, "slotCompressionAttempts": 0, "slotCompressionSuccess": False, "rejectedBySlotOverflow": False, "rejectedByCoverage": False, "rejectedByCheckSolution": False, "bestRejectedReason": "slot-aware-construction-blocked"}
     result = UnifiedIntelligentOptimizer().optimize(subproblem, sub_incumbent, sub_time_ms)
-    sub_solution_old = remap_solution_to_full(result["solution"], new_to_old)
+    sub_candidate = slot_builder.compress_to_slots(subproblem, result["solution"], slot_config.maxSubproblemRoutes)
+    compression_telemetry = dict(slot_builder.lastTelemetry)
+    if sub_candidate is None:
+        sub_candidate = result["solution"]
+    sub_solution_old = remap_solution_to_full(sub_candidate, new_to_old)
     candidate_subproblem_route_count = active_route_count(sub_solution_old)
     recombined = recombine_solution(instance, incumbent, selected, sub_solution_old)
     precheck = strict_recombination_validator(instance, incumbent, recombined, slot_policy.maxAllowedSubproblemRoutes, candidate_subproblem_route_count)
@@ -151,8 +173,14 @@ def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], requ
         "objectiveImproves": improves,
         "objectiveDelta": objective_delta,
         "affectedRouteCount": affected_route_count,
-        "availableRouteSlots": slot_policy.availableRouteSlots,
+        "availableRouteSlots": slot_config.availableRouteSlots,
+        "maxSubproblemRoutes": slot_config.maxSubproblemRoutes,
+        "subproblemVehicleCount": subproblem.get("vehicleCount"),
+        "incumbentSubproblemRouteCount": int(construction_telemetry.get("incumbentSubproblemRouteCount", 0) or 0),
         "candidateSubproblemRouteCount": candidate_subproblem_route_count,
+        "slotAwareConstructionBlocked": bool(construction_telemetry.get("slotAwareConstructionBlocked", False)),
+        "slotCompressionAttempts": int(compression_telemetry.get("slotCompressionAttempts", 0) or 0),
+        "slotCompressionSuccess": bool(compression_telemetry.get("slotCompressionSuccess", False)),
         "rejectedBySlotOverflow": reject_reason == "subproblem-route-slot-overflow",
         "rejectedByCoverage": reject_reason == "coverage-invalid",
         "rejectedByCheckSolution": reject_reason == "check-solution-rejected",
@@ -177,7 +205,7 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     suite = load_suite(args.suite)
     instance_name = str(suite.get("instances", [])[0])
     instance = load_benchmark_instance(str(suite.get("source", "li-lim")), instance_name)
-    incumbent = naive_incumbent(instance)
+    incumbent = slot_limited_incumbent(instance)
     trace = []
     accepted = 0
     recombined = 0
