@@ -37,23 +37,23 @@ def point(rng: random.Random, center: Tuple[float, float], spread: float) -> Tup
 def generate_scenario(name: str, seed: int) -> Dict[str, Any]:
     spec = SCENARIOS[name]
     rng = random.Random(f"{seed}:{name}")
-    depot = {"id": "0", "x": 50.0, "y": 50.0, "demand": 0, "readyTime": spec["start"] - 30, "dueTime": spec["start"] + 180, "serviceTime": 0}
+    depot = {"id": "0", "x": 5.0, "y": 5.0, "demand": 0, "readyTime": spec["start"] - 30, "dueTime": spec["start"] + 240, "serviceTime": 0}
     nodes = [depot]
     requests = []
     orders = []
-    apartment_center = (62.0, 58.0)
-    restaurant_centers = [(42.0, 48.0), (48.0, 55.0), (55.0, 45.0), (38.0, 60.0)]
+    apartment_center = (6.2, 5.8)
+    restaurant_centers = [(4.2, 4.8), (4.8, 5.5), (5.5, 4.5), (3.8, 6.0)]
     for order_index in range(1, int(spec["orders"]) + 1):
         pickup_center = restaurant_centers[order_index % len(restaurant_centers)]
-        pickup_x, pickup_y = point(rng, pickup_center, 5.0)
+        pickup_x, pickup_y = point(rng, pickup_center, 0.5)
         clustered = rng.random() < float(spec["cluster"])
-        dropoff_center = apartment_center if clustered else (rng.uniform(25.0, 75.0), rng.uniform(25.0, 75.0))
-        dropoff_x, dropoff_y = point(rng, dropoff_center, 4.0 if clustered else 9.0)
+        dropoff_center = apartment_center if clustered else (rng.uniform(2.5, 7.5), rng.uniform(2.5, 7.5))
+        dropoff_x, dropoff_y = point(rng, dropoff_center, 0.4 if clustered else 0.9)
         ready = int(spec["start"] + rng.randint(0, 45))
         pickup_id = str(order_index * 2 - 1)
         dropoff_id = str(order_index * 2)
-        nodes.append({"id": pickup_id, "x": round(pickup_x, 3), "y": round(pickup_y, 3), "demand": 1, "readyTime": ready, "dueTime": ready + int(spec["window"]), "serviceTime": 3})
-        nodes.append({"id": dropoff_id, "x": round(dropoff_x, 3), "y": round(dropoff_y, 3), "demand": -1, "readyTime": ready + 5, "dueTime": ready + int(spec["window"]) + 20, "serviceTime": 2})
+        nodes.append({"id": pickup_id, "x": round(pickup_x, 3), "y": round(pickup_y, 3), "demand": 1, "readyTime": ready, "dueTime": ready + int(spec["window"]) + 20, "serviceTime": 2})
+        nodes.append({"id": dropoff_id, "x": round(dropoff_x, 3), "y": round(dropoff_y, 3), "demand": -1, "readyTime": ready + 3, "dueTime": ready + int(spec["window"]) + 45, "serviceTime": 1})
         requests.append({"pickupNodeId": pickup_id, "dropoffNodeId": dropoff_id, "orderId": f"{name}-{order_index:03d}", "cancellationRisk": round(float(spec["risk"]) + rng.random() * 0.05, 3)})
         orders.append({"orderId": f"{name}-{order_index:03d}", "pickupNodeId": pickup_id, "dropoffNodeId": dropoff_id, "cancellationRisk": requests[-1]["cancellationRisk"]})
     duration_matrix = matrix(nodes, float(spec["traffic"]))

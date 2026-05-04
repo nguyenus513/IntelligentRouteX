@@ -30,6 +30,18 @@ py -3.13 scripts/run_phase63_unified_benchmark_suite.py `
   --output-dir artifacts/final/li_lim_8case_v1
 ```
 
+## Run Synthetic Food Benchmark
+
+```powershell
+py -3.13 scripts/run_phase63_unified_benchmark_suite.py `
+  --suite synthetic-food-smoke `
+  --champions vroom `
+  --challenger phase56f `
+  --vroom-url http://localhost:3000 `
+  --time-limit 30s `
+  --output-dir artifacts/final/synthetic_food_smoke_v1
+```
+
 ## Generate Synthetic Food Dataset
 
 ```powershell
@@ -47,6 +59,8 @@ py -3.13 scripts/run_phase65_final_system_evaluation_report.py `
   --input-dir artifacts/final/li_lim_8case_v1 `
   --output docs/benchmark/final_system_evaluation_report.md
 ```
+
+For synthetic food reporting, point `--input-dir` at `artifacts/final/synthetic_food_smoke_v1` or `artifacts/final/synthetic_food_full_v1`.
 
 ## Result Interpretation
 

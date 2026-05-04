@@ -60,7 +60,30 @@ def scenario_analysis(input_dir: Path) -> Dict[str, Any]:
     if not manifest_path.exists():
         return {"available": False, "scenarios": []}
     manifest = read_json(manifest_path)
-    return {"available": True, "scenarioCount": manifest.get("scenarioCount"), "scenarios": manifest.get("scenarios", [])}
+    challenger = maybe_read_json(input_dir / "challenger_phase56f" / "phase56b_stable_promoted_summary.json") or {}
+    vroom = maybe_read_json(input_dir / "vroom_comparator" / "aggregate_summary.json") or {}
+    challenger_rows = {str(row.get("instance", "")).lower(): row for row in challenger.get("results", [])}
+    vroom_rows = {str(row.get("instance", "")).lower(): row for row in vroom.get("rows", [])}
+    scenarios = []
+    for scenario in manifest.get("scenarios", []):
+        key = str(scenario.get("scenario", "")).lower()
+        challenger_row = challenger_rows.get(key, {})
+        vroom_row = vroom_rows.get(key, {})
+        scenarios.append(
+            {
+                "scenario": scenario.get("scenario"),
+                "expectedStress": scenario.get("expectedStress", {}),
+                "challengerHardViolations": challenger_row.get("hardViolations"),
+                "challengerOverBudget": challenger_row.get("wallClockOverBudget") or challenger_row.get("stageRuntimeSummary", {}).get("overBudget"),
+                "challengerVehicleCount": challenger_row.get("vehicleCountAfter"),
+                "challengerDistance": challenger_row.get("distanceAfter"),
+                "challengerRuntimeMs": challenger_row.get("runtimeMs"),
+                "vroomClassification": vroom_row.get("classification"),
+                "vroomVehicleCount": vroom_row.get("champion", {}).get("vehicleCount"),
+                "vroomDistance": vroom_row.get("champion", {}).get("totalDistance"),
+            }
+        )
+    return {"available": True, "scenarioCount": manifest.get("scenarioCount"), "scenarios": scenarios}
 
 
 def final_verdict_from(safety: Dict[str, Any], robustness: Dict[str, Any], gap_counts: Dict[str, int]) -> Dict[str, Any]:
@@ -120,13 +143,20 @@ def markdown(report: Dict[str, Any]) -> str:
         f"- Synthetic food scenarios available: {report['scenarioAnalysis'].get('available')}",
         f"- Scenario count: {report['scenarioAnalysis'].get('scenarioCount', 0)}",
         "",
+        "| Scenario | VROOM Class | Challenger Vehicles | Challenger Distance | Runtime ms |",
+        "|---|---|---:|---:|---:|",
+    ]
+    for scenario in report["scenarioAnalysis"].get("scenarios", []):
+        lines.append(f"| {scenario.get('scenario')} | {scenario.get('vroomClassification')} | {scenario.get('challengerVehicleCount')} | {scenario.get('challengerDistance')} | {scenario.get('challengerRuntimeMs')} |")
+    lines.extend([
+        "",
         "## Final Verdict",
         "",
         f"- Production-safe: {verdict['productionSafe']}",
         f"- Industry-quality competitive: {verdict['industryQualityCompetitive']}",
         f"- Main bottlenecks: {', '.join(verdict['mainBottlenecks'])}",
         "",
-    ]
+    ])
     return "\n".join(lines)
 
 

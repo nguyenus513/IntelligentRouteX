@@ -11,7 +11,8 @@ from typing import Any, Callable, Dict, List
 
 from external_benchmark_dispatch_adapter import DispatchV2ExternalBenchmarkSolver
 from external_benchmark_support import check_solution, route_distance
-from run_external_benchmark_certification import parse_instance, parse_time_limit, resolve_instance_path
+from run_external_benchmark_certification import parse_time_limit
+from phase67_synthetic_instance_loader import load_benchmark_instance
 from run_phase40_natural_pdptw_optimizer import (
     InternalSolverCandidateGenerator,
     internal_solver_improvement,
@@ -333,12 +334,13 @@ def run_instance(
     time_limit_ms: int,
     mode: str,
     *,
+    benchmark_source: str = "li-lim",
     stable_incumbent_replay: bool = False,
     incumbent_cache_dir: Path | None = None,
     deterministic_seed: int = 56,
 ) -> Dict[str, Any]:
     started = time.perf_counter()
-    instance = parse_instance("li-lim", resolve_instance_path("li-lim", instance_name, data_source))
+    instance = load_benchmark_instance(benchmark_source, instance_name, data_source)
     config = objective_config(mode)
     policy = StableBudgetPolicy(finalReserveMs=min(3_000, max(500, int(time_limit_ms * 0.10))))
     scheduler = StageBudgetScheduler(time_limit_ms, reserve_ms=policy.finalReserveMs)
@@ -551,6 +553,7 @@ def run(
     mode: str,
     repeat: int = 1,
     *,
+    benchmark_source: str = "li-lim",
     stable_incumbent_replay: bool = False,
     incumbent_cache_dir: Path | None = None,
     deterministic_seed: int = 56,
@@ -566,6 +569,7 @@ def run(
                 data_source,
                 time_limit_ms,
                 mode,
+                benchmark_source=benchmark_source,
                 stable_incumbent_replay=stable_incumbent_replay,
                 incumbent_cache_dir=incumbent_cache_dir or output_dir / "incumbent-cache",
                 deterministic_seed=deterministic_seed,
@@ -574,7 +578,7 @@ def run(
             rows.append(row)
     counts = {verdict: sum(1 for row in rows if row.get("verdict") == verdict) for verdict in ("PASS_STRONG", "PASS", "PASS_WITH_LIMITS", "FAIL")}
     gate = phase56b_gate(rows)
-    summary = {"schemaVersion": "phase56c-stable-replay-promoted-runner-summary/v1" if stable_incumbent_replay else "phase56b-stable-promoted-runner-summary/v1", "instances": instances, "repeat": max(1, int(repeat)), "mode": mode, "stableIncumbentReplay": stable_incumbent_replay, "deterministicSeed": deterministic_seed, "incumbentCacheDir": str(incumbent_cache_dir or output_dir / "incumbent-cache") if stable_incumbent_replay else None, "results": rows, "verdictCounts": counts, "phase56bGate": gate}
+    summary = {"schemaVersion": "phase56c-stable-replay-promoted-runner-summary/v1" if stable_incumbent_replay else "phase56b-stable-promoted-runner-summary/v1", "instances": instances, "benchmarkSource": benchmark_source, "repeat": max(1, int(repeat)), "mode": mode, "stableIncumbentReplay": stable_incumbent_replay, "deterministicSeed": deterministic_seed, "incumbentCacheDir": str(incumbent_cache_dir or output_dir / "incumbent-cache") if stable_incumbent_replay else None, "results": rows, "verdictCounts": counts, "phase56bGate": gate}
     write_json(output_dir / "phase56b_stable_promoted_summary.json", summary)
     (output_dir / "phase56b_stable_promoted_summary.md").write_text(markdown(rows, gate), encoding="utf-8")
     return summary
@@ -583,6 +587,7 @@ def run(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Phase 56B stable promoted natural optimizer diagnostics.")
     parser.add_argument("--instances", default="lrc202")
+    parser.add_argument("--benchmark-source", choices=("li-lim", "synthetic-food"), default="li-lim")
     parser.add_argument("--data-source", choices=("fixture", "official", "auto"), default="auto")
     parser.add_argument("--mode", choices=("academic_certification", "production_food_dispatch"), default="academic_certification")
     parser.add_argument("--time-limit", default="30s")
@@ -600,6 +605,7 @@ def main() -> int:
         parse_time_limit(args.time_limit),
         args.mode,
         repeat=args.repeat,
+        benchmark_source=args.benchmark_source,
         stable_incumbent_replay=args.stable_incumbent_replay,
         incumbent_cache_dir=Path(args.incumbent_cache_dir) if args.incumbent_cache_dir else None,
         deterministic_seed=args.deterministic_seed,

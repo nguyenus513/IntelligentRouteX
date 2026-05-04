@@ -22,6 +22,7 @@ def run_vroom_comparator(instances: List[str], args: argparse.Namespace, output_
 
     phase58_args = Namespace(
         instances=",".join(instances),
+        benchmark_source=args.benchmark_source,
         data_source=args.data_source,
         mode=args.mode,
         challenger_time_limit=args.time_limit,
@@ -47,13 +48,14 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     suite = load_suite(args.suite)
     instances = [str(instance) for instance in suite.get("instances", [])]
+    args.benchmark_source = str(suite.get("source", "li-lim"))
     champions = {part.strip().lower() for part in args.champions.split(",") if part.strip()}
     challenger_summary = None
     vroom_summary = None
     gap_summary = None
 
     if args.challenger == "phase56f":
-        challenger_summary = run_phase56f(instances, output_dir / "challenger_phase56f", args.data_source, parse_time_limit(args.time_limit), args.mode, repeat=1, stable_incumbent_replay=True)
+        challenger_summary = run_phase56f(instances, output_dir / "challenger_phase56f", args.data_source, parse_time_limit(args.time_limit), args.mode, repeat=1, benchmark_source=args.benchmark_source, stable_incumbent_replay=True)
     if "vroom" in champions:
         vroom_summary = run_vroom_comparator(instances, args, output_dir / "vroom_comparator")
         rows = vroom_summary.get("rows", [])

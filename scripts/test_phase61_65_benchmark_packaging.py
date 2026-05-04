@@ -26,7 +26,7 @@ def test_vroom_docker_docs_mention_health_and_root_404() -> None:
 
 
 def test_unified_runner_can_run_dry_run_conversion(monkeypatch, tmp_path: Path) -> None:
-    def fake_phase56f(instances, output_dir, data_source, time_limit_ms, mode, repeat=1, stable_incumbent_replay=True):
+    def fake_phase56f(instances, output_dir, data_source, time_limit_ms, mode, repeat=1, benchmark_source="li-lim", stable_incumbent_replay=True):
         return {"phase56bGate": {"verdict": "PASS"}, "results": []}
 
     def fake_vroom(instances, args, output_dir):

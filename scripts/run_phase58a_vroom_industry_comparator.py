@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from external_benchmark_support import check_solution
-from run_external_benchmark_certification import parse_instance, parse_time_limit, resolve_instance_path
+from run_external_benchmark_certification import parse_time_limit
+from phase67_synthetic_instance_loader import load_benchmark_instance
 from run_phase40_natural_pdptw_optimizer import objective_components, objective_config
 from run_phase56b_stable_promoted_runner import run as run_stable_promoted
 
@@ -348,7 +349,7 @@ def metrics(instance: Dict[str, Any], solution: Dict[str, Any], mode: str) -> Di
 
 
 def run_instance(instance_name: str, args: argparse.Namespace, output_dir: Path) -> Dict[str, Any]:
-    instance = parse_instance("li-lim", resolve_instance_path("li-lim", instance_name, args.data_source))
+    instance = load_benchmark_instance(getattr(args, "benchmark_source", "li-lim"), instance_name, args.data_source)
     vroom_request = convert_pdptw_to_vroom(instance, args.time_scale, args.rounding)
     request_digest = request_hash(vroom_request)
     request_validation = validate_vroom_request(vroom_request, len(instance.get("nodes", [])))
@@ -391,7 +392,7 @@ def run_instance(instance_name: str, args: argparse.Namespace, output_dir: Path)
         self_consistency = vroom_self_consistency(instance, champion_solution)
         import_valid = bool(coverage.get("valid")) and int(champion_solution.get("vroomAmbiguousStepCount", 0) or 0) == 0
         champion_metrics = metrics(instance, champion_solution, args.mode)
-    challenger_summary = run_stable_promoted([instance_name], output_dir / "challenger_results" / instance_name, args.data_source, parse_time_limit(args.challenger_time_limit), args.mode, repeat=1, stable_incumbent_replay=True)
+    challenger_summary = run_stable_promoted([instance_name], output_dir / "challenger_results" / instance_name, args.data_source, parse_time_limit(args.challenger_time_limit), args.mode, repeat=1, benchmark_source=getattr(args, "benchmark_source", "li-lim"), stable_incumbent_replay=True)
     challenger_row = challenger_summary.get("results", [{}])[0]
     challenger_metrics = {
         "hardViolations": challenger_row.get("hardViolations"),
@@ -468,6 +469,7 @@ def markdown(summary: Dict[str, Any]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compare Phase 56F stable runner against VROOM industry-standard champion.")
     parser.add_argument("--instances", default="lrc202,lrc106")
+    parser.add_argument("--benchmark-source", choices=("li-lim", "synthetic-food"), default="li-lim")
     parser.add_argument("--data-source", choices=("fixture", "official", "auto"), default="auto")
     parser.add_argument("--mode", choices=("academic_certification", "production_food_dispatch"), default="academic_certification")
     parser.add_argument("--challenger-time-limit", default="30s")

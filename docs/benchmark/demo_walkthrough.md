@@ -35,6 +35,18 @@ py -3.13 scripts/generate_phase64_synthetic_food_dataset.py `
 
 The generated scenarios provide production-like stress coverage without real customer data.
 
+To benchmark synthetic food scenarios against VROOM:
+
+```powershell
+py -3.13 scripts/run_phase63_unified_benchmark_suite.py `
+  --suite synthetic-food-smoke `
+  --champions vroom `
+  --challenger phase56f `
+  --vroom-url http://localhost:3000 `
+  --time-limit 30s `
+  --output-dir artifacts/final/synthetic_food_smoke_v1
+```
+
 ## 4. Build the Final Report
 
 ```powershell
