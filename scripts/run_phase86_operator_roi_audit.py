@@ -16,6 +16,12 @@ DEFAULT_OUTPUT_DIR = REPO_ROOT / "artifacts" / "benchmark" / "phase86_operator_r
 
 
 def classify_rejection(reason: str, vehicle_delta: float = 0.0, distance_delta: float = 0.0, objective_delta: float = 0.0) -> str:
+    if reason == "generation-too-narrow":
+        return "generation-too-narrow"
+    if reason == "pruning-too-aggressive":
+        return "pruning-too-aggressive"
+    if reason == "feasibility-blocked":
+        return "feasibility-blocked"
     if reason == "objective-not-improved":
         if distance_delta < 0 and objective_delta >= 0:
             return "distance-improved-but-objective-rejected"
@@ -71,6 +77,9 @@ def flatten_phase84(summary: Dict[str, Any]) -> tuple[List[Dict[str, Any]], List
                     "attempts": 1 if int(budget.get("candidateChecks", 0) or 0) or int(budget.get("generatedCandidates", 0) or 0) else 0,
                     "generatedCandidates": budget.get("generatedCandidates", 0),
                     "candidateChecks": budget.get("candidateChecks", 0),
+                    "generatedMoves": budget.get("generatedCandidates", 0),
+                    "rankedMoves": budget.get("generatedCandidates", 0),
+                    "prunedMoves": max(0, int(budget.get("generatedCandidates", 0) or 0) - int(budget.get("candidateChecks", 0) or 0)),
                     "feasibleCandidates": budget.get("feasibleCandidateCount", 0),
                     "acceptedCandidates": budget.get("acceptedCount", 0),
                     "objectiveNotImproved": fail_reasons.get("objective-not-improved", 0),
@@ -86,6 +95,12 @@ def flatten_phase84(summary: Dict[str, Any]) -> tuple[List[Dict[str, Any]], List
                     "failReasons": fail_reasons,
                 }
             )
+            if int(budget.get("generatedCandidates", 0) or 0) == 0:
+                samples.append({"operator": operator, "rejectReason": "generation-too-narrow", "classification": "generation-too-narrow", "sampleIndex": 0, "instance": row.get("instance")})
+            elif int(budget.get("candidateChecks", 0) or 0) == 0:
+                samples.append({"operator": operator, "rejectReason": "pruning-too-aggressive", "classification": "pruning-too-aggressive", "sampleIndex": 0, "instance": row.get("instance")})
+            elif int(budget.get("feasibleCandidateCount", 0) or 0) == 0 and int(budget.get("candidateChecks", 0) or 0) > 0:
+                samples.append({"operator": operator, "rejectReason": "feasibility-blocked", "classification": "feasibility-blocked", "sampleIndex": 0, "instance": row.get("instance")})
             for reason, count in fail_reasons.items():
                 for index in range(min(3, int(count or 0))):
                     samples.append({"operator": operator, "rejectReason": reason, "classification": classify_rejection(str(reason)), "sampleIndex": index, "instance": row.get("instance")})

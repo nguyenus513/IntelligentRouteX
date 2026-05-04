@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from external_benchmark_support import route_distance
+from optimizer.phase85_pair_utils import insert_pair_positions, request_id
+from optimizer.phase87_candidate_ranker import CandidateRanker
+
+
+class InsertionIndex:
+    def enumerate_options(self, instance: Dict[str, Any], route: List[str], request: Dict[str, Any], top_k: int = 8) -> List[Dict[str, Any]]:
+        base_distance = route_distance(instance, route)
+        moves = []
+        for pickup_pos, dropoff_pos, candidate_route in insert_pair_positions(route, request):
+            distance_delta = route_distance(instance, candidate_route) - base_distance
+            capacity_risk = self._capacity_risk(instance, candidate_route)
+            slack_risk = self._slack_risk(instance, candidate_route)
+            moves.append(
+                {
+                    "moveId": f"{request_id(request)}:{pickup_pos}:{dropoff_pos}",
+                    "request": request,
+                    "route": candidate_route,
+                    "pickupPos": pickup_pos,
+                    "dropoffPos": dropoff_pos,
+                    "estimatedDistanceDelta": distance_delta,
+                    "capacityRisk": capacity_risk,
+                    "slackRisk": slack_risk,
+                    "routeCompatibility": 1.0 / (1.0 + max(0.0, distance_delta)),
+                    "clusterRelatedness": 0.0,
+                    "trafficRobustness": 1.0 / (1.0 + slack_risk),
+                    "lockSafety": 1.0,
+                }
+            )
+        return CandidateRanker().rank(moves)[:top_k]
+
+    def _capacity_risk(self, instance: Dict[str, Any], route: List[str]) -> float:
+        nodes = {str(node.get("id")): node for node in instance.get("nodes", [])}
+        capacity = int(instance.get("capacity", 0) or 0)
+        load = 0
+        risk = 0.0
+        for stop in route:
+            load += int(float(nodes.get(str(stop), {}).get("demand", 0) or 0))
+            if load < 0 or load > capacity:
+                risk += 1.0
+        return risk
+
+    def _slack_risk(self, instance: Dict[str, Any], route: List[str]) -> float:
+        nodes = {str(node.get("id")): node for node in instance.get("nodes", [])}
+        risk = 0.0
+        for stop in route:
+            node = nodes.get(str(stop), {})
+            width = float(node.get("dueTime", 0.0) or 0.0) - float(node.get("readyTime", 0.0) or 0.0)
+            if width < 5.0:
+                risk += 1.0
+        return risk
