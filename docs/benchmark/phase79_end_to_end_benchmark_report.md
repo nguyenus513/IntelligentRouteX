@@ -32,8 +32,22 @@ live snapshot
 
 `FAIL` means invalid snapshot, Challenger hard violation, overBudget, required fallback, or unknown comparator classification.
 
+## Phase 80 Active Route Locking
+
+Phase 80 adds `--enforce-active-route-locking` to the Phase 79 harness.
+
+When enabled, Phase 79 validates every active route locked prefix after the Challenger run. The gate may reach `PASS` only if all locked prefixes are preserved and no fallback is required. Without the flag, the harness remains `PASS_WITH_LIMITS` when active-route locking is not implemented.
+
+Locked-prefix diagnostics are recorded in each Challenger row:
+
+- `lockedPrefixPreservedCount`
+- `lockedPrefixViolationCount`
+- `changedActiveRouteCount`
+- `insertedAfterLockedPrefixCount`
+- `routeChurnScore`
+
 ## Current Readiness Meaning
 
-Phase 79 is a benchmark-to-production bridge. It supports shadow/canary engineering evidence, but it does not claim `PRODUCTION_MAIN_READY`.
+Phase 79/80 is a benchmark-to-production bridge. It supports shadow/canary engineering evidence, but it does not claim `PRODUCTION_MAIN_READY`.
 
 Production-main still requires real live data, wired fallback execution, replay/canary evidence, monitoring, alerting, and SLA dashboards.

@@ -44,7 +44,7 @@ def snapshot_node_ids(snapshot: Dict[str, Any]) -> List[str]:
     return node_ids
 
 
-def convert_live_snapshot_to_pdptw_instance(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+def convert_live_snapshot_to_pdptw_instance(snapshot: Dict[str, Any], enforce_active_route_locking: bool = False) -> Dict[str, Any]:
     node_ids = snapshot_node_ids(snapshot)
     matrix = snapshot.get("durationMatrix", [])
     if len(node_ids) != len(matrix):
@@ -118,13 +118,90 @@ def convert_live_snapshot_to_pdptw_instance(snapshot: Dict[str, Any]) -> Dict[st
             "restaurantDelay": restaurant_delay,
             "cancellationRisk": cancellation_risk,
             "activeRoutes": snapshot.get("activeRoutes", []),
-            "activeRouteLockingImplemented": False,
+            "activeRouteLockingImplemented": bool(enforce_active_route_locking),
         },
     }
 
 
-def challenger_metrics(row: Dict[str, Any], instance: Dict[str, Any], solution: Dict[str, Any]) -> Dict[str, Any]:
+def _route_driver_id(solution: Dict[str, Any], route_index: int) -> str | None:
+    route_drivers = solution.get("routeDrivers") or solution.get("routeDriverIds")
+    if isinstance(route_drivers, list) and route_index < len(route_drivers):
+        return str(route_drivers[route_index])
+    assignments = solution.get("routeAssignments")
+    if isinstance(assignments, list) and route_index < len(assignments) and isinstance(assignments[route_index], dict):
+        driver_id = assignments[route_index].get("driverId")
+        return str(driver_id) if driver_id is not None else None
+    return None
+
+
+def validate_locked_prefix(candidate_solution: Dict[str, Any], active_routes: List[Dict[str, Any]], drivers: List[Dict[str, Any]] | None = None) -> Dict[str, Any]:
+    routes = [[str(stop) for stop in route] for route in candidate_solution.get("routes", [])]
+    driver_ids = {str(driver.get("driverId")) for driver in (drivers or []) if driver.get("driverId") is not None}
+    errors: List[str] = []
+    preserved_count = 0
+    changed_count = 0
+    inserted_after_locked = 0
+    locked_nodes_seen: set[str] = set()
+
+    for active_index, active_route in enumerate(active_routes):
+        driver_id = str(active_route.get("driverId"))
+        if driver_ids and driver_id not in driver_ids:
+            errors.append(f"activeRoutes[{active_index}]: unknown driverId {driver_id}")
+        route = [str(stop) for stop in active_route.get("route", [])]
+        locked_length = int(active_route.get("lockedPrefixLength", 0) or 0)
+        locked_prefix = route[:locked_length]
+        for node_id in locked_prefix:
+            if node_id != "depot" and node_id in locked_nodes_seen:
+                errors.append(f"activeRoutes[{active_index}]: duplicate locked node {node_id}")
+            if node_id != "depot":
+                locked_nodes_seen.add(node_id)
+        if not locked_prefix:
+            preserved_count += 1
+            continue
+
+        matches = []
+        for route_index, candidate_route in enumerate(routes):
+            if len(candidate_route) >= len(locked_prefix) and candidate_route[: len(locked_prefix)] == locked_prefix:
+                route_driver = _route_driver_id(candidate_solution, route_index)
+                if route_driver is not None and route_driver != driver_id:
+                    errors.append(f"activeRoutes[{active_index}]: locked prefix assigned to {route_driver}, expected {driver_id}")
+                    continue
+                matches.append((route_index, candidate_route))
+        if not matches:
+            dropped = [node_id for node_id in locked_prefix if not any(node_id in candidate_route for candidate_route in routes)]
+            if dropped:
+                errors.append(f"activeRoutes[{active_index}]: missing locked node(s) {','.join(dropped)}")
+            else:
+                errors.append(f"activeRoutes[{active_index}]: locked prefix reordered or not preserved")
+            changed_count += 1
+            continue
+        preserved_count += 1
+        best_route = matches[0][1]
+        if len(best_route) > len(locked_prefix):
+            inserted_after_locked += max(0, len(best_route) - len(locked_prefix) - 1)
+
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "lockedPrefixPreservedCount": preserved_count,
+        "lockedPrefixViolationCount": len(errors),
+        "changedActiveRouteCount": changed_count,
+        "insertedAfterLockedPrefixCount": inserted_after_locked,
+        "routeChurnScore": changed_count + len(errors),
+    }
+
+
+def challenger_metrics(row: Dict[str, Any], instance: Dict[str, Any], solution: Dict[str, Any], enforce_active_route_locking: bool = False) -> Dict[str, Any]:
     food_metrics = compute_instance_metrics(instance, solution)
+    lock_metrics = validate_locked_prefix(solution, instance.get("activeRoutes", []), instance.get("drivers", [])) if enforce_active_route_locking else {
+        "valid": True,
+        "errors": [],
+        "lockedPrefixPreservedCount": 0,
+        "lockedPrefixViolationCount": 0,
+        "changedActiveRouteCount": 0,
+        "insertedAfterLockedPrefixCount": 0,
+        "routeChurnScore": 0,
+    }
     return {
         "runtimeMs": int(row.get("actualRuntimeMs", row.get("runtimeMs", 0)) or 0),
         "hardViolations": int(row.get("hardViolations", 0) or 0),
@@ -135,17 +212,19 @@ def challenger_metrics(row: Dict[str, Any], instance: Dict[str, Any], solution: 
         "finalSolutionSignature": row.get("finalSolutionSignature"),
         "verdict": row.get("verdict"),
         "foodMetrics": food_metrics,
+        "activeRouteLockingImplemented": bool(enforce_active_route_locking),
+        "activeRouteLockMetrics": lock_metrics,
     }
 
 
-def run_challenger(instances: List[str], output_dir: Path, time_limit_ms: int, time_limit_text: str) -> Dict[str, Any]:
+def run_challenger(instances: List[str], output_dir: Path, time_limit_ms: int, time_limit_text: str, enforce_active_route_locking: bool = False) -> Dict[str, Any]:
     summary = run_phase56f(instances, output_dir, "auto", time_limit_ms, "production_food_dispatch", repeat=1, benchmark_source="live-snapshot", stable_incumbent_replay=True)
     rows = []
     for row in summary.get("results", []):
         instance_name = str(row.get("instance"))
         instance = read_json(DEFAULT_CONVERTED_DIR / f"{instance_name}.json")
         solution = read_json(output_dir / instance_name / "final_solution.json")
-        rows.append({"instance": instance_name, **challenger_metrics(row, instance, solution), "timeLimit": time_limit_text})
+        rows.append({"instance": instance_name, **challenger_metrics(row, instance, solution, enforce_active_route_locking), "timeLimit": time_limit_text})
     return {"summary": summary, "rows": rows}
 
 
@@ -209,6 +288,8 @@ def apply_fallback_policy(challenger: Dict[str, Any], time_limit_ms: int) -> Dic
         reasons.append("runtime-exceeds-budget")
     if not challenger.get("finalSolutionSignature"):
         reasons.append("checker-unavailable-or-missing-signature")
+    if challenger.get("activeRouteLockingImplemented") and not challenger.get("activeRouteLockMetrics", {}).get("valid", True):
+        reasons.append("active-route-lock-violation")
     return {"instance": challenger.get("instance"), "fallbackApplied": bool(reasons), "fallbackReason": ",".join(reasons) if reasons else None, "productionCandidateSafe": not reasons}
 
 
@@ -235,11 +316,11 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     for path in snapshot_paths:
         snapshot = read_json(path)
         validation = validate_snapshot(snapshot)
-        row = {"snapshotPath": str(path), "snapshotId": snapshot.get("snapshotId"), "valid": bool(validation.get("valid")), "errors": validation.get("errors", []), "activeRouteLockingImplemented": False}
+        row = {"snapshotPath": str(path), "snapshotId": snapshot.get("snapshotId"), "valid": bool(validation.get("valid")), "errors": validation.get("errors", []), "activeRouteLockingImplemented": bool(args.enforce_active_route_locking)}
         validation_rows.append(row)
         if not validation.get("valid"):
             continue
-        instance = convert_live_snapshot_to_pdptw_instance(snapshot)
+        instance = convert_live_snapshot_to_pdptw_instance(snapshot, enforce_active_route_locking=bool(args.enforce_active_route_locking))
         write_json(converted_dir / f"{instance['instanceName']}.json", instance)
         write_json(output_dir / "converted_instances" / f"{instance['instanceName']}.json", instance)
         instances.append(str(instance["instanceName"]))
@@ -250,7 +331,7 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
         return summary
 
     time_limit_ms = parse_time_limit(args.time_limit)
-    challenger = run_challenger(instances, output_dir / "challenger_phase56f", time_limit_ms, args.time_limit)
+    challenger = run_challenger(instances, output_dir / "challenger_phase56f", time_limit_ms, args.time_limit, enforce_active_route_locking=bool(args.enforce_active_route_locking))
     vroom = run_vroom(instances, output_dir / "vroom_comparison", args)
     vroom_by_instance = {str(row.get("instance")): row for row in vroom.get("rows", [])}
     comparisons = []
@@ -279,7 +360,7 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
         "challenger": "phase56f",
         "champion": "vroom",
         "classificationCounts": classification_counts,
-        "activeRouteLockingImplemented": False,
+        "activeRouteLockingImplemented": bool(args.enforce_active_route_locking),
         "outputDir": str(output_dir),
     }
     write_outputs(output_dir, summary, validation_rows, comparisons, fallback_decisions, food_rows, vroom.get("rows", []))
@@ -326,6 +407,7 @@ def main() -> int:
     parser.add_argument("--time-limit", default="30s")
     parser.add_argument("--dry-run-conversion", action="store_true")
     parser.add_argument("--skip-vroom-run", action="store_true")
+    parser.add_argument("--enforce-active-route-locking", action="store_true")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     args = parser.parse_args()
     summary = run(args)
