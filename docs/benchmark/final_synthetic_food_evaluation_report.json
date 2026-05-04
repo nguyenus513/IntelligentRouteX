@@ -1,207 +1,213 @@
-{
-  "finalVerdict": {
-    "industryQualityCompetitive": "no",
-    "mainBottlenecks": [
-      "industry comparator robustness interpretation"
-    ],
-    "productionSafe": true
-  },
-  "qualityVsVroom": {
-    "distanceGapSummary": {
-      "count": 0,
-      "max": null,
-      "mean": null,
-      "min": null,
-      "sum": 0
-    },
-    "gapCounts": {
-      "challenger-better-feasibility": 6
-    },
-    "vehicleGapSummary": {
-      "count": 0,
-      "max": null,
-      "mean": null,
-      "min": null,
-      "sum": 0
-    },
-    "vroomCounts": {
-      "vroom-hard-fail": 6
-    }
-  },
-  "robustness": {
-    "challengerHardFailCount": 0,
-    "challengerOverBudgetCount": 0,
-    "vroomHardFailCount": 6,
-    "vroomTimeoutCount": 0
-  },
-  "safety": {
-    "challengerFailCount": 0,
-    "challengerHardViolations": 0,
-    "challengerOverBudgetCount": 0,
-    "runtimeMs": {
-      "count": 6,
-      "max": 25113.0,
-      "p50": 24252.0,
-      "p95": 25113.0,
-      "p99": 25113.0
-    }
-  },
-  "scenarioAnalysis": {
-    "available": true,
-    "scenarioCount": 6,
-    "scenarios": [
-      {
-        "challengerDistance": 36.24157819305559,
-        "challengerHardViolations": 0,
-        "challengerOverBudget": false,
-        "challengerRuntimeMs": 25113,
-        "challengerVehicleCount": 2,
-        "expectedStress": {
-          "clusteredDropoffs": false,
-          "highCancellationRisk": false,
-          "longDistances": false,
-          "peak": true,
-          "rainTraffic": false,
-          "tightTimeWindows": true
-        },
-        "scenario": "lunch_peak",
-        "vroomClassification": "vroom-hard-fail",
-        "vroomDistance": 42.73417358889523,
-        "vroomVehicleCount": 2
-      },
-      {
-        "challengerDistance": 50.10808008488571,
-        "challengerHardViolations": 0,
-        "challengerOverBudget": false,
-        "challengerRuntimeMs": 23953,
-        "challengerVehicleCount": 2,
-        "expectedStress": {
-          "clusteredDropoffs": false,
-          "highCancellationRisk": false,
-          "longDistances": false,
-          "peak": true,
-          "rainTraffic": false,
-          "tightTimeWindows": false
-        },
-        "scenario": "dinner_peak",
-        "vroomClassification": "vroom-hard-fail",
-        "vroomDistance": 57.424637165884036,
-        "vroomVehicleCount": 2
-      },
-      {
-        "challengerDistance": 42.707627453274824,
-        "challengerHardViolations": 0,
-        "challengerOverBudget": false,
-        "challengerRuntimeMs": 24671,
-        "challengerVehicleCount": 2,
-        "expectedStress": {
-          "clusteredDropoffs": true,
-          "highCancellationRisk": false,
-          "longDistances": false,
-          "peak": false,
-          "rainTraffic": false,
-          "tightTimeWindows": false
-        },
-        "scenario": "apartment_cluster",
-        "vroomClassification": "vroom-hard-fail",
-        "vroomDistance": 46.371311510493314,
-        "vroomVehicleCount": 2
-      },
-      {
-        "challengerDistance": 38.03389157110962,
-        "challengerHardViolations": 0,
-        "challengerOverBudget": false,
-        "challengerRuntimeMs": 24324,
-        "challengerVehicleCount": 2,
-        "expectedStress": {
-          "clusteredDropoffs": false,
-          "highCancellationRisk": false,
-          "longDistances": false,
-          "peak": true,
-          "rainTraffic": true,
-          "tightTimeWindows": true
-        },
-        "scenario": "rain_peak",
-        "vroomClassification": "vroom-hard-fail",
-        "vroomDistance": 44.41610481027422,
-        "vroomVehicleCount": 2
-      },
-      {
-        "challengerDistance": 32.02300171827903,
-        "challengerHardViolations": 0,
-        "challengerOverBudget": false,
-        "challengerRuntimeMs": 22492,
-        "challengerVehicleCount": 1,
-        "expectedStress": {
-          "clusteredDropoffs": false,
-          "highCancellationRisk": false,
-          "longDistances": true,
-          "peak": false,
-          "rainTraffic": false,
-          "tightTimeWindows": false
-        },
-        "scenario": "sparse_suburban",
-        "vroomClassification": "vroom-hard-fail",
-        "vroomDistance": 35.352658340957966,
-        "vroomVehicleCount": 1
-      },
-      {
-        "challengerDistance": 42.28388589535285,
-        "challengerHardViolations": 0,
-        "challengerOverBudget": false,
-        "challengerRuntimeMs": 24252,
-        "challengerVehicleCount": 2,
-        "expectedStress": {
-          "clusteredDropoffs": false,
-          "highCancellationRisk": true,
-          "longDistances": false,
-          "peak": false,
-          "rainTraffic": false,
-          "tightTimeWindows": false
-        },
-        "scenario": "cancellation_risk",
-        "vroomClassification": "vroom-hard-fail",
-        "vroomDistance": 45.362907211832834,
-        "vroomVehicleCount": 2
-      }
-    ]
-  },
-  "schemaVersion": "phase65-final-system-evaluation/v1",
-  "unified": {
-    "challenger": "phase56f",
-    "challengerGate": "PASS",
-    "challengerSummaryPath": "artifacts\\final\\synthetic_food_full_real_20260504_131148\\challenger_phase56f\\phase56b_stable_promoted_summary.json",
-    "champions": [
-      "vroom"
-    ],
-    "gapClassifications": {
-      "challenger-better-feasibility": 6
-    },
-    "gapSummaryPath": "artifacts\\final\\synthetic_food_full_real_20260504_131148\\vroom_gap_analyzer\\phase59_vroom_gap_summary.json",
-    "schemaVersion": "phase63-unified-benchmark-suite/v1",
-    "suite": {
-      "dataSource": "generated",
-      "description": "Full production-like synthetic food dispatch scenarios generated by Phase 64.",
-      "expectedStress": {
-        "clusteredDropoffs": true,
-        "generated": true,
-        "peakDemand": true,
-        "productionLike": true
-      },
-      "instances": [
-        "lunch_peak",
-        "dinner_peak",
-        "apartment_cluster",
-        "rain_peak",
-        "sparse_suburban",
-        "cancellation_risk"
-      ],
-      "problemType": "PDPTW",
-      "schemaVersion": "benchmark-suite-manifest/v1",
-      "source": "synthetic-food",
-      "suite": "synthetic-food-full"
-    },
-    "vroomGate": "PROMOTE_CANDIDATE",
-    "vroomSummaryPath": "artifacts\\final\\synthetic_food_full_real_20260504_131148\\vroom_comparator\\aggregate_summary.json"
-  }
+﻿{
+    "finalVerdict":  {
+                         "industryQualityCompetitive":  "no",
+                         "mainBottlenecks":  [
+                                                 "industry comparator robustness interpretation"
+                                             ],
+                         "productionSafe":  true
+                     },
+    "qualityVsVroom":  {
+                           "distanceGapSummary":  {
+                                                      "count":  0,
+                                                      "max":  null,
+                                                      "mean":  null,
+                                                      "min":  null,
+                                                      "sum":  0
+                                                  },
+                           "gapCounts":  {
+                                             "challenger-better-feasibility":  6
+                                         },
+                           "vehicleGapSummary":  {
+                                                     "count":  0,
+                                                     "max":  null,
+                                                     "mean":  null,
+                                                     "min":  null,
+                                                     "sum":  0
+                                                 },
+                           "vroomCounts":  {
+                                               "vroom-hard-fail":  6
+                                           }
+                       },
+    "robustness":  {
+                       "challengerHardFailCount":  0,
+                       "challengerOverBudgetCount":  0,
+                       "vroomHardFailCount":  6,
+                       "vroomTimeoutCount":  0
+                   },
+    "safety":  {
+                   "challengerFailCount":  0,
+                   "challengerHardViolations":  0,
+                   "challengerOverBudgetCount":  0,
+                   "runtimeMs":  {
+                                     "count":  6,
+                                     "max":  25113.0,
+                                     "p50":  24252.0,
+                                     "p95":  25113.0,
+                                     "p99":  25113.0
+                                 }
+               },
+    "scenarioAnalysis":  {
+                             "available":  true,
+                             "scenarioCount":  6,
+                             "scenarios":  [
+                                               {
+                                                   "challengerDistance":  36.24157819305559,
+                                                   "challengerHardViolations":  0,
+                                                   "challengerOverBudget":  false,
+                                                   "challengerRuntimeMs":  25113,
+                                                   "challengerVehicleCount":  2,
+                                                   "expectedStress":  {
+                                                                          "clusteredDropoffs":  false,
+                                                                          "highCancellationRisk":  false,
+                                                                          "longDistances":  false,
+                                                                          "peak":  true,
+                                                                          "rainTraffic":  false,
+                                                                          "tightTimeWindows":  true
+                                                                      },
+                                                   "scenario":  "lunch_peak",
+                                                   "vroomClassification":  "vroom-hard-fail",
+                                                   "vroomDistance":  42.73417358889523,
+                                                   "vroomVehicleCount":  2
+                                               },
+                                               {
+                                                   "challengerDistance":  50.10808008488571,
+                                                   "challengerHardViolations":  0,
+                                                   "challengerOverBudget":  false,
+                                                   "challengerRuntimeMs":  23953,
+                                                   "challengerVehicleCount":  2,
+                                                   "expectedStress":  {
+                                                                          "clusteredDropoffs":  false,
+                                                                          "highCancellationRisk":  false,
+                                                                          "longDistances":  false,
+                                                                          "peak":  true,
+                                                                          "rainTraffic":  false,
+                                                                          "tightTimeWindows":  false
+                                                                      },
+                                                   "scenario":  "dinner_peak",
+                                                   "vroomClassification":  "vroom-hard-fail",
+                                                   "vroomDistance":  57.424637165884036,
+                                                   "vroomVehicleCount":  2
+                                               },
+                                               {
+                                                   "challengerDistance":  42.707627453274824,
+                                                   "challengerHardViolations":  0,
+                                                   "challengerOverBudget":  false,
+                                                   "challengerRuntimeMs":  24671,
+                                                   "challengerVehicleCount":  2,
+                                                   "expectedStress":  {
+                                                                          "clusteredDropoffs":  true,
+                                                                          "highCancellationRisk":  false,
+                                                                          "longDistances":  false,
+                                                                          "peak":  false,
+                                                                          "rainTraffic":  false,
+                                                                          "tightTimeWindows":  false
+                                                                      },
+                                                   "scenario":  "apartment_cluster",
+                                                   "vroomClassification":  "vroom-hard-fail",
+                                                   "vroomDistance":  46.371311510493314,
+                                                   "vroomVehicleCount":  2
+                                               },
+                                               {
+                                                   "challengerDistance":  38.03389157110962,
+                                                   "challengerHardViolations":  0,
+                                                   "challengerOverBudget":  false,
+                                                   "challengerRuntimeMs":  24324,
+                                                   "challengerVehicleCount":  2,
+                                                   "expectedStress":  {
+                                                                          "clusteredDropoffs":  false,
+                                                                          "highCancellationRisk":  false,
+                                                                          "longDistances":  false,
+                                                                          "peak":  true,
+                                                                          "rainTraffic":  true,
+                                                                          "tightTimeWindows":  true
+                                                                      },
+                                                   "scenario":  "rain_peak",
+                                                   "vroomClassification":  "vroom-hard-fail",
+                                                   "vroomDistance":  44.41610481027422,
+                                                   "vroomVehicleCount":  2
+                                               },
+                                               {
+                                                   "challengerDistance":  32.02300171827903,
+                                                   "challengerHardViolations":  0,
+                                                   "challengerOverBudget":  false,
+                                                   "challengerRuntimeMs":  22492,
+                                                   "challengerVehicleCount":  1,
+                                                   "expectedStress":  {
+                                                                          "clusteredDropoffs":  false,
+                                                                          "highCancellationRisk":  false,
+                                                                          "longDistances":  true,
+                                                                          "peak":  false,
+                                                                          "rainTraffic":  false,
+                                                                          "tightTimeWindows":  false
+                                                                      },
+                                                   "scenario":  "sparse_suburban",
+                                                   "vroomClassification":  "vroom-hard-fail",
+                                                   "vroomDistance":  35.352658340957966,
+                                                   "vroomVehicleCount":  1
+                                               },
+                                               {
+                                                   "challengerDistance":  42.28388589535285,
+                                                   "challengerHardViolations":  0,
+                                                   "challengerOverBudget":  false,
+                                                   "challengerRuntimeMs":  24252,
+                                                   "challengerVehicleCount":  2,
+                                                   "expectedStress":  {
+                                                                          "clusteredDropoffs":  false,
+                                                                          "highCancellationRisk":  true,
+                                                                          "longDistances":  false,
+                                                                          "peak":  false,
+                                                                          "rainTraffic":  false,
+                                                                          "tightTimeWindows":  false
+                                                                      },
+                                                   "scenario":  "cancellation_risk",
+                                                   "vroomClassification":  "vroom-hard-fail",
+                                                   "vroomDistance":  45.362907211832834,
+                                                   "vroomVehicleCount":  2
+                                               }
+                                           ]
+                         },
+    "schemaVersion":  "phase65-final-system-evaluation/v1",
+    "unified":  {
+                    "challenger":  "phase56f",
+                    "challengerGate":  "PASS",
+                    "challengerSummaryPath":  "artifacts\\final\\synthetic_food_full_real_20260504_131148\\challenger_phase56f\\phase56b_stable_promoted_summary.json",
+                    "champions":  [
+                                      "vroom"
+                                  ],
+                    "gapClassifications":  {
+                                               "challenger-better-feasibility":  6
+                                           },
+                    "gapSummaryPath":  "artifacts\\final\\synthetic_food_full_real_20260504_131148\\vroom_gap_analyzer\\phase59_vroom_gap_summary.json",
+                    "schemaVersion":  "phase63-unified-benchmark-suite/v1",
+                    "suite":  {
+                                  "dataSource":  "generated",
+                                  "description":  "Full production-like synthetic food dispatch scenarios generated by Phase 64.",
+                                  "expectedStress":  {
+                                                         "clusteredDropoffs":  true,
+                                                         "generated":  true,
+                                                         "peakDemand":  true,
+                                                         "productionLike":  true
+                                                     },
+                                  "instances":  [
+                                                    "lunch_peak",
+                                                    "dinner_peak",
+                                                    "apartment_cluster",
+                                                    "rain_peak",
+                                                    "sparse_suburban",
+                                                    "cancellation_risk"
+                                                ],
+                                  "problemType":  "PDPTW",
+                                  "schemaVersion":  "benchmark-suite-manifest/v1",
+                                  "source":  "synthetic-food",
+                                  "suite":  "synthetic-food-full"
+                              },
+                    "vroomGate":  "PROMOTE_CANDIDATE",
+                    "vroomSummaryPath":  "artifacts\\final\\synthetic_food_full_real_20260504_131148\\vroom_comparator\\aggregate_summary.json"
+                },
+    "vroomTimeWindowAuditSummary":  {
+                                        "trueVroomTwViolationCount":  4,
+                                        "matrixDurationMismatchCount":  2,
+                                        "unknownCount":  0,
+                                        "auditGate":  "PASS"
+                                    }
 }

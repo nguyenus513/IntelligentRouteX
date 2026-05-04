@@ -23,6 +23,22 @@
 - Challenger hard-fail count: 0
 - Challenger overBudget count: 0
 
+## Phase 67B VROOM Time-Window Audit
+
+Phase 67B audits the six VROOM hard-fail cases by reconstructing route timelines from raw VROOM request/response artifacts and the normalized synthetic instances.
+
+| Audit Classification | Count |
+|---|---:|
+| vroom-true-time-window-violation | 4/6 |
+| matrix-duration-mismatch | 2/6 |
+| unknown | 0/6 |
+
+Interpretation:
+
+- `4/6` cases are confirmed true VROOM time-window violations from VROOM step arrivals.
+- `2/6` cases are matrix-duration mismatches and are reported separately, not counted as confirmed true VROOM solver failures.
+- Because VROOM has no internally feasible synthetic solution in this run, this report supports a feasibility/stability win for Phase 56F, not a full distance/vehicle-count quality superiority claim over VROOM.
+
 ## Scenario Analysis
 
 - Synthetic food scenarios available: True
@@ -42,3 +58,5 @@
 - Production-safe: True
 - Industry-quality competitive: no
 - Main bottlenecks: industry comparator robustness interpretation
+- Audit-backed conclusion: Phase 56F is feasible `6/6` with hard violations `0` and overBudget `0`; VROOM hard-fails `6/6`, with Phase 67B confirming `4/6` true time-window violations and `2/6` matrix-duration mismatches.
+- Quality conclusion: blocked/inconclusive on synthetic food because VROOM has no feasible solution to compare distance or vehicle count against.
