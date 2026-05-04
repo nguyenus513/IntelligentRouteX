@@ -8,6 +8,7 @@ from optimizer.phase85_pair_utils import insert_pair_positions, request_id, solu
 from optimizer.phase95_slot_aware_subproblem import SlotAwareSubproblemConfig, SlotAwareSubproblemBuilder
 from optimizer.phase96_coverage_repair import coverage_diff
 from optimizer.phase97_time_window_repair import evaluate_route_schedule, solution_time_window_stats
+from optimizer.phase99_exact_tw_route_finalizer import ExactTWRouteFinalizer
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ class ScheduleFeasibleSubproblemBuilder:
             candidate = self._build_by_insertion(subproblem, config, ordered)
             if candidate is None:
                 continue
+            candidate = self._finalize_routes(subproblem, candidate) or candidate
             if not self._coverage_ok(subproblem, candidate) or self._active_route_count(candidate) > config.maxSubproblemRoutes:
                 continue
             key = (score_solution(subproblem, candidate).to_tuple(), solution_signature(candidate))
@@ -95,6 +97,7 @@ class ScheduleFeasibleSubproblemBuilder:
                 best = candidate
                 best_key = key
                 self.lastTelemetry["scheduleBuilderStrategy"] = strategy
+        best = self._finalize_routes(subproblem, best) or best
         best_score = score_solution(subproblem, best)
         improved = best_key < (fallback_score.to_tuple(), solution_signature(fallback))
         self.lastTelemetry.update({
@@ -104,6 +107,10 @@ class ScheduleFeasibleSubproblemBuilder:
             "scheduleBuiltCandidateUsed": improved,
         })
         return best
+
+    def _finalize_routes(self, subproblem: Dict[str, Any], solution: Dict[str, Any]) -> Dict[str, Any] | None:
+        finalizer = ExactTWRouteFinalizer()
+        return finalizer.finalize_solution_routes(subproblem, solution, max_states=512, beam_width=32, max_runtime_ms=500)
 
     def choose_candidate(self, subproblem: Dict[str, Any], optimizer_solution: Dict[str, Any], schedule_incumbent: Dict[str, Any]) -> Dict[str, Any]:
         optimizer_key = (score_solution(subproblem, optimizer_solution).to_tuple(), solution_signature(optimizer_solution))

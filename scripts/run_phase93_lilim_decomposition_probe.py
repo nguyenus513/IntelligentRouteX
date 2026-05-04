@@ -15,6 +15,7 @@ from optimizer.phase95_slot_aware_subproblem import SlotAwareSubproblemBuilder, 
 from optimizer.phase96_coverage_repair import ResidualCoverageRepair, coverage_diff, remove_duplicate_pairs
 from optimizer.phase97_time_window_repair import TimeWindowRepair, solution_time_window_stats
 from optimizer.phase98_schedule_feasible_subproblem import ScheduleFeasibleSubproblemBuilder
+from optimizer.phase99_exact_tw_route_finalizer import ExactTWRouteFinalizer
 from phase67_synthetic_instance_loader import load_benchmark_instance
 from run_external_benchmark_certification import parse_time_limit
 from run_phase55_promotion_guard import write_json
@@ -212,8 +213,22 @@ def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], requ
         "repairStrategyUsed": None,
         "candidateChecksUsed": 0,
     }
+    exact_finalizer_telemetry = {"attempted": False, "improved": False, "statesExpanded": 0, "reason": "not-run"}
     if precheck.get("valid"):
         checked = check_solution(instance, recombined)
+        if "time-window-violation" in checked.get("violations", []):
+            finalizer = ExactTWRouteFinalizer()
+            violation_indices = [index for index, route in enumerate(recombined.get("routes", [])) if solution_time_window_stats(instance, {"routes": [route]}).get("timeWindowViolationCount", 0)]
+            finalized = finalizer.finalize_solution_routes(instance, recombined, violation_indices, max_states=512, beam_width=32, max_runtime_ms=max(100, min(750, sub_time_ms // 4)))
+            exact_finalizer_telemetry = dict(finalizer.lastTelemetry)
+            if finalized is not None:
+                finalized_precheck = strict_recombination_validator(instance, incumbent, finalized, slot_policy.maxAllowedSubproblemRoutes, candidate_subproblem_route_count, affected_request_ids)
+                if finalized_precheck.get("valid"):
+                    finalized_checked = check_solution(instance, finalized)
+                    if int(finalized_checked.get("timeWindowViolationCount", 0) or 0) <= int(checked.get("timeWindowViolationCount", 0) or 0):
+                        recombined = finalized
+                        precheck = finalized_precheck
+                        checked = finalized_checked
         if "time-window-violation" in checked.get("violations", []):
             time_repair = TimeWindowRepair()
             repaired = time_repair.repair(instance, recombined, affected_request_ids, active_route_count(incumbent), max_candidate_checks=256, max_runtime_ms=max(100, min(750, sub_time_ms // 4)))
@@ -233,6 +248,7 @@ def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], requ
     after = float(recombined_eval.get("objective", float("inf")))
     objective_delta = after - before if before != float("inf") and after != float("inf") else None
     reject_reason = None if improves else (precheck["reason"] if not precheck.get("valid") else "check-solution-rejected" if not checked.get("feasible") else "objective-regression")
+    final_time_window = solution_time_window_stats(instance, recombined)
     return {
         "mode": slot_policy.mode,
         "selectedSeedRequestCount": len(seed_selected), "selectedRequestCount": len(seed_selected), "expandedAffectedRequestCount": len(selected), "affectedRouteRequestCount": len(selected),
@@ -271,12 +287,16 @@ def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], requ
         "timeWindowRepairAttempts": int(time_repair_telemetry.get("timeWindowRepairAttempts", 0) or 0),
         "timeWindowRepairSuccess": bool(time_repair_telemetry.get("timeWindowRepairSuccess", False)),
         "timeWindowViolationCountBefore": int(time_repair_telemetry.get("timeWindowViolationCountBefore", 0) or 0),
-        "timeWindowViolationCountAfter": int(time_repair_telemetry.get("timeWindowViolationCountAfter", 0) or 0),
+        "timeWindowViolationCountAfter": int(final_time_window.get("timeWindowViolationCount", time_repair_telemetry.get("timeWindowViolationCountAfter", 0)) or 0),
         "totalLatenessBefore": float(time_repair_telemetry.get("totalLatenessBefore", 0.0) or 0.0),
-        "totalLatenessAfter": float(time_repair_telemetry.get("totalLatenessAfter", 0.0) or 0.0),
+        "totalLatenessAfter": float(final_time_window.get("totalLateness", time_repair_telemetry.get("totalLatenessAfter", 0.0)) or 0.0),
         "firstViolationNode": time_repair_telemetry.get("firstViolationNode"),
         "repairStrategyUsed": time_repair_telemetry.get("repairStrategyUsed"),
         "candidateChecksUsed": int(time_repair_telemetry.get("candidateChecksUsed", 0) or 0),
+        "exactTWFinalizerAttempted": bool(exact_finalizer_telemetry.get("attempted", False)),
+        "exactTWFinalizerImproved": bool(exact_finalizer_telemetry.get("improved", False)),
+        "exactTWFinalizerStates": int(exact_finalizer_telemetry.get("statesExpanded", 0) or 0),
+        "exactTWFinalizerReason": exact_finalizer_telemetry.get("reason"),
         "rejectedByTimeWindow": reject_reason == "check-solution-rejected" and "time-window-violation" in checked.get("violations", []),
         "rejectedByCheckSolution": reject_reason == "check-solution-rejected",
         "bestRejectedReason": reject_reason,
@@ -335,6 +355,9 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     subproblem_lateness_before = sum(float(item.get("subproblemLatenessBefore", 0.0) or 0.0) for item in trace)
     subproblem_lateness_after = sum(float(item.get("subproblemLatenessAfter", 0.0) or 0.0) for item in trace)
     schedule_built_used = sum(1 for item in trace if item.get("scheduleBuiltCandidateUsed"))
+    exact_finalizer_attempts = sum(1 for item in trace if item.get("exactTWFinalizerAttempted"))
+    exact_finalizer_improvements = sum(1 for item in trace if item.get("exactTWFinalizerImproved"))
+    exact_finalizer_states = sum(int(item.get("exactTWFinalizerStates", 0) or 0) for item in trace)
     rejected_time_window = sum(1 for item in trace if item.get("rejectedByTimeWindow"))
     tw_repair_attempts = sum(int(item.get("timeWindowRepairAttempts", 0) or 0) for item in trace)
     tw_repair_successes = sum(1 for item in trace if item.get("timeWindowRepairSuccess"))
@@ -362,7 +385,7 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
         gate = "PASS"
     else:
         gate = "PASS_WITH_LIMITS"
-    summary = {"schemaVersion": "phase93-lilim-decomposition-probe/v1", "gate": gate, "instance": instance_name, "decompositionTrace": [{key: value for key, value in item.items() if key not in {"subDiagnostics", "recombinedSolution"}} for item in trace], "subproblemCount": len(trace), "recombinedCandidates": recombined, "acceptedRecombinedCandidates": accepted, "unknownCount": unknown, "hardViolations": hard, "rejectedRecombinedHardViolations": rejected_hard, "rejectedCheckSolutionViolations": rejected_check_violations, "rejectedBySlotOverflow": rejected_slot, "rejectedByCoverage": rejected_coverage, "coverageMissingCount": coverage_missing, "coverageDuplicateCount": coverage_duplicate, "coveragePartialPairCount": coverage_partial, "residualCoverageRepairAttempts": repair_attempts, "residualCoverageRepairSuccesses": repair_successes, "rejectedByCheckSolution": rejected_check, "scheduleBuilderAttempts": schedule_attempts, "scheduleBuilderSuccesses": schedule_successes, "subproblemTWBefore": subproblem_tw_before, "subproblemTWAfter": subproblem_tw_after, "subproblemLatenessBefore": subproblem_lateness_before, "subproblemLatenessAfter": subproblem_lateness_after, "scheduleBuiltCandidateUsed": schedule_built_used, "rejectedByTimeWindow": rejected_time_window, "phase97TimeWindowAfterBaseline": int(getattr(args, "phase97_time_window_after_baseline", 0) or 0), "timeWindowRepairAttempts": tw_repair_attempts, "timeWindowRepairSuccesses": tw_repair_successes, "timeWindowViolationCountBefore": tw_before, "timeWindowViolationCountAfter": tw_after, "totalLatenessBefore": lateness_before, "totalLatenessAfter": lateness_after, "firstViolationNode": first_violation_node, "repairStrategyUsed": repair_strategy_used, "candidateChecksUsed": tw_candidate_checks, "recombinedFeasibleCandidates": recombined_feasible, "bestRejectedReason": best_rejected_reason, "antiHardcodeGate": anti.get("gate"), **telemetry}
+    summary = {"schemaVersion": "phase93-lilim-decomposition-probe/v1", "gate": gate, "instance": instance_name, "decompositionTrace": [{key: value for key, value in item.items() if key not in {"subDiagnostics", "recombinedSolution"}} for item in trace], "subproblemCount": len(trace), "recombinedCandidates": recombined, "acceptedRecombinedCandidates": accepted, "unknownCount": unknown, "hardViolations": hard, "rejectedRecombinedHardViolations": rejected_hard, "rejectedCheckSolutionViolations": rejected_check_violations, "rejectedBySlotOverflow": rejected_slot, "rejectedByCoverage": rejected_coverage, "coverageMissingCount": coverage_missing, "coverageDuplicateCount": coverage_duplicate, "coveragePartialPairCount": coverage_partial, "residualCoverageRepairAttempts": repair_attempts, "residualCoverageRepairSuccesses": repair_successes, "rejectedByCheckSolution": rejected_check, "scheduleBuilderAttempts": schedule_attempts, "scheduleBuilderSuccesses": schedule_successes, "subproblemTWBefore": subproblem_tw_before, "subproblemTWAfter": subproblem_tw_after, "subproblemLatenessBefore": subproblem_lateness_before, "subproblemLatenessAfter": subproblem_lateness_after, "scheduleBuiltCandidateUsed": schedule_built_used, "exactTWFinalizerAttempts": exact_finalizer_attempts, "exactTWFinalizerImprovements": exact_finalizer_improvements, "exactTWFinalizerStates": exact_finalizer_states, "rejectedByTimeWindow": rejected_time_window, "phase97TimeWindowAfterBaseline": int(getattr(args, "phase97_time_window_after_baseline", 0) or 0), "timeWindowRepairAttempts": tw_repair_attempts, "timeWindowRepairSuccesses": tw_repair_successes, "timeWindowViolationCountBefore": tw_before, "timeWindowViolationCountAfter": tw_after, "totalLatenessBefore": lateness_before, "totalLatenessAfter": lateness_after, "firstViolationNode": first_violation_node, "repairStrategyUsed": repair_strategy_used, "candidateChecksUsed": tw_candidate_checks, "recombinedFeasibleCandidates": recombined_feasible, "bestRejectedReason": best_rejected_reason, "antiHardcodeGate": anti.get("gate"), **telemetry}
     write_json(output_dir / "phase93_lilim_decomposition_probe_summary.json", summary)
     write_json(output_dir / "decomposition_trace.json", {"rows": summary["decompositionTrace"]})
     write_json(output_dir / "operator_telemetry.json", {"rows": [item.get("subDiagnostics", {}).get("budgetTelemetry", []) for item in trace]})

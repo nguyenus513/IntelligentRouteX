@@ -122,6 +122,7 @@ class TimeWindowRepair:
             ("pair-relocate-within-route", self._within_route_relocate_candidates),
             ("cross-affected-route-pair-relocate", self._cross_route_relocate_candidates),
             ("schedule-regret-rebuild", self._schedule_regret_rebuild_candidates),
+            ("exact-tw-route-finalizer", self._exact_tw_finalizer_candidates),
             ("mini-destroy-regret-repair", self._mini_destroy_regret_candidates),
         ]
         checks = 0
@@ -294,6 +295,13 @@ class TimeWindowRepair:
             rebuilt = best_routes
         return [{"routes": [route for route in unaffected + rebuilt if len(route) > 2]}]
 
+
+    def _exact_tw_finalizer_candidates(self, instance: Dict[str, Any], routes: List[List[str]], affected_indices: List[int], affected_request_ids: Set[str], max_moved_pairs: int) -> List[Dict[str, Any]]:
+        from optimizer.phase99_exact_tw_route_finalizer import ExactTWRouteFinalizer
+        finalizer = ExactTWRouteFinalizer()
+        candidate = finalizer.finalize_solution_routes(instance, {"routes": routes}, affected_indices, max_states=512, beam_width=32, max_runtime_ms=500)
+        return [candidate] if candidate is not None else []
+
     def _mini_destroy_regret_candidates(self, instance: Dict[str, Any], routes: List[List[str]], affected_indices: List[int], affected_request_ids: Set[str], max_moved_pairs: int) -> List[Dict[str, Any]]:
         pairs = []
         for route_index in affected_indices:
@@ -328,3 +336,4 @@ class TimeWindowRepair:
         node_lateness = {str(stop): schedule.dueTimeLateness[index] for index, stop in enumerate(route) if index < len(schedule.dueTimeLateness)}
         pairs = self._route_pairs(instance, route, affected_request_ids)
         return sorted(pairs, key=lambda pair: (-(node_lateness.get(str(pair["pickup"]), 0.0) + node_lateness.get(str(pair["dropoff"]), 0.0)), str(pair["requestId"])))
+

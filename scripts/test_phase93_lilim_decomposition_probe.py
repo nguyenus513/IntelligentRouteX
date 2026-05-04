@@ -1,13 +1,15 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from argparse import Namespace
 from pathlib import Path
 
 from optimizer.phase84_unified_objective import UnifiedNaturalObjective
+from optimizer.phase85_pair_utils import extract_request_pairs
 from optimizer.phase95_slot_aware_subproblem import SlotAwareSubproblemBuilder, build_slot_aware_config
 from optimizer.phase96_coverage_repair import ResidualCoverageRepair, coverage_diff
 from optimizer.phase97_time_window_repair import TimeWindowRepair, evaluate_route_schedule, solution_time_window_stats
 from optimizer.phase98_schedule_feasible_subproblem import ScheduleFeasibleSubproblemBuilder, score_solution
+from optimizer.phase99_exact_tw_route_finalizer import ExactTWRouteFinalizer
 from run_phase93_lilim_decomposition_probe import active_route_count, affected_route_request_closure, exact_request_coverage, extract_subproblem, recombine_solution, run, select_requests_by_features, slot_limited_incumbent, strict_recombination_validator
 from test_phase90_final_quality_completion import instance
 
@@ -60,6 +62,7 @@ def test_no_instance_name_branch() -> None:
     source = Path("scripts/run_phase93_lilim_decomposition_probe.py").read_text(encoding="utf-8")
     source += Path("scripts/optimizer/phase97_time_window_repair.py").read_text(encoding="utf-8")
     source += Path("scripts/optimizer/phase98_schedule_feasible_subproblem.py").read_text(encoding="utf-8")
+    source += Path("scripts/optimizer/phase99_exact_tw_route_finalizer.py").read_text(encoding="utf-8")
     forbidden = ["instance ==", "instanceName ==", "startswith(\"LRC", "startswith('LRC"]
 
     assert not any(token in source for token in forbidden)
@@ -304,3 +307,42 @@ def test_schedule_builder_fallback_used_when_no_schedule_improvement_exists() ->
 
     assert incumbent == fallback
     assert builder.lastTelemetry["scheduleBuilderSuccess"] is False
+
+
+
+def test_exact_tw_finalizer_improves_synthetic_route_lateness() -> None:
+    inst = time_window_repair_instance()
+    route = ["0", "3", "4", "1", "2", "0"]
+    finalized = ExactTWRouteFinalizer().finalize_route(inst, route, max_states=128, beam_width=16)
+
+    assert finalized is not None
+    assert solution_time_window_stats(inst, {"routes": [finalized]})["totalLateness"] < solution_time_window_stats(inst, {"routes": [route]})["totalLateness"]
+
+
+def test_exact_tw_finalizer_preserves_pickup_before_dropoff() -> None:
+    inst = time_window_repair_instance()
+    route = ["0", "3", "4", "1", "2", "0"]
+    finalized = ExactTWRouteFinalizer().finalize_route(inst, route, max_states=128, beam_width=16)
+
+    assert finalized is not None
+    assert finalized.index("1") < finalized.index("2")
+    assert finalized.index("3") < finalized.index("4")
+
+
+def test_exact_tw_finalizer_preserves_exact_request_set() -> None:
+    inst = time_window_repair_instance()
+    route = ["0", "3", "4", "1", "2", "0"]
+    finalized = ExactTWRouteFinalizer().finalize_route(inst, route, max_states=128, beam_width=16)
+
+    assert finalized is not None
+    assert {pair["requestId"] for pair in extract_request_pairs(inst, {"routes": [route]})} == {pair["requestId"] for pair in extract_request_pairs(inst, {"routes": [finalized]})}
+
+
+def test_exact_tw_finalizer_respects_max_states_beam_width() -> None:
+    inst = time_window_repair_instance()
+    finalizer = ExactTWRouteFinalizer()
+    finalizer.finalize_route(inst, ["0", "3", "4", "1", "2", "0"], max_states=4, beam_width=1)
+
+    assert finalizer.lastTelemetry["statesExpanded"] <= 4
+    assert finalizer.lastTelemetry["beamWidth"] == 1
+
