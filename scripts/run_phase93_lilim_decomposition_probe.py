@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import json
@@ -12,6 +12,7 @@ from optimizer.phase84_unified_objective import UnifiedNaturalObjective
 from optimizer.phase85_pair_utils import extract_request_pairs, request_id, solution_signature
 from optimizer.phase94_slot_recombination_policy import SlotPreservingRecombinationPolicy
 from optimizer.phase95_slot_aware_subproblem import SlotAwareSubproblemBuilder, build_slot_aware_config
+from optimizer.phase96_coverage_repair import ResidualCoverageRepair, coverage_diff, remove_duplicate_pairs
 from phase67_synthetic_instance_loader import load_benchmark_instance
 from run_external_benchmark_certification import parse_time_limit
 from run_phase55_promotion_guard import write_json
@@ -109,16 +110,34 @@ def affected_routes(incumbent: Dict[str, Any], selected_requests: List[Dict[str,
     return [[str(stop) for stop in route] for route in incumbent.get("routes", []) if affected_nodes & {str(stop) for stop in route}]
 
 
-def strict_recombination_validator(instance: Dict[str, Any], original_incumbent: Dict[str, Any], candidate: Dict[str, Any], affected_route_count: int, candidate_subproblem_route_count: int) -> Dict[str, Any]:
+def affected_route_request_closure(instance: Dict[str, Any], incumbent: Dict[str, Any], seed_requests: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], List[List[str]]]:
+    seed_nodes = {str(request.get("pickupNodeId")) for request in seed_requests} | {str(request.get("dropoffNodeId")) for request in seed_requests}
+    affected = [[str(stop) for stop in route] for route in incumbent.get("routes", []) if seed_nodes & {str(stop) for stop in route}]
+    affected_node_sets = [set(route) for route in affected]
+    closed = []
+    for request in instance.get("requests", []):
+        pickup = str(request.get("pickupNodeId"))
+        dropoff = str(request.get("dropoffNodeId"))
+        if any(pickup in nodes and dropoff in nodes for nodes in affected_node_sets):
+            closed.append(request)
+    return sorted(closed, key=request_id), affected
+
+
+def strict_recombination_validator(instance: Dict[str, Any], original_incumbent: Dict[str, Any], candidate: Dict[str, Any], affected_route_count: int, candidate_subproblem_route_count: int, affected_request_ids: Set[str] | None = None) -> Dict[str, Any]:
     if candidate_subproblem_route_count > affected_route_count:
-        return {"valid": False, "reason": "subproblem-route-slot-overflow"}
+        return {"valid": False, "reason": "subproblem-route-slot-overflow", "coverage": {}}
     if active_route_count(candidate) > active_route_count(original_incumbent):
-        return {"valid": False, "reason": "active-route-count-regression"}
+        return {"valid": False, "reason": "active-route-count-regression", "coverage": {}}
     if active_route_count(candidate) > int(instance.get("vehicleCount", active_route_count(candidate)) or active_route_count(candidate)):
-        return {"valid": False, "reason": "subproblem-route-slot-overflow"}
-    if not exact_request_coverage(instance, candidate):
-        return {"valid": False, "reason": "coverage-invalid"}
-    return {"valid": True, "reason": "precheck-pass"}
+        return {"valid": False, "reason": "subproblem-route-slot-overflow", "coverage": {}}
+    diff = coverage_diff(instance, candidate, affected_request_ids)
+    if diff.partialPickupDropoffIds:
+        return {"valid": False, "reason": "coverage-partial-pair", "coverage": diff.to_dict(), "partialPairCount": len(diff.partialPickupDropoffIds), "missingCount": len(diff.missingRequestIds), "duplicateCount": len(diff.duplicateRequestIds)}
+    if diff.duplicateRequestIds:
+        return {"valid": False, "reason": "coverage-duplicate", "coverage": diff.to_dict(), "partialPairCount": 0, "missingCount": len(diff.missingRequestIds), "duplicateCount": len(diff.duplicateRequestIds)}
+    if diff.missingRequestIds:
+        return {"valid": False, "reason": "coverage-missing", "coverage": diff.to_dict(), "partialPairCount": 0, "missingCount": len(diff.missingRequestIds), "duplicateCount": 0}
+    return {"valid": True, "reason": "precheck-pass", "coverage": diff.to_dict(), "partialPairCount": 0, "missingCount": 0, "duplicateCount": 0}
 
 
 def exact_request_coverage(instance: Dict[str, Any], solution: Dict[str, Any]) -> bool:
@@ -128,9 +147,13 @@ def exact_request_coverage(instance: Dict[str, Any], solution: Dict[str, Any]) -
 
 
 def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], request_limit: int, sub_time_ms: int, mode: str = "same-slot-polish") -> Dict[str, Any]:
-    selected = select_requests_by_features(instance, request_limit)
-    affected = affected_routes(incumbent, selected)
+    seed_selected = select_requests_by_features(instance, request_limit)
+    selected, affected = affected_route_request_closure(instance, incumbent, seed_selected)
+    if not selected:
+        selected = seed_selected
+        affected = affected_routes(incumbent, selected)
     affected_route_count = max(1, len(affected))
+    affected_request_ids = {request_id(request) for request in selected}
     slot_policy = SlotPreservingRecombinationPolicy().build(affected_route_count, len(selected), mode)
     slot_config = build_slot_aware_config(slot_policy.mode, affected_route_count, len(selected))
     subproblem, new_to_old = extract_subproblem(instance, selected)
@@ -139,7 +162,7 @@ def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], requ
     sub_incumbent = slot_builder.build_incumbent(subproblem, slot_config)
     construction_telemetry = dict(slot_builder.lastTelemetry)
     if sub_incumbent is None:
-        return {"mode": slot_config.mode, "selectedRequestCount": len(selected), "subproblemRequestCount": len(subproblem.get("requests", [])), "subDiagnostics": {}, "recombinedSolution": incumbent, "recombinedFeasible": False, "recombinedViolations": ["slot-aware-construction-blocked"], "exactCoverage": True, "objectiveImproves": False, "objectiveDelta": None, "affectedRouteCount": affected_route_count, "availableRouteSlots": slot_config.availableRouteSlots, "maxSubproblemRoutes": slot_config.maxSubproblemRoutes, "subproblemVehicleCount": subproblem.get("vehicleCount"), "incumbentSubproblemRouteCount": 0, "candidateSubproblemRouteCount": 0, "slotAwareConstructionBlocked": True, "slotCompressionAttempts": 0, "slotCompressionSuccess": False, "rejectedBySlotOverflow": False, "rejectedByCoverage": False, "rejectedByCheckSolution": False, "bestRejectedReason": "slot-aware-construction-blocked"}
+        return {"mode": slot_config.mode, "selectedSeedRequestCount": len(seed_selected), "selectedRequestCount": len(seed_selected), "expandedAffectedRequestCount": len(selected), "affectedRouteRequestCount": len(selected), "subproblemRequestCount": len(subproblem.get("requests", [])), "subDiagnostics": {}, "recombinedSolution": incumbent, "recombinedFeasible": False, "recombinedViolations": ["slot-aware-construction-blocked"], "exactCoverage": True, "objectiveImproves": False, "objectiveDelta": None, "affectedRouteCount": affected_route_count, "availableRouteSlots": slot_config.availableRouteSlots, "maxSubproblemRoutes": slot_config.maxSubproblemRoutes, "subproblemVehicleCount": subproblem.get("vehicleCount"), "incumbentSubproblemRouteCount": 0, "candidateSubproblemRouteCount": 0, "slotAwareConstructionBlocked": True, "slotCompressionAttempts": 0, "slotCompressionSuccess": False, "rejectedBySlotOverflow": False, "rejectedByCoverage": False, "rejectedByCheckSolution": False, "bestRejectedReason": "slot-aware-construction-blocked"}
     result = UnifiedIntelligentOptimizer().optimize(subproblem, sub_incumbent, sub_time_ms)
     sub_candidate = slot_builder.compress_to_slots(subproblem, result["solution"], slot_config.maxSubproblemRoutes)
     compression_telemetry = dict(slot_builder.lastTelemetry)
@@ -148,7 +171,16 @@ def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], requ
     sub_solution_old = remap_solution_to_full(sub_candidate, new_to_old)
     candidate_subproblem_route_count = active_route_count(sub_solution_old)
     recombined = recombine_solution(instance, incumbent, selected, sub_solution_old)
-    precheck = strict_recombination_validator(instance, incumbent, recombined, slot_policy.maxAllowedSubproblemRoutes, candidate_subproblem_route_count)
+    precheck = strict_recombination_validator(instance, incumbent, recombined, slot_policy.maxAllowedSubproblemRoutes, candidate_subproblem_route_count, affected_request_ids)
+    repairer = ResidualCoverageRepair()
+    repair_telemetry = {"residualCoverageRepairAttempts": 0, "residualCoverageRepairSuccess": False}
+    if not precheck.get("valid") and precheck.get("reason") in {"coverage-missing", "coverage-duplicate"}:
+        repaired = remove_duplicate_pairs(instance, recombined, precheck.get("coverage", {}).get("duplicateRequestIds", []))
+        repaired = repairer.repair(instance, repaired, precheck.get("coverage", {}).get("missingRequestIds", []), active_route_count(incumbent))
+        repair_telemetry = dict(repairer.lastTelemetry)
+        if repaired is not None:
+            recombined = repaired
+            precheck = strict_recombination_validator(instance, incumbent, recombined, slot_policy.maxAllowedSubproblemRoutes, active_route_count(sub_solution_old), affected_request_ids)
     objective = UnifiedNaturalObjective()
     checked = {"feasible": False, "violations": [precheck["reason"]]}
     recombined_eval = {"objective": float("inf")}
@@ -163,7 +195,7 @@ def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], requ
     reject_reason = None if improves else (precheck["reason"] if not precheck.get("valid") else "check-solution-rejected" if not checked.get("feasible") else "objective-regression")
     return {
         "mode": slot_policy.mode,
-        "selectedRequestCount": len(selected),
+        "selectedSeedRequestCount": len(seed_selected), "selectedRequestCount": len(seed_selected), "expandedAffectedRequestCount": len(selected), "affectedRouteRequestCount": len(selected),
         "subproblemRequestCount": len(subproblem.get("requests", [])),
         "subDiagnostics": result.get("diagnostics", {}),
         "recombinedSolution": recombined,
@@ -182,7 +214,12 @@ def run_one_subproblem(instance: Dict[str, Any], incumbent: Dict[str, Any], requ
         "slotCompressionAttempts": int(compression_telemetry.get("slotCompressionAttempts", 0) or 0),
         "slotCompressionSuccess": bool(compression_telemetry.get("slotCompressionSuccess", False)),
         "rejectedBySlotOverflow": reject_reason == "subproblem-route-slot-overflow",
-        "rejectedByCoverage": reject_reason == "coverage-invalid",
+        "rejectedByCoverage": str(reject_reason).startswith("coverage-"),
+        "coverageMissingCount": int(precheck.get("missingCount", 0) or 0),
+        "coverageDuplicateCount": int(precheck.get("duplicateCount", 0) or 0),
+        "coveragePartialPairCount": int(precheck.get("partialPairCount", 0) or 0),
+        "residualCoverageRepairAttempts": int(repair_telemetry.get("residualCoverageRepairAttempts", 0) or 0),
+        "residualCoverageRepairSuccess": bool(repair_telemetry.get("residualCoverageRepairSuccess", False)),
         "rejectedByCheckSolution": reject_reason == "check-solution-rejected",
         "bestRejectedReason": reject_reason,
     }
@@ -222,10 +259,16 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
                 break
     telemetry = aggregate_subproblem_telemetry(trace)
     anti = antihardcode_scan()
-    rejected_hard = sum(0 if item.get("recombinedFeasible") or item.get("rejectedBySlotOverflow") or item.get("rejectedByCoverage") else len(item.get("recombinedViolations", [])) for item in trace)
+    rejected_check_violations = sum(0 if item.get("recombinedFeasible") or not item.get("rejectedByCheckSolution") else len(item.get("recombinedViolations", [])) for item in trace)
+    rejected_hard = 0
     hard = sum(len(item.get("recombinedViolations", [])) for item in trace if item.get("objectiveImproves") and not item.get("recombinedFeasible"))
     rejected_slot = sum(1 for item in trace if item.get("rejectedBySlotOverflow"))
     rejected_coverage = sum(1 for item in trace if item.get("rejectedByCoverage"))
+    coverage_missing = sum(int(item.get("coverageMissingCount", 0) or 0) for item in trace)
+    coverage_duplicate = sum(int(item.get("coverageDuplicateCount", 0) or 0) for item in trace)
+    coverage_partial = sum(int(item.get("coveragePartialPairCount", 0) or 0) for item in trace)
+    repair_attempts = sum(int(item.get("residualCoverageRepairAttempts", 0) or 0) for item in trace)
+    repair_successes = sum(1 for item in trace if item.get("residualCoverageRepairSuccess"))
     rejected_check = sum(1 for item in trace if item.get("rejectedByCheckSolution"))
     recombined_feasible = sum(1 for item in trace if item.get("recombinedFeasible"))
     best_rejected_reason = next((item.get("bestRejectedReason") for item in trace if item.get("bestRejectedReason")), None)
@@ -240,7 +283,7 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
         gate = "PASS"
     else:
         gate = "PASS_WITH_LIMITS"
-    summary = {"schemaVersion": "phase93-lilim-decomposition-probe/v1", "gate": gate, "instance": instance_name, "decompositionTrace": [{key: value for key, value in item.items() if key not in {"subDiagnostics", "recombinedSolution"}} for item in trace], "subproblemCount": len(trace), "recombinedCandidates": recombined, "acceptedRecombinedCandidates": accepted, "unknownCount": unknown, "hardViolations": hard, "rejectedRecombinedHardViolations": rejected_hard, "rejectedBySlotOverflow": rejected_slot, "rejectedByCoverage": rejected_coverage, "rejectedByCheckSolution": rejected_check, "recombinedFeasibleCandidates": recombined_feasible, "bestRejectedReason": best_rejected_reason, "antiHardcodeGate": anti.get("gate"), **telemetry}
+    summary = {"schemaVersion": "phase93-lilim-decomposition-probe/v1", "gate": gate, "instance": instance_name, "decompositionTrace": [{key: value for key, value in item.items() if key not in {"subDiagnostics", "recombinedSolution"}} for item in trace], "subproblemCount": len(trace), "recombinedCandidates": recombined, "acceptedRecombinedCandidates": accepted, "unknownCount": unknown, "hardViolations": hard, "rejectedRecombinedHardViolations": rejected_hard, "rejectedCheckSolutionViolations": rejected_check_violations, "rejectedBySlotOverflow": rejected_slot, "rejectedByCoverage": rejected_coverage, "coverageMissingCount": coverage_missing, "coverageDuplicateCount": coverage_duplicate, "coveragePartialPairCount": coverage_partial, "residualCoverageRepairAttempts": repair_attempts, "residualCoverageRepairSuccesses": repair_successes, "rejectedByCheckSolution": rejected_check, "recombinedFeasibleCandidates": recombined_feasible, "bestRejectedReason": best_rejected_reason, "antiHardcodeGate": anti.get("gate"), **telemetry}
     write_json(output_dir / "phase93_lilim_decomposition_probe_summary.json", summary)
     write_json(output_dir / "decomposition_trace.json", {"rows": summary["decompositionTrace"]})
     write_json(output_dir / "operator_telemetry.json", {"rows": [item.get("subDiagnostics", {}).get("budgetTelemetry", []) for item in trace]})
@@ -268,3 +311,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+

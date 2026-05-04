@@ -5,7 +5,8 @@ from pathlib import Path
 
 from optimizer.phase84_unified_objective import UnifiedNaturalObjective
 from optimizer.phase95_slot_aware_subproblem import SlotAwareSubproblemBuilder, build_slot_aware_config
-from run_phase93_lilim_decomposition_probe import active_route_count, exact_request_coverage, extract_subproblem, recombine_solution, run, select_requests_by_features, slot_limited_incumbent, strict_recombination_validator
+from optimizer.phase96_coverage_repair import ResidualCoverageRepair, coverage_diff
+from run_phase93_lilim_decomposition_probe import active_route_count, affected_route_request_closure, exact_request_coverage, extract_subproblem, recombine_solution, run, select_requests_by_features, slot_limited_incumbent, strict_recombination_validator
 from test_phase90_final_quality_completion import instance
 
 
@@ -67,7 +68,8 @@ def test_recombination_rejects_subproblem_route_overflow_before_check_solution()
 
     result = strict_recombination_validator(inst, incumbent, candidate, affected_route_count=1, candidate_subproblem_route_count=2)
 
-    assert result == {"valid": False, "reason": "subproblem-route-slot-overflow"}
+    assert result["valid"] is False
+    assert result["reason"] == "subproblem-route-slot-overflow"
 
 
 def test_same_slot_polish_preserves_active_route_count() -> None:
@@ -123,3 +125,42 @@ def test_slot_limited_full_incumbent_respects_vehicle_count() -> None:
 
     assert active_route_count(incumbent) <= 1
     assert exact_request_coverage(inst, incumbent)
+
+
+def test_affected_route_request_closure_includes_all_requests_from_removed_routes() -> None:
+    inst = instance()
+    incumbent = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+    closed, affected = affected_route_request_closure(inst, incumbent, [inst["requests"][0]])
+
+    assert len(affected) == 1
+    assert {request["orderId"] for request in closed} == {"a", "b"}
+
+
+def test_recombination_no_longer_drops_unselected_request_from_affected_route() -> None:
+    inst = instance()
+    incumbent = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+    closed, _ = affected_route_request_closure(inst, incumbent, [inst["requests"][0]])
+    candidate = recombine_solution(inst, incumbent, closed, {"routes": [["0", "1", "2", "3", "4", "0"]]})
+
+    assert exact_request_coverage(inst, candidate)
+
+
+def test_coverage_diff_detects_missing_request() -> None:
+    diff = coverage_diff(instance(), {"routes": [["0", "1", "2", "0"]]})
+
+    assert "b" in diff.missingRequestIds
+
+
+def test_coverage_diff_detects_duplicate_request() -> None:
+    diff = coverage_diff(instance(), {"routes": [["0", "1", "2", "0"], ["0", "1", "2", "3", "4", "0"]]})
+
+    assert "a" in diff.duplicateRequestIds
+
+
+def test_residual_coverage_repair_inserts_missing_complete_pair_when_slot_allows() -> None:
+    inst = instance()
+    candidate = {"routes": [["0", "1", "2", "0"]]}
+    repaired = ResidualCoverageRepair().repair(inst, candidate, ["b"], max_routes=1)
+
+    assert repaired is not None
+    assert exact_request_coverage(inst, repaired)
