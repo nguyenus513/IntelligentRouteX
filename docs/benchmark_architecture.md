@@ -196,3 +196,17 @@ Next integrated optimization priorities:
 4. keep runtime stable with wall-clock overrun rate at `0.0` while improving route quality;
 5. preserve shard20/shard60 gates as regression guards before another overnight run;
 6. prove ML value only through ablation against the solver-first baseline.
+
+## Final Quality-Search Diagnostic
+
+The benchmark architecture now separates production-natural diagnostics from final quality-search repair diagnostics:
+
+- Phase 47 remains the promoted production-natural diagnostic runner: `scripts/run_phase47_adaptive_budget_natural_optimizer.py`.
+- Phase 99 is the autonomous final repair loop for the Li-Lim decomposition blocker: `scripts/run_phase99_autonomous_repair_loop.py`.
+- Phase 100 is the final quality promotion/regression guard: `scripts/run_phase100_final_quality_guard.py`.
+
+Phase 99 proves the decomposition quality-search path can produce a strict accepted recombination after the slot, coverage and time-window blockers were isolated. Phase 100 locks that result as a regression gate requiring `acceptedRecombinedCandidates >= 1`, `timeWindowViolationCountAfter == 0`, `rejectedByCoverage == 0`, `rejectedBySlotOverflow == 0`, `hardViolations == 0`, and `antiHardcodeGate == PASS`.
+
+This does not automatically replace the production adapter or the Phase 47 production-natural diagnostic runner. A wider benchmark promotion must be run before treating Phase 99 as a production runner. The Phase 99/100 path is the canonical final quality-search diagnostic and regression guard.
+
+Promotion record: `docs/benchmark/phase100_final_quality_promotion.md`.
