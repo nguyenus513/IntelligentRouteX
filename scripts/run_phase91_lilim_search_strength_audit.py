@@ -34,6 +34,8 @@ def classify_operator(row: Dict[str, Any]) -> str:
         return "deadline-cap"
     if int(fail_reasons.get("candidate-cap", 0) or 0) > 0:
         return "candidate-cap"
+    if row.get("noGenerationReason") in {"no-opportunity-detected", "activation-filtered", "no-route-pair-found", "no-feasible-move", "deadline-before-generation", "candidate-cap-before-generation"}:
+        return "no-generation"
     if generated == 0 and final_produced == 0 and candidate_checks == 0:
         if repair_fail_reasons and sum(int(value or 0) for value in repair_fail_reasons.values()) > 0:
             return "repair-failure"
@@ -94,6 +96,10 @@ def operator_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                     "candidateChecks": int(budget.get("candidateChecks", 0) or 0),
                     "bestDistanceDelta": budget.get("bestDistanceDelta", budget.get("bestActualDistanceDelta")),
                     "bestVehicleDelta": budget.get("bestVehicleDelta"),
+                    "noGenerationReason": budget.get("noGenerationReason"),
+                    "activationPolicy": budget.get("activationPolicy"),
+                    "activationReasons": budget.get("activationReasons"),
+                    "bridgedFinalCandidates": int(budget.get("bridgedFinalCandidates", 0) or 0),
                     "failReasons": budget.get("failReasons") or {},
                     "repairFailReasons": budget.get("repairFailReasons") or {},
                     "classification": classify_operator(budget),

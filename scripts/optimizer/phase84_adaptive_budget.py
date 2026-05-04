@@ -30,6 +30,12 @@ class OperatorBudget:
     populationDiversity: int = 0
     ejectionDepthUsed: int = 0
     repairFailReasons: Dict[str, int] | None = None
+    activationPolicy: Any | None = None
+    activatedOperators: Any | None = None
+    activationReasons: Dict[str, str] | None = None
+    noGenerationReason: str | None = None
+    intermediateStatesSeen: int = 0
+    bridgedFinalCandidates: int = 0
     safeReturn: bool = False
     roi: float = 0.0
     earlyStopReason: str | None = None

@@ -88,6 +88,13 @@ class UnifiedIntelligentOptimizer:
                 budgets[name].populationDiversity = max(budgets[name].populationDiversity, int(operator_telemetry.get("populationDiversity", 0) or 0))
                 budgets[name].ejectionDepthUsed = max(budgets[name].ejectionDepthUsed, int(operator_telemetry.get("ejectionDepthUsed", 0) or 0))
                 budgets[name].safeReturn = bool(budgets[name].safeReturn or operator_telemetry.get("safeReturn", False))
+                budgets[name].activationPolicy = operator_telemetry.get("activationPolicy", budgets[name].activationPolicy)
+                budgets[name].activatedOperators = operator_telemetry.get("activatedOperators", budgets[name].activatedOperators)
+                budgets[name].activationReasons = operator_telemetry.get("activationReasons", budgets[name].activationReasons)
+                if operator_telemetry.get("noGenerationReason"):
+                    budgets[name].noGenerationReason = str(operator_telemetry.get("noGenerationReason"))
+                budgets[name].intermediateStatesSeen += int(operator_telemetry.get("intermediateStatesSeen", 0) or 0)
+                budgets[name].bridgedFinalCandidates += int(operator_telemetry.get("bridgedFinalCandidates", 0) or 0)
                 if operator_telemetry.get("earlyStopReason") and not budgets[name].earlyStopReason:
                     budgets[name].earlyStopReason = str(operator_telemetry.get("earlyStopReason"))
                 repair_reasons = dict(budgets[name].repairFailReasons or {})

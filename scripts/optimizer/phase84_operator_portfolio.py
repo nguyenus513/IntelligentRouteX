@@ -18,6 +18,8 @@ from optimizer.phase90_local_search_chain import LocalSearchChain
 from optimizer.phase90_route_compression import RouteCompression
 from optimizer.phase90_route_pool_recombiner import RoutePoolRecombiner
 from optimizer.phase90_route_population import RoutePopulation
+from optimizer.phase92_final_candidate_bridge import FinalCandidateBridge
+from optimizer.phase92_operator_activation_policy import OperatorActivationPolicy
 from run_phase79_end_to_end_production_benchmark import validate_locked_prefix
 from run_phase56b_stable_promoted_runner import canonicalize_solution
 
@@ -66,6 +68,8 @@ class OperatorPortfolio:
         self.route_compression = RouteCompression()
         self.route_pool_recombiner = RoutePoolRecombiner()
         self.route_population = RoutePopulation()
+        self.activation_policy = OperatorActivationPolicy()
+        self.final_bridge = FinalCandidateBridge()
         self._pruneTelemetry: Dict[str, int] = {}
         self.lastCheckedCandidateTraces: List[Dict[str, Any]] = []
         self.lastPrunedCandidateSamples: List[Dict[str, Any]] = []
@@ -83,12 +87,17 @@ class OperatorPortfolio:
         operator_deadline = deadline.child_budget(spec.maxRuntimeMs) if deadline is not None else Deadline.from_time_limit_ms(spec.maxRuntimeMs)
         if operator_deadline.expired():
             return {"solution": incumbent, "telemetry": {"generatedCandidates": 0, "candidateChecks": 0, "acceptedCandidates": 0, "earlyStopReason": "deadline", "safeReturn": True}, "checkedCandidateTraces": [], "prunedCandidateSamples": []}
+        activation_decisions = self.activation_policy.activate(instance, incumbent, features, operator_deadline.remaining_ms(), self.names())
+        activation = next((item for item in activation_decisions if item.operator == name), None)
         candidates = self._generate(name, instance, incumbent, spec, route_pool, operator_deadline)
         generated = 0
         self._pruneTelemetry = {"prunedByCapacity": 0, "prunedByTimeWindow": 0, "prunedByLock": 0, "estimatedFeasibleMoves": 0, "nearFeasibleRepairAttempts": 0, "nearFeasibleRepairSuccesses": 0, "prunedNoQualityPotential": 0}
         phase90_telemetry: Dict[str, Any] = {"alnsIterations": 0, "intermediateWorseAcceptedForSearch": 0, "finalCheckerFeasibleCandidates": 0, "finalObjectiveImprovingCandidates": 0, "routePoolColumnCount": len(getattr(route_pool, "columns", {}) or {}), "populationDiversity": 0, "ejectionDepthUsed": 0, "repairFailReasons": {}}
         self.lastCheckedCandidateTraces = []
         self.lastPrunedCandidateSamples = []
+        no_generation_reason = activation.reason if activation is not None and activation.priority <= 0 else None
+        bridged_final_candidates = 0
+        intermediate_states_seen = 0
         best = incumbent
         best_key = self._candidate_key(instance, incumbent)
         checks = 0
@@ -100,7 +109,18 @@ class OperatorPortfolio:
         best_estimated_distance_delta = None
         best_actual_distance_delta = None
         best_vehicle_delta = None
-        for raw_candidate in candidates:
+        raw_list = list(candidates)
+        if not raw_list and not operator_deadline.should_stop(5):
+            bridge_seed = self._bridge_seed_candidate(name, instance, incumbent, spec)
+            if bridge_seed is not None:
+                raw_list = self.final_bridge.bridge(instance, incumbent, [bridge_seed], 1)
+                bridged_final_candidates += int(self.final_bridge.lastTelemetry.get("bridgedFinalCandidates", 0) or 0)
+                intermediate_states_seen += int(self.final_bridge.lastTelemetry.get("intermediateStatesSeen", 0) or 0)
+                if raw_list:
+                    no_generation_reason = None
+        if not raw_list and no_generation_reason is None:
+            no_generation_reason = self._no_generation_reason(name, instance, incumbent, operator_deadline)
+        for raw_candidate in raw_list:
             generated += 1
             candidate = canonicalize_solution(instance, raw_candidate.get("solution", raw_candidate))
             delta = raw_candidate.get("delta")
@@ -168,6 +188,12 @@ class OperatorPortfolio:
             "feasibleCandidates": checker_feasible,
             "acceptedCandidates": accepted_count,
             "failReasons": fail_reasons,
+            "activationPolicy": [item.to_dict() for item in activation_decisions[:8]],
+            "activatedOperators": [item.operator for item in activation_decisions[:8]],
+            "activationReasons": {item.operator: item.reason for item in activation_decisions[:8]},
+            "noGenerationReason": no_generation_reason,
+            "intermediateStatesSeen": intermediate_states_seen + int(phase90_telemetry.get("intermediateFeasibleStates", 0) or 0),
+            "bridgedFinalCandidates": bridged_final_candidates,
             "topRejectedReason": max(fail_reasons.items(), key=lambda item: item[1])[0] if fail_reasons else None,
             "bestEstimatedDistanceDelta": best_estimated_distance_delta,
             "bestActualDistanceDelta": best_actual_distance_delta,
@@ -345,6 +371,29 @@ class OperatorPortfolio:
         self._pruneTelemetry["estimatedFeasibleMoves"] = self._pruneTelemetry.get("estimatedFeasibleMoves", 0) + len(options)
         self.lastPrunedCandidateSamples.extend(self.insertion_index.lastPrunedSamples[: max(0, 20 - len(self.lastPrunedCandidateSamples))])
         return options
+
+    def _bridge_seed_candidate(self, name: str, instance: Dict[str, Any], solution: Dict[str, Any], spec: OperatorSpec) -> Dict[str, Any] | None:
+        lowered = name.lower()
+        if "compression" in lowered or "elimination" in lowered or "ejection" in lowered:
+            for candidate in self.route_compression.generate(instance, solution, 1, Deadline.from_time_limit_ms(max(25, spec.maxRuntimeMs // 2))):
+                return candidate
+        if "polish" in lowered or "swap" in lowered or "relocate" in lowered or "insertion" in lowered:
+            for candidate in self.distance_polish.generate(instance, solution, 1, Deadline.from_time_limit_ms(max(25, spec.maxRuntimeMs // 2))):
+                return candidate
+        if "alns" in lowered or "population" in lowered or "pool" in lowered:
+            for candidate in self.alns_engine.generate(instance, solution, None, 4, 4, 1, Deadline.from_time_limit_ms(max(25, spec.maxRuntimeMs // 2))):
+                return candidate
+        return None
+
+    def _no_generation_reason(self, name: str, instance: Dict[str, Any], solution: Dict[str, Any], deadline: Deadline) -> str:
+        if deadline.expired():
+            return "deadline-before-generation"
+        pairs = extract_request_pairs(instance, solution)
+        if not pairs:
+            return "no-route-pair-found"
+        if len(solution.get("routes", [])) <= 0:
+            return "no-opportunity-detected"
+        return "no-feasible-move"
 
     def _candidate_trace(self, operator: str, instance: Dict[str, Any], candidate: Dict[str, Any], raw_candidate: Dict[str, Any], validation: Dict[str, Any]) -> Dict[str, Any]:
         checked = check_solution(instance, candidate)
