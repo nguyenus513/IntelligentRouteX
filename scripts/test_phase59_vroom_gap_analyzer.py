@@ -39,6 +39,12 @@ def test_handles_vroom_timeout() -> None:
     assert result == "vroom-timeout"
 
 
+def test_handles_vroom_unavailable_without_quality_tie() -> None:
+    result = phase59.classify_gap(row("vroom-unavailable", None, 10, None, 130.0))
+
+    assert result == "vroom-unavailable"
+
+
 def test_analyze_rows_recommends_stability_and_quality_work() -> None:
     summary = phase59.analyze_rows(
         [

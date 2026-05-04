@@ -1,0 +1,8 @@
+services:
+  vroom:
+    image: ghcr.io/vroom-project/vroom-docker:v1.15.0-rc.1
+    container_name: intelligentroutex-vroom
+    ports:
+      - "3000:3000"
+    environment:
+      - VROOM_ROUTER=osrm

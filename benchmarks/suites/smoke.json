@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "benchmark-suite-manifest/v1",
+  "suite": "smoke",
+  "description": "Li-Lim smoke suite for stable certification and VROOM comparator checks.",
+  "source": "li-lim",
+  "problemType": "PDPTW",
+  "dataSource": "auto",
+  "instances": ["lrc202", "lrc106"],
+  "expectedStress": {
+    "pickupDelivery": true,
+    "timeWindows": true,
+    "smoke": true
+  }
+}

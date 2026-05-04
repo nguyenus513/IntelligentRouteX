@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "benchmark-suite-manifest/v1",
+  "suite": "li-lim-8case",
+  "description": "Eight Li-Lim vehicle-loss and certification cases used for Phase 56F/58B/59 evaluation.",
+  "source": "li-lim",
+  "problemType": "PDPTW",
+  "dataSource": "auto",
+  "instances": ["lrc202", "lrc206", "lrc106", "lrc104", "lrc108", "LRC1_2_7", "LRC281", "LC1_4_8"],
+  "expectedStress": {
+    "pickupDelivery": true,
+    "timeWindows": true,
+    "vehicleReduction": true,
+    "industryComparator": true
+  }
+}

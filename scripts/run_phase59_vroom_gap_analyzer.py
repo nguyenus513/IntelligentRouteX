@@ -37,6 +37,8 @@ def classify_gap(row: Dict[str, Any], distance_tolerance: float = 0.01) -> str:
 
     if classification == "vroom-timeout":
         return "vroom-timeout"
+    if classification == "vroom-unavailable":
+        return "vroom-unavailable"
     if classification in {"vroom-hard-fail", "vroom-import-fail", "vroom-schema-error", "unsupported-mapping"}:
         return "challenger-better-feasibility" if not challenger_hard else "vroom-hard-fail"
     if vroom_hard and not challenger_hard:

@@ -1,0 +1,91 @@
+{
+  "scenarioCount": 6,
+  "scenarios": [
+    {
+      "drivers": 8,
+      "expectedStress": {
+        "clusteredDropoffs": false,
+        "highCancellationRisk": false,
+        "longDistances": false,
+        "peak": true,
+        "rainTraffic": false,
+        "tightTimeWindows": true
+      },
+      "orders": 24,
+      "path": "benchmarks\\synthetic_food\\generated_v1\\lunch_peak.json",
+      "scenario": "lunch_peak"
+    },
+    {
+      "drivers": 9,
+      "expectedStress": {
+        "clusteredDropoffs": false,
+        "highCancellationRisk": false,
+        "longDistances": false,
+        "peak": true,
+        "rainTraffic": false,
+        "tightTimeWindows": false
+      },
+      "orders": 28,
+      "path": "benchmarks\\synthetic_food\\generated_v1\\dinner_peak.json",
+      "scenario": "dinner_peak"
+    },
+    {
+      "drivers": 8,
+      "expectedStress": {
+        "clusteredDropoffs": true,
+        "highCancellationRisk": false,
+        "longDistances": false,
+        "peak": false,
+        "rainTraffic": false,
+        "tightTimeWindows": false
+      },
+      "orders": 26,
+      "path": "benchmarks\\synthetic_food\\generated_v1\\apartment_cluster.json",
+      "scenario": "apartment_cluster"
+    },
+    {
+      "drivers": 8,
+      "expectedStress": {
+        "clusteredDropoffs": false,
+        "highCancellationRisk": false,
+        "longDistances": false,
+        "peak": true,
+        "rainTraffic": true,
+        "tightTimeWindows": true
+      },
+      "orders": 24,
+      "path": "benchmarks\\synthetic_food\\generated_v1\\rain_peak.json",
+      "scenario": "rain_peak"
+    },
+    {
+      "drivers": 7,
+      "expectedStress": {
+        "clusteredDropoffs": false,
+        "highCancellationRisk": false,
+        "longDistances": true,
+        "peak": false,
+        "rainTraffic": false,
+        "tightTimeWindows": false
+      },
+      "orders": 18,
+      "path": "benchmarks\\synthetic_food\\generated_v1\\sparse_suburban.json",
+      "scenario": "sparse_suburban"
+    },
+    {
+      "drivers": 8,
+      "expectedStress": {
+        "clusteredDropoffs": false,
+        "highCancellationRisk": true,
+        "longDistances": false,
+        "peak": false,
+        "rainTraffic": false,
+        "tightTimeWindows": false
+      },
+      "orders": 22,
+      "path": "benchmarks\\synthetic_food\\generated_v1\\cancellation_risk.json",
+      "scenario": "cancellation_risk"
+    }
+  ],
+  "schemaVersion": "phase64-synthetic-food-dataset/v1",
+  "seed": 64
+}
