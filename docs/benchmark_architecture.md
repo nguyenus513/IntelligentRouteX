@@ -38,13 +38,20 @@ Current meaning:
 - academic = routing algorithm competitiveness;
 - current weaknesses are `vehicle-count-gap`, `strong-baseline-gap` and `max-quality-not-close-to-bks`.
 
-Current promoted production-natural PDPTW diagnostic runner:
+Current stable certification/shadow-mode PDPTW diagnostic runner:
+
+- `scripts/run_phase56b_stable_promoted_runner.py --stable-incumbent-replay`
+- Certification note: `docs/benchmark/phase56f_stable_certification_runner.md`
+- Certification artifact: `artifacts/benchmark/community-phase56f-stable-vehicle-losses-v3`
+- Phase 56F adds stable incumbent replay, internal solver replay, route-pool budget reserve and a hard first-run wall-clock guard.
+
+Research-quality production-natural PDPTW baseline:
 
 - `scripts/run_phase47_adaptive_budget_natural_optimizer.py`
-- Promotion note: `docs/benchmark/phase47_promoted_natural_optimizer.md`
+- Research note: `docs/benchmark/phase47_promoted_natural_optimizer.md`
 - Promotion artifact: `artifacts/benchmark/community-phase48-promotion-v2`
 
-Target-K runners remain diagnostic microscopes only; the promoted natural path uses objective-driven acceptance and budgeted candidate generation.
+Target-K runners remain diagnostic microscopes only; the natural paths use objective-driven acceptance and budgeted candidate generation. Phase 56F is the certification path; Phase 47 remains a research-quality comparison baseline and does not supersede Phase 56F for strict wall-clock certification.
 
 ## Food Dispatch Quality Benchmark
 

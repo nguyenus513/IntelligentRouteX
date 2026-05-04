@@ -1,6 +1,20 @@
 # Diagnostic Branch Registry
 
-Phase 47 is the promoted production-natural diagnostic optimizer runner:
+Phase 56F is the promoted stable certification and shadow-mode diagnostic runner. Phase 47 remains the research-quality baseline for algorithm work, but it is not the strict certification baseline.
+
+Certification command:
+
+```powershell
+py -3.13 scripts/run_phase56b_stable_promoted_runner.py `
+  --instances lrc202,lrc206,lrc106,lrc104,lrc108,LRC1_2_7,LRC281,LC1_4_8 `
+  --repeat 2 `
+  --stable-incumbent-replay `
+  --time-limit 30s `
+  --mode academic_certification `
+  --output-dir artifacts/benchmark/community-phase56f-stable-vehicle-losses-v3
+```
+
+Research-quality command:
 
 ```powershell
 py -3.13 scripts/run_phase47_adaptive_budget_natural_optimizer.py `
@@ -11,13 +25,14 @@ py -3.13 scripts/run_phase47_adaptive_budget_natural_optimizer.py `
   --output-dir artifacts/benchmark/community-phase47-adaptive-budget-vehicle-losses-v1
 ```
 
-Promotion is based on the Phase 48 report: Phase 47 has the same safety as Phase 45 and better vehicle reduction. The production-natural diagnostic path must not use target-K forcing, comparator/reference/BKS data, instance-name policies, or objective-regressing candidates.
+Phase 47 research promotion was based on the Phase 48 report: Phase 47 has the same safety as Phase 45 and better vehicle reduction. Phase 56F certification promotion is based on deterministic repeat behavior and strict first-run wall-clock compliance. The production-natural diagnostic path must not use target-K forcing, comparator/reference/BKS data, instance-name policies, or objective-regressing candidates.
 
 ## Promoted Runner
 
 | Phase | Runner | Status | Reason |
 |---|---|---|---|
-| Phase 47 | `scripts/run_phase47_adaptive_budget_natural_optimizer.py` | Promoted | `FAIL=0`, hard violations `0`, over-budget `0`, leakage `0`, total vehicle reduction `3` across the 8 vehicle-loss diagnostics. |
+| Phase 56F | `scripts/run_phase56b_stable_promoted_runner.py --stable-incumbent-replay` | Promoted for stable certification/shadow-mode | `FAIL=0`, `actualRuntimeWithinTolerance=true`, `overBudgetZero=true`, hard violations `0`, `duplicateOutcomesStable=true`, and `duplicateFinalSignaturesStable=true` on the 8 vehicle-loss repeat certification. |
+| Phase 47 | `scripts/run_phase47_adaptive_budget_natural_optimizer.py` | Research-quality baseline | Higher-quality research artifact with total vehicle reduction `3`, including `LRC202 5 -> 4`, but not the strict certification baseline after Phase 56 reproducibility and budget audits. |
 
 ## Diagnostic-Only Branches
 
@@ -28,6 +43,10 @@ Promotion is based on the Phase 48 report: Phase 47 has the same safety as Phase
 | Phase 52 | `scripts/run_phase52_population_natural_optimizer.py` | Diagnostic only | Safe population route-set generator, but total vehicle reduction remained `2`, below Phase 47. |
 | Phase 53 | `scripts/run_phase52_population_natural_optimizer.py` | Diagnostic only | Useful offspring diagnostics and zero unknown blockers, but not a promotion decision over Phase 47. |
 | Phase 54A | `scripts/run_phase54a_population_missing_repair.py` | Diagnostic only | Safe missing-repair diagnostics, but total vehicle reduction was `2` and LRC106 regressed versus Phase 47. |
+| Phase 56B | `scripts/run_phase56b_stable_promoted_runner.py` | Stabilization diagnostic | Fixed route-pool budget starvation but still exposed repeat instability. |
+| Phase 56C | `scripts/run_phase56b_stable_promoted_runner.py --stable-incumbent-replay` | Stabilization diagnostic | Added stable incumbent replay; single smoke improved, but downstream nondeterminism remained. |
+| Phase 56D | `scripts/run_phase56d_stable_stage_audit.py` | Stabilization diagnostic | Classified downstream nondeterminism as `internal-generator-nondeterministic`. |
+| Phase 56E | `scripts/run_phase56b_stable_promoted_runner.py --stable-incumbent-replay` | Stabilization diagnostic | Stabilized internal solver replay and signatures, but first-run over-budget remained on 8-case certification. |
 
 ## Promotion Guard
 
@@ -42,4 +61,3 @@ py -3.13 scripts/run_phase55_promotion_guard.py `
 ```
 
 A candidate can only become a promotion candidate if it preserves Phase 47 safety, covers the same baseline instances, has total vehicle reduction at least as high as Phase 47, and does not regress any instance where Phase 47 improved vehicle count.
-
