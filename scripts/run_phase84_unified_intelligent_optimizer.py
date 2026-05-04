@@ -48,6 +48,8 @@ def run_instance(source: str, instance_name: str, output_dir: Path, time_limit_m
         "routePoolStats": result["diagnostics"].get("routePoolStats", {}),
         "operatorTelemetry": result["diagnostics"].get("operatorTelemetry", {}),
         "budgetTelemetry": result["diagnostics"].get("budgetTelemetry", []),
+        "checkedCandidateTraces": result["diagnostics"].get("checkedCandidateTraces", []),
+        "prunedCandidateSamples": result["diagnostics"].get("prunedCandidateSamples", []),
     }
 
 

@@ -33,12 +33,16 @@ class UnifiedIntelligentOptimizer:
         pool.add_solution(instance, current, "incumbent")
         operator_names = self.portfolio.names()
         budgets = self.budget.allocate(max(1, int(time_limit_ms * 0.25)), features, operator_names)
+        checked_candidate_traces = []
+        pruned_candidate_samples = []
         for _ in range(min(8, len(operator_names))):
             name = self.hyper.select(operator_names, features)
             if name is None:
                 break
             op_started = time.perf_counter()
             operator_result = self.portfolio.apply(name, instance, current, features, budgets.get(name), pool)
+            checked_candidate_traces.extend(operator_result.get("checkedCandidateTraces", [])[: max(0, 100 - len(checked_candidate_traces))])
+            pruned_candidate_samples.extend(operator_result.get("prunedCandidateSamples", [])[: max(0, 100 - len(pruned_candidate_samples))])
             candidate = operator_result.get("solution", current)
             operator_telemetry = operator_result.get("telemetry", {})
             runtime_ms = int((time.perf_counter() - op_started) * 1000)
@@ -90,6 +94,8 @@ class UnifiedIntelligentOptimizer:
             "operatorTelemetry": self.hyper.telemetry(),
             "budgetTelemetry": self.budget.telemetry(budgets),
             "routePoolStats": pool.stats(),
+            "checkedCandidateTraces": checked_candidate_traces,
+            "prunedCandidateSamples": pruned_candidate_samples,
             "objective": evaluation,
             "acceptedOnlyNaturalImprovement": True,
         }

@@ -10,6 +10,7 @@ from optimizer.phase85_candidate_validator import CandidateValidator
 from optimizer.phase85_pair_utils import extract_request_pairs, insert_pair_positions, remove_pair_from_route, solution_signature
 from optimizer.phase87_candidate_ranker import CandidateRanker
 from optimizer.phase87_insertion_index import InsertionIndex
+from run_phase79_end_to_end_production_benchmark import validate_locked_prefix
 from run_phase56b_stable_promoted_runner import canonicalize_solution
 
 
@@ -44,6 +45,8 @@ class OperatorPortfolio:
         self.insertion_index = InsertionIndex()
         self.ranker = CandidateRanker()
         self._pruneTelemetry: Dict[str, int] = {}
+        self.lastCheckedCandidateTraces: List[Dict[str, Any]] = []
+        self.lastPrunedCandidateSamples: List[Dict[str, Any]] = []
 
     def names(self) -> List[str]:
         return [spec.name for spec in self.specs]
@@ -57,6 +60,8 @@ class OperatorPortfolio:
         candidates = self._generate(name, instance, canonicalize_solution(instance, solution), spec, route_pool)
         generated = 0
         self._pruneTelemetry = {"prunedByCapacity": 0, "prunedByTimeWindow": 0, "prunedByLock": 0, "estimatedFeasibleMoves": 0, "nearFeasibleRepairAttempts": 0, "nearFeasibleRepairSuccesses": 0}
+        self.lastCheckedCandidateTraces = []
+        self.lastPrunedCandidateSamples = []
         best = solution
         best_key = self._candidate_key(instance, solution)
         checks = 0
@@ -73,8 +78,11 @@ class OperatorPortfolio:
                 fail_reasons["candidate-cap"] = fail_reasons.get("candidate-cap", 0) + 1
                 break
             checks += 1
+            raw_candidate = candidate
             candidate = canonicalize_solution(instance, candidate.get("solution", candidate))
             result = self.validator.validate(instance, solution, candidate, require_improvement=True)
+            trace = self._candidate_trace(name, instance, candidate, raw_candidate, result)
+            self.lastCheckedCandidateTraces.append(trace)
             if not result.get("valid"):
                 reason = str(result.get("reason", "rejected"))
                 fail_reasons[reason] = fail_reasons.get(reason, 0) + 1
@@ -85,7 +93,7 @@ class OperatorPortfolio:
                 best = candidate
                 best_key = key
         telemetry = {"generatedCandidates": generated, "generatedMoves": generated, "rankedMoves": generated, "prunedMoves": max(0, generated - checks), "candidateChecks": checks, "checkedCandidates": checks, "feasibleCandidates": feasible, "acceptedCandidates": 1 if best is not solution else 0, "failReasons": fail_reasons, "topRejectedReason": max(fail_reasons.items(), key=lambda item: item[1])[0] if fail_reasons else None, "bestEstimatedDistanceDelta": best_estimated_distance_delta, "bestActualDistanceDelta": None, "fullCheckPassRate": feasible / max(1, checks), **self._pruneTelemetry}
-        return {"solution": best, "telemetry": telemetry}
+        return {"solution": best, "telemetry": telemetry, "checkedCandidateTraces": self.lastCheckedCandidateTraces, "prunedCandidateSamples": self.lastPrunedCandidateSamples}
 
     def _generate(self, name: str, instance: Dict[str, Any], solution: Dict[str, Any], spec: OperatorSpec, route_pool: Any | None) -> Iterable[Dict[str, Any]]:
         if name in {"intra-route-pair-relocate", "slack-aware-insertion", "traffic-aware-insertion", "lock-aware-insertion"}:
@@ -117,7 +125,7 @@ class OperatorPortfolio:
                     continue
                 candidate_routes = [list(item) for item in routes]
                 candidate_routes[route_index] = candidate_route
-                yield {"solution": {"routes": [route for route in candidate_routes if len(route) > 2]}, "estimatedDistanceDelta": option.get("estimatedDistanceDelta", 0.0)}
+                yield {"solution": {"routes": [route for route in candidate_routes if len(route) > 2]}, "estimatedDistanceDelta": option.get("estimatedDistanceDelta", 0.0), "estimator": option.get("rankScore", {})}
 
     def _cross_route_pair_relocate(self, instance: Dict[str, Any], solution: Dict[str, Any], spec: OperatorSpec) -> Iterable[Dict[str, Any]]:
         routes = [[str(stop) for stop in route] for route in solution.get("routes", [])]
@@ -133,7 +141,7 @@ class OperatorPortfolio:
                     candidate_routes = [list(item) for item in routes]
                     candidate_routes[source_index] = source_route
                     candidate_routes[target_index] = inserted
-                    yield {"solution": {"routes": [route for route in candidate_routes if len(route) > 2]}, "estimatedDistanceDelta": option.get("estimatedDistanceDelta", 0.0)}
+                    yield {"solution": {"routes": [route for route in candidate_routes if len(route) > 2]}, "estimatedDistanceDelta": option.get("estimatedDistanceDelta", 0.0), "estimator": option.get("rankScore", {})}
 
     def _cross_route_pair_swap(self, instance: Dict[str, Any], solution: Dict[str, Any], spec: OperatorSpec) -> Iterable[Dict[str, Any]]:
         routes = [[str(stop) for stop in route] for route in solution.get("routes", [])]
@@ -153,7 +161,7 @@ class OperatorPortfolio:
                         candidate_routes = [list(item) for item in routes]
                         candidate_routes[left["routeIndex"]] = left_route
                         candidate_routes[right["routeIndex"]] = right_route
-                        yield {"solution": {"routes": [route for route in candidate_routes if len(route) > 2]}, "estimatedDistanceDelta": left_option.get("estimatedDistanceDelta", 0.0) + right_option.get("estimatedDistanceDelta", 0.0)}
+                        yield {"solution": {"routes": [route for route in candidate_routes if len(route) > 2]}, "estimatedDistanceDelta": left_option.get("estimatedDistanceDelta", 0.0) + right_option.get("estimatedDistanceDelta", 0.0), "estimator": {"left": left_option.get("rankScore", {}), "right": right_option.get("rankScore", {})}}
 
     def _route_elimination(self, instance: Dict[str, Any], solution: Dict[str, Any], spec: OperatorSpec) -> Iterable[Dict[str, Any]]:
         routes = [[str(stop) for stop in route] for route in solution.get("routes", [])]
@@ -184,7 +192,7 @@ class OperatorPortfolio:
                     break
                 candidate_routes = best_routes
             if ok:
-                yield {"solution": {"routes": [route for route in candidate_routes if len(route) > 2]}, "estimatedDistanceDelta": -1.0}
+                yield {"solution": {"routes": [route for route in candidate_routes if len(route) > 2]}, "estimatedDistanceDelta": -1.0, "estimator": {"estimatedDistanceDelta": -1.0}}
 
     def _two_pair_relocate(self, instance: Dict[str, Any], solution: Dict[str, Any], spec: OperatorSpec) -> Iterable[Dict[str, Any]]:
         pairs = self._rank_pairs(instance, solution)[:4]
@@ -215,7 +223,21 @@ class OperatorPortfolio:
         for key in ("prunedByCapacity", "prunedByTimeWindow", "prunedByLock"):
             self._pruneTelemetry[key] = self._pruneTelemetry.get(key, 0) + int(telemetry.get(key, 0) or 0)
         self._pruneTelemetry["estimatedFeasibleMoves"] = self._pruneTelemetry.get("estimatedFeasibleMoves", 0) + len(options)
+        self.lastPrunedCandidateSamples.extend(self.insertion_index.lastPrunedSamples[: max(0, 20 - len(self.lastPrunedCandidateSamples))])
         return options
+
+    def _candidate_trace(self, operator: str, instance: Dict[str, Any], candidate: Dict[str, Any], raw_candidate: Dict[str, Any], validation: Dict[str, Any]) -> Dict[str, Any]:
+        checked = check_solution(instance, candidate)
+        lock = validate_locked_prefix(candidate, instance.get("activeRoutes", []), instance.get("drivers", []))
+        estimator = raw_candidate.get("estimator", {}) if isinstance(raw_candidate, dict) else {}
+        return {
+            "operator": operator,
+            "candidateSignature": solution_signature(candidate),
+            "estimator": estimator,
+            "fullChecker": {"feasible": checked.get("feasible"), "violations": checked.get("violations", []), "vehicleCount": checked.get("vehicleCount"), "totalDistance": checked.get("totalDistance")},
+            "lockValidator": lock,
+            "rejectReason": validation.get("reason"),
+        }
 
     def _candidate_key(self, instance: Dict[str, Any], candidate: Dict[str, Any]) -> tuple[float, float, float, str]:
         checked = check_solution(instance, candidate)
