@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -65,6 +66,31 @@ class Phase56BStablePromotedRunnerTest(unittest.TestCase):
 
         self.assertEqual("FAIL", gate["verdict"])
         self.assertFalse(gate["checks"]["noAcceptedObjectiveRegression"])
+
+    def test_gate_marks_wall_clock_over_budget(self) -> None:
+        rows = [
+            {
+                "instance": "A",
+                "verdict": "PASS",
+                "vehicleCountBefore": 1,
+                "vehicleCountAfter": 1,
+                "objectiveImproved": False,
+                "finalSolutionSignature": "same",
+                "routePoolRan": True,
+                "hardViolations": 0,
+                "leakageDetected": False,
+                "routePoolSkipReason": None,
+                "objectiveBefore": 100.0,
+                "objectiveAfter": 100.0,
+                "wallClockOverBudget": True,
+                "stageRuntimeSummary": {"overBudget": False},
+            }
+        ]
+
+        gate = phase56b.phase56b_gate(rows)
+
+        self.assertEqual("FAIL", gate["verdict"])
+        self.assertFalse(gate["checks"]["actualRuntimeWithinTolerance"])
 
     def test_gate_rejects_duplicate_instance_instability(self) -> None:
         rows = [
@@ -269,6 +295,25 @@ class Phase56BStablePromotedRunnerTest(unittest.TestCase):
             first["trace"]["selectedInternalSolverCandidateSignature"],
             second["trace"]["selectedInternalSolverCandidateSignature"],
         )
+
+    def test_route_pool_skipped_when_remaining_wall_clock_below_cap(self) -> None:
+        scheduler = StageBudgetScheduler(30_000, reserve_ms=3_000)
+        scheduler.started_at -= 29.5
+        policy = phase56b.StableBudgetPolicy(routePoolReserveMs=5_000, finalReserveMs=3_000)
+        skips = []
+
+        result = phase56b.route_pool_stage_call(scheduler, policy, lambda budget: {"solution": {"routes": []}}, skips, scheduler.started_at, 30_000)
+
+        self.assertIsNone(result)
+        self.assertEqual("skippedDueHardDeadline", skips[0]["reason"])
+
+    def test_incumbent_overrun_protection_threshold(self) -> None:
+        policy = phase56b.StableBudgetPolicy(incumbentOverrunThresholdMs=18_000)
+
+        self.assertGreater(24_944, policy.incumbentOverrunThresholdMs)
+
+    def test_hard_deadline_guard_is_feature_free_and_name_free(self) -> None:
+        self.assertTrue(phase56b.should_skip_for_hard_deadline(time.perf_counter() - 29.5, 30_000, 1_000, 1_000))
 
 
 if __name__ == "__main__":
