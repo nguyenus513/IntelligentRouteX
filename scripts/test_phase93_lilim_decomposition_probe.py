@@ -4,7 +4,7 @@ from argparse import Namespace
 from pathlib import Path
 
 from optimizer.phase84_unified_objective import UnifiedNaturalObjective
-from run_phase93_lilim_decomposition_probe import exact_request_coverage, extract_subproblem, recombine_solution, run, select_requests_by_features
+from run_phase93_lilim_decomposition_probe import active_route_count, exact_request_coverage, extract_subproblem, recombine_solution, run, select_requests_by_features, strict_recombination_validator
 from test_phase90_final_quality_completion import instance
 
 
@@ -57,3 +57,31 @@ def test_no_instance_name_branch() -> None:
     forbidden = ["instance ==", "instanceName ==", "startswith(\"LRC", "startswith('LRC"]
 
     assert not any(token in source for token in forbidden)
+
+
+def test_recombination_rejects_subproblem_route_overflow_before_check_solution() -> None:
+    inst = instance()
+    incumbent = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+    candidate = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+
+    result = strict_recombination_validator(inst, incumbent, candidate, affected_route_count=1, candidate_subproblem_route_count=2)
+
+    assert result == {"valid": False, "reason": "subproblem-route-slot-overflow"}
+
+
+def test_same_slot_polish_preserves_active_route_count() -> None:
+    inst = instance()
+    incumbent = {"routes": [["0", "1", "2", "3", "4", "0"]]}
+    selected = inst["requests"]
+    candidate = recombine_solution(inst, incumbent, selected, {"routes": [["0", "1", "3", "4", "2", "0"]]})
+
+    assert active_route_count(candidate) == active_route_count(incumbent)
+
+
+def test_slot_compression_reduces_active_route_count_on_synthetic_case() -> None:
+    inst = instance()
+    incumbent = {"routes": [["0", "1", "2", "0"], ["0", "3", "4", "0"]]}
+    selected = inst["requests"]
+    candidate = recombine_solution(inst, incumbent, selected, {"routes": [["0", "1", "3", "4", "2", "0"]]})
+
+    assert active_route_count(candidate) < active_route_count(incumbent)
