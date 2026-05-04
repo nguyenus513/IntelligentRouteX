@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SYNTHETIC_DIR = REPO_ROOT / "benchmarks" / "synthetic_food" / "generated_v1"
 DEFAULT_VROOM_CAPABILITY_DIR = REPO_ROOT / "benchmarks" / "vroom_capability" / "generated_v1"
 DEFAULT_LIVE_SNAPSHOT_DIR = REPO_ROOT / "benchmarks" / "live_snapshots" / "converted_v1"
+DEFAULT_PHASE90_OPPORTUNITY_DIR = REPO_ROOT / "benchmarks" / "phase90_opportunity" / "generated_v1"
 
 
 def load_normalized_json(path: Path) -> Dict[str, Any]:
@@ -36,6 +37,13 @@ def resolve_vroom_capability_path(instance_name: str, capability_dir: Path = DEF
     return path
 
 
+def resolve_phase90_opportunity_path(instance_name: str, opportunity_dir: Path = DEFAULT_PHASE90_OPPORTUNITY_DIR) -> Path:
+    path = opportunity_dir / f"{instance_name}.json"
+    if not path.exists():
+        raise FileNotFoundError(f"Phase 90 opportunity instance not found: {path}")
+    return path
+
+
 def resolve_live_snapshot_path(instance_name: str, live_snapshot_dir: Path | None = None) -> Path:
     root = live_snapshot_dir or DEFAULT_LIVE_SNAPSHOT_DIR
     path = root / f"{instance_name}.json"
@@ -52,4 +60,6 @@ def load_benchmark_instance(source: str, instance_name: str, data_source: str = 
         return load_normalized_json(resolve_vroom_capability_path(instance_name))
     if normalized_source in {"live-snapshot", "live_snapshot"}:
         return load_normalized_json(resolve_live_snapshot_path(instance_name))
+    if normalized_source in {"phase90-opportunity", "phase90_opportunity"}:
+        return load_normalized_json(resolve_phase90_opportunity_path(instance_name))
     return parse_instance("li-lim", resolve_instance_path("li-lim", instance_name, data_source))

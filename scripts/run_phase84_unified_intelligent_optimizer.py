@@ -50,6 +50,9 @@ def run_instance(source: str, instance_name: str, output_dir: Path, time_limit_m
         "budgetTelemetry": result["diagnostics"].get("budgetTelemetry", []),
         "checkedCandidateTraces": result["diagnostics"].get("checkedCandidateTraces", []),
         "prunedCandidateSamples": result["diagnostics"].get("prunedCandidateSamples", []),
+        "improvementOpportunity": result["diagnostics"].get("improvementOpportunity", {}),
+        "earlyStopReason": result["diagnostics"].get("earlyStopReason"),
+        "safeReturn": result["diagnostics"].get("safeReturn", False),
     }
 
 

@@ -43,7 +43,7 @@ def recommendation_engine(operator_rows: List[Dict[str, Any]], calibration_count
     recommendations = []
     generated_total = sum(int(row.get("generatedCandidates", 0) or 0) for row in operator_rows)
     zero_generated = sum(1 for row in operator_rows if int(row.get("generatedCandidates", 0) or 0) == 0)
-    feasible_total = sum(int(row.get("feasibleCandidates", 0) or 0) for row in operator_rows)
+    feasible_total = sum(int(row.get("checkerFeasibleCandidates", row.get("feasibleCandidates", 0)) or 0) for row in operator_rows)
     accepted_total = sum(int(row.get("acceptedCandidates", 0) or 0) for row in operator_rows)
     if generated_total == 0 or zero_generated > max(0, len(operator_rows) // 2):
         recommendations.append("candidate generation is too narrow or not wired")
@@ -81,15 +81,18 @@ def flatten_phase84(summary: Dict[str, Any]) -> tuple[List[Dict[str, Any]], List
                     "rankedMoves": budget.get("generatedCandidates", 0),
                     "prunedMoves": max(0, int(budget.get("generatedCandidates", 0) or 0) - int(budget.get("candidateChecks", 0) or 0)),
                     "feasibleCandidates": budget.get("feasibleCandidateCount", 0),
+                    "checkerFeasibleCandidates": budget.get("checkerFeasibleCandidates", budget.get("feasibleCandidateCount", 0)),
+                    "objectiveImprovingCandidates": budget.get("objectiveImprovingCandidates", 0),
+                    "objectiveNotImprovedCandidates": budget.get("objectiveNotImprovedCandidates", fail_reasons.get("objective-not-improved", 0)),
                     "acceptedCandidates": budget.get("acceptedCount", 0),
-                    "objectiveNotImproved": fail_reasons.get("objective-not-improved", 0),
+                    "objectiveNotImproved": budget.get("objectiveNotImprovedCandidates", fail_reasons.get("objective-not-improved", 0)),
                     "hardViolation": fail_reasons.get("hard-violation", 0),
                     "lockViolation": fail_reasons.get("lock-violation", 0),
                     "candidateCap": fail_reasons.get("candidate-cap", 0),
                     "runtimeCap": fail_reasons.get("runtime-cap", 0),
-                    "bestCandidateDistanceDelta": None,
+                    "bestCandidateDistanceDelta": budget.get("bestDistanceDelta", budget.get("bestActualDistanceDelta")),
                     "bestCandidateObjectiveDelta": None,
-                    "bestCandidateVehicleDelta": None,
+                    "bestCandidateVehicleDelta": budget.get("bestVehicleDelta"),
                     "meanRuntimeMs": budget.get("usedMs", 0),
                     "roi": budget.get("roi", 0.0),
                     "failReasons": fail_reasons,
@@ -99,7 +102,7 @@ def flatten_phase84(summary: Dict[str, Any]) -> tuple[List[Dict[str, Any]], List
                 samples.append({"operator": operator, "rejectReason": "generation-too-narrow", "classification": "generation-too-narrow", "sampleIndex": 0, "instance": row.get("instance")})
             elif int(budget.get("candidateChecks", 0) or 0) == 0:
                 samples.append({"operator": operator, "rejectReason": "pruning-too-aggressive", "classification": "pruning-too-aggressive", "sampleIndex": 0, "instance": row.get("instance")})
-            elif int(budget.get("feasibleCandidateCount", 0) or 0) == 0 and int(budget.get("candidateChecks", 0) or 0) > 0:
+            elif int(budget.get("checkerFeasibleCandidates", budget.get("feasibleCandidateCount", 0)) or 0) == 0 and int(budget.get("candidateChecks", 0) or 0) > 0:
                 samples.append({"operator": operator, "rejectReason": "feasibility-blocked", "classification": "feasibility-blocked", "sampleIndex": 0, "instance": row.get("instance")})
             for reason, count in fail_reasons.items():
                 for index in range(min(3, int(count or 0))):

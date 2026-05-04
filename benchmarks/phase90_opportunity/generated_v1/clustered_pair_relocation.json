@@ -1,0 +1,226 @@
+{
+  "benchmarkFamily": "phase90-opportunity",
+  "bestKnown": {},
+  "capacity": 2,
+  "depotNodeId": "0",
+  "distanceMatrix": [
+    [
+      0.0,
+      1.0,
+      2.0,
+      1.2,
+      2.2,
+      20.0,
+      21.0
+    ],
+    [
+      1.0,
+      0.0,
+      1.0,
+      0.2,
+      1.2,
+      19.0,
+      20.0
+    ],
+    [
+      2.0,
+      1.0,
+      0.0,
+      0.8,
+      0.2,
+      18.0,
+      19.0
+    ],
+    [
+      1.2,
+      0.2,
+      0.8,
+      0.0,
+      1.0,
+      18.8,
+      19.8
+    ],
+    [
+      2.2,
+      1.2,
+      0.2,
+      1.0,
+      0.0,
+      17.8,
+      18.8
+    ],
+    [
+      20.0,
+      19.0,
+      18.0,
+      18.8,
+      17.8,
+      0.0,
+      1.0
+    ],
+    [
+      21.0,
+      20.0,
+      19.0,
+      19.8,
+      18.8,
+      1.0,
+      0.0
+    ]
+  ],
+  "durationMatrix": [
+    [
+      0.0,
+      1.0,
+      2.0,
+      1.2,
+      2.2,
+      20.0,
+      21.0
+    ],
+    [
+      1.0,
+      0.0,
+      1.0,
+      0.2,
+      1.2,
+      19.0,
+      20.0
+    ],
+    [
+      2.0,
+      1.0,
+      0.0,
+      0.8,
+      0.2,
+      18.0,
+      19.0
+    ],
+    [
+      1.2,
+      0.2,
+      0.8,
+      0.0,
+      1.0,
+      18.8,
+      19.8
+    ],
+    [
+      2.2,
+      1.2,
+      0.2,
+      1.0,
+      0.0,
+      17.8,
+      18.8
+    ],
+    [
+      20.0,
+      19.0,
+      18.0,
+      18.8,
+      17.8,
+      0.0,
+      1.0
+    ],
+    [
+      21.0,
+      20.0,
+      19.0,
+      19.8,
+      18.8,
+      1.0,
+      0.0
+    ]
+  ],
+  "instanceName": "clustered_pair_relocation",
+  "nodes": [
+    {
+      "demand": 0,
+      "dueTime": 500,
+      "id": "0",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "demand": 1,
+      "dueTime": 500,
+      "id": "1",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 1,
+      "y": 0
+    },
+    {
+      "demand": -1,
+      "dueTime": 500,
+      "id": "2",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 2,
+      "y": 0
+    },
+    {
+      "demand": 1,
+      "dueTime": 500,
+      "id": "3",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 1.2,
+      "y": 0
+    },
+    {
+      "demand": -1,
+      "dueTime": 500,
+      "id": "4",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 2.2,
+      "y": 0
+    },
+    {
+      "demand": 1,
+      "dueTime": 500,
+      "id": "5",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 20,
+      "y": 0
+    },
+    {
+      "demand": -1,
+      "dueTime": 500,
+      "id": "6",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 21,
+      "y": 0
+    }
+  ],
+  "problemType": "PDPTW",
+  "requests": [
+    {
+      "demand": 1,
+      "dropoffNodeId": "2",
+      "orderId": "a",
+      "pickupNodeId": "1"
+    },
+    {
+      "demand": 1,
+      "dropoffNodeId": "4",
+      "orderId": "b",
+      "pickupNodeId": "3"
+    },
+    {
+      "demand": 1,
+      "dropoffNodeId": "6",
+      "orderId": "c",
+      "pickupNodeId": "5"
+    }
+  ],
+  "schemaVersion": "external-benchmark-normalized/v1",
+  "vehicleCount": 2,
+  "vroomVehicles": []
+}

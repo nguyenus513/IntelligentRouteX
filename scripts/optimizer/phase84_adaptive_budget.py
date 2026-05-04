@@ -15,7 +15,22 @@ class OperatorBudget:
     rankedMoves: int = 0
     prunedMoves: int = 0
     feasibleCandidateCount: int = 0
+    checkerFeasibleCandidates: int = 0
+    objectiveImprovingCandidates: int = 0
+    objectiveNotImprovedCandidates: int = 0
     acceptedCount: int = 0
+    prunedNoQualityPotential: int = 0
+    bestDistanceDelta: float | None = None
+    bestVehicleDelta: float | None = None
+    alnsIterations: int = 0
+    intermediateWorseAcceptedForSearch: int = 0
+    finalCheckerFeasibleCandidates: int = 0
+    finalObjectiveImprovingCandidates: int = 0
+    routePoolColumnCount: int = 0
+    populationDiversity: int = 0
+    ejectionDepthUsed: int = 0
+    repairFailReasons: Dict[str, int] | None = None
+    safeReturn: bool = False
     roi: float = 0.0
     earlyStopReason: str | None = None
     failReasons: Dict[str, int] | None = None
@@ -48,8 +63,12 @@ class AdaptiveBudgetController:
             lowered = name.lower()
             if "slack" in lowered or "time" in lowered:
                 weights[name] += tightness + max(0.0, traffic - 1.0)
-            if "elimination" in lowered or "relocate" in lowered:
+            if "elimination" in lowered or "relocate" in lowered or "compression" in lowered or "ejection" in lowered:
                 weights[name] += capacity
+            if "alns" in lowered or "population" in lowered:
+                weights[name] += 1.0 + cluster + capacity * 0.5
+            if "polish" in lowered or "chain" in lowered:
+                weights[name] += 0.5 + tightness * 0.25
             if "cluster" in lowered or "pool" in lowered:
                 weights[name] += cluster
             if "lock" in lowered:

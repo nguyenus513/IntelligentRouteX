@@ -1,0 +1,13 @@
+{
+  "dataSource": "generated",
+  "description": "Small generic Phase 90 opportunity fixtures with known route quality improvement opportunities.",
+  "instances": [
+    "crossing_routes_distance_polish",
+    "weak_route_compression",
+    "clustered_pair_relocation"
+  ],
+  "problemType": "PDPTW",
+  "schemaVersion": "benchmark-suite-manifest/v1",
+  "source": "phase90-opportunity",
+  "suite": "phase90-opportunity-smoke"
+}

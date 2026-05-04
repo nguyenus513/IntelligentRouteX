@@ -1,0 +1,146 @@
+{
+  "benchmarkFamily": "phase90-opportunity",
+  "bestKnown": {},
+  "capacity": 2,
+  "depotNodeId": "0",
+  "distanceMatrix": [
+    [
+      0.0,
+      1.0,
+      8.0,
+      2.0,
+      3.0
+    ],
+    [
+      1.0,
+      0.0,
+      7.0,
+      1.0,
+      2.0
+    ],
+    [
+      8.0,
+      7.0,
+      0.0,
+      6.0,
+      5.0
+    ],
+    [
+      2.0,
+      1.0,
+      6.0,
+      0.0,
+      1.0
+    ],
+    [
+      3.0,
+      2.0,
+      5.0,
+      1.0,
+      0.0
+    ]
+  ],
+  "durationMatrix": [
+    [
+      0.0,
+      1.0,
+      8.0,
+      2.0,
+      3.0
+    ],
+    [
+      1.0,
+      0.0,
+      7.0,
+      1.0,
+      2.0
+    ],
+    [
+      8.0,
+      7.0,
+      0.0,
+      6.0,
+      5.0
+    ],
+    [
+      2.0,
+      1.0,
+      6.0,
+      0.0,
+      1.0
+    ],
+    [
+      3.0,
+      2.0,
+      5.0,
+      1.0,
+      0.0
+    ]
+  ],
+  "instanceName": "crossing_routes_distance_polish",
+  "nodes": [
+    {
+      "demand": 0,
+      "dueTime": 500,
+      "id": "0",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "demand": 1,
+      "dueTime": 500,
+      "id": "1",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 1,
+      "y": 0
+    },
+    {
+      "demand": -1,
+      "dueTime": 500,
+      "id": "2",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 8,
+      "y": 0
+    },
+    {
+      "demand": 1,
+      "dueTime": 500,
+      "id": "3",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 2,
+      "y": 0
+    },
+    {
+      "demand": -1,
+      "dueTime": 500,
+      "id": "4",
+      "readyTime": 0,
+      "serviceTime": 0,
+      "x": 3,
+      "y": 0
+    }
+  ],
+  "problemType": "PDPTW",
+  "requests": [
+    {
+      "demand": 1,
+      "dropoffNodeId": "2",
+      "orderId": "a",
+      "pickupNodeId": "1"
+    },
+    {
+      "demand": 1,
+      "dropoffNodeId": "4",
+      "orderId": "b",
+      "pickupNodeId": "3"
+    }
+  ],
+  "schemaVersion": "external-benchmark-normalized/v1",
+  "vehicleCount": 1,
+  "vroomVehicles": []
+}

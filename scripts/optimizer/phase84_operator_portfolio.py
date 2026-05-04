@@ -10,6 +10,14 @@ from optimizer.phase85_candidate_validator import CandidateValidator
 from optimizer.phase85_pair_utils import extract_request_pairs, insert_pair_positions, remove_pair_from_route, solution_signature
 from optimizer.phase87_candidate_ranker import CandidateRanker
 from optimizer.phase87_insertion_index import InsertionIndex
+from optimizer.phase90_alns_repair_engine import ALNSRepairEngine
+from optimizer.phase90_deadline import Deadline
+from optimizer.phase90_distance_polish import DistancePolish
+from optimizer.phase90_exact_delta_scorer import ExactDeltaScorer
+from optimizer.phase90_local_search_chain import LocalSearchChain
+from optimizer.phase90_route_compression import RouteCompression
+from optimizer.phase90_route_pool_recombiner import RoutePoolRecombiner
+from optimizer.phase90_route_population import RoutePopulation
 from run_phase79_end_to_end_production_benchmark import validate_locked_prefix
 from run_phase56b_stable_promoted_runner import canonicalize_solution
 
@@ -28,6 +36,13 @@ class OperatorSpec:
 class OperatorPortfolio:
     def __init__(self) -> None:
         self.specs = [
+            OperatorSpec("alns-destroy-repair", maxRuntimeMs=220, maxCandidateChecks=96, maxDepth=3, maxBeam=8),
+            OperatorSpec("ejection-route-repair", maxRuntimeMs=220, maxCandidateChecks=96, maxDepth=3, maxBeam=8),
+            OperatorSpec("hgs-lite-route-population", maxRuntimeMs=180, maxCandidateChecks=64, maxBeam=8),
+            OperatorSpec("distance-polish", maxRuntimeMs=140, maxCandidateChecks=80),
+            OperatorSpec("local-search-chain", maxRuntimeMs=180, maxCandidateChecks=80, maxDepth=3),
+            OperatorSpec("route-compression", maxRuntimeMs=180, maxCandidateChecks=80),
+            OperatorSpec("quality-route-pool-recombination", maxRuntimeMs=120, maxCandidateChecks=40),
             OperatorSpec("slack-aware-insertion"),
             OperatorSpec("traffic-aware-insertion"),
             OperatorSpec("lock-aware-insertion"),
@@ -44,6 +59,13 @@ class OperatorPortfolio:
         self.objective = UnifiedNaturalObjective()
         self.insertion_index = InsertionIndex()
         self.ranker = CandidateRanker()
+        self.delta_scorer = ExactDeltaScorer()
+        self.alns_engine = ALNSRepairEngine()
+        self.distance_polish = DistancePolish()
+        self.local_chain = LocalSearchChain()
+        self.route_compression = RouteCompression()
+        self.route_pool_recombiner = RoutePoolRecombiner()
+        self.route_population = RoutePopulation()
         self._pruneTelemetry: Dict[str, int] = {}
         self.lastCheckedCandidateTraces: List[Dict[str, Any]] = []
         self.lastPrunedCandidateSamples: List[Dict[str, Any]] = []
@@ -54,49 +76,147 @@ class OperatorPortfolio:
     def spec(self, name: str) -> OperatorSpec:
         return next((spec for spec in self.specs if spec.name == name), OperatorSpec(name))
 
-    def apply(self, name: str, instance: Dict[str, Any], solution: Dict[str, Any], features: Dict[str, Any], budget: Any | None = None, route_pool: Any | None = None) -> Dict[str, Any]:
+    def apply(self, name: str, instance: Dict[str, Any], solution: Dict[str, Any], features: Dict[str, Any], budget: Any | None = None, route_pool: Any | None = None, deadline: Deadline | None = None) -> Dict[str, Any]:
         spec = self.spec(name)
         started = time.perf_counter()
-        candidates = self._generate(name, instance, canonicalize_solution(instance, solution), spec, route_pool)
+        incumbent = canonicalize_solution(instance, solution)
+        operator_deadline = deadline.child_budget(spec.maxRuntimeMs) if deadline is not None else Deadline.from_time_limit_ms(spec.maxRuntimeMs)
+        if operator_deadline.expired():
+            return {"solution": incumbent, "telemetry": {"generatedCandidates": 0, "candidateChecks": 0, "acceptedCandidates": 0, "earlyStopReason": "deadline", "safeReturn": True}, "checkedCandidateTraces": [], "prunedCandidateSamples": []}
+        candidates = self._generate(name, instance, incumbent, spec, route_pool, operator_deadline)
         generated = 0
-        self._pruneTelemetry = {"prunedByCapacity": 0, "prunedByTimeWindow": 0, "prunedByLock": 0, "estimatedFeasibleMoves": 0, "nearFeasibleRepairAttempts": 0, "nearFeasibleRepairSuccesses": 0}
+        self._pruneTelemetry = {"prunedByCapacity": 0, "prunedByTimeWindow": 0, "prunedByLock": 0, "estimatedFeasibleMoves": 0, "nearFeasibleRepairAttempts": 0, "nearFeasibleRepairSuccesses": 0, "prunedNoQualityPotential": 0}
+        phase90_telemetry: Dict[str, Any] = {"alnsIterations": 0, "intermediateWorseAcceptedForSearch": 0, "finalCheckerFeasibleCandidates": 0, "finalObjectiveImprovingCandidates": 0, "routePoolColumnCount": len(getattr(route_pool, "columns", {}) or {}), "populationDiversity": 0, "ejectionDepthUsed": 0, "repairFailReasons": {}}
         self.lastCheckedCandidateTraces = []
         self.lastPrunedCandidateSamples = []
-        best = solution
-        best_key = self._candidate_key(instance, solution)
+        best = incumbent
+        best_key = self._candidate_key(instance, incumbent)
         checks = 0
-        feasible = 0
+        checker_feasible = 0
+        objective_improving = 0
+        objective_not_improved = 0
+        accepted_count = 0
         fail_reasons: Dict[str, int] = {}
         best_estimated_distance_delta = None
-        for candidate in candidates:
+        best_actual_distance_delta = None
+        best_vehicle_delta = None
+        for raw_candidate in candidates:
             generated += 1
-            best_estimated_distance_delta = min(best_estimated_distance_delta, candidate.get("estimatedDistanceDelta", 0.0)) if best_estimated_distance_delta is not None else candidate.get("estimatedDistanceDelta", 0.0)
-            if int((time.perf_counter() - started) * 1000) > spec.maxRuntimeMs:
+            candidate = canonicalize_solution(instance, raw_candidate.get("solution", raw_candidate))
+            delta = raw_candidate.get("delta")
+            if delta is None:
+                delta_obj = self.delta_scorer.score(instance, incumbent, candidate)
+                delta = delta_obj.to_dict()
+            estimated_distance = float(delta.get("distanceDelta", raw_candidate.get("estimatedDistanceDelta", 0.0)) or 0.0)
+            best_estimated_distance_delta = min(best_estimated_distance_delta, estimated_distance) if best_estimated_distance_delta is not None else estimated_distance
+            if best_actual_distance_delta is None or estimated_distance < best_actual_distance_delta:
+                best_actual_distance_delta = estimated_distance
+            vehicle_delta = float(delta.get("vehicleDelta", 0.0) or 0.0)
+            best_vehicle_delta = min(best_vehicle_delta, vehicle_delta) if best_vehicle_delta is not None else vehicle_delta
+            raw_telemetry = raw_candidate.get("telemetry", {}) if isinstance(raw_candidate, dict) else {}
+            self._merge_phase90_telemetry(phase90_telemetry, raw_telemetry)
+            allow_final_quality_check = bool(raw_candidate.get("allowFinalQualityCheck")) if isinstance(raw_candidate, dict) else False
+            if not self._has_quality_potential(delta) and not allow_final_quality_check:
+                self._pruneTelemetry["prunedNoQualityPotential"] = self._pruneTelemetry.get("prunedNoQualityPotential", 0) + 1
+                fail_reasons["no-quality-potential"] = fail_reasons.get("no-quality-potential", 0) + 1
+                continue
+            if not self._has_quality_potential(delta) and allow_final_quality_check:
+                self._pruneTelemetry["prunedNoQualityPotential"] = self._pruneTelemetry.get("prunedNoQualityPotential", 0) + 1
+            if operator_deadline.should_stop(5) or int((time.perf_counter() - started) * 1000) > spec.maxRuntimeMs:
                 fail_reasons["runtime-cap"] = fail_reasons.get("runtime-cap", 0) + 1
+                phase90_telemetry["earlyStopReason"] = "deadline" if operator_deadline.should_stop(5) else "runtime-cap"
+                phase90_telemetry["safeReturn"] = True
                 break
             if checks >= spec.maxCandidateChecks:
                 fail_reasons["candidate-cap"] = fail_reasons.get("candidate-cap", 0) + 1
                 break
             checks += 1
-            raw_candidate = candidate
-            candidate = canonicalize_solution(instance, candidate.get("solution", candidate))
-            result = self.validator.validate(instance, solution, candidate, require_improvement=True)
-            trace = self._candidate_trace(name, instance, candidate, raw_candidate, result)
+            feasibility_result = self.validator.validate(instance, incumbent, candidate, require_improvement=False)
+            if feasibility_result.get("valid"):
+                checker_feasible += 1
+                if self.objective.improves(instance, incumbent, candidate):
+                    objective_improving += 1
+                    result = self.validator.validate(instance, incumbent, candidate, require_improvement=True)
+                else:
+                    objective_not_improved += 1
+                    result = {"valid": False, "reason": "objective-not-improved", "details": []}
+            else:
+                result = feasibility_result
+            trace_payload = dict(raw_candidate)
+            trace_payload["delta"] = delta
+            trace = self._candidate_trace(name, instance, candidate, trace_payload, result)
             self.lastCheckedCandidateTraces.append(trace)
             if not result.get("valid"):
                 reason = str(result.get("reason", "rejected"))
                 fail_reasons[reason] = fail_reasons.get(reason, 0) + 1
                 continue
-            feasible += 1
+            accepted_count += 1
             key = self._candidate_key(instance, candidate)
             if key < best_key:
                 best = candidate
                 best_key = key
-        telemetry = {"generatedCandidates": generated, "generatedMoves": generated, "rankedMoves": generated, "prunedMoves": max(0, generated - checks), "candidateChecks": checks, "checkedCandidates": checks, "feasibleCandidates": feasible, "acceptedCandidates": 1 if best is not solution else 0, "failReasons": fail_reasons, "topRejectedReason": max(fail_reasons.items(), key=lambda item: item[1])[0] if fail_reasons else None, "bestEstimatedDistanceDelta": best_estimated_distance_delta, "bestActualDistanceDelta": None, "fullCheckPassRate": feasible / max(1, checks), **self._pruneTelemetry}
+        telemetry = {
+            "generatedCandidates": generated,
+            "generatedMoves": generated,
+            "rankedMoves": generated,
+            "prunedMoves": max(0, generated - checks),
+            "candidateChecks": checks,
+            "checkedCandidates": checks,
+            "checkerFeasibleCandidates": checker_feasible,
+            "objectiveImprovingCandidates": objective_improving,
+            "objectiveNotImprovedCandidates": objective_not_improved,
+            "feasibleCandidates": checker_feasible,
+            "acceptedCandidates": accepted_count,
+            "failReasons": fail_reasons,
+            "topRejectedReason": max(fail_reasons.items(), key=lambda item: item[1])[0] if fail_reasons else None,
+            "bestEstimatedDistanceDelta": best_estimated_distance_delta,
+            "bestActualDistanceDelta": best_actual_distance_delta,
+            "bestDistanceDelta": best_actual_distance_delta,
+            "bestVehicleDelta": best_vehicle_delta,
+            "fullCheckPassRate": checker_feasible / max(1, checks),
+            **self._pruneTelemetry,
+            **phase90_telemetry,
+        }
         return {"solution": best, "telemetry": telemetry, "checkedCandidateTraces": self.lastCheckedCandidateTraces, "prunedCandidateSamples": self.lastPrunedCandidateSamples}
 
-    def _generate(self, name: str, instance: Dict[str, Any], solution: Dict[str, Any], spec: OperatorSpec, route_pool: Any | None) -> Iterable[Dict[str, Any]]:
-        if name in {"intra-route-pair-relocate", "slack-aware-insertion", "traffic-aware-insertion", "lock-aware-insertion"}:
+    def _has_quality_potential(self, delta: Dict[str, Any]) -> bool:
+        return (
+            float(delta.get("vehicleDelta", 0.0) or 0.0) < 0
+            or float(delta.get("distanceDelta", 0.0) or 0.0) < 0
+            or float(delta.get("objectiveDeltaEstimate", 0.0) or 0.0) < 0
+            or (float(delta.get("churnDelta", 0.0) or 0.0) < 0 and float(delta.get("distanceDelta", 0.0) or 0.0) <= 0)
+        )
+
+    def _merge_phase90_telemetry(self, target: Dict[str, Any], source: Dict[str, Any]) -> None:
+        for key in ("alnsIterations", "intermediateWorseAcceptedForSearch", "finalCheckerFeasibleCandidates", "finalObjectiveImprovingCandidates", "ejectionDepthUsed", "routePoolColumnCount", "populationDiversity"):
+            if key in source:
+                target[key] = max(int(target.get(key, 0) or 0), int(source.get(key, 0) or 0)) if key in {"ejectionDepthUsed", "routePoolColumnCount", "populationDiversity"} else int(target.get(key, 0) or 0) + int(source.get(key, 0) or 0)
+        repair_reasons = source.get("repairFailReasons", {}) or {}
+        merged = dict(target.get("repairFailReasons", {}) or {})
+        for reason, count in repair_reasons.items():
+            merged[str(reason)] = merged.get(str(reason), 0) + int(count or 0)
+        target["repairFailReasons"] = merged
+
+    def _generate(self, name: str, instance: Dict[str, Any], solution: Dict[str, Any], spec: OperatorSpec, route_pool: Any | None, deadline: Deadline | None = None) -> Iterable[Dict[str, Any]]:
+        if name == "alns-destroy-repair":
+            yield from self.alns_engine.generate(instance, solution, route_pool, spec.maxCandidateChecks, spec.maxBeam, spec.maxDepth, deadline)
+        elif name == "ejection-route-repair":
+            yield from self.alns_engine.generate(instance, solution, route_pool, spec.maxCandidateChecks, spec.maxBeam, spec.maxDepth, deadline)
+        elif name == "hgs-lite-route-population":
+            seeds = []
+            for raw in self.alns_engine.generate(instance, solution, route_pool, max(4, spec.maxBeam), spec.maxBeam, spec.maxDepth, deadline):
+                seeds.append(raw.get("solution", raw))
+            yield from self.route_population.generate(instance, solution, seeds, spec.maxCandidateChecks, deadline)
+        elif name == "distance-polish":
+            yield from self.distance_polish.generate(instance, solution, spec.maxCandidateChecks, deadline)
+        elif name == "local-search-chain":
+            yield from self.local_chain.generate(instance, solution, spec.maxCandidateChecks, spec.maxDepth, deadline)
+        elif name == "route-compression":
+            yield from self.route_compression.generate(instance, solution, spec.maxCandidateChecks, deadline)
+        elif name == "quality-route-pool-recombination" and route_pool is not None:
+            yield from self.route_pool_recombiner.generate(instance, solution, route_pool, spec.maxCandidateChecks, deadline)
+            self._pruneTelemetry["rejectedNonInternalRouteColumns"] = self.route_pool_recombiner.lastRejectedNonInternal
+        elif name in {"intra-route-pair-relocate", "slack-aware-insertion", "traffic-aware-insertion", "lock-aware-insertion"}:
             yield from self._intra_route_pair_relocate(instance, solution, spec)
         elif name == "pd-aware-pair-relocate":
             yield from self._cross_route_pair_relocate(instance, solution, spec)
@@ -109,7 +229,7 @@ class OperatorPortfolio:
         elif name == "two-pair-relocate":
             yield from self._two_pair_relocate(instance, solution, spec)
         elif name == "two-pair-swap":
-            yield from self._two_pair_swap(instance, solution, spec)
+            yield from self._two_pair_swap(instance, solution, OperatorSpec("two-pair-swap", maxCandidateChecks=spec.maxCandidateChecks, maxBeam=2, maxPairs=4))
         elif name == "route-compression-two-pair":
             yield from self._route_elimination(instance, solution, spec)
 
@@ -234,6 +354,7 @@ class OperatorPortfolio:
             "operator": operator,
             "candidateSignature": solution_signature(candidate),
             "estimator": estimator,
+            "delta": raw_candidate.get("delta", {}),
             "fullChecker": {"feasible": checked.get("feasible"), "violations": checked.get("violations", []), "vehicleCount": checked.get("vehicleCount"), "totalDistance": checked.get("totalDistance")},
             "lockValidator": lock,
             "rejectReason": validation.get("reason"),

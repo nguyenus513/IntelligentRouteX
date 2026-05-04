@@ -37,7 +37,7 @@ def classify_alignment(trace: Dict[str, Any]) -> str:
     lock = trace.get("lockValidator", {}) or {}
     violations = [normalize_violation(item) for item in checker.get("violations", [])]
     if checker.get("feasible") and trace.get("rejectReason") == "objective-not-improved":
-        return "objective-not-reached-no-feasible"
+        return "objective-not-improved-after-checker-feasible"
     if not lock.get("valid", True):
         return "estimator-too-loose-lock"
     if "capacity-overflow" in violations:
@@ -131,6 +131,8 @@ def recommendations(counts: Dict[str, int]) -> str:
         lines.append("- Fix candidate construction and route shape normalization.")
     if counts.get("checker-estimator-aligned"):
         lines.append("- Estimator/checker align; stronger repair/ejection may be needed.")
+    if counts.get("objective-not-improved-after-checker-feasible"):
+        lines.append("- Checked candidates are feasible; prioritize exact delta scoring and quality-generating operators.")
     return "\n".join(lines) + "\n"
 
 
