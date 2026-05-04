@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "live-dispatch-snapshot/v1",
+  "snapshotId": "incident_multiplier_snapshot",
+  "timestamp": "2026-05-04T17:20:00+07:00",
+  "region": "hcm-traffic-demo",
+  "nodeIds": ["depot", "restaurant-incident", "customer-incident"],
+  "orders": [{"orderId": "incident-001", "pickupNodeId": "restaurant-incident", "dropoffNodeId": "customer-incident", "restaurantId": "restaurant-incident", "readyTime": 10, "dueTime": 120, "serviceTimePickup": 3, "serviceTimeDropoff": 2, "demand": 1}],
+  "drivers": [{"driverId": "driver-incident", "startNodeId": "depot", "capacity": 2, "shiftStart": 0, "shiftEnd": 180}],
+  "activeRoutes": [],
+  "durationMatrix": [[0, 25, 70], [25, 0, 48], [70, 48, 0]],
+  "trafficContext": {"provider": "synthetic", "generatedAt": "2026-05-04T17:19:30+07:00", "validUntil": "2026-05-04T17:24:30+07:00", "trafficMode": "incident", "multiplier": 2.0, "confidence": 0.78, "matrixSource": "live", "freshnessSeconds": 30, "maxFreshnessSeconds": 300, "region": "hcm-traffic-demo"},
+  "restaurantDelay": {"restaurant-incident": 5},
+  "cancellationRisk": {"incident-001": 0.22}
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "live-dispatch-snapshot/v1",
+  "snapshotId": "active_route_becomes_late_snapshot",
+  "timestamp": "2026-05-04T18:00:00+07:00",
+  "region": "hcm-traffic-demo",
+  "nodeIds": ["depot", "restaurant-active", "customer-active", "restaurant-new", "customer-new"],
+  "orders": [
+    {"orderId": "active-001", "pickupNodeId": "restaurant-active", "dropoffNodeId": "customer-active", "restaurantId": "restaurant-active", "readyTime": 0, "dueTime": 90, "serviceTimePickup": 2, "serviceTimeDropoff": 1, "demand": 1},
+    {"orderId": "active-002", "pickupNodeId": "restaurant-new", "dropoffNodeId": "customer-new", "restaurantId": "restaurant-new", "readyTime": 10, "dueTime": 120, "serviceTimePickup": 2, "serviceTimeDropoff": 1, "demand": 1}
+  ],
+  "drivers": [{"driverId": "driver-active", "startNodeId": "depot", "capacity": 2, "shiftStart": 0, "shiftEnd": 180}],
+  "activeRoutes": [{"driverId": "driver-active", "route": ["depot", "restaurant-active", "customer-active"], "lockedPrefixLength": 3}],
+  "durationMatrix": [[0, 45, 95, 20, 42], [45, 0, 55, 25, 50], [95, 55, 0, 40, 18], [20, 25, 40, 0, 22], [42, 50, 18, 22, 0]],
+  "trafficContext": {"provider": "synthetic", "generatedAt": "2026-05-04T17:59:30+07:00", "validUntil": "2026-05-04T18:04:30+07:00", "trafficMode": "incident", "multiplier": 2.0, "confidence": 0.8, "matrixSource": "live", "freshnessSeconds": 30, "maxFreshnessSeconds": 300, "activeRouteRiskThreshold": 80, "region": "hcm-traffic-demo"},
+  "restaurantDelay": {"restaurant-active": 0, "restaurant-new": 0},
+  "cancellationRisk": {"active-001": 0.24, "active-002": 0.14}
+}

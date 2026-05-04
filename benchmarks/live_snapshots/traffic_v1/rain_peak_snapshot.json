@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "live-dispatch-snapshot/v1",
+  "snapshotId": "rain_peak_snapshot",
+  "timestamp": "2026-05-04T18:30:00+07:00",
+  "region": "hcm-traffic-demo",
+  "nodeIds": ["depot", "restaurant-rain", "customer-rain"],
+  "orders": [{"orderId": "rain-001", "pickupNodeId": "restaurant-rain", "dropoffNodeId": "customer-rain", "restaurantId": "restaurant-rain", "readyTime": 10, "dueTime": 95, "serviceTimePickup": 3, "serviceTimeDropoff": 2, "demand": 1}],
+  "drivers": [{"driverId": "driver-rain", "startNodeId": "depot", "capacity": 2, "shiftStart": 0, "shiftEnd": 150}],
+  "activeRoutes": [],
+  "durationMatrix": [[0, 14, 38], [14, 0, 24], [38, 24, 0]],
+  "trafficContext": {"provider": "synthetic", "generatedAt": "2026-05-04T18:29:00+07:00", "validUntil": "2026-05-04T18:34:00+07:00", "trafficMode": "rain", "rain": true, "multiplier": 1.45, "confidence": 0.86, "matrixSource": "live", "freshnessSeconds": 60, "maxFreshnessSeconds": 300, "region": "hcm-traffic-demo"},
+  "restaurantDelay": {"restaurant-rain": 4},
+  "cancellationRisk": {"rain-001": 0.16}
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "live-dispatch-snapshot/v1",
+  "snapshotId": "stale_matrix_snapshot",
+  "timestamp": "2026-05-04T12:00:00+07:00",
+  "region": "hcm-traffic-demo",
+  "nodeIds": ["depot", "restaurant-stale", "customer-stale"],
+  "orders": [{"orderId": "stale-001", "pickupNodeId": "restaurant-stale", "dropoffNodeId": "customer-stale", "restaurantId": "restaurant-stale", "readyTime": 5, "dueTime": 70, "serviceTimePickup": 2, "serviceTimeDropoff": 1, "demand": 1}],
+  "drivers": [{"driverId": "driver-stale", "startNodeId": "depot", "capacity": 2, "shiftStart": 0, "shiftEnd": 120}],
+  "activeRoutes": [],
+  "durationMatrix": [[0, 8, 20], [8, 0, 12], [20, 12, 0]],
+  "trafficContext": {"provider": "synthetic", "generatedAt": "2026-05-04T11:40:00+07:00", "validUntil": "2026-05-04T11:45:00+07:00", "trafficMode": "normal", "multiplier": 1.0, "confidence": 0.9, "matrixSource": "cached", "freshnessSeconds": 1200, "maxFreshnessSeconds": 1800, "region": "hcm-traffic-demo"},
+  "restaurantDelay": {"restaurant-stale": 0},
+  "cancellationRisk": {"stale-001": 0.08}
+}

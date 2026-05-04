@@ -10,6 +10,7 @@ from phase67_synthetic_instance_loader import DEFAULT_LIVE_SNAPSHOT_DIR
 from run_external_benchmark_certification import parse_time_limit
 from run_phase56b_stable_promoted_runner import run as run_phase56f
 from run_phase71_food_dispatch_metrics import compute_instance_metrics
+from traffic.phase82_matrix_validator import audit_traffic_matrix
 from validate_phase78_live_snapshot_schema import validate_snapshot
 
 
@@ -278,7 +279,7 @@ def fair_compare(challenger: Dict[str, Any], vroom_row: Dict[str, Any] | None) -
     return "both-feasible-challenger-distance-win" if challenger_distance < vroom_distance else "both-feasible-vroom-distance-win"
 
 
-def apply_fallback_policy(challenger: Dict[str, Any], time_limit_ms: int) -> Dict[str, Any]:
+def apply_fallback_policy(challenger: Dict[str, Any], time_limit_ms: int, traffic_audit: Dict[str, Any] | None = None) -> Dict[str, Any]:
     reasons = []
     if int(challenger.get("hardViolations", 0) or 0) > 0:
         reasons.append("challenger-hard-violation")
@@ -290,17 +291,19 @@ def apply_fallback_policy(challenger: Dict[str, Any], time_limit_ms: int) -> Dic
         reasons.append("checker-unavailable-or-missing-signature")
     if challenger.get("activeRouteLockingImplemented") and not challenger.get("activeRouteLockMetrics", {}).get("valid", True):
         reasons.append("active-route-lock-violation")
+    if traffic_audit and traffic_audit.get("fallbackRequired"):
+        reasons.append(str(traffic_audit.get("classification", "traffic-fallback-required")))
     return {"instance": challenger.get("instance"), "fallbackApplied": bool(reasons), "fallbackReason": ",".join(reasons) if reasons else None, "productionCandidateSafe": not reasons}
 
 
-def summarize_gate(validation_rows: List[Dict[str, Any]], comparisons: List[Dict[str, Any]], fallback_decisions: List[Dict[str, Any]]) -> str:
+def summarize_gate(validation_rows: List[Dict[str, Any]], comparisons: List[Dict[str, Any]], fallback_decisions: List[Dict[str, Any]], traffic_rows: List[Dict[str, Any]] | None = None) -> str:
     if any(not row.get("valid") for row in validation_rows):
         return "FAIL"
     if any(row.get("classification") == "unknown" for row in comparisons):
         return "FAIL"
     if any(decision.get("fallbackApplied") for decision in fallback_decisions):
         return "FAIL"
-    limited = any(row.get("activeRouteLockingImplemented") is False for row in validation_rows) or any(row.get("classification") in {"vroom-unavailable", "comparator-semantics-blocked", "vroom-timeout"} for row in comparisons)
+    limited = any(row.get("activeRouteLockingImplemented") is False for row in validation_rows) or any(row.get("classification") in {"vroom-unavailable", "comparator-semantics-blocked", "vroom-timeout"} for row in comparisons) or any(row.get("classification") == "traffic-fallback-used" for row in (traffic_rows or []))
     return "PASS_WITH_LIMITS" if limited else "PASS"
 
 
@@ -312,13 +315,17 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     snapshot_paths = sorted(snapshot_dir.glob("*.json"))
     validation_rows = []
+    traffic_rows = []
     instances = []
     for path in snapshot_paths:
         snapshot = read_json(path)
         validation = validate_snapshot(snapshot)
-        row = {"snapshotPath": str(path), "snapshotId": snapshot.get("snapshotId"), "valid": bool(validation.get("valid")), "errors": validation.get("errors", []), "activeRouteLockingImplemented": bool(args.enforce_active_route_locking)}
+        traffic_audit = audit_traffic_matrix(snapshot, args.traffic_max_freshness_seconds, args.traffic_min_confidence, args.require_live_traffic, args.allow_traffic_fallback) if validation.get("valid") else {"snapshotId": snapshot.get("snapshotId"), "classification": "traffic-skip-invalid-snapshot", "fallbackRequired": False}
+        traffic_rows.append(traffic_audit)
+        traffic_invalid = traffic_audit.get("classification") == "traffic-matrix-invalid" or (traffic_audit.get("fallbackRequired") and not args.allow_traffic_fallback)
+        row = {"snapshotPath": str(path), "snapshotId": snapshot.get("snapshotId"), "valid": bool(validation.get("valid")) and not traffic_invalid, "errors": validation.get("errors", []) + traffic_audit.get("errors", []), "activeRouteLockingImplemented": bool(args.enforce_active_route_locking), "trafficClassification": traffic_audit.get("classification")}
         validation_rows.append(row)
-        if not validation.get("valid"):
+        if not row.get("valid"):
             continue
         instance = convert_live_snapshot_to_pdptw_instance(snapshot, enforce_active_route_locking=bool(args.enforce_active_route_locking))
         write_json(converted_dir / f"{instance['instanceName']}.json", instance)
@@ -341,12 +348,13 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
         instance_name = str(challenger_row["instance"])
         vroom_row = vroom_by_instance.get(instance_name)
         classification = fair_compare(challenger_row, vroom_row)
-        fallback_decision = apply_fallback_policy(challenger_row, time_limit_ms)
+        traffic_audit = next((row for row in traffic_rows if row.get("snapshotId") == instance_name), None)
+        fallback_decision = apply_fallback_policy(challenger_row, time_limit_ms, traffic_audit)
         comparisons.append({"instance": instance_name, "classification": classification, "challenger": challenger_row, "vroom": vroom_row})
-        food_rows.append({"instance": instance_name, **challenger_row.get("foodMetrics", {})})
+        food_rows.append({"instance": instance_name, **challenger_row.get("foodMetrics", {}), "matrixFreshnessSeconds": (traffic_audit or {}).get("freshnessSeconds"), "trafficConfidence": (traffic_audit or {}).get("confidence"), "trafficFallbackRate": 1.0 if (traffic_audit or {}).get("fallbackUsed") else 0.0})
         fallback_decisions.append(fallback_decision)
 
-    gate = summarize_gate(validation_rows, comparisons, fallback_decisions)
+    gate = summarize_gate(validation_rows, comparisons, fallback_decisions, traffic_rows)
     classification_counts: Dict[str, int] = {}
     for comparison in comparisons:
         classification_counts[comparison["classification"]] = classification_counts.get(comparison["classification"], 0) + 1
@@ -361,19 +369,21 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
         "champion": "vroom",
         "classificationCounts": classification_counts,
         "activeRouteLockingImplemented": bool(args.enforce_active_route_locking),
+        "trafficAuditCounts": {classification: sum(1 for row in traffic_rows if row.get("classification") == classification) for classification in sorted({str(row.get("classification")) for row in traffic_rows})},
         "outputDir": str(output_dir),
     }
-    write_outputs(output_dir, summary, validation_rows, comparisons, fallback_decisions, food_rows, vroom.get("rows", []))
+    write_outputs(output_dir, summary, validation_rows, comparisons, fallback_decisions, food_rows, vroom.get("rows", []), traffic_rows)
     return summary
 
 
-def write_outputs(output_dir: Path, summary: Dict[str, Any], validation_rows: List[Dict[str, Any]], comparisons: List[Dict[str, Any]], fallback_decisions: List[Dict[str, Any]], food_rows: List[Dict[str, Any]], vroom_rows: List[Dict[str, Any]]) -> None:
+def write_outputs(output_dir: Path, summary: Dict[str, Any], validation_rows: List[Dict[str, Any]], comparisons: List[Dict[str, Any]], fallback_decisions: List[Dict[str, Any]], food_rows: List[Dict[str, Any]], vroom_rows: List[Dict[str, Any]], traffic_rows: List[Dict[str, Any]] | None = None) -> None:
     write_json(output_dir / "phase79_summary.json", summary)
     write_json(output_dir / "snapshot_validation.json", validation_rows)
     write_json(output_dir / "per_snapshot_comparison.json", comparisons)
     write_json(output_dir / "fallback_decisions.json", fallback_decisions)
     write_json(output_dir / "food_metrics.json", {"schemaVersion": "phase79-food-metrics/v1", "rows": food_rows})
     write_json(output_dir / "vroom_comparison.json", {"schemaVersion": "phase79-vroom-comparison-rows/v1", "rows": vroom_rows})
+    write_json(output_dir / "traffic_audit.json", {"schemaVersion": "phase82-phase79-traffic-audit/v1", "rows": traffic_rows or []})
     (output_dir / "phase79_summary.md").write_text(markdown(summary, comparisons, fallback_decisions), encoding="utf-8")
 
 
@@ -386,6 +396,7 @@ def markdown(summary: Dict[str, Any], comparisons: List[Dict[str, Any]], fallbac
         f"- Production main ready: `{summary.get('productionMainReady')}`",
         f"- Classification counts: `{json.dumps(summary.get('classificationCounts', {}), sort_keys=True)}`",
         f"- Active-route locking implemented: `{summary.get('activeRouteLockingImplemented')}`",
+        f"- Traffic audit counts: `{json.dumps(summary.get('trafficAuditCounts', {}), sort_keys=True)}`",
         "",
         "| Snapshot | Classification | Fallback Applied |",
         "|---|---|---:|",
@@ -408,6 +419,10 @@ def main() -> int:
     parser.add_argument("--dry-run-conversion", action="store_true")
     parser.add_argument("--skip-vroom-run", action="store_true")
     parser.add_argument("--enforce-active-route-locking", action="store_true")
+    parser.add_argument("--traffic-max-freshness-seconds", type=int, default=300)
+    parser.add_argument("--traffic-min-confidence", type=float, default=0.7)
+    parser.add_argument("--require-live-traffic", action="store_true")
+    parser.add_argument("--allow-traffic-fallback", action="store_true")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     args = parser.parse_args()
     summary = run(args)

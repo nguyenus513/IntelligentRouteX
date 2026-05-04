@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -79,6 +80,43 @@ def _validate_duration_matrix(matrix: Any, errors: list[str]) -> None:
         for column_index, value in enumerate(row):
             if not _is_number(value) or value < 0:
                 errors.append(f"durationMatrix[{row_index}][{column_index}]: must be a finite non-negative number")
+        if isinstance(row, list) and row_index < len(row) and _is_number(row[row_index]) and row[row_index] != 0:
+            errors.append(f"durationMatrix[{row_index}][{row_index}]: diagonal must be 0")
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _validate_traffic_context(snapshot: dict[str, Any], errors: list[str]) -> None:
+    traffic = snapshot.get("trafficContext")
+    if not isinstance(traffic, dict):
+        return
+    confidence = traffic.get("confidence")
+    freshness = traffic.get("freshnessSeconds")
+    max_freshness = traffic.get("maxFreshnessSeconds")
+    if confidence is not None and (not _is_number(confidence) or confidence < 0 or confidence > 1):
+        errors.append("trafficContext.confidence: must be in [0,1]")
+    if freshness is not None and (not _is_number(freshness) or freshness < 0):
+        errors.append("trafficContext.freshnessSeconds: must be a finite non-negative number")
+    if max_freshness is not None and (not _is_number(max_freshness) or max_freshness < 0):
+        errors.append("trafficContext.maxFreshnessSeconds: must be a finite non-negative number")
+    if _is_number(freshness) and _is_number(max_freshness) and freshness > max_freshness:
+        errors.append("trafficContext.freshnessSeconds: exceeds maxFreshnessSeconds")
+    generated_at = _parse_timestamp(traffic.get("generatedAt")) if traffic.get("generatedAt") is not None else None
+    valid_until = _parse_timestamp(traffic.get("validUntil")) if traffic.get("validUntil") is not None else None
+    snapshot_time = _parse_timestamp(snapshot.get("timestamp"))
+    if traffic.get("generatedAt") is not None and generated_at is None:
+        errors.append("trafficContext.generatedAt: must be ISO-8601 parseable")
+    if traffic.get("validUntil") is not None and valid_until is None:
+        errors.append("trafficContext.validUntil: must be ISO-8601 parseable")
+    if generated_at and snapshot_time and generated_at > snapshot_time:
+        errors.append("trafficContext.generatedAt: must be <= snapshot timestamp")
 
 
 def _validate_orders(orders: Any, errors: list[str]) -> None:
@@ -153,6 +191,7 @@ def validate_snapshot(snapshot: Any) -> dict[str, Any]:
         if object_field in snapshot and not isinstance(snapshot[object_field], dict):
             errors.append(f"{object_field}: must be an object")
 
+    _validate_traffic_context(snapshot, errors)
     _validate_orders(snapshot.get("orders"), errors)
     _validate_drivers(snapshot.get("drivers"), errors)
     _validate_active_routes(snapshot.get("activeRoutes"), errors)

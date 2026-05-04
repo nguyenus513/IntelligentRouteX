@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "live-dispatch-snapshot/v1",
+  "snapshotId": "normal_peak_snapshot",
+  "timestamp": "2026-05-04T12:00:00+07:00",
+  "region": "hcm-traffic-demo",
+  "nodeIds": ["depot", "restaurant-a", "customer-a"],
+  "orders": [{"orderId": "normal-001", "pickupNodeId": "restaurant-a", "dropoffNodeId": "customer-a", "restaurantId": "restaurant-a", "readyTime": 5, "dueTime": 70, "serviceTimePickup": 2, "serviceTimeDropoff": 1, "demand": 1}],
+  "drivers": [{"driverId": "driver-1", "startNodeId": "depot", "capacity": 2, "shiftStart": 0, "shiftEnd": 120}],
+  "activeRoutes": [],
+  "durationMatrix": [[0, 8, 20], [8, 0, 12], [20, 12, 0]],
+  "trafficContext": {"provider": "synthetic", "generatedAt": "2026-05-04T11:59:30+07:00", "validUntil": "2026-05-04T12:04:30+07:00", "trafficMode": "peak", "multiplier": 1.1, "confidence": 0.92, "matrixSource": "live", "freshnessSeconds": 30, "maxFreshnessSeconds": 300, "region": "hcm-traffic-demo"},
+  "restaurantDelay": {"restaurant-a": 0},
+  "cancellationRisk": {"normal-001": 0.08}
+}

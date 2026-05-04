@@ -35,7 +35,7 @@ def valid_snapshot() -> dict:
         ],
         "activeRoutes": [],
         "durationMatrix": [[0, 300, 600], [300, 0, 240], [600, 240, 0]],
-        "trafficContext": {"multiplier": 1.0},
+        "trafficContext": {"multiplier": 1.0, "generatedAt": "2026-05-04T06:59:00Z", "validUntil": "2026-05-04T07:04:00Z", "confidence": 0.9, "freshnessSeconds": 60, "maxFreshnessSeconds": 300, "matrixSource": "live"},
         "restaurantDelay": {"restaurant-1": 0},
         "cancellationRisk": {"order-1": 0.1},
     }
@@ -76,6 +76,16 @@ def test_invalid_order_time_window_fails() -> None:
 
     assert result["valid"] is False
     assert any("readyTime must be <= dueTime" in error for error in result["errors"])
+
+
+def test_invalid_traffic_confidence_fails() -> None:
+    snapshot = valid_snapshot()
+    snapshot["trafficContext"]["confidence"] = 1.5
+
+    result = phase78.validate_snapshot(snapshot)
+
+    assert result["valid"] is False
+    assert any("trafficContext.confidence" in error for error in result["errors"])
 
 
 def test_fallback_policy_mentions_required_triggers() -> None:

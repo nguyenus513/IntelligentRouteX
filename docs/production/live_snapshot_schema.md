@@ -70,11 +70,28 @@ Required per active route:
 
 `activeRoutes` is mandatory even when empty. This prevents accidentally optimizing as if no committed dispatch state exists.
 
+## Traffic Context Fields
+
+Phase 82 extends `trafficContext` for traffic-aware matrix readiness:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `provider` | string | `synthetic`, `osrm`, `google`, `internal`, or `manual`. |
+| `generatedAt` | ISO-8601 string | When the matrix was generated. Must be `<= timestamp`. |
+| `validUntil` | ISO-8601 string | Recommended expiry time for the matrix. |
+| `trafficMode` | string | `normal`, `peak`, `rain`, `incident`, or `unknown`. |
+| `multiplier` | number | Traffic multiplier used to produce durations. |
+| `confidence` | number | Matrix confidence in `[0,1]`. |
+| `matrixSource` | string | `live`, `cached`, `synthetic`, or `fallback`. |
+| `freshnessSeconds` | number | Age of matrix at snapshot time. |
+| `maxFreshnessSeconds` | number | Maximum accepted matrix age. |
+| `region` | string | Traffic region used by the provider. |
+
 ## Matrix Contract
 
 - `durationMatrix` must be square.
 - Every node referenced by orders, drivers, and active routes must have an index in `nodeIdToMatrixIndex` if that map is supplied.
-- Production comparisons must not use distance as duration unless explicitly recorded in `trafficContext.durationSource`.
+- Production comparisons must not use distance as duration unless explicitly recorded in `trafficContext.durationSource` or `trafficContext.matrixSource`.
 
 ## Minimal Example
 
