@@ -1,4 +1,4 @@
-﻿# Community Benchmark Report v2
+# Community Benchmark Report v2
 
 System: IntelligentRouteX  
 Benchmark source commit: `2a394e3c`  
@@ -16,9 +16,9 @@ This report rewrites the previous engineering summary into a benchmark-paper sty
 
 ## Abstract
 
-We evaluate IntelligentRouteX on community-standard routing and dispatch workloads, including Solomon-style VRPTW, Liâ€“Lim PDPTW, VROOM capability cases, Liâ€“Lim VROOM live comparison, dynamic dispatch, food dispatch quality, traffic-aware routing, weather-aware routing, route beauty, and ML-assisted routing evidence.
+We evaluate IntelligentRouteX on community-standard routing and dispatch workloads, including Solomon-style VRPTW, Li-Lim PDPTW, VROOM capability cases, Li-Lim VROOM live comparison, dynamic dispatch, food dispatch quality, traffic-aware routing, weather-aware routing, route beauty, and ML-assisted routing evidence.
 
-The strongest current evidence is feasibility-oriented routing, ML readiness, ML ablation value, dynamic dispatch stability, and environment-aware route selection. The main research gap remains large-scale academic PDPTW quality: under the current benchmark protocol, IntelligentRouteX trails OR-Tools on distance in many paired feasible Liâ€“Lim comparisons, and trails VROOM on the feasible Liâ€“Lim live rows collected in this campaign.
+The strongest current evidence is feasibility-oriented routing, ML readiness, ML ablation value, dynamic dispatch stability, and environment-aware route selection. The main research gap remains large-scale academic PDPTW quality: under the current benchmark protocol, IntelligentRouteX trails OR-Tools on distance in many paired feasible Li-Lim comparisons, and trails VROOM on the feasible Li-Lim live rows collected in this campaign.
 
 ## 1. Overview
 
@@ -31,7 +31,7 @@ Problem families:
 | Family | Benchmark source | Main objective |
 |---|---|---|
 | Static VRPTW | Solomon-style community rows | Minimize vehicle count, then distance |
-| Static PDPTW | Liâ€“Lim community rows | Minimize vehicle count, then distance |
+| Static PDPTW | Li-Lim community rows | Minimize vehicle count, then distance |
 | Industrial comparator | VROOM live service | Compare feasibility, vehicle count, distance, timeout |
 | Dynamic dispatch | Community-style dynamic dispatch rows | Minimize violations, tardiness, instability |
 | Food dispatch | Grubhub/MDRP-style threshold rows | Minimize delivery tail, lateness, unfairness |
@@ -40,9 +40,9 @@ Problem families:
 ### 1.2 Claims Supported by This Artifact
 
 - On the generated VROOM capability smoke suite, VROOM returned feasible solutions on `4/4` rows; IntelligentRouteX matched VROOM on `3/4` rows and had lower distance on `1/4` row.
-- On the live Liâ€“Lim VROOM comparator, VROOM returned feasible checked solutions on `4/8` rows and timed out on `2/8`; among comparable feasible rows, IntelligentRouteX had an average distance gap of `8.131%` and an average vehicle gap of `+0.75` versus VROOM.
-- On the large Phase15 community run, IntelligentRouteX completed paired comparison against OR-Tools over `360` instances; feasible rate was `100.0%` for medium and large Liâ€“Lim groups and `80.822%` for small Liâ€“Lim.
-- On Liâ€“Lim medium and large groups, the average distance gap versus OR-Tools was `1.409%` and `2.076%`, respectively.
+- On the live Li-Lim VROOM comparator, VROOM returned feasible checked solutions on `4/8` rows and timed out on `2/8`; among comparable feasible rows, IntelligentRouteX had an average distance gap of `8.131%` and an average vehicle gap of `+0.75` versus VROOM.
+- On the large Phase15 community run, IntelligentRouteX completed paired comparison against OR-Tools over `360` instances; feasible rate was `100.0%` for medium and large Li-Lim groups and `80.822%` for small Li-Lim.
+- On Li-Lim medium and large groups, the average distance gap versus OR-Tools was `1.409%` and `2.076%`, respectively.
 - ML components are present and importable; the artifact contains `20` ablation rows, with positive rows for forecast, GreedRL, and RouteFinder components.
 
 ## 2. Experimental Setup
@@ -80,15 +80,15 @@ PyVRP is intentionally not assigned synthetic numbers. The current report marks 
 | Phase15 large community rows | `60s` per cell |
 | VROOM capability smoke challenger | `10s` |
 | VROOM capability smoke VROOM timeout | `30s` |
-| VROOM Liâ€“Lim challenger | `15s` |
-| VROOM Liâ€“Lim VROOM timeout | `60s` |
+| VROOM Li-Lim challenger | `15s` |
+| VROOM Li-Lim VROOM timeout | `60s` |
 | Food dispatch quality | artifact-defined |
 | Dynamic dispatch quality | artifact-defined |
 | ML ablation/readiness | artifact-defined |
 
 ### 2.4 Random Seeds
 
-The current benchmark artifacts do not provide a complete seed-level repeated-trial table. Therefore, statistical reporting is limited to cross-instance mean and standard deviation where multiple rows exist. Paper-grade reporting should rerun key benchmarks with fixed seeds such as `[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]` and report mean Â± std over seeds.
+The current benchmark artifacts do not provide a complete seed-level repeated-trial table. Therefore, statistical reporting is limited to cross-instance mean and standard deviation where multiple rows exist. Paper-grade reporting should rerun key benchmarks with fixed seeds such as `[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]` and report mean +/- std over seeds.
 
 ## 3. Metrics
 
@@ -99,8 +99,8 @@ The current benchmark artifacts do not provide a complete seed-level repeated-tr
 | Vehicle count | Number of active vehicles in a feasible solution |
 | Total distance | Sum of route distances in benchmark-native units |
 | Vehicle gap | Ours vehicles minus baseline vehicles |
-| Distance gap (%) | `(ours_distance - baseline_distance) / baseline_distance Ã— 100` |
-| Gap to BKS (%) | `(ours_distance - BKS_distance) / BKS_distance Ã— 100` |
+| Distance gap (%) | `(ours_distance - baseline_distance) / baseline_distance x 100` |
+| Gap to BKS (%) | `(ours_distance - BKS_distance) / BKS_distance x 100` |
 | Runtime | Wall-clock benchmark runtime |
 | Feasible rate | Fraction of rows with all hard constraints satisfied |
 | Timeout rate | Fraction of rows where solver exceeded configured time limit |
@@ -133,7 +133,7 @@ No raw missing-value placeholders are used in the main report.
 
 | Label | Meaning |
 |---|---|
-| `â€”` | Not applicable by design |
+| `-` | Not applicable by design |
 | `not measured` | Pipeline did not collect this metric in the current artifact |
 | `timeout` | Solver exceeded the configured time limit |
 | `infeasible` | Checker did not validate all hard constraints |
@@ -147,15 +147,15 @@ Source: `artifacts/benchmark/community_benchmark_tables_v2/routing_phase15_summa
 
 | Dataset | Scale | Instances | Paired feasible | Feasible rate (%) | Vehicle gap vs OR-Tools | Distance gap vs OR-Tools (%) | Runtime (s) | Hard-violation rows |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Liâ€“Lim | large | 104 | 104 | 100.000 | 0.087 | 2.076 | 56.171 | 0 |
-| Liâ€“Lim | medium | 177 | 176 | 100.000 | 0.057 | 1.409 | 53.388 | 0 |
-| Liâ€“Lim | small | 73 | 59 | 80.822 | 0.119 | 1.661 | 45.022 | 0 |
+| Li-Lim | large | 104 | 104 | 100.000 | 0.087 | 2.076 | 56.171 | 0 |
+| Li-Lim | medium | 177 | 176 | 100.000 | 0.057 | 1.409 | 53.388 | 0 |
+| Li-Lim | small | 73 | 59 | 80.822 | 0.119 | 1.661 | 45.022 | 0 |
 | Solomon-style | small | 6 | 6 | 100.000 | -1.833 | 3.580 | 60.580 | 0 |
 
 Interpretation:
 
-- The Liâ€“Lim medium and large rows show complete feasibility in the Phase15 paired artifact and low but positive average distance gap versus OR-Tools.
-- The Liâ€“Lim small group has a lower feasible rate (`80.822%`), which should be investigated before making a broad small-instance quality claim.
+- The Li-Lim medium and large rows show complete feasibility in the Phase15 paired artifact and low but positive average distance gap versus OR-Tools.
+- The Li-Lim small group has a lower feasible rate (`80.822%`), which should be investigated before making a broad small-instance quality claim.
 - The Solomon-style small group uses fewer vehicles on average than OR-Tools in this artifact (`-1.833` vehicle gap), but with a higher distance gap (`3.580%`). This indicates a hierarchical trade-off: vehicle minimization may be stronger than distance polish in those rows.
 
 ### 5.2 VROOM Capability Smoke Live Comparator
@@ -187,22 +187,22 @@ Interpretation:
 - Capability smoke confirms adapter compatibility for small pickup-delivery and custom-matrix cases.
 - This is not a large academic quality benchmark; it is a live integration and semantic capability check.
 
-### 5.3 VROOM Liâ€“Lim Live Comparator
+### 5.3 VROOM Li-Lim Live Comparator
 
 Source: `artifacts/benchmark/community_benchmark_tables_v2/vroom_lilim_live.csv`
 
 | Instance | VROOM status | VROOM feasible | VROOM vehicles / distance | Ours vehicles / distance | Vehicle gap | Distance gap (%) | VROOM runtime (ms) |
 |---|---|---:|---:|---:|---:|---:|---:|
-| LRC202 | ok | no | 4 / 1398.020 | 5 / 1591.021 | â€” | â€” | 534 |
+| LRC202 | ok | no | 4 / 1398.020 | 5 / 1591.021 | - | - | 534 |
 | LRC206 | ok | yes | 3 / 1159.033 | 4 / 1348.841 | 1 | 16.376 | 386 |
 | LRC106 | ok | yes | 12 / 1474.085 | 12 / 1489.758 | 0 | 1.063 | 408 |
 | LRC104 | ok | yes | 10 / 1129.338 | 11 / 1170.620 | 1 | 3.655 | 417 |
 | LRC108 | ok | yes | 11 / 1167.174 | 12 / 1300.589 | 1 | 11.431 | 345 |
-| LRC1_2_7 | ok | no | 17 / 3419.307 | 17 / 3782.925 | â€” | â€” | 1781 |
-| LRC281 | timeout | no | â€” | 94 / 73280.848 | â€” | â€” | 60120 |
-| LC1_4_8 | timeout | no | â€” | 43 / 10026.852 | â€” | â€” | 60076 |
+| LRC1_2_7 | ok | no | 17 / 3419.307 | 17 / 3782.925 | - | - | 1781 |
+| LRC281 | timeout | no | - | 94 / 73280.848 | - | - | 60120 |
+| LC1_4_8 | timeout | no | - | 43 / 10026.852 | - | - | 60076 |
 
-Aggregate VROOM Liâ€“Lim live comparator:
+Aggregate VROOM Li-Lim live comparator:
 
 | Metric | Value |
 |---|---:|
@@ -217,9 +217,9 @@ Aggregate VROOM Liâ€“Lim live comparator:
 
 Interpretation:
 
-- VROOM is a strong live baseline on the feasible Liâ€“Lim rows; IntelligentRouteX trails it on mean distance and vehicle count in this sample.
+- VROOM is a strong live baseline on the feasible Li-Lim rows; IntelligentRouteX trails it on mean distance and vehicle count in this sample.
 - Two VROOM rows were returned but failed the internal checker, and two rows timed out under the configured `60s` VROOM timeout. These rows are not included in distance-gap averages.
-- The fair conclusion is: IntelligentRouteX is comparable and feasible on several Liâ€“Lim rows, but it is not stronger than VROOM on this live Liâ€“Lim sample.
+- The fair conclusion is: IntelligentRouteX is comparable and feasible on several Li-Lim rows, but it is not stronger than VROOM on this live Li-Lim sample.
 
 ## 6. Dispatch Results
 
@@ -302,7 +302,7 @@ Interpretation:
 
 - The ML layer is installed, importable, and connected to worker readiness artifacts.
 - Ablation evidence is mixed rather than uniformly positive: GreedRL has positive mean selector delta but negative mean robust utility delta; RouteFinder has positive selector and robust deltas in the small measured subset; forecast has slightly negative selector delta but positive robust delta.
-- The current ML evidence supports â€œML components are operational and sometimes beneficial,â€ not â€œML consistently improves every metric.â€
+- The current ML evidence supports -ML components are operational and sometimes beneficial, not -ML consistently improves every metric.
 - Inference latency and training cost are not measured in the current artifact, so a paper-grade ML efficiency claim is still pending.
 
 ## 8. Statistical Validity
@@ -313,7 +313,7 @@ Current statistical strength:
 |---|---|---|
 | Phase15 routing | cross-instance mean, std, median available from generated CSV | seed-level repeated trials missing |
 | VROOM smoke | per-instance comparison over 4 rows | too small for statistical significance |
-| VROOM Liâ€“Lim | per-instance comparison over 8 rows | VROOM infeasible/timeout rows reduce comparable sample to 4 |
+| VROOM Li-Lim | per-instance comparison over 8 rows | VROOM infeasible/timeout rows reduce comparable sample to 4 |
 | Food dispatch | row-level metrics over 3 rows | no P99, no cost/order, no multi-seed variance |
 | Dynamic dispatch | row-level metrics over 3 rows | no tail latency, no multi-seed variance |
 | ML ablation | component-level mean/std over 20 rows | inference cost and seed-level generalization not measured |
@@ -333,13 +333,13 @@ Phase-linked diagnostic history explains the remaining large-instance routing ga
 
 | Phase range | Bottleneck found | Fix direction | Current interpretation |
 |---|---|---|---|
-| 91â€“93 | candidate generation and decomposition scaling | operator activation, micro-probe, decomposition probe | generation works on micro/subproblem cases; full-scale quality remains harder |
-| 94â€“95 | route-slot overflow during recombination | slot-preserving and slot-aware subproblem solving | slot overflow is prechecked instead of accepted as hard violation |
+| 91-93 | candidate generation and decomposition scaling | operator activation, micro-probe, decomposition probe | generation works on micro/subproblem cases; full-scale quality remains harder |
+| 94-95 | route-slot overflow during recombination | slot-preserving and slot-aware subproblem solving | slot overflow is prechecked instead of accepted as hard violation |
 | 96 | coverage invalid after recombination | affected-route request closure and coverage repair | coverage preservation is cleaner |
-| 97â€“98 | residual time-window infeasibility | TW repair and schedule-feasible subproblem construction | time-window violations were reduced upstream |
+| 97-98 | residual time-window infeasibility | TW repair and schedule-feasible subproblem construction | time-window violations were reduced upstream |
 | 99 | final residual TW blocker | exact TW route finalizer and autonomous repair loop | diagnostic path reached clean final decomposition evidence |
 
-The key research conclusion is that large Liâ€“Lim performance is now primarily a search-efficiency and scaling problem, not a basic feasibility, adapter, hardcode, or telemetry problem.
+The key research conclusion is that large Li-Lim performance is now primarily a search-efficiency and scaling problem, not a basic feasibility, adapter, hardcode, or telemetry problem.
 
 ## 10. Discussion
 
@@ -347,7 +347,7 @@ The key research conclusion is that large Liâ€“Lim performance is now prima
 
 - VROOM is now running live and produces comparator artifacts.
 - IntelligentRouteX has complete numeric Phase15 tables against OR-Tools over `360` paired instances.
-- Liâ€“Lim medium and large feasibility in the generated Phase15 table is `100.000%` with zero hard-violation rows in those groups.
+- Li-Lim medium and large feasibility in the generated Phase15 table is `100.000%` with zero hard-violation rows in those groups.
 - Dynamic dispatch and food dispatch show zero hard violations in the evaluated artifacts.
 - ML runtime readiness is real: RL4CO, Torch, CUDA visibility, and worker readiness are present.
 
@@ -355,7 +355,7 @@ The key research conclusion is that large Liâ€“Lim performance is now prima
 
 - PyVRP was not measured in this campaign, so the classical baseline set is incomplete.
 - Seed-level repeated trials are missing, so the report is not yet statistically complete by NeurIPS/ICAPS-style standards.
-- VROOM Liâ€“Lim comparison has only `4` comparable feasible rows because VROOM had `2` checker-infeasible returns and `2` timeouts.
+- VROOM Li-Lim comparison has only `4` comparable feasible rows because VROOM had `2` checker-infeasible returns and `2` timeouts.
 - Food and dynamic dispatch do not yet include P99 latency or cost per order.
 - ML inference time and training cost are not measured.
 
@@ -390,7 +390,7 @@ The following files are produced by `scripts/generate_benchmark_tables.py`:
 | `artifacts/benchmark/community_benchmark_tables_v2/community_benchmark_tables_v2.json` | Full normalized table bundle |
 | `artifacts/benchmark/community_benchmark_tables_v2/routing_phase15_pairs.csv` | Per-instance OR-Tools vs ours table |
 | `artifacts/benchmark/community_benchmark_tables_v2/routing_phase15_summary.csv` | Aggregate routing table by dataset/scale |
-| `artifacts/benchmark/community_benchmark_tables_v2/vroom_lilim_live.csv` | VROOM Liâ€“Lim live comparator rows |
+| `artifacts/benchmark/community_benchmark_tables_v2/vroom_lilim_live.csv` | VROOM Li-Lim live comparator rows |
 | `artifacts/benchmark/community_benchmark_tables_v2/ml_ablation_summary.csv` | ML component ablation summary |
 | `artifacts/benchmark/community_benchmark_tables_v2/generated_tables.md` | Markdown tables generated from artifacts |
 
@@ -408,7 +408,7 @@ py -3.13 scripts/generate_benchmark_tables.py `
 
 IntelligentRouteX now has a paper-style community benchmark report with numeric tables and live VROOM data. The system is feasible and robust across several evaluated routing and dispatch workloads, and the ML stack is operational with measurable ablation signals.
 
-The strongest quantitative routing result is not superiority over all baselines; it is reproducible benchmarkability with clean numeric evidence. Against OR-Tools, Liâ€“Lim medium and large average distance gaps are `1.409%` and `2.076%` in the generated Phase15 table. Against VROOM on the live Liâ€“Lim sample, IntelligentRouteX trails by `8.131%` average distance over the four comparable feasible rows.
+The strongest quantitative routing result is not superiority over all baselines; it is reproducible benchmarkability with clean numeric evidence. Against OR-Tools, Li-Lim medium and large average distance gaps are `1.409%` and `2.076%` in the generated Phase15 table. Against VROOM on the live Li-Lim sample, IntelligentRouteX trails by `8.131%` average distance over the four comparable feasible rows.
 
 The next benchmark phase should add PyVRP under the same time limits, rerun seed-level trials, collect P99/cost metrics for dispatch, and measure ML inference overhead. Only after those additions should the report be treated as a full international paper-grade benchmark package.
 

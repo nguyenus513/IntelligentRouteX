@@ -365,6 +365,8 @@ def write_manifest(output_dir: Path, args: argparse.Namespace, files: list[Path]
         f"source_commit: `{args.source_commit}`",
         f"report_commit: `{args.report_commit}`",
         f"artifact_generation_commit: `{args.commit}`",
+        f"artifact_committed_in: `{args.artifact_committed_in}`",
+        f"report_trace_commit: `{args.report_trace_commit}`",
         f"generated_at_utc: `{datetime.now(timezone.utc).isoformat()}`",
         f"python_version: `{platform.python_version()}`",
         f"os: `{platform.platform()}`",
@@ -399,6 +401,8 @@ def main() -> int:
     parser.add_argument("--commit", default="unknown")
     parser.add_argument("--source-commit", default="2a394e3c")
     parser.add_argument("--report-commit", default="795efc96")
+    parser.add_argument("--artifact-committed-in", default="fcb3441a")
+    parser.add_argument("--report-trace-commit", default="7d7d2725")
     args = parser.parse_args()
 
     data = build(args)

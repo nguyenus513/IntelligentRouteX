@@ -3,7 +3,9 @@
 source_commit: `2a394e3c`
 report_commit: `795efc96`
 artifact_generation_commit: `2a394e3c`
-generated_at_utc: `2026-05-05T08:58:10.723422+00:00`
+artifact_committed_in: `fcb3441a`
+report_trace_commit: `7d7d2725`
+generated_at_utc: `2026-05-05T09:11:02.375274+00:00`
 python_version: `3.13.11`
 os: `Windows-11-10.0.26200-SP0`
 vroom_image: `ghcr.io/vroom-project/vroom-docker:v1.15.0-rc.1`

@@ -99,6 +99,8 @@ def test_manifest_records_hashes(tmp_path: Path) -> None:
         source_commit="source",
         report_commit="report",
         commit="generation",
+        artifact_committed_in="artifact-commit",
+        report_trace_commit="trace-commit",
         overnight=Path("overnight"),
         vroom_smoke=Path("smoke"),
         vroom_lilim=Path("lilim"),
