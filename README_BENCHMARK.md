@@ -13,10 +13,22 @@ This repository now packages IntelligentRouteX as a benchmarkable routing optimi
 
 ```powershell
 docker compose -f docker/vroom/docker-compose.yml up -d
-docker/vroom/healthcheck.ps1
+docker/vroom/healthcheck.cmd
 ```
 
 Use `/health` for readiness. `GET /` can return `404` and is not a service failure.
+
+If Docker Desktop is installed but the daemon is not running, start Docker Desktop first and then recreate the service so the host port is published:
+
+```powershell
+Start-Process 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
+docker compose -f docker/vroom/docker-compose.yml down
+docker compose -f docker/vroom/docker-compose.yml up -d --force-recreate
+docker port intelligentroutex-vroom 3000
+curl.exe -s -i http://localhost:3000/health
+```
+
+PowerShell execution policy can block `.ps1` scripts on Windows. `docker/vroom/healthcheck.cmd` avoids that issue.
 
 ## Run Li-Lim 8-Case Benchmark
 
