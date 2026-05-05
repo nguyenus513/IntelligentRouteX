@@ -1,0 +1,5 @@
+component,rows,positive_rows,mean_selector_objective_delta,std_selector_objective_delta,mean_robust_utility_delta,std_robust_utility_delta,inference_time_ms,training_cost_gpu_hours
+forecast,2,1,-0.005973969444305283,0.008448468609338993,0.0013510885068976353,0.0019107276904210507,not measured,not measured
+greedrl,15,1,0.012090670431838025,0.046826965226991105,-0.02638893189525365,0.045297034530110906,not measured,not measured
+routefinder,2,1,0.010252588222352088,0.014499349313476984,0.0021027331685612993,0.0029737137650311407,not measured,not measured
+tabular,1,0,0.0,0.0,0.0,0.0,not measured,not measured

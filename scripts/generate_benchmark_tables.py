@@ -1,12 +1,14 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import platform
 import statistics
-from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -20,6 +22,14 @@ DEFAULT_OUTPUT = REPO_ROOT / "artifacts" / "benchmark" / "community_benchmark_ta
 
 def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def safe_read_json(path: Path, default: Any, missing_inputs: list[str] | None = None) -> Any:
+    if not path.exists():
+        if missing_inputs is not None:
+            missing_inputs.append(str(path))
+        return default
+    return read_json(path)
 
 
 def write_json(path: Path, data: Any) -> None:
@@ -36,16 +46,24 @@ def write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> 
             writer.writerow({name: row.get(name, "") for name in fieldnames})
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def fmt(value: Any, digits: int = 3) -> str:
     if value is None:
-        return "—"
+        return "-"
     if isinstance(value, bool):
         return "yes" if value else "no"
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
         if math.isnan(value) or math.isinf(value):
-            return "—"
+            return "-"
         return f"{value:.{digits}f}"
     return str(value)
 
@@ -80,9 +98,9 @@ def gap_pct(value: float | None, baseline: float | None) -> float | None:
     return (value - baseline) / baseline * 100.0
 
 
-def load_phase15_rows(overnight: Path) -> list[dict[str, Any]]:
+def load_phase15_rows(overnight: Path, missing_inputs: list[str] | None = None) -> list[dict[str, Any]]:
     path = overnight / "07_phase15_large_community" / "phase15_large_benchmark_results.json"
-    return read_json(path).get("results", []) if path.exists() else []
+    return safe_read_json(path, {}, missing_inputs).get("results", [])
 
 
 def paired_solver_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -153,11 +171,9 @@ def aggregate_phase15(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return summary
 
 
-def load_vroom_rows(root: Path, suite_name: str) -> list[dict[str, Any]]:
+def load_vroom_rows(root: Path, suite_name: str, missing_inputs: list[str] | None = None) -> list[dict[str, Any]]:
     path = root / "vroom_comparator" / "per_instance_comparison.json"
-    if not path.exists():
-        return []
-    rows = read_json(path)
+    rows = safe_read_json(path, [], missing_inputs)
     out: list[dict[str, Any]] = []
     for row in rows:
         champion = row.get("champion") or {}
@@ -177,7 +193,7 @@ def load_vroom_rows(root: Path, suite_name: str) -> list[dict[str, Any]]:
                 "vehicle_gap_vs_vroom": (challenger.get("vehicleCount") - champion.get("vehicleCount")) if row.get("vroomFeasibleByInternalChecker") and champion.get("vehicleCount") is not None and challenger.get("vehicleCount") is not None else None,
                 "distance_gap_vs_vroom_pct": gap_pct(challenger.get("totalDistance"), champion.get("totalDistance")) if row.get("vroomFeasibleByInternalChecker") and champion.get("totalDistance") else None,
                 "timeout": row.get("vroomStatus") == "vroom-timeout",
-                "vroom_error_class": row.get("vroomStatus") if row.get("vroomStatus") != "ok" else "—",
+                "vroom_error_class": row.get("vroomStatus") if row.get("vroomStatus") != "ok" else "-",
             }
         )
     return out
@@ -198,8 +214,8 @@ def aggregate_vroom(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def load_food(overnight: Path) -> dict[str, Any]:
-    data = read_json(overnight / "11_food_dispatch_quality" / "food_dispatch_quality_results.json")
+def load_food(overnight: Path, missing_inputs: list[str] | None = None) -> dict[str, Any]:
+    data = safe_read_json(overnight / "11_food_dispatch_quality" / "food_dispatch_quality_results.json", {}, missing_inputs)
     metrics: dict[str, Any] = {}
     for layer in data.get("layers", []):
         metrics.update(layer.get("metrics") or {})
@@ -220,8 +236,8 @@ def load_food(overnight: Path) -> dict[str, Any]:
     }
 
 
-def load_dynamic(overnight: Path) -> dict[str, Any]:
-    data = read_json(overnight / "12_dynamic_dispatch_quality" / "dynamic_dispatch_quality_results.json")
+def load_dynamic(overnight: Path, missing_inputs: list[str] | None = None) -> dict[str, Any]:
+    data = safe_read_json(overnight / "12_dynamic_dispatch_quality" / "dynamic_dispatch_quality_results.json", {}, missing_inputs)
     return {
         "row_count": data.get("rowCount"),
         "hard_violations": data.get("hardViolationCount"),
@@ -234,8 +250,8 @@ def load_dynamic(overnight: Path) -> dict[str, Any]:
     }
 
 
-def load_ml(overnight: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    data = read_json(overnight / "16_ml_intelligence" / "ml_intelligence_results.json")
+def load_ml(overnight: Path, missing_inputs: list[str] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    data = safe_read_json(overnight / "16_ml_intelligence" / "ml_intelligence_results.json", {}, missing_inputs)
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in data.get("mlAblationRows", []):
         groups[row.get("component", "unknown")].append(row)
@@ -284,8 +300,8 @@ def render_tables(data: dict[str, Any]) -> str:
     lines.append("## Generated Numeric Tables\n")
     lines.append("### Routing Aggregate by Dataset and Scale\n")
     lines.append(markdown_table(
-        ["Dataset", "Scale", "Instances", "Feasible rate (%)", "Vehicle gap vs OR-Tools", "Distance gap vs OR-Tools (%)", "Runtime (s)", "Hard-violation rows"],
-        [[r["dataset"], r["scale"], r["instances"], r["ours_feasible_rate_pct"], r["avg_vehicle_gap_vs_ortools"], r["avg_distance_gap_vs_ortools_pct"], r["avg_runtime_sec"], r["hard_violation_rows"]] for r in phase15_summary],
+        ["Dataset", "Scale", "Instances", "Paired feasible", "Feasible rate (%)", "Vehicle gap vs OR-Tools", "Distance gap vs OR-Tools (%)", "Runtime (s)", "Hard-violation rows"],
+        [[r["dataset"], r["scale"], r["instances"], r["paired_feasible_instances"], r["ours_feasible_rate_pct"], r["avg_vehicle_gap_vs_ortools"], r["avg_distance_gap_vs_ortools_pct"], r["avg_runtime_sec"], r["hard_violation_rows"]] for r in phase15_summary],
     ))
     lines.append("\n### VROOM Li-Lim Live Comparator\n")
     lines.append(markdown_table(
@@ -305,10 +321,11 @@ def render_tables(data: dict[str, Any]) -> str:
 
 
 def build(args: argparse.Namespace) -> dict[str, Any]:
-    phase15_pairs = paired_solver_rows(load_phase15_rows(args.overnight))
-    vroom_smoke_rows = load_vroom_rows(args.vroom_smoke, "vroom-capability-smoke")
-    vroom_lilim_rows = load_vroom_rows(args.vroom_lilim, "li-lim-8case")
-    ml_rows, ml_meta = load_ml(args.overnight)
+    missing_inputs: list[str] = []
+    phase15_pairs = paired_solver_rows(load_phase15_rows(args.overnight, missing_inputs))
+    vroom_smoke_rows = load_vroom_rows(args.vroom_smoke, "vroom-capability-smoke", missing_inputs)
+    vroom_lilim_rows = load_vroom_rows(args.vroom_lilim, "li-lim-8case", missing_inputs)
+    ml_rows, ml_meta = load_ml(args.overnight, missing_inputs)
     return {
         "schemaVersion": "community-benchmark-tables-v2/v1",
         "systemCommit": args.commit,
@@ -324,8 +341,8 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "vroom_smoke_summary": aggregate_vroom(vroom_smoke_rows),
         "vroom_lilim_rows": vroom_lilim_rows,
         "vroom_lilim_summary": aggregate_vroom(vroom_lilim_rows),
-        "food": load_food(args.overnight),
-        "dynamic": load_dynamic(args.overnight),
+        "food": load_food(args.overnight, missing_inputs),
+        "dynamic": load_dynamic(args.overnight, missing_inputs),
         "ml_rows": ml_rows,
         "ml_meta": ml_meta,
         "missingDataPolicy": {
@@ -335,7 +352,42 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "timeout": "solver exceeded configured limit",
             "infeasible": "hard constraints not satisfied by checker",
         },
+        "inputStatus": "complete" if not missing_inputs else "missing_input_artifact",
+        "missingInputs": missing_inputs,
     }
+
+
+def write_manifest(output_dir: Path, args: argparse.Namespace, files: list[Path], data: dict[str, Any]) -> None:
+    hashes = {str(path.relative_to(output_dir)): sha256_file(path) for path in files if path.exists()}
+    lines = [
+        "# Community Benchmark Tables v2 Manifest",
+        "",
+        f"source_commit: `{args.source_commit}`",
+        f"report_commit: `{args.report_commit}`",
+        f"artifact_generation_commit: `{args.commit}`",
+        f"generated_at_utc: `{datetime.now(timezone.utc).isoformat()}`",
+        f"python_version: `{platform.python_version()}`",
+        f"os: `{platform.platform()}`",
+        f"vroom_image: `ghcr.io/vroom-project/vroom-docker:v1.15.0-rc.1`",
+        f"ortools_version: `9.15.6755`",
+        f"pyvrp_version: `not measured in this artifact`",
+        f"input_status: `{data.get('inputStatus')}`",
+        "",
+        "## Source Artifacts",
+        "",
+        f"- overnight: `{args.overnight}`",
+        f"- vroom_smoke: `{args.vroom_smoke}`",
+        f"- vroom_lilim: `{args.vroom_lilim}`",
+        "",
+        "## Generated Files",
+        "",
+    ]
+    for rel, digest in sorted(hashes.items()):
+        lines.append(f"- `{rel}` - sha256 `{digest}`")
+    if data.get("missingInputs"):
+        lines.extend(["", "## Missing Inputs", ""])
+        lines.extend(f"- `{item}`" for item in data["missingInputs"])
+    (output_dir / "MANIFEST.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main() -> int:
@@ -345,19 +397,31 @@ def main() -> int:
     parser.add_argument("--vroom-lilim", type=Path, default=DEFAULT_VROOM_LILIM)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--commit", default="unknown")
+    parser.add_argument("--source-commit", default="2a394e3c")
+    parser.add_argument("--report-commit", default="795efc96")
     args = parser.parse_args()
 
     data = build(args)
     out = args.output_dir
-    write_json(out / "community_benchmark_tables_v2.json", data)
-    write_csv(out / "routing_phase15_pairs.csv", data["phase15_pairs"], list(data["phase15_pairs"][0].keys()) if data["phase15_pairs"] else [])
-    write_csv(out / "routing_phase15_summary.csv", data["phase15_summary"], list(data["phase15_summary"][0].keys()) if data["phase15_summary"] else [])
-    write_csv(out / "vroom_lilim_live.csv", data["vroom_lilim_rows"], list(data["vroom_lilim_rows"][0].keys()) if data["vroom_lilim_rows"] else [])
-    write_csv(out / "ml_ablation_summary.csv", data["ml_rows"], list(data["ml_rows"][0].keys()) if data["ml_rows"] else [])
-    (out / "generated_tables.md").write_text(render_tables(data), encoding="utf-8")
+    outputs = [
+        out / "community_benchmark_tables_v2.json",
+        out / "routing_phase15_pairs.csv",
+        out / "routing_phase15_summary.csv",
+        out / "vroom_lilim_live.csv",
+        out / "ml_ablation_summary.csv",
+        out / "generated_tables.md",
+    ]
+    write_json(outputs[0], data)
+    write_csv(outputs[1], data["phase15_pairs"], list(data["phase15_pairs"][0].keys()) if data["phase15_pairs"] else [])
+    write_csv(outputs[2], data["phase15_summary"], list(data["phase15_summary"][0].keys()) if data["phase15_summary"] else [])
+    write_csv(outputs[3], data["vroom_lilim_rows"], list(data["vroom_lilim_rows"][0].keys()) if data["vroom_lilim_rows"] else [])
+    write_csv(outputs[4], data["ml_rows"], list(data["ml_rows"][0].keys()) if data["ml_rows"] else [])
+    outputs[5].write_text(render_tables(data), encoding="utf-8")
+    write_manifest(out, args, outputs, data)
     print(f"[TABLES V2] wrote {out}")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

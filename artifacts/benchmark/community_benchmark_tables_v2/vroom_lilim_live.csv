@@ -1,0 +1,9 @@
+suite,instance,vroom_status,vroom_feasible,vroom_runtime_ms,vroom_vehicle_count,vroom_distance,ours_vehicle_count,ours_distance,ours_feasible,vehicle_gap_vs_vroom,distance_gap_vs_vroom_pct,timeout,vroom_error_class
+li-lim-8case,LRC202,ok,False,534,4,1398.0200524661618,5,1591.0213822424967,True,,,False,-
+li-lim-8case,LRC206,ok,True,386,3,1159.033182536852,4,1348.8409164304378,True,1,16.37638479669245,False,-
+li-lim-8case,LRC106,ok,True,408,12,1474.0852514636424,12,1489.7577229745948,True,0,1.063199804447602,False,-
+li-lim-8case,LRC104,ok,True,417,10,1129.3382461698936,11,1170.6199481024069,True,1,3.6553886377724734,False,-
+li-lim-8case,LRC108,ok,True,345,11,1167.1742158307516,12,1300.5891296903847,True,1,11.430591256222472,False,-
+li-lim-8case,LRC1_2_7,ok,False,1781,17,3419.3073345401062,17,3782.924524291524,True,,,False,-
+li-lim-8case,LRC281,vroom-timeout,False,60120,,,94,73280.84754196243,True,,,True,vroom-timeout
+li-lim-8case,LC1_4_8,vroom-timeout,False,60076,,,43,10026.852367930709,True,,,True,vroom-timeout
