@@ -302,7 +302,7 @@ Interpretation:
 
 - The ML layer is installed, importable, and connected to worker readiness artifacts.
 - Ablation evidence is mixed rather than uniformly positive: GreedRL has positive mean selector delta but negative mean robust utility delta; RouteFinder has positive selector and robust deltas in the small measured subset; forecast has slightly negative selector delta but positive robust delta.
-- The current ML evidence supports -ML components are operational and sometimes beneficial, not -ML consistently improves every metric.
+- The current ML evidence supports "ML components are operational and sometimes beneficial", not "ML consistently improves every metric."
 - Inference latency and training cost are not measured in the current artifact, so a paper-grade ML efficiency claim is still pending.
 
 ## 8. Statistical Validity
@@ -401,6 +401,8 @@ py -3.13 scripts/generate_benchmark_tables.py `
   --commit 2a394e3c `
   --source-commit 2a394e3c `
   --report-commit 795efc96 `
+  --artifact-committed-in fcb3441a `
+  --report-trace-commit 7d7d2725 `
   --output-dir artifacts/benchmark/community_benchmark_tables_v2
 ```
 
