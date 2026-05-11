@@ -127,7 +127,7 @@ fun DriverDemoApp(viewModel: DriverDemoViewModel = viewModel()) {
             if (selectedTab == DriverTab.Home || state.phase == DriverPhase.ActiveTrip) {
                 DriverMapSurface(state, state.phase == DriverPhase.ActiveTrip, mapController, Modifier.fillMaxSize())
             } else {
-                DriverTabScreen(selectedTab, state.assignment, Modifier.fillMaxSize())
+                DriverTabScreen(selectedTab, state.assignment, onLoadLocalDemo = viewModel::loadLocalCoreDemo, modifier = Modifier.fillMaxSize())
             }
             if (state.phase == DriverPhase.ActiveTrip) {
                 NavigationTopInstruction(state, Modifier.align(Alignment.TopCenter).padding(top = 16.dp, start = 8.dp, end = 8.dp))
@@ -151,6 +151,12 @@ fun DriverDemoApp(viewModel: DriverDemoViewModel = viewModel()) {
                     onReject = viewModel::rejectAssignment,
                     onCompleteStep = viewModel::completeCurrentStep,
                     onToggleSimulation = viewModel::toggleDrivingSimulation,
+                    onOrderNotReady = viewModel::markOrderNotReady,
+                    onContinueWaiting = viewModel::continueWaiting,
+                    onConfirmPickedUp = viewModel::confirmPickedUp,
+                    onRequestProof = viewModel::requestProof,
+                    onCustomerUnreachable = viewModel::markCustomerUnreachable,
+                    onConfirmDelivered = viewModel::confirmDelivered,
                     onRouteDetail = { overlay = DriverOverlay.RouteDetail },
                     onIntelligentRoute = { overlay = DriverOverlay.IntelligentRoute },
                     modifier = Modifier.align(Alignment.BottomCenter).padding(start = 8.dp, end = 8.dp, bottom = if (state.phase == DriverPhase.ActiveTrip) 10.dp else 14.dp)
@@ -268,7 +274,8 @@ private fun NavigationTopInstruction(state: DriverDemoUiState, modifier: Modifie
     val step = assignment?.currentStep
     if (step == null) return
     val instruction = state.navigationInstructions.getOrNull(state.activeInstructionIndex)
-    val mainText = instruction?.text ?: if (step.isPickup) "Đang tới điểm lấy ${step.label}" else "Đang tới điểm giao ${step.label}"
+    val details = demoOrderDetails(step)
+    val mainText = instruction?.text ?: if (step.isPickup) "Đi tới ${step.label} • ${details.merchantName}" else "Đi tới ${step.label} • giao cho ${details.customerName}"
     val nextInstruction = state.navigationInstructions.getOrNull(state.activeInstructionIndex + 1)?.text ?: "Tiếp theo: ${step.label}"
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Card(
@@ -283,7 +290,7 @@ private fun NavigationTopInstruction(state: DriverDemoUiState, modifier: Modifie
                 }
                 Column(Modifier.weight(1f)) {
                     Text(mainText, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(step.title.substringAfter(" - ").ifBlank { step.title }, color = DriverTextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${details.orderCode} • ${if (step.isPickup) details.pickupNote else details.addressText}", color = DriverTextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Box(Modifier.size(42.dp).clip(CircleShape).background(Color.White.copy(alpha = .10f)), contentAlignment = Alignment.Center) {
                     Icon(Icons.Default.Navigation, null, tint = Color(0xFF2DD4BF), modifier = Modifier.size(24.dp))
@@ -360,16 +367,33 @@ private fun DriverPrimaryPanel(
     onReject: () -> Unit,
     onCompleteStep: () -> Unit,
     onToggleSimulation: () -> Unit,
+    onOrderNotReady: () -> Unit,
+    onContinueWaiting: () -> Unit,
+    onConfirmPickedUp: () -> Unit,
+    onRequestProof: () -> Unit,
+    onCustomerUnreachable: () -> Unit,
+    onConfirmDelivered: () -> Unit,
     onRouteDetail: () -> Unit,
     onIntelligentRoute: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         when (state.phase) {
-            DriverPhase.Offline -> OfflinePanel(onGoOnline, onLoadLocalDemo)
-            DriverPhase.Idle -> IdlePanel(onGoOffline, onLoadLocalDemo)
+            DriverPhase.Offline -> OfflinePanel(onGoOnline)
+            DriverPhase.Idle -> IdlePanel(onGoOffline)
             DriverPhase.Offer -> AssignmentOfferPanel(state.assignment, state.error, onAccept, onReject, onRouteDetail, onIntelligentRoute)
-            DriverPhase.ActiveTrip -> ActiveTripPanel(state, state.error, onCompleteStep, onToggleSimulation)
+            DriverPhase.ActiveTrip -> ActiveTripPanel(
+                state,
+                state.error,
+                onCompleteStep,
+                onToggleSimulation,
+                onOrderNotReady,
+                onContinueWaiting,
+                onConfirmPickedUp,
+                onRequestProof,
+                onCustomerUnreachable,
+                onConfirmDelivered
+            )
         }
         if (state.phase != DriverPhase.ActiveTrip) DriverQuickActions()
     }
@@ -390,28 +414,65 @@ private fun NavigationMapControls(
 }
 
 @Composable
-private fun OfflinePanel(onGoOnline: () -> Unit, onLoadLocalDemo: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+private fun OfflinePanel(onGoOnline: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        DriverHomeSummaryCard(online = false)
         Button(
             onClick = onGoOnline,
             shape = PillShape,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Leaf),
             contentPadding = PaddingValues(horizontal = 26.dp, vertical = 14.dp)
-        ) { Text("Go Online", color = Color(0xFF03100B), fontWeight = FontWeight.Black, fontSize = 16.sp) }
-        OutlinedButton(onClick = onLoadLocalDemo, shape = PillShape, colors = ButtonDefaults.outlinedButtonColors(contentColor = DriverText)) { Text("Load Core Demo") }
-        InfoCard("Shift starts at 08:00 PM", "Batch mode is ready • Food, Parcel, COD enabled")
+        ) { Text("GO ONLINE", color = Color(0xFF03100B), fontWeight = FontWeight.Black, fontSize = 16.sp) }
+        HomeQuestCard()
+        RecentDeliveriesCard()
     }
 }
 
 @Composable
-private fun IdlePanel(onGoOffline: () -> Unit, onLoadLocalDemo: () -> Unit) {
+private fun IdlePanel(onGoOffline: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        InfoCard("Searching intelligent batches", "Waiting for route-compatible orders near your current zone.")
+        DriverHomeSummaryCard(online = true)
+        InfoCard("You're Online", "Finding nearby route-compatible orders in District 1.")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = onGoOffline, shape = PillShape, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = DriverText)) { Text("Go Offline") }
-            Button(onClick = onLoadLocalDemo, shape = PillShape, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Leaf)) { Text("Demo Route", color = Color(0xFF03100B), fontWeight = FontWeight.Black) }
+            Button(onClick = {}, shape = PillShape, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Leaf)) { Text("Hot Zone", color = Color(0xFF03100B), fontWeight = FontWeight.Black) }
+        }
+        HomeQuestCard()
+    }
+}
+
+@Composable
+private fun DriverHomeSummaryCard(online: Boolean) {
+    Card(shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = DriverSurface.copy(alpha = .97f)), elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Good evening, Minh", color = DriverTextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("248.000đ", color = Leaf, fontSize = 34.sp, fontWeight = FontWeight.Black)
+                    Text("Today earnings • 6 trips • 4h 20m online", color = DriverText, fontSize = 13.sp)
+                }
+                Box(Modifier.clip(PillShape).background((if (online) Leaf else Color.White).copy(alpha = .14f)).padding(horizontal = 11.dp, vertical = 7.dp)) {
+                    Text(if (online) "ONLINE" else "OFFLINE", color = if (online) Leaf else DriverTextMuted, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OfferMetric("92%", "Accept", Modifier.weight(1f))
+                OfferMetric("0%", "Cancel", Modifier.weight(1f))
+                OfferMetric("4.9★", "Rating", Modifier.weight(1f))
+            }
         }
     }
+}
+
+@Composable
+private fun HomeQuestCard() {
+    InfoCard("Quest active: +48.000đ", "Complete 4 more deliveries before 9 PM • Batch Food priority")
+}
+
+@Composable
+private fun RecentDeliveriesCard() {
+    DriverListCard("Recent deliveries", listOf("RF-1019 • Delivered • 42.000đ", "RF-1018 • Delivered • 38.000đ"))
 }
 
 @Composable
@@ -428,6 +489,7 @@ private fun AssignmentOfferPanel(
     val estimatedPay = 42000 + assignment.orderIds.size * 13500 + max(0, stops - 2) * 5500
     val distanceKm = assignment.routePlan.distanceMeters / 1000.0
     val etaMin = max(1, assignment.routePlan.etaSeconds / 60)
+    val paymentMix = assignment.routePlan.sequence.filter { !it.isPickup }.joinToString(" • ") { demoOrderDetails(it).paymentType }.ifBlank { "Paid" }
     DriverSheetCard {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             CoreBadge(assignment)
@@ -444,8 +506,14 @@ private fun AssignmentOfferPanel(
             OfferMetric(String.format("%.1f km", distanceKm), "Road distance", Modifier.weight(1f))
             OfferMetric("${etaMin}m", "ETA", Modifier.weight(1f))
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            MetricPill("Food delivery")
+            MetricPill("Same-direction batch")
+            MetricPill(paymentMix)
+        }
         CoreDecisionPanel(assignment)
         RouteStepPreview(assignment)
+        OfferOperationalSummary(assignment)
         BatchStopList(assignment)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = onRouteDetail, shape = PillShape, modifier = Modifier.weight(1f).height(44.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = DriverText)) { Text("Route Detail", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
@@ -472,16 +540,113 @@ private fun OfferMetric(value: String, label: String, modifier: Modifier = Modif
 }
 
 @Composable
+private fun OfferOperationalSummary(assignment: DriverAssignmentDemo) {
+    val pickups = assignment.routePlan.sequence.filter { it.isPickup }.take(2)
+    val dropoffs = assignment.routePlan.sequence.filter { !it.isPickup }.take(2)
+    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = .06f))) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Pickup / dropoff preview", color = DriverText, fontWeight = FontWeight.Black, fontSize = 13.sp)
+            pickups.forEach { step ->
+                val details = demoOrderDetails(step)
+                OfferInfoRow(step.label, details.merchantName, "${details.orderCode} • ${details.itemCount} items • ${details.readyLabel}", Leaf)
+            }
+            dropoffs.forEach { step ->
+                val details = demoOrderDetails(step)
+                OfferInfoRow(step.label, details.roughDropoffArea, "${details.deliveryOption} • ${details.paymentType}", Color(0xFFFF7A1A))
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfferInfoRow(label: String, title: String, subtitle: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        Box(Modifier.size(26.dp).clip(CircleShape).background(color), contentAlignment = Alignment.Center) {
+            Text(label, color = Color.White, fontWeight = FontWeight.Black, fontSize = 10.sp)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, color = DriverText, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, color = DriverTextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+private data class DemoOrderDetails(
+    val orderCode: String,
+    val merchantName: String,
+    val customerName: String,
+    val customerPhoneMasked: String,
+    val paymentType: String,
+    val deliveryOption: String,
+    val itemCount: Int,
+    val bagCount: Int,
+    val items: List<String>,
+    val pickupNote: String,
+    val dropoffNote: String,
+    val addressText: String,
+    val roughDropoffArea: String,
+    val readyLabel: String
+)
+
+private fun demoOrderDetails(step: DriverRouteStep): DemoOrderDetails {
+    val numeric = step.orderId.filter { it.isDigit() }.takeLast(2).toIntOrNull() ?: (step.index + 1)
+    val code = "RF-${1020 + numeric}"
+    val merchants = listOf("Cơm Gà Q1", "Trà Sữa Mây", "Bún Bò Huế Mưa", "Bánh Mì 24h")
+    val customers = listOf("Minh", "An", "Linh", "Khoa")
+    val areas = listOf("Office Tower B", "Sunrise Riverside Lobby", "Chung cư Demo A", "Saigon Pearl Gate")
+    val merchant = merchants[(step.index + numeric) % merchants.size]
+    val customer = customers[(step.index + numeric) % customers.size]
+    val address = areas[(step.index + numeric) % areas.size]
+    val paid = numeric % 3 != 0
+    val leaveAtDoor = numeric % 2 == 0
+    return DemoOrderDetails(
+        orderCode = code,
+        merchantName = merchant,
+        customerName = customer,
+        customerPhoneMasked = "09xx xxx ${160 + numeric}",
+        paymentType = if (paid) "Paid" else "COD 120k",
+        deliveryOption = if (leaveAtDoor) "Leave at reception" else "Meet at door",
+        itemCount = if (numeric % 2 == 0) 1 else 2,
+        bagCount = if (numeric % 4 == 0) 2 else 1,
+        items = if (numeric % 2 == 0) listOf("1x Trà sữa olong") else listOf("1x Cơm gà xối mỡ", "1x Trà đá"),
+        pickupNote = "Quầy online, đọc mã đơn",
+        dropoffNote = if (leaveAtDoor) "Để tại lễ tân và chụp ảnh" else "Gọi khi tới sảnh",
+        addressText = address,
+        roughDropoffArea = address.substringBefore(" ") + " area",
+        readyLabel = if (numeric % 2 == 0) "Ready now" else "Ready in 4 min"
+    )
+}
+
+@Composable
 private fun ActiveTripPanel(
     state: DriverDemoUiState,
     error: String?,
     onCompleteStep: () -> Unit,
-    onToggleSimulation: () -> Unit
+    onToggleSimulation: () -> Unit,
+    onOrderNotReady: () -> Unit,
+    onContinueWaiting: () -> Unit,
+    onConfirmPickedUp: () -> Unit,
+    onRequestProof: () -> Unit,
+    onCustomerUnreachable: () -> Unit,
+    onConfirmDelivered: () -> Unit
 ) {
     val assignment = state.assignment
     if (assignment == null) return
     val currentStep = assignment.currentStep
-    NavigationBottomSheet(state, assignment, currentStep, error, onCompleteStep, onToggleSimulation)
+    NavigationBottomSheet(
+        state,
+        assignment,
+        currentStep,
+        error,
+        onCompleteStep,
+        onToggleSimulation,
+        onOrderNotReady,
+        onContinueWaiting,
+        onConfirmPickedUp,
+        onRequestProof,
+        onCustomerUnreachable,
+        onConfirmDelivered
+    )
 }
 
 @Composable
@@ -491,12 +656,33 @@ private fun NavigationBottomSheet(
     currentStep: DriverRouteStep?,
     error: String?,
     onCompleteStep: () -> Unit,
-    onToggleSimulation: () -> Unit
+    onToggleSimulation: () -> Unit,
+    onOrderNotReady: () -> Unit,
+    onContinueWaiting: () -> Unit,
+    onConfirmPickedUp: () -> Unit,
+    onRequestProof: () -> Unit,
+    onCustomerUnreachable: () -> Unit,
+    onConfirmDelivered: () -> Unit
 ) {
     val remainingMinutes = max(1, (state.remainingDurationSeconds.takeIf { it > 0 } ?: (assignment.routePlan.etaSeconds / max(1, assignment.routePlan.sequence.size - assignment.currentStepIndex))) / 60)
     val remainingKm = max(.1, (state.remainingDistanceMeters.takeIf { it > 0 } ?: (assignment.routePlan.distanceMeters / max(1, assignment.routePlan.sequence.size - assignment.currentStepIndex))) / 1000.0)
     if (currentStep == null) {
         BatchCompletedPanel(assignment)
+        return
+    }
+    val details = demoOrderDetails(currentStep)
+    if (state.stopWorkflow != DriverStopWorkflow.NAVIGATING) {
+        StopWorkflowSheet(
+            state = state,
+            assignment = assignment,
+            step = currentStep,
+            onOrderNotReady = onOrderNotReady,
+            onContinueWaiting = onContinueWaiting,
+            onConfirmPickedUp = onConfirmPickedUp,
+            onRequestProof = onRequestProof,
+            onCustomerUnreachable = onCustomerUnreachable,
+            onConfirmDelivered = onConfirmDelivered
+        )
         return
     }
     Card(
@@ -522,8 +708,15 @@ private fun NavigationBottomSheet(
                         Text(String.format("%.1f km", remainingKm), color = Color.White.copy(alpha = .76f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
                     Text("${if (currentStep.isPickup) "Pickup" else "Dropoff"} • ${state.simulatedSpeedKmh} km/h • ${state.trafficLabel}", color = Color.White.copy(alpha = .58f), fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(
+                        if (currentStep.isPickup) "${details.orderCode} • ${details.itemCount} items • ${details.pickupNote}" else "${details.customerName} • ${details.deliveryOption} • ${details.addressText}",
+                        color = Color.White.copy(alpha = .70f),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-                Box(Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = .13f)).clickable { onCompleteStep() }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = .13f)), contentAlignment = Alignment.Center) {
                     Text(currentStep.label, color = Color.White, fontWeight = FontWeight.Black)
                 }
                 Spacer(Modifier.width(8.dp))
@@ -537,6 +730,129 @@ private fun NavigationBottomSheet(
             }
             StepProgressBar(assignment, dark = true)
             ErrorText(error)
+        }
+    }
+}
+
+@Composable
+private fun StopWorkflowSheet(
+    state: DriverDemoUiState,
+    assignment: DriverAssignmentDemo,
+    step: DriverRouteStep,
+    onOrderNotReady: () -> Unit,
+    onContinueWaiting: () -> Unit,
+    onConfirmPickedUp: () -> Unit,
+    onRequestProof: () -> Unit,
+    onCustomerUnreachable: () -> Unit,
+    onConfirmDelivered: () -> Unit
+) {
+    val isPickup = step.isPickup
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1110).copy(alpha = .97f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 18.dp)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.width(52.dp).height(4.dp).clip(PillShape).background(Color.White.copy(alpha = .28f)).align(Alignment.CenterHorizontally))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(54.dp).clip(CircleShape).background(if (isPickup) Leaf else Color(0xFFFF7A1A)), contentAlignment = Alignment.Center) {
+                    Text(step.label, color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(workflowTitle(state.stopWorkflow, step), color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                    Text(step.title, color = Color.White.copy(alpha = .72f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                MetricPill("${assignment.currentStepIndex + 1}/${assignment.routePlan.sequence.size}")
+            }
+            when (state.stopWorkflow) {
+                DriverStopWorkflow.PICKUP_ARRIVED -> PickupArrivedContent(step, onOrderNotReady, onConfirmPickedUp)
+                DriverStopWorkflow.PICKUP_WAITING -> PickupWaitingContent(state.waitingSeconds, onContinueWaiting, onConfirmPickedUp)
+                DriverStopWorkflow.DROPOFF_ARRIVED -> DropoffArrivedContent(step, onRequestProof, onCustomerUnreachable, onConfirmDelivered)
+                DriverStopWorkflow.PROOF_REQUIRED -> ProofContent(step, onConfirmDelivered)
+                DriverStopWorkflow.CUSTOMER_UNREACHABLE -> CustomerUnreachableContent(state.waitingSeconds, onContinueWaiting, onConfirmDelivered)
+                DriverStopWorkflow.NAVIGATING -> Unit
+            }
+        }
+    }
+}
+
+private fun workflowTitle(workflow: DriverStopWorkflow, step: DriverRouteStep): String = when (workflow) {
+    DriverStopWorkflow.PICKUP_ARRIVED -> "Đã đến điểm lấy ${step.label}"
+    DriverStopWorkflow.PICKUP_WAITING -> "Đơn chưa sẵn sàng"
+    DriverStopWorkflow.DROPOFF_ARRIVED -> "Đã đến điểm giao ${step.label}"
+    DriverStopWorkflow.PROOF_REQUIRED -> "Xác minh giao hàng"
+    DriverStopWorkflow.CUSTOMER_UNREACHABLE -> "Không liên hệ được khách"
+    DriverStopWorkflow.NAVIGATING -> if (step.isPickup) "Đi tới điểm lấy" else "Đi tới điểm giao"
+}
+
+@Composable
+private fun PickupArrivedContent(step: DriverRouteStep, onOrderNotReady: () -> Unit, onConfirmPickedUp: () -> Unit) {
+    val details = demoOrderDetails(step)
+    StopDetailGrid(details, pickup = true)
+    WorkflowChecklist(listOf("Đối chiếu tên quán: ${details.merchantName}", "Đọc mã đơn ${details.orderCode}", "Kiểm tra số túi: ${details.bagCount}", "Items: ${details.items.joinToString()}", "Không rời quán khi chưa xác nhận"))
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedButton(onClick = onOrderNotReady, shape = PillShape, modifier = Modifier.weight(1f).height(50.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFC857))) { Text("Đơn chưa sẵn", fontWeight = FontWeight.Bold) }
+        Button(onClick = onConfirmPickedUp, shape = PillShape, modifier = Modifier.weight(1f).height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = Leaf)) { Text("Verify & nhận", color = Color(0xFF03100B), fontWeight = FontWeight.Black) }
+    }
+}
+
+@Composable
+private fun PickupWaitingContent(waitingSeconds: Int, onContinueWaiting: () -> Unit, onConfirmPickedUp: () -> Unit) {
+    Text("Merchant đang chuẩn bị • Waiting ${waitingSeconds / 60}m", color = Color.White.copy(alpha = .72f), fontSize = 13.sp)
+    WorkflowChecklist(listOf("Báo quán đang chuẩn bị", "Có thể chờ thêm 3 phút", "Support sẽ thấy trạng thái delay"))
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedButton(onClick = onContinueWaiting, shape = PillShape, modifier = Modifier.weight(1f).height(50.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = DriverText)) { Text("Chờ thêm", fontWeight = FontWeight.Bold) }
+        Button(onClick = onConfirmPickedUp, shape = PillShape, modifier = Modifier.weight(1f).height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = Leaf)) { Text("Đã nhận", color = Color(0xFF03100B), fontWeight = FontWeight.Black) }
+    }
+}
+
+@Composable
+private fun DropoffArrivedContent(step: DriverRouteStep, onRequestProof: () -> Unit, onCustomerUnreachable: () -> Unit, onConfirmDelivered: () -> Unit) {
+    val details = demoOrderDetails(step)
+    StopDetailGrid(details, pickup = false)
+    Text("Customer instruction: ${details.dropoffNote} • ${details.deliveryOption}", color = Color.White.copy(alpha = .72f), fontSize = 13.sp)
+    WorkflowChecklist(listOf("Liên hệ ${details.customerPhoneMasked} nếu cần", "Đối chiếu đúng mã đơn ${details.orderCode}", "Giao tại ${details.addressText}", "Proof/OTP nếu hệ yêu cầu"))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = onCustomerUnreachable, shape = PillShape, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFC857))) { Text("Không nghe máy", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+        OutlinedButton(onClick = onRequestProof, shape = PillShape, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = Leaf)) { Text("Proof", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+        Button(onClick = onConfirmDelivered, shape = PillShape, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Leaf)) { Text("Đã giao", color = Color(0xFF03100B), fontSize = 12.sp, fontWeight = FontWeight.Black) }
+    }
+}
+
+@Composable
+private fun StopDetailGrid(details: DemoOrderDetails, pickup: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        OfferMetric(details.orderCode, "Order code", Modifier.weight(1f))
+        OfferMetric(if (pickup) details.merchantName else details.customerName, if (pickup) "Merchant" else "Customer", Modifier.weight(1f))
+        OfferMetric(if (pickup) "${details.itemCount} items" else details.paymentType, if (pickup) "Items" else "Payment", Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun ProofContent(step: DriverRouteStep, onConfirmDelivered: () -> Unit) {
+    WorkflowChecklist(listOf("Take demo photo", "Hoặc nhập OTP demo: 2485", "Xác nhận đã đặt đúng vị trí"))
+    Button(onClick = onConfirmDelivered, shape = PillShape, modifier = Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Leaf)) { Text("Xác nhận proof & hoàn tất ${step.label}", color = Color(0xFF03100B), fontWeight = FontWeight.Black) }
+}
+
+@Composable
+private fun CustomerUnreachableContent(waitingSeconds: Int, onContinueWaiting: () -> Unit, onConfirmDelivered: () -> Unit) {
+    Text("Contact timer ${waitingSeconds / 60}m • Call + message customer before completing.", color = Color.White.copy(alpha = .72f), fontSize = 13.sp)
+    WorkflowChecklist(listOf("Gọi khách", "Nhắn tin trong app", "Chờ tối thiểu 2 phút", "Ghi chú vị trí giao an toàn"))
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedButton(onClick = onContinueWaiting, shape = PillShape, modifier = Modifier.weight(1f).height(50.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = DriverText)) { Text("Start/Wait", fontWeight = FontWeight.Bold) }
+        Button(onClick = onConfirmDelivered, shape = PillShape, modifier = Modifier.weight(1f).height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = Leaf)) { Text("Complete note", color = Color(0xFF03100B), fontWeight = FontWeight.Black) }
+    }
+}
+
+@Composable
+private fun WorkflowChecklist(items: List<String>) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        items.forEach { item ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.CheckCircle, null, tint = Leaf, modifier = Modifier.size(16.dp))
+                Text(item, color = Color.White.copy(alpha = .78f), fontSize = 12.sp)
+            }
         }
     }
 }
@@ -776,7 +1092,7 @@ private fun BottomNavItem(label: String, icon: androidx.compose.ui.graphics.vect
 }
 
 @Composable
-private fun DriverTabScreen(tab: DriverTab, assignment: DriverAssignmentDemo?, modifier: Modifier = Modifier) {
+private fun DriverTabScreen(tab: DriverTab, assignment: DriverAssignmentDemo?, onLoadLocalDemo: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier.background(Brush.verticalGradient(listOf(Color(0xFF06100E), DriverBg))).padding(horizontal = 18.dp, vertical = 34.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -787,7 +1103,7 @@ private fun DriverTabScreen(tab: DriverTab, assignment: DriverAssignmentDemo?, m
             DriverTab.Earnings -> EarningsScreen()
             DriverTab.Orders -> OrdersScreen(assignment)
             DriverTab.Planner -> PlannerScreen()
-            DriverTab.Profile -> ProfileScreen()
+            DriverTab.Profile -> ProfileScreen(onLoadLocalDemo)
             DriverTab.Home -> Unit
         }
     }
@@ -802,7 +1118,7 @@ private fun tabTitle(tab: DriverTab): String = when (tab) {
 }
 
 private fun tabSubtitle(tab: DriverTab): String = when (tab) {
-    DriverTab.Home -> "Map-first driver workspace"
+    DriverTab.Home -> "Dashboard, online status and nearby demand"
     DriverTab.Earnings -> "Thu nhập, thưởng ghép đơn và ví tài xế"
     DriverTab.Orders -> "Đơn đang chạy, lịch sử và vấn đề cần xử lý"
     DriverTab.Planner -> "Ca làm, vùng nóng và dự báo nhu cầu"
@@ -836,7 +1152,7 @@ private fun PlannerScreen() {
 }
 
 @Composable
-private fun ProfileScreen() {
+private fun ProfileScreen(onLoadLocalDemo: () -> Unit) {
     DriverStatHero("4.92 ★", "Minh Driver", "1,248 completed orders • Active account")
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         OfferMetric("94%", "On-time", Modifier.weight(1f))
@@ -844,6 +1160,26 @@ private fun ProfileScreen() {
         OfferMetric("88%", "Efficiency", Modifier.weight(1f))
     }
     DriverListCard("Account", listOf("Documents approved", "Vehicle: Honda Air Blade", "COD balance clear", "Safety center ready"))
+    DeveloperDemoModeCard(onLoadLocalDemo)
+}
+
+@Composable
+private fun DeveloperDemoModeCard(onLoadLocalDemo: () -> Unit) {
+    Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = DriverSurface.copy(alpha = .92f))) {
+        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Developer / Demo Mode", color = DriverText, fontSize = 16.sp, fontWeight = FontWeight.Black)
+            Text("Debug controls are hidden from Home and live here only.", color = DriverTextMuted, fontSize = 12.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = onLoadLocalDemo, shape = PillShape, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Leaf)) {
+                    Text("Load local batch", color = Color(0xFF03100B), fontWeight = FontWeight.Black, fontSize = 12.sp)
+                }
+                OutlinedButton(onClick = {}, shape = PillShape, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = DriverText)) {
+                    Text("Reset demo", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            DriverListCard("Navigation debug", listOf("Show snap points: off", "Show route quality: off", "Simulation speed: 2x", "OSRM instructions: enabled"))
+        }
+    }
 }
 
 @Composable
@@ -965,9 +1301,9 @@ private fun RealOsmDriverMap(
 ) {
     val driverLocation = state.driverProjectedLocation ?: state.simulatedDriverLocation ?: assignment.driverLocationAtAssignment
     val driver = driverLocation.toMapRoutePoint("DR", "driver", "Driver ${assignment.driverCode}")
-    val stops = assignment.routePlan.sequence.map { step ->
-        step.location.toMapRoutePoint(step.label, step.type, step.title)
-    }
+    val stops = assignment.currentStep?.let { step ->
+        listOf(step.location.toMapRoutePoint(step.label, step.type, step.title))
+    } ?: emptyList()
     val routeState = MapRouteState(
         driver = driver,
         stops = stops,

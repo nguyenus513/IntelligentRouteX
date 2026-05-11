@@ -301,11 +301,11 @@ class MapLibreRouteView @JvmOverloads constructor(
             SymbolLayer(DRIVER_LAYER_ID, DRIVER_SOURCE_ID).withProperties(
                 textField(get("arrow")),
                 textRotate(get("bearing")),
-                textRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
-                textSize(38f),
+                textRotationAlignment(Property.TEXT_ROTATION_ALIGNMENT_MAP),
+                textSize(42f),
                 textColor("#052E1A"),
                 textHaloColor("#18D674"),
-                textHaloWidth(3.2f),
+                textHaloWidth(3.6f),
                 textAllowOverlap(true),
                 textIgnorePlacement(true)
             )
@@ -403,11 +403,11 @@ class MapLibreRouteView @JvmOverloads constructor(
         map?.setPadding(0, 150, 0, 430)
         val cameraPosition = CameraPosition.Builder()
             .target(LatLng(target.first, target.second))
-            .zoom(17.0)
-            .tilt(0.0)
-            .bearing(0.0)
+            .zoom(if (state.cameraMode == "FOLLOWING") 17.6 else 17.0)
+            .tilt(if (state.cameraMode == "FOLLOWING") 45.0 else 0.0)
+            .bearing(if (state.cameraMode == "FOLLOWING") state.driverHeadingDeg else 0.0)
             .build()
-        map?.easeCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 260)
+        map?.easeCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), if (state.cameraMode == "FOLLOWING") 520 else 260)
         lastCameraTarget = target
         fittedInitialRoute = true
         lastActiveStepIndex = state.activeStepIndex

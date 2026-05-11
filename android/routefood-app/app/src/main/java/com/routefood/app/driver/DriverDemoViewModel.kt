@@ -57,7 +57,9 @@ data class DriverDemoUiState(
     val snappedWaypoints: List<DriverSnappedWaypointUi> = emptyList(),
     val snapWarnings: List<String> = emptyList(),
     val maxSnapDistanceMeters: Double = 0.0,
-    val cameraMode: NavigationCameraMode = NavigationCameraMode.OVERVIEW
+    val cameraMode: NavigationCameraMode = NavigationCameraMode.OVERVIEW,
+    val stopWorkflow: DriverStopWorkflow = DriverStopWorkflow.NAVIGATING,
+    val waitingSeconds: Int = 0
 ) {
     val phase: DriverPhase
         get() = when {
@@ -72,6 +74,8 @@ data class DriverDemoUiState(
 enum class DriverPhase { Offline, Idle, Offer, ActiveTrip }
 
 enum class NavigationCameraMode { OVERVIEW, FOLLOWING, MANUAL, OFF_ROUTE }
+
+enum class DriverStopWorkflow { NAVIGATING, PICKUP_ARRIVED, PICKUP_WAITING, DROPOFF_ARRIVED, PROOF_REQUIRED, CUSTOMER_UNREACHABLE }
 
 data class DriverSnappedWaypointUi(
     val label: String,
@@ -109,7 +113,7 @@ class DriverDemoViewModel(
         pollJob?.cancel()
         simulationJob?.cancel()
         resetNavigationSimulation()
-        _state.update { it.copy(online = false, loading = false, assignment = null, error = null, lastUpdatedLabel = "Offline", simulationRunning = false, simulatedDriverLocation = null, roadGeometry = emptyList(), roadGeometryLoading = false, roadGeometryLabel = "Estimated route", navigationInstructions = emptyList(), simulatedSpeedKmh = 0, trafficLabel = "Normal traffic", driverHeadingDeg = 0.0, routeProgressIndex = 0, routeProgressMeters = 0.0, driverProjectedLocation = null, currentLegIndex = 0, currentLegEndMeters = 0.0, completedGeometry = emptyList(), remainingGeometry = emptyList(), snappedWaypoints = emptyList(), snapWarnings = emptyList(), maxSnapDistanceMeters = 0.0, cameraMode = NavigationCameraMode.OVERVIEW) }
+        _state.update { it.copy(online = false, loading = false, assignment = null, error = null, lastUpdatedLabel = "Offline", simulationRunning = false, simulatedDriverLocation = null, roadGeometry = emptyList(), roadGeometryLoading = false, roadGeometryLabel = "Estimated route", navigationInstructions = emptyList(), simulatedSpeedKmh = 0, trafficLabel = "Normal traffic", driverHeadingDeg = 0.0, routeProgressIndex = 0, routeProgressMeters = 0.0, driverProjectedLocation = null, currentLegIndex = 0, currentLegEndMeters = 0.0, completedGeometry = emptyList(), remainingGeometry = emptyList(), snappedWaypoints = emptyList(), snapWarnings = emptyList(), maxSnapDistanceMeters = 0.0, cameraMode = NavigationCameraMode.OVERVIEW, stopWorkflow = DriverStopWorkflow.NAVIGATING, waitingSeconds = 0) }
     }
 
     fun loadLocalCoreDemo() {
@@ -123,7 +127,9 @@ class DriverDemoViewModel(
                 simulationRunning = false,
                 simulatedDriverLocation = DriverAssignmentDemo.sample().driverLocationAtAssignment,
                 simulatedSpeedKmh = 0,
-                trafficLabel = "Normal traffic"
+                trafficLabel = "Normal traffic",
+                stopWorkflow = DriverStopWorkflow.NAVIGATING,
+                waitingSeconds = 0
             )
         }
         refreshRoadGeometry()
@@ -137,7 +143,9 @@ class DriverDemoViewModel(
                 it.copy(
                     assignment = assignment.copy(status = "accepted"),
                     simulatedDriverLocation = assignment.driverLocationAtAssignment,
-                    lastUpdatedLabel = "Accepted ${assignment.assignmentCode}"
+                    lastUpdatedLabel = "Accepted ${assignment.assignmentCode}",
+                    stopWorkflow = DriverStopWorkflow.NAVIGATING,
+                    waitingSeconds = 0
                 )
             }
             refreshRoadGeometry()
@@ -153,7 +161,9 @@ class DriverDemoViewModel(
                             loading = false,
                             assignment = assignment.copy(status = "accepted"),
                             simulatedDriverLocation = assignment.driverLocationAtAssignment,
-                            lastUpdatedLabel = "Accepted ${assignment.assignmentCode}"
+                            lastUpdatedLabel = "Accepted ${assignment.assignmentCode}",
+                            stopWorkflow = DriverStopWorkflow.NAVIGATING,
+                            waitingSeconds = 0
                         )
                     }
                     refreshRoadGeometry()
@@ -208,6 +218,10 @@ class DriverDemoViewModel(
 
     fun toggleDrivingSimulation() {
         val assignment = _state.value.assignment ?: return
+        if (_state.value.stopWorkflow != DriverStopWorkflow.NAVIGATING) {
+            _state.update { it.copy(lastUpdatedLabel = "Confirm current stop before continuing") }
+            return
+        }
         if (assignment.status == "assigned") {
             _state.update { it.copy(assignment = assignment.copy(status = "accepted"), simulatedDriverLocation = assignment.driverLocationAtAssignment) }
         }
@@ -230,14 +244,77 @@ class DriverDemoViewModel(
         }
     }
 
+    fun markOrderNotReady() {
+        _state.update {
+            it.copy(
+                simulationRunning = false,
+                simulatedSpeedKmh = 0,
+                stopWorkflow = DriverStopWorkflow.PICKUP_WAITING,
+                waitingSeconds = 0,
+                trafficLabel = "Restaurant delay",
+                lastUpdatedLabel = "Order not ready - waiting at merchant"
+            )
+        }
+    }
+
+    fun continueWaiting() {
+        _state.update {
+            val nextSeconds = it.waitingSeconds + 180
+            it.copy(
+                waitingSeconds = nextSeconds,
+                lastUpdatedLabel = "Waiting ${nextSeconds / 60} min at merchant"
+            )
+        }
+    }
+
+    fun confirmPickedUp() {
+        if (_state.value.assignment?.currentStep?.isPickup != true) return
+        advanceLocalStep()
+    }
+
+    fun requestProof() {
+        _state.update {
+            it.copy(
+                simulationRunning = false,
+                simulatedSpeedKmh = 0,
+                stopWorkflow = DriverStopWorkflow.PROOF_REQUIRED,
+                lastUpdatedLabel = "Proof required before completing delivery"
+            )
+        }
+    }
+
+    fun markCustomerUnreachable() {
+        _state.update {
+            it.copy(
+                simulationRunning = false,
+                simulatedSpeedKmh = 0,
+                stopWorkflow = DriverStopWorkflow.CUSTOMER_UNREACHABLE,
+                waitingSeconds = 0,
+                lastUpdatedLabel = "Customer unreachable - start contact timer"
+            )
+        }
+    }
+
+    fun confirmDelivered() {
+        if (_state.value.assignment?.currentStep?.isPickup == true) return
+        advanceLocalStep()
+    }
+
     private fun advanceLocalStep() {
-        val assignment = _state.value.assignment ?: return
+        val state = _state.value
+        val assignment = state.assignment ?: return
         val currentStep = assignment.currentStep ?: run {
             _state.update { it.copy(simulationRunning = false) }
             return
         }
+        val currentRoadPoint = state.driverProjectedLocation
+            ?: state.simulatedDriverLocation
+            ?: simulatedAlongLocation
+            ?: assignment.driverLocationAtAssignment
         val nextIndex = assignment.currentStepIndex + 1
         val completed = nextIndex >= assignment.routePlan.sequence.size
+        val nextLegOffset = (nextIndex - routeBaseStepIndex).coerceAtLeast(0)
+        val remainingMeters = if (completed) 0 else remainingDistanceMeters(state.roadGeometry, simulationGeometryIndex).toInt()
         _state.update {
             it.copy(
                 loading = false,
@@ -245,23 +322,34 @@ class DriverDemoViewModel(
                     status = if (completed) "completed" else "in_progress",
                     currentStepIndex = nextIndex.coerceAtMost(assignment.routePlan.sequence.size)
                 ),
-                simulationRunning = if (completed) false else it.simulationRunning,
-                simulatedSpeedKmh = if (completed) 0 else it.simulatedSpeedKmh,
-                trafficLabel = if (completed) "Route completed" else "Continuing to step ${nextIndex + 1}",
-                currentLegIndex = nextIndex.coerceAtMost(assignment.routePlan.sequence.lastIndex),
-                currentLegEndMeters = routeLegEndMeters.getOrNull(nextIndex) ?: it.currentLegEndMeters,
-                lastUpdatedLabel = if (completed) "Arrived final stop" else "Arrived ${currentStep.label}; navigating to step ${nextIndex + 1}"
+                simulatedDriverLocation = currentRoadPoint,
+                driverProjectedLocation = currentRoadPoint,
+                simulationRunning = false,
+                simulatedSpeedKmh = 0,
+                remainingDistanceMeters = remainingMeters,
+                remainingDurationSeconds = if (completed) 0 else max(30, it.remainingDurationSeconds),
+                trafficLabel = if (completed) "Route completed" else "Ready for ${assignment.routePlan.sequence.getOrNull(nextIndex)?.label ?: "next stop"}",
+                currentLegIndex = nextLegOffset,
+                currentLegEndMeters = routeLegEndMeters.getOrNull(nextLegOffset) ?: it.currentLegEndMeters,
+                stopWorkflow = DriverStopWorkflow.NAVIGATING,
+                waitingSeconds = 0,
+                lastUpdatedLabel = if (completed) "Arrived final stop" else "${currentStep.label} confirmed • ready to navigate to ${assignment.routePlan.sequence.getOrNull(nextIndex)?.label ?: "next stop"}"
             )
         }
+        if (!completed) refreshRoadGeometry()
     }
 
     private fun advanceAlongRoadGeometry() {
         val state = _state.value
         val assignment = state.assignment ?: return
         val geometry = state.roadGeometry
+        if (state.stopWorkflow != DriverStopWorkflow.NAVIGATING) {
+            _state.update { it.copy(simulationRunning = false, simulatedSpeedKmh = 0) }
+            return
+        }
         if (geometry.size < 2) {
-            advanceLocalStep()
             refreshRoadGeometry()
+            _state.update { it.copy(simulationRunning = false, simulatedSpeedKmh = 0, lastUpdatedLabel = "Preparing road route") }
             return
         }
         val currentStep = assignment.currentStep ?: run {
@@ -302,16 +390,18 @@ class DriverDemoViewModel(
                     currentLegEndMeters = currentLegEndMeters,
                     completedGeometry = arrivedProgress.first,
                     remainingGeometry = arrivedProgress.second,
+                    simulationRunning = false,
                     simulatedSpeedKmh = 0,
                     trafficLabel = "Arrived ${currentStep.label}",
                     driverHeadingDeg = heading,
                     activeInstructionIndex = activeInstruction,
                     remainingDistanceMeters = 0,
                     remainingDurationSeconds = 0,
+                    stopWorkflow = if (currentStep.isPickup) DriverStopWorkflow.PICKUP_ARRIVED else DriverStopWorkflow.DROPOFF_ARRIVED,
+                    waitingSeconds = 0,
                     lastUpdatedLabel = "Arrived ${currentStep.label}"
                 )
             }
-            advanceLocalStep()
             return
         }
         _state.update {
@@ -575,31 +665,37 @@ class DriverDemoViewModel(
             _state.update { it.copy(roadGeometry = emptyList(), roadGeometryLoading = false, roadGeometryLabel = "Route completed") }
             return
         }
-        val waypoints = buildList {
-            val driver = _state.value.simulatedDriverLocation ?: assignment.driverLocationAtAssignment
-            add(GeoPoint(driver.lat, driver.lng))
-            remainingSteps.forEach { step -> add(GeoPoint(step.location.lat, step.location.lng)) }
-        }
+        val driverPoint = _state.value.driverProjectedLocation
+            ?: _state.value.simulatedDriverLocation
+            ?: assignment.driverLocationAtAssignment
+        val currentStep = remainingSteps.first()
         val waypointLabels = buildList {
             add("DR")
-            remainingSteps.forEach { step -> add(step.label) }
+            add(currentStep.label)
         }
         val currentLegWaypoints = buildList {
-            val driver = _state.value.simulatedDriverLocation ?: assignment.driverLocationAtAssignment
-            add(GeoPoint(driver.lat, driver.lng))
-            remainingSteps.firstOrNull()?.let { step -> add(GeoPoint(step.location.lat, step.location.lng)) }
+            add(GeoPoint(driverPoint.lat, driverPoint.lng))
+            add(GeoPoint(currentStep.location.lat, currentStep.location.lng))
         }
         viewModelScope.launch(Dispatchers.IO) {
-            _state.update { it.copy(roadGeometryLoading = true, roadGeometryLabel = "Fetching road route") }
-            runCatching { routingProvider.routeFixedOrder(waypoints) }
-                .recoverCatching { routingProvider.routeFixedOrder(currentLegWaypoints) }
+            _state.update {
+                it.copy(
+                    simulationRunning = false,
+                    simulatedSpeedKmh = 0,
+                    roadGeometry = emptyList(),
+                    completedGeometry = emptyList(),
+                    remainingGeometry = emptyList(),
+                    roadGeometryLoading = true,
+                    roadGeometryLabel = "Fetching current leg to ${currentStep.label}"
+                )
+            }
+            runCatching { routingProvider.routeFixedOrder(currentLegWaypoints) }
                 .onSuccess { result ->
                     val points = result.coordinates
                     val geometry = points.map { point -> DriverLatLng(point.latitude(), point.longitude()) }
-                    val driver = _state.value.simulatedDriverLocation ?: assignment.driverLocationAtAssignment
-                    val initialProjected = geometry.firstOrNull() ?: driver
+                    val initialProjected = geometry.firstOrNull() ?: driverPoint
                     routeBaseStepIndex = assignment.currentStepIndex
-                    val legBoundaries = computeLegBoundaries(geometry, waypoints.size, result.legDistanceMeters)
+                    val legBoundaries = computeLegBoundaries(geometry, currentLegWaypoints.size, result.legDistanceMeters)
                     routeLegEndIndices = legBoundaries.first
                     routeLegEndMeters = legBoundaries.second
                     simulationGeometryIndex = 0
@@ -637,8 +733,8 @@ class DriverDemoViewModel(
                             remainingDistanceMeters = remainingMeters,
                             remainingDurationSeconds = remainingSeconds,
                             roadGeometryLoading = false,
-                            roadGeometryLabel = if (result.instructions.isEmpty()) qualityLabel else "Turn-by-turn • $qualityLabel",
-                            cameraMode = if (it.simulationRunning) NavigationCameraMode.FOLLOWING else NavigationCameraMode.OVERVIEW
+                            roadGeometryLabel = if (result.instructions.isEmpty()) "Leg ${currentStep.label} • $qualityLabel" else "Turn-by-turn to ${currentStep.label} • $qualityLabel",
+                            cameraMode = NavigationCameraMode.OVERVIEW
                         )
                     }
                 }
