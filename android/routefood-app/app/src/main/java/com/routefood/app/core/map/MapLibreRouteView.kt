@@ -59,11 +59,23 @@ data class MapRoutePoint(
 data class MapRouteState(
     val driver: MapRoutePoint?,
     val stops: List<MapRoutePoint>,
-    val polyline: List<Pair<Double, Double>>,
+    val remainingPolyline: List<Pair<Double, Double>>,
+    val completedPolyline: List<Pair<Double, Double>> = emptyList(),
     val activeStepIndex: Int,
     val geometryAvailable: Boolean,
     val followDriver: Boolean = false,
-    val driverHeadingDeg: Double = 0.0
+    val driverHeadingDeg: Double = 0.0,
+    val cameraMode: String = "OVERVIEW",
+    val snappedWaypoints: List<MapSnappedWaypoint> = emptyList()
+)
+
+data class MapSnappedWaypoint(
+    val label: String,
+    val rawLat: Double,
+    val rawLng: Double,
+    val snappedLat: Double,
+    val snappedLng: Double,
+    val distanceMeters: Double
 )
 
 class MapLibreRouteView @JvmOverloads constructor(
@@ -134,18 +146,19 @@ class MapLibreRouteView @JvmOverloads constructor(
             append('|').append(state.geometryAvailable)
             append('|').append(state.followDriver)
             append('|').append(state.driverHeadingDeg.toInt())
-            append('|').append(state.polyline.size)
-            state.polyline.firstOrNull()?.let { append('|').append(it.first).append(',').append(it.second) }
-            state.polyline.lastOrNull()?.let { append('|').append(it.first).append(',').append(it.second) }
+            append('|').append(state.cameraMode)
+            append('|').append(state.remainingPolyline.size)
+            append('|').append(state.completedPolyline.size)
+            state.remainingPolyline.firstOrNull()?.let { append('|').append(it.first).append(',').append(it.second) }
+            state.remainingPolyline.lastOrNull()?.let { append('|').append(it.first).append(',').append(it.second) }
             append('|').append(state.stops.size)
+            append('|').append(state.snappedWaypoints.size)
         }
     }
 
     private fun renderRouteLine(style: Style, state: MapRouteState) {
-        val points = routePoints(state)
-        val progress = if (state.followDriver) splitRouteProgress(points, state.driver) else RouteProgress(emptyList(), points)
-        val remainingLine = routeLine(progress.remaining)
-        val traveledLine = routeLine(progress.traveled)
+        val remainingLine = routeLine(state.remainingPolyline)
+        val traveledLine = routeLine(state.completedPolyline)
         val remainingSource = style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)
         if (remainingSource == null) {
             style.addSource(GeoJsonSource(ROUTE_TRAVELED_SOURCE_ID, traveledLine))
@@ -197,9 +210,13 @@ class MapLibreRouteView @JvmOverloads constructor(
         upsertSource(style, PICKUP_SOURCE_ID, features(state.stops.filter { !it.type.equals("dropoff", true) }))
         upsertSource(style, DROPOFF_SOURCE_ID, features(state.stops.filter { it.type.equals("dropoff", true) }))
         upsertSource(style, ACTIVE_SOURCE_ID, features(state.stops.getOrNull(state.activeStepIndex)?.let { listOf(it) }.orEmpty()))
+        upsertSource(style, CONNECTOR_SOURCE_ID, connectorFeatures(state.snappedWaypoints))
+        upsertSource(style, SNAPPED_SOURCE_ID, snappedFeatures(state.snappedWaypoints))
     }
 
     private fun ensureMarkerLayers(style: Style) {
+        addConnectorLayer(style)
+        addCircleLayer(style, SNAPPED_LAYER_ID, SNAPPED_SOURCE_ID, "#0F766E", 5.5f, 1.4f, opacity = 0.86f)
         addCircleLayer(style, DRIVER_SHADOW_LAYER_ID, DRIVER_SOURCE_ID, "#06111D", 24f, 0f, opacity = 0.42f, blur = 0.2f)
         addCircleLayer(style, DRIVER_DOT_LAYER_ID, DRIVER_SOURCE_ID, "#18D674", 11f, 3.2f)
         addDriverArrowLayer(style)
@@ -213,6 +230,20 @@ class MapLibreRouteView @JvmOverloads constructor(
         addLabelLayer(style, STOP_LABEL_LAYER_ID, PICKUP_SOURCE_ID, 12.5f, "#FFFFFF", "#7C2D12")
         addLabelLayer(style, DROPOFF_LABEL_LAYER_ID, DROPOFF_SOURCE_ID, 12.5f, "#FFFFFF", "#7F1D1D")
         addLabelLayer(style, ACTIVE_LABEL_LAYER_ID, ACTIVE_SOURCE_ID, 13.5f, "#FFFFFF", "#052E1A")
+    }
+
+    private fun addConnectorLayer(style: Style) {
+        if (style.getLayer(CONNECTOR_LAYER_ID) != null) return
+        ensureEmptySource(style, CONNECTOR_SOURCE_ID)
+        style.addLayer(
+            LineLayer(CONNECTOR_LAYER_ID, CONNECTOR_SOURCE_ID).withProperties(
+                lineColor("#64748B"),
+                lineWidth(2.0f),
+                lineOpacity(0.54f),
+                lineCap(Property.LINE_CAP_ROUND),
+                lineJoin(Property.LINE_JOIN_ROUND)
+            )
+        )
     }
 
     private fun addCircleLayer(
@@ -306,9 +337,35 @@ class MapLibreRouteView @JvmOverloads constructor(
         })
     }
 
+    private fun snappedFeatures(points: List<MapSnappedWaypoint>): FeatureCollection {
+        return FeatureCollection.fromFeatures(points.map { point ->
+            Feature.fromGeometry(Point.fromLngLat(point.snappedLng, point.snappedLat)).also { feature ->
+                feature.addStringProperty("label", point.label)
+                feature.addNumberProperty("snapDistance", point.distanceMeters)
+            }
+        })
+    }
+
+    private fun connectorFeatures(points: List<MapSnappedWaypoint>): FeatureCollection {
+        val connectors = points.filter { it.distanceMeters > 15.0 }.map { point ->
+            Feature.fromGeometry(
+                LineString.fromLngLats(
+                    listOf(
+                        Point.fromLngLat(point.rawLng, point.rawLat),
+                        Point.fromLngLat(point.snappedLng, point.snappedLat)
+                    )
+                )
+            ).also { feature ->
+                feature.addStringProperty("label", point.label)
+                feature.addNumberProperty("snapDistance", point.distanceMeters)
+            }
+        }
+        return FeatureCollection.fromFeatures(connectors)
+    }
+
     private fun driverFeatures(state: MapRouteState): FeatureCollection {
         val driver = state.driver ?: return FeatureCollection.fromFeatures(emptyArray())
-        val bearing = state.driverHeadingDeg.takeIf { state.followDriver } ?: bearingFromRoute(routePoints(state), driver, state.stops.getOrNull(state.activeStepIndex))
+        val bearing = state.driverHeadingDeg
         val feature = Feature.fromGeometry(Point.fromLngLat(driver.lng, driver.lat)).also { feature ->
             feature.addStringProperty("label", driver.label)
             feature.addStringProperty("arrow", "▲")
@@ -340,7 +397,7 @@ class MapLibreRouteView @JvmOverloads constructor(
         }
         val driver = state.driver ?: return
         val driverPoint = driver.lat to driver.lng
-        val target = lookAheadTarget(routePoints(state), driverPoint, 110.0)
+        val target = if (state.cameraMode == "FOLLOWING") lookAheadTarget(state.remainingPolyline, driverPoint, 55.0) else driverPoint
         val cameraMovedEnough = lastCameraTarget?.let { distanceMeters(it, target) >= 3.0 } ?: true
         if (!shouldFit && !cameraMovedEnough) return
         map?.setPadding(0, 150, 0, 430)
@@ -380,12 +437,7 @@ class MapLibreRouteView @JvmOverloads constructor(
     }
 
     private fun routePoints(state: MapRouteState): List<Pair<Double, Double>> {
-        if (state.polyline.size >= 2) return state.polyline
-        if (!state.geometryAvailable) return emptyList()
-        return buildList {
-            state.driver?.let { add(it.lat to it.lng) }
-            state.stops.forEach { add(it.lat to it.lng) }
-        }
+        return state.remainingPolyline
     }
 
     private data class RouteProgress(
@@ -524,6 +576,10 @@ class MapLibreRouteView @JvmOverloads constructor(
         private const val PICKUP_SOURCE_ID = "routefood-pickup-source"
         private const val DROPOFF_SOURCE_ID = "routefood-dropoff-source"
         private const val ACTIVE_SOURCE_ID = "routefood-active-source"
+        private const val CONNECTOR_SOURCE_ID = "routefood-snap-connector-source"
+        private const val SNAPPED_SOURCE_ID = "routefood-snapped-source"
+        private const val CONNECTOR_LAYER_ID = "routefood-snap-connector-layer"
+        private const val SNAPPED_LAYER_ID = "routefood-snapped-layer"
         private const val DRIVER_SHADOW_LAYER_ID = "routefood-driver-shadow-layer"
         private const val DRIVER_DOT_LAYER_ID = "routefood-driver-dot-layer"
         private const val DRIVER_LAYER_ID = "routefood-driver-layer"

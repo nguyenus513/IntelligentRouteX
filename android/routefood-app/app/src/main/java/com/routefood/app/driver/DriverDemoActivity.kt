@@ -83,6 +83,7 @@ import com.routefood.app.compose.core.designsystem.RouteFoodTheme
 import com.routefood.app.core.map.MapLibreRouteView
 import com.routefood.app.core.map.MapRoutePoint
 import com.routefood.app.core.map.MapRouteState
+import com.routefood.app.core.map.MapSnappedWaypoint
 import com.routefood.app.driver.model.DriverAssignmentDemo
 import com.routefood.app.driver.model.DriverLatLng
 import com.routefood.app.driver.model.DriverRouteStep
@@ -124,18 +125,12 @@ fun DriverDemoApp(viewModel: DriverDemoViewModel = viewModel()) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (selectedTab == DriverTab.Home || state.phase == DriverPhase.ActiveTrip) {
-                DriverMapSurface(state.assignment, state.simulatedDriverLocation, state.roadGeometry, state.driverHeadingDeg, state.phase == DriverPhase.ActiveTrip, mapController, Modifier.fillMaxSize())
+                DriverMapSurface(state, state.phase == DriverPhase.ActiveTrip, mapController, Modifier.fillMaxSize())
             } else {
                 DriverTabScreen(selectedTab, state.assignment, Modifier.fillMaxSize())
             }
             if (state.phase == DriverPhase.ActiveTrip) {
                 NavigationTopInstruction(state, Modifier.align(Alignment.TopCenter).padding(top = 16.dp, start = 8.dp, end = 8.dp))
-                NavigationDriverPuck(
-                    headingDegrees = state.driverHeadingDeg.toFloat(),
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(bottom = 96.dp)
-                )
                 NavigationMapControls(
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp, bottom = 52.dp),
                     onZoomIn = mapController::zoomIn,
@@ -937,14 +932,12 @@ private fun DriverMiniRouteMap(assignment: DriverAssignmentDemo?) {
 
 @Composable
 private fun DriverMapSurface(
-    assignment: DriverAssignmentDemo?,
-    simulatedDriverLocation: DriverLatLng?,
-    roadGeometry: List<DriverLatLng>,
-    driverHeadingDeg: Double,
+    state: DriverDemoUiState,
     navigationMode: Boolean,
     mapController: DriverMapController,
     modifier: Modifier = Modifier
 ) {
+    val assignment = state.assignment
     if (assignment != null) {
         var mapReady by remember(assignment.id) { mutableStateOf(false) }
         LaunchedEffect(assignment.id) {
@@ -952,38 +945,49 @@ private fun DriverMapSurface(
             mapReady = true
         }
         if (mapReady) {
-            RealOsmDriverMap(assignment, simulatedDriverLocation, roadGeometry, driverHeadingDeg, mapController, modifier)
+            RealOsmDriverMap(state, assignment, mapController, modifier)
         } else {
             mapController.mapView = null
-            DriverCoreMap(assignment, simulatedDriverLocation, navigationMode, modifier)
+            DriverCoreMap(assignment, state.simulatedDriverLocation, navigationMode, modifier)
         }
     } else {
         mapController.mapView = null
-        DriverCoreMap(assignment, simulatedDriverLocation, navigationMode, modifier)
+        DriverCoreMap(assignment, state.simulatedDriverLocation, navigationMode, modifier)
     }
 }
 
 @Composable
 private fun RealOsmDriverMap(
+    state: DriverDemoUiState,
     assignment: DriverAssignmentDemo,
-    simulatedDriverLocation: DriverLatLng?,
-    roadGeometry: List<DriverLatLng>,
-    driverHeadingDeg: Double,
     mapController: DriverMapController,
     modifier: Modifier = Modifier
 ) {
-    val driver = (simulatedDriverLocation ?: assignment.driverLocationAtAssignment).toMapRoutePoint("DR", "driver", "Driver ${assignment.driverCode}")
+    val driverLocation = state.driverProjectedLocation ?: state.simulatedDriverLocation ?: assignment.driverLocationAtAssignment
+    val driver = driverLocation.toMapRoutePoint("DR", "driver", "Driver ${assignment.driverCode}")
     val stops = assignment.routePlan.sequence.map { step ->
         step.location.toMapRoutePoint(step.label, step.type, step.title)
     }
     val routeState = MapRouteState(
         driver = driver,
         stops = stops,
-        polyline = if (roadGeometry.size >= 2) roadGeometry.map { it.lat to it.lng } else emptyList(),
+        remainingPolyline = state.remainingGeometry.map { it.lat to it.lng },
+        completedPolyline = state.completedGeometry.map { it.lat to it.lng },
         activeStepIndex = assignment.currentStepIndex,
-        geometryAvailable = roadGeometry.size >= 2,
-        followDriver = simulatedDriverLocation != null,
-        driverHeadingDeg = driverHeadingDeg
+        geometryAvailable = state.roadGeometry.size >= 2,
+        followDriver = state.simulatedDriverLocation != null,
+        driverHeadingDeg = state.driverHeadingDeg,
+        cameraMode = state.cameraMode.name,
+        snappedWaypoints = state.snappedWaypoints.map {
+            MapSnappedWaypoint(
+                label = it.label,
+                rawLat = it.raw.lat,
+                rawLng = it.raw.lng,
+                snappedLat = it.snapped.lat,
+                snappedLng = it.snapped.lng,
+                distanceMeters = it.distanceMeters
+            )
+        }
     )
     AndroidView(
         modifier = modifier.background(NavMapBg),
