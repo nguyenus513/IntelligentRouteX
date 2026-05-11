@@ -46,9 +46,12 @@ data class DriverDemoUiState(
     val remainingDistanceMeters: Int = 0,
     val remainingDurationSeconds: Int = 0,
     val driverHeadingDeg: Double = 0.0,
-    val demoReplayMultiplier: Double = 10.0,
+    val demoReplayMultiplier: Double = 2.0,
     val routeProgressIndex: Int = 0,
+    val routeProgressMeters: Double = 0.0,
     val driverProjectedLocation: DriverLatLng? = null,
+    val currentLegIndex: Int = 0,
+    val currentLegEndMeters: Double = 0.0,
     val completedGeometry: List<DriverLatLng> = emptyList(),
     val remainingGeometry: List<DriverLatLng> = emptyList(),
     val snappedWaypoints: List<DriverSnappedWaypointUi> = emptyList(),
@@ -90,6 +93,10 @@ class DriverDemoViewModel(
     private var pollJob: Job? = null
     private var simulationJob: Job? = null
     private var simulationGeometryIndex: Int = 0
+    private var simulationProgressMeters: Double = 0.0
+    private var routeLegEndMeters: List<Double> = emptyList()
+    private var routeLegEndIndices: List<Int> = emptyList()
+    private var routeBaseStepIndex: Int = 0
     private var trafficHoldTicks: Int = 0
     private var simulatedAlongLocation: DriverLatLng? = null
 
@@ -102,7 +109,7 @@ class DriverDemoViewModel(
         pollJob?.cancel()
         simulationJob?.cancel()
         resetNavigationSimulation()
-        _state.update { it.copy(online = false, loading = false, assignment = null, error = null, lastUpdatedLabel = "Offline", simulationRunning = false, simulatedDriverLocation = null, roadGeometry = emptyList(), roadGeometryLoading = false, roadGeometryLabel = "Estimated route", navigationInstructions = emptyList(), simulatedSpeedKmh = 0, trafficLabel = "Normal traffic", driverHeadingDeg = 0.0, routeProgressIndex = 0, driverProjectedLocation = null, completedGeometry = emptyList(), remainingGeometry = emptyList(), snappedWaypoints = emptyList(), snapWarnings = emptyList(), maxSnapDistanceMeters = 0.0, cameraMode = NavigationCameraMode.OVERVIEW) }
+        _state.update { it.copy(online = false, loading = false, assignment = null, error = null, lastUpdatedLabel = "Offline", simulationRunning = false, simulatedDriverLocation = null, roadGeometry = emptyList(), roadGeometryLoading = false, roadGeometryLabel = "Estimated route", navigationInstructions = emptyList(), simulatedSpeedKmh = 0, trafficLabel = "Normal traffic", driverHeadingDeg = 0.0, routeProgressIndex = 0, routeProgressMeters = 0.0, driverProjectedLocation = null, currentLegIndex = 0, currentLegEndMeters = 0.0, completedGeometry = emptyList(), remainingGeometry = emptyList(), snappedWaypoints = emptyList(), snapWarnings = emptyList(), maxSnapDistanceMeters = 0.0, cameraMode = NavigationCameraMode.OVERVIEW) }
     }
 
     fun loadLocalCoreDemo() {
@@ -238,8 +245,11 @@ class DriverDemoViewModel(
                     status = if (completed) "completed" else "in_progress",
                     currentStepIndex = nextIndex.coerceAtMost(assignment.routePlan.sequence.size)
                 ),
-                simulatedDriverLocation = currentStep.location,
                 simulationRunning = if (completed) false else it.simulationRunning,
+                simulatedSpeedKmh = if (completed) 0 else it.simulatedSpeedKmh,
+                trafficLabel = if (completed) "Route completed" else "Continuing to step ${nextIndex + 1}",
+                currentLegIndex = nextIndex.coerceAtMost(assignment.routePlan.sequence.lastIndex),
+                currentLegEndMeters = routeLegEndMeters.getOrNull(nextIndex) ?: it.currentLegEndMeters,
                 lastUpdatedLabel = if (completed) "Arrived final stop" else "Arrived ${currentStep.label}; navigating to step ${nextIndex + 1}"
             )
         }
@@ -270,15 +280,28 @@ class DriverDemoViewModel(
         val remainingDistance = remainingDistanceMeters(geometry, simulationGeometryIndex)
         val activeInstruction = activeInstructionIndex(location, state.navigationInstructions, remainingDistance)
         val remainingDuration = max(30, (remainingDistance / max(1.0, speedKmh / 3.6)).toInt())
-        val arrivedCurrentStop = distanceMeters(location, currentStep.location) <= 75.0 || simulationGeometryIndex >= geometry.lastIndex - 1
+        val currentLegEndMeters = routeLegEndMeters.getOrNull(assignment.currentStepIndex - routeBaseStepIndex)
+            ?: routeDistanceMeters(geometry)
+        val currentLegEndIndex = routeLegEndIndices.getOrNull(assignment.currentStepIndex - routeBaseStepIndex)
+            ?: geometry.lastIndex
+        val arrivedCurrentStop = simulationProgressMeters >= currentLegEndMeters - ARRIVAL_THRESHOLD_METERS ||
+            simulationGeometryIndex >= currentLegEndIndex.coerceAtMost(geometry.lastIndex)
         if (arrivedCurrentStop) {
+            val arrivalLocation = geometry.getOrNull(currentLegEndIndex.coerceIn(0, geometry.lastIndex)) ?: location
+            simulationGeometryIndex = max(simulationGeometryIndex, currentLegEndIndex.coerceIn(0, geometry.lastIndex))
+            simulationProgressMeters = max(simulationProgressMeters, currentLegEndMeters)
+            simulatedAlongLocation = arrivalLocation
+            val arrivedProgress = splitGeometryAtProgress(geometry, simulationGeometryIndex, arrivalLocation)
             _state.update {
                 it.copy(
-                    simulatedDriverLocation = currentStep.location,
-                    driverProjectedLocation = location,
+                    simulatedDriverLocation = arrivalLocation,
+                    driverProjectedLocation = arrivalLocation,
                     routeProgressIndex = simulationGeometryIndex,
-                    completedGeometry = routeProgress.first,
-                    remainingGeometry = routeProgress.second,
+                    routeProgressMeters = simulationProgressMeters,
+                    currentLegIndex = assignment.currentStepIndex - routeBaseStepIndex,
+                    currentLegEndMeters = currentLegEndMeters,
+                    completedGeometry = arrivedProgress.first,
+                    remainingGeometry = arrivedProgress.second,
                     simulatedSpeedKmh = 0,
                     trafficLabel = "Arrived ${currentStep.label}",
                     driverHeadingDeg = heading,
@@ -288,9 +311,7 @@ class DriverDemoViewModel(
                     lastUpdatedLabel = "Arrived ${currentStep.label}"
                 )
             }
-            resetNavigationSimulation()
             advanceLocalStep()
-            if (_state.value.assignment?.isCompleted != true) refreshRoadGeometry()
             return
         }
         _state.update {
@@ -298,6 +319,9 @@ class DriverDemoViewModel(
                 simulatedDriverLocation = location,
                 driverProjectedLocation = location,
                 routeProgressIndex = simulationGeometryIndex,
+                routeProgressMeters = simulationProgressMeters,
+                currentLegIndex = assignment.currentStepIndex - routeBaseStepIndex,
+                currentLegEndMeters = currentLegEndMeters,
                 completedGeometry = routeProgress.first,
                 remainingGeometry = routeProgress.second,
                 simulatedSpeedKmh = speedKmh,
@@ -339,15 +363,21 @@ class DriverDemoViewModel(
     }
 
     private fun alignSimulationIndexToCurrentLocation() {
-        val location = _state.value.simulatedDriverLocation ?: return
+        val location = _state.value.driverProjectedLocation ?: _state.value.simulatedDriverLocation ?: return
         val geometry = _state.value.roadGeometry
         if (geometry.isEmpty()) return
-        simulationGeometryIndex = geometry.indices.minByOrNull { index -> distanceMeters(location, geometry[index]) } ?: 0
+        val nearestIndex = geometry.indices.minByOrNull { index -> distanceMeters(location, geometry[index]) } ?: 0
+        simulationGeometryIndex = max(simulationGeometryIndex, nearestIndex)
+        simulationProgressMeters = max(simulationProgressMeters, cumulativeDistanceUntil(geometry, simulationGeometryIndex))
         simulatedAlongLocation = location
     }
 
     private fun resetNavigationSimulation() {
         simulationGeometryIndex = 0
+        simulationProgressMeters = 0.0
+        routeLegEndMeters = emptyList()
+        routeLegEndIndices = emptyList()
+        routeBaseStepIndex = 0
         trafficHoldTicks = 0
         simulatedAlongLocation = null
     }
@@ -355,12 +385,14 @@ class DriverDemoViewModel(
     private fun advanceAlongPolyline(geometry: List<DriverLatLng>, speedKmh: Int, replayMultiplier: Double): DriverLatLng {
         var current = simulatedAlongLocation ?: geometry[simulationGeometryIndex]
         var budgetMeters = max(0.6, speedKmh / 3.6 * (SIMULATION_TICK_MS / 1000.0) * replayMultiplier)
+            .coerceAtMost(MAX_ADVANCE_METERS_PER_TICK)
         while (budgetMeters > 0.0 && simulationGeometryIndex < geometry.lastIndex) {
             val next = geometry[simulationGeometryIndex + 1]
             val segmentMeters = distanceMeters(current, next)
             if (segmentMeters <= budgetMeters || segmentMeters < 0.5) {
                 current = next
                 simulationGeometryIndex++
+                simulationProgressMeters += segmentMeters
                 budgetMeters -= segmentMeters
             } else {
                 val ratio = budgetMeters / segmentMeters
@@ -368,6 +400,7 @@ class DriverDemoViewModel(
                     current.lat + (next.lat - current.lat) * ratio,
                     current.lng + (next.lng - current.lng) * ratio
                 )
+                simulationProgressMeters += budgetMeters
                 budgetMeters = 0.0
             }
         }
@@ -393,6 +426,47 @@ class DriverDemoViewModel(
             sum += distanceMeters(geometry[index], geometry[index + 1])
         }
         return sum
+    }
+
+    private fun routeDistanceMeters(geometry: List<DriverLatLng>): Double = cumulativeDistanceUntil(geometry, geometry.lastIndex)
+
+    private fun cumulativeDistanceUntil(geometry: List<DriverLatLng>, endIndex: Int): Double {
+        if (geometry.size < 2) return 0.0
+        var sum = 0.0
+        val safeEnd = endIndex.coerceIn(0, geometry.lastIndex)
+        for (index in 0 until safeEnd) {
+            sum += distanceMeters(geometry[index], geometry[index + 1])
+        }
+        return sum
+    }
+
+    private fun computeLegBoundaries(
+        geometry: List<DriverLatLng>,
+        waypointCount: Int,
+        legDistances: List<Double> = emptyList()
+    ): Pair<List<Int>, List<Double>> {
+        if (geometry.isEmpty() || waypointCount <= 1) return emptyList<Int>() to emptyList()
+        val legCount = waypointCount - 1
+        if (legDistances.size == legCount && legDistances.all { it > 0.0 }) {
+            val endMeters = legDistances.runningFold(0.0) { total, legDistance -> total + legDistance }.drop(1)
+            val endIndices = endMeters.map { targetMeters -> geometryIndexAtDistance(geometry, targetMeters) }
+            return endIndices to endMeters
+        }
+        val endIndices = (1..legCount).map { leg ->
+            ((geometry.lastIndex.toDouble() * leg) / legCount).toInt().coerceIn(0, geometry.lastIndex)
+        }
+        val endMeters = endIndices.map { index -> cumulativeDistanceUntil(geometry, index) }
+        return endIndices to endMeters
+    }
+
+    private fun geometryIndexAtDistance(geometry: List<DriverLatLng>, targetMeters: Double): Int {
+        if (geometry.size < 2) return 0
+        var traveled = 0.0
+        for (index in 0 until geometry.lastIndex) {
+            traveled += distanceMeters(geometry[index], geometry[index + 1])
+            if (traveled >= targetMeters) return index + 1
+        }
+        return geometry.lastIndex
     }
 
     private fun splitGeometryAtProgress(
@@ -524,6 +598,13 @@ class DriverDemoViewModel(
                     val geometry = points.map { point -> DriverLatLng(point.latitude(), point.longitude()) }
                     val driver = _state.value.simulatedDriverLocation ?: assignment.driverLocationAtAssignment
                     val initialProjected = geometry.firstOrNull() ?: driver
+                    routeBaseStepIndex = assignment.currentStepIndex
+                    val legBoundaries = computeLegBoundaries(geometry, waypoints.size, result.legDistanceMeters)
+                    routeLegEndIndices = legBoundaries.first
+                    routeLegEndMeters = legBoundaries.second
+                    simulationGeometryIndex = 0
+                    simulationProgressMeters = 0.0
+                    simulatedAlongLocation = initialProjected
                     val routeProgress = if (geometry.size >= 2) splitGeometryAtProgress(geometry, 0, initialProjected) else emptyList<DriverLatLng>() to emptyList()
                     val remainingMeters = result.distanceMeters.toInt()
                     val remainingSeconds = result.durationSeconds.toInt()
@@ -540,8 +621,12 @@ class DriverDemoViewModel(
                     _state.update {
                         it.copy(
                             roadGeometry = geometry,
+                            simulatedDriverLocation = initialProjected,
                             driverProjectedLocation = initialProjected,
                             routeProgressIndex = 0,
+                            routeProgressMeters = 0.0,
+                            currentLegIndex = 0,
+                            currentLegEndMeters = routeLegEndMeters.firstOrNull() ?: remainingMeters.toDouble(),
                             completedGeometry = routeProgress.first,
                             remainingGeometry = routeProgress.second,
                             snappedWaypoints = snapped,
@@ -574,6 +659,8 @@ class DriverDemoViewModel(
 
     companion object {
         private const val SIMULATION_TICK_MS = 250L
+        private const val MAX_ADVANCE_METERS_PER_TICK = 8.0
+        private const val ARRIVAL_THRESHOLD_METERS = 10.0
     }
 
     override fun onCleared() {

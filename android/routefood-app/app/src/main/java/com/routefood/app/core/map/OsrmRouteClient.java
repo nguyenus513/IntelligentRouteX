@@ -51,18 +51,24 @@ public class OsrmRouteClient {
         public final double distanceMeters;
         public final double durationSeconds;
         public final double maxSnapDistanceMeters;
+        public final List<Double> legDistanceMeters;
 
         public NavigationRouteResult(List<GeoPoint> geometry, List<NavigationInstruction> instructions, double distanceMeters, double durationSeconds) {
-            this(geometry, instructions, new ArrayList<>(), distanceMeters, durationSeconds, 0.0);
+            this(geometry, instructions, new ArrayList<>(), distanceMeters, durationSeconds, 0.0, new ArrayList<>());
         }
 
         public NavigationRouteResult(List<GeoPoint> geometry, List<NavigationInstruction> instructions, List<SnappedWaypoint> waypoints, double distanceMeters, double durationSeconds, double maxSnapDistanceMeters) {
+            this(geometry, instructions, waypoints, distanceMeters, durationSeconds, maxSnapDistanceMeters, new ArrayList<>());
+        }
+
+        public NavigationRouteResult(List<GeoPoint> geometry, List<NavigationInstruction> instructions, List<SnappedWaypoint> waypoints, double distanceMeters, double durationSeconds, double maxSnapDistanceMeters, List<Double> legDistanceMeters) {
             this.geometry = geometry;
             this.instructions = instructions;
             this.waypoints = waypoints;
             this.distanceMeters = distanceMeters;
             this.durationSeconds = durationSeconds;
             this.maxSnapDistanceMeters = maxSnapDistanceMeters;
+            this.legDistanceMeters = legDistanceMeters;
         }
     }
 
@@ -337,11 +343,14 @@ public class OsrmRouteClient {
         JSONObject route = routes.getJSONObject(0);
         List<GeoPoint> geometry = parseRoute(body);
         List<NavigationInstruction> instructions = new ArrayList<>();
+        List<Double> legDistanceMeters = new ArrayList<>();
         JSONArray legs = route.optJSONArray("legs");
         int instructionIndex = 0;
         if (legs != null) {
             for (int legIndex = 0; legIndex < legs.length(); legIndex++) {
-                JSONArray steps = legs.getJSONObject(legIndex).optJSONArray("steps");
+                JSONObject leg = legs.getJSONObject(legIndex);
+                legDistanceMeters.add(leg.optDouble("distance", 0.0));
+                JSONArray steps = leg.optJSONArray("steps");
                 if (steps == null) continue;
                 for (int stepIndex = 0; stepIndex < steps.length(); stepIndex++) {
                     JSONObject step = steps.getJSONObject(stepIndex);
@@ -365,7 +374,7 @@ public class OsrmRouteClient {
                 }
             }
         }
-        return new NavigationRouteResult(geometry, instructions, waypoints, route.optDouble("distance", 0.0), route.optDouble("duration", 0.0), maxSnapDistanceMeters);
+        return new NavigationRouteResult(geometry, instructions, waypoints, route.optDouble("distance", 0.0), route.optDouble("duration", 0.0), maxSnapDistanceMeters, legDistanceMeters);
     }
 
     private String instructionText(String type, String modifier, String roadName) {

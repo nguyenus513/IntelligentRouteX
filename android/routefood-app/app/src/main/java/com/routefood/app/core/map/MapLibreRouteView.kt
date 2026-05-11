@@ -419,10 +419,9 @@ class MapLibreRouteView @JvmOverloads constructor(
         lookAheadMeters: Double
     ): Pair<Double, Double> {
         if (route.size < 2) return driverPoint
-        val projection = projectPointOnRoute(driverPoint, route)
-        var current = projection.point
+        var current = route.first()
         var remaining = lookAheadMeters
-        for (index in projection.segmentEndIndex until route.size) {
+        for (index in 1 until route.size) {
             val next = route[index]
             val segmentMeters = distanceMeters(current, next)
             if (segmentMeters >= remaining && segmentMeters > 0.1) {
@@ -438,84 +437,6 @@ class MapLibreRouteView @JvmOverloads constructor(
 
     private fun routePoints(state: MapRouteState): List<Pair<Double, Double>> {
         return state.remainingPolyline
-    }
-
-    private data class RouteProgress(
-        val traveled: List<Pair<Double, Double>>,
-        val remaining: List<Pair<Double, Double>>
-    )
-
-    private data class RouteProjection(
-        val segmentStartIndex: Int,
-        val segmentEndIndex: Int,
-        val point: Pair<Double, Double>,
-        val distanceMeters: Double
-    )
-
-    private fun splitRouteProgress(points: List<Pair<Double, Double>>, driver: MapRoutePoint?): RouteProgress {
-        if (points.size < 2 || driver == null) return RouteProgress(emptyList(), points)
-        val driverPoint = driver.lat to driver.lng
-        val projection = projectPointOnRoute(driverPoint, points)
-        val traveled = (points.take(projection.segmentStartIndex + 1) + projection.point).distinctConsecutive()
-        val remaining = (listOf(projection.point) + points.drop(projection.segmentEndIndex)).distinctConsecutive()
-        return RouteProgress(traveled, remaining)
-    }
-
-    private fun List<Pair<Double, Double>>.distinctConsecutive(): List<Pair<Double, Double>> {
-        if (isEmpty()) return this
-        val result = mutableListOf<Pair<Double, Double>>()
-        forEach { point ->
-            if (result.lastOrNull() != point) result.add(point)
-        }
-        return result
-    }
-
-    private fun bearingFromRoute(points: List<Pair<Double, Double>>, driver: MapRoutePoint, fallbackTarget: MapRoutePoint? = null): Double {
-        if (points.size < 2) return fallbackTarget?.let { bearingDegrees(driver.lat to driver.lng, it.lat to it.lng) } ?: 0.0
-        val driverPoint = driver.lat to driver.lng
-        val projection = projectPointOnRoute(driverPoint, points)
-        val next = points.drop(projection.segmentEndIndex).firstOrNull { distanceMeters(projection.point, it) > 8.0 }
-            ?: points.getOrNull(projection.segmentEndIndex.coerceAtMost(points.lastIndex))
-            ?: fallbackTarget?.let { return bearingDegrees(driver.lat to driver.lng, it.lat to it.lng) }
-            ?: return 0.0
-        return bearingDegrees(projection.point, next)
-    }
-
-    private fun projectPointOnRoute(
-        point: Pair<Double, Double>,
-        route: List<Pair<Double, Double>>
-    ): RouteProjection {
-        var best = RouteProjection(0, 1, route.first(), distanceMeters(route.first(), point))
-        for (index in 0 until route.lastIndex) {
-            val projected = projectPointOnSegment(point, route[index], route[index + 1])
-            val distance = distanceMeters(projected, point)
-            if (distance < best.distanceMeters) {
-                best = RouteProjection(index, index + 1, projected, distance)
-            }
-        }
-        return best
-    }
-
-    private fun projectPointOnSegment(
-        point: Pair<Double, Double>,
-        start: Pair<Double, Double>,
-        end: Pair<Double, Double>
-    ): Pair<Double, Double> {
-        val originLat = point.first
-        val metersPerLng = 111_320.0 * cos(Math.toRadians(originLat))
-        val sx = (start.second - point.second) * metersPerLng
-        val sy = (start.first - point.first) * 111_320.0
-        val ex = (end.second - point.second) * metersPerLng
-        val ey = (end.first - point.first) * 111_320.0
-        val dx = ex - sx
-        val dy = ey - sy
-        val lengthSquared = dx * dx + dy * dy
-        if (lengthSquared == 0.0) return start
-        val t = ((-sx * dx) + (-sy * dy)) / lengthSquared
-        val clamped = t.coerceIn(0.0, 1.0)
-        val px = sx + clamped * dx
-        val py = sy + clamped * dy
-        return (point.first + py / 111_320.0) to (point.second + px / metersPerLng)
     }
 
     private fun distanceMeters(a: Pair<Double, Double>, b: Pair<Double, Double>): Double {

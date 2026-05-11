@@ -15,6 +15,7 @@ public class RoadRoute {
     public final List<OsrmRouteClient.SnappedWaypoint> snappedWaypoints;
     public final double distanceMeters;
     public final double durationSeconds;
+    public final List<Double> legDistanceMeters;
     public final RouteQuality quality;
 
     public RoadRoute(
@@ -27,6 +28,20 @@ public class RoadRoute {
             double durationSeconds,
             RouteQuality quality
     ) {
+        this(provider, geometryAvailable, coordinates, instructions, snappedWaypoints, distanceMeters, durationSeconds, Collections.emptyList(), quality);
+    }
+
+    public RoadRoute(
+            String provider,
+            boolean geometryAvailable,
+            List<GeoPoint> coordinates,
+            List<OsrmRouteClient.NavigationInstruction> instructions,
+            List<OsrmRouteClient.SnappedWaypoint> snappedWaypoints,
+            double distanceMeters,
+            double durationSeconds,
+            List<Double> legDistanceMeters,
+            RouteQuality quality
+    ) {
         this.provider = provider;
         this.geometryAvailable = geometryAvailable;
         this.coordinates = Collections.unmodifiableList(new ArrayList<>(coordinates));
@@ -34,6 +49,7 @@ public class RoadRoute {
         this.snappedWaypoints = Collections.unmodifiableList(new ArrayList<>(snappedWaypoints));
         this.distanceMeters = distanceMeters;
         this.durationSeconds = durationSeconds;
+        this.legDistanceMeters = Collections.unmodifiableList(new ArrayList<>(legDistanceMeters));
         this.quality = quality;
     }
 }

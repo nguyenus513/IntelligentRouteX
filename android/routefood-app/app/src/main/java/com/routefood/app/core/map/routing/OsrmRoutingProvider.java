@@ -34,6 +34,7 @@ public class OsrmRoutingProvider implements RoutingProvider {
                 result.waypoints,
                 result.distanceMeters,
                 result.durationSeconds,
+                result.legDistanceMeters,
                 quality
         );
     }
