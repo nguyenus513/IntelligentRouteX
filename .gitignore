@@ -20,6 +20,10 @@ android/routefood-app/build/
 android/routefood-app/app/build/
 android/routefood-app/app/google-services.json
 android/routefood-app/local.properties
+*firebase-adminsdk*.json
+serviceAccount*.json
+firebase-admin*.json
+secrets/
 data/bronze/
 data/silver/
 data/gold/
@@ -29,3 +33,5 @@ services/models/materialized/tabular/
 artifacts/osrm/
 artifacts/visual/
 artifacts/validation/geo-tiles/
+firebase-project.local.json
+artifacts/ui-smoke/

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -9,24 +9,56 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Your cart"
+        android:letterSpacing="0.12"
+        android:text="GIỎ HÀNG"
+        android:textColor="@color/route_text_secondary"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="Order Summary"
         android:textColor="@color/route_text_primary"
         android:textSize="28sp"
         android:textStyle="bold" />
 
     <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="Kiểm tra món và ưu đãi trong một summary tối giản."
+        android:textColor="@color/route_text_secondary"
+        android:textSize="15sp" />
+
+    <TextView
         android:id="@+id/cartSummaryText"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="22dp"
         android:layout_weight="1"
         android:background="@drawable/bg_card"
+        android:lineSpacingExtra="6dp"
         android:padding="20dp"
-        android:textColor="@color/route_text_primary" />
+        android:textColor="@color/route_text_primary"
+        android:textSize="16sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_search"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="Voucher  •  NOIR20 đang khả dụng"
+        android:textColor="@color/route_text_secondary" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/checkoutButton"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:text="Checkout" />
+        android:layout_marginTop="16dp"
+        android:text="Thanh toán" />
 </LinearLayout>

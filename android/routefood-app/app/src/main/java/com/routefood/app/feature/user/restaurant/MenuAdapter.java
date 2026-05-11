@@ -44,6 +44,7 @@ public class MenuAdapter extends RecyclerView.Adapter<MenuAdapter.MenuViewHolder
         MenuItem item = items.get(position);
         holder.nameText.setText(item.name() + " • " + item.price() + "đ");
         holder.descriptionText.setText(item.description());
+        holder.addButton.setContentDescription("Thêm " + item.name());
         holder.addButton.setOnClickListener(view -> listener.onAdd(item));
     }
 

@@ -8,11 +8,22 @@
     android:padding="32dp">
 
     <TextView
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:background="@drawable/bg_glass_strong"
+        android:gravity="center"
+        android:text="◌"
+        android:textColor="@color/route_text_primary"
+        android:textSize="34sp" />
+
+    <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="RouteFood"
-        android:textColor="@android:color/white"
-        android:textSize="38sp"
+        android:layout_marginTop="22dp"
+        android:letterSpacing="0.08"
+        android:text="NOIR Eats"
+        android:textColor="@color/route_text_primary"
+        android:textSize="34sp"
         android:textStyle="bold" />
 
     <TextView
@@ -20,7 +31,15 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
         android:gravity="center"
-        android:text="Food delivery powered by IntelligentRouteX"
-        android:textColor="@android:color/white"
+        android:text="Food, but quieter."
+        android:textColor="@color/route_text_secondary"
+        android:textSize="15sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="96dp"
+        android:text="•  •  •"
+        android:textColor="@color/route_text_muted"
         android:textSize="16sp" />
 </LinearLayout>

@@ -1,0 +1,20 @@
+services:
+  valhalla:
+    image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+    container_name: intelligentroutex-valhalla
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./custom_files:/custom_files
+    environment:
+      - tile_urls=https://download.geofabrik.de/asia/vietnam-latest.osm.pbf
+      - use_tiles_ignore_pbf=False
+      - force_rebuild=False
+      - force_rebuild_elevation=False
+      - build_elevation=False
+      - build_admins=True
+      - build_time_zones=True
+      - build_transit=False
+      - server_threads=2
+      - serve_tiles=True
+    restart: unless-stopped

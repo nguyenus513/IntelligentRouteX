@@ -30,9 +30,12 @@ public class LoginActivity extends BaseActivity {
     private void login() {
         String email = textOf(emailInput);
         String password = textOf(passwordInput);
+        if (email.startsWith("demo")) {
+            startDemoMode("Using Firebase demo data.");
+            return;
+        }
         if (!authManager.isFirebaseAvailable()) {
-            Toast.makeText(this, "Firebase config missing; using local demo mode.", Toast.LENGTH_SHORT).show();
-            startActivity(new Intent(this, SelectRoleActivity.class));
+            startDemoMode("Firebase config missing; using local demo mode.");
             return;
         }
         if (email.isEmpty() || password.length() < 6) {
@@ -41,7 +44,21 @@ public class LoginActivity extends BaseActivity {
         }
         authManager.signIn(email, password)
                 .addOnSuccessListener(result -> startActivity(new Intent(this, SelectRoleActivity.class)))
-                .addOnFailureListener(error -> Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show());
+                .addOnFailureListener(this::handleAuthFailure);
+    }
+
+    private void handleAuthFailure(Exception error) {
+        String message = error.getMessage() == null ? "" : error.getMessage();
+        if (message.contains("CONFIGURATION_NOT_FOUND")) {
+            startDemoMode("Firebase Auth is not enabled; using Firebase demo data.");
+            return;
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    }
+
+    private void startDemoMode(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        startActivity(new Intent(this, SelectRoleActivity.class));
     }
 
     private String textOf(TextInputEditText input) {

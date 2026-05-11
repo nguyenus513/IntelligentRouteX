@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">RouteFood</string>
-    <string name="login_title">Welcome back</string>
-    <string name="register_title">Create your RouteFood account</string>
-    <string name="select_role_title">Choose demo mode</string>
-    <string name="user_mode">User mode</string>
-    <string name="driver_mode">Driver mode</string>
+    <string name="app_name">NOIR Eats</string>
+    <string name="login_title">Chào mừng trở lại</string>
+    <string name="register_title">Tạo tài khoản NOIR Eats</string>
+    <string name="select_role_title">Chọn trải nghiệm</string>
+    <string name="user_mode">NOIR Eats</string>
+    <string name="driver_mode">NOIR Driver</string>
 </resources>

@@ -2,58 +2,109 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/route_background">
+    android:background="@color/route_background"
+    android:clipToPadding="false">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:paddingStart="18dp"
+        android:paddingTop="42dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="18dp">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Deliver to"
-            android:textColor="@color/route_text_secondary"
-            android:textSize="14sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Ho Chi Minh City"
-            android:textColor="@color/route_text_primary"
-            android:textSize="24sp"
+            android:letterSpacing="0.12"
+            android:text="DELIVER TO"
+            android:textColor="@color/route_text_muted"
+            android:textSize="10sp"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:layout_marginTop="20dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Ho Chi Minh City  ▾"
+            android:textColor="@color/route_text_primary"
+            android:textSize="23sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="18dp"
             android:background="@drawable/bg_search"
             android:gravity="center_vertical"
-            android:paddingStart="20dp"
-            android:paddingEnd="20dp"
-            android:text="Search food or restaurant"
-            android:textColor="@color/route_text_secondary" />
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:text="Search curated meals"
+            android:textColor="@color/route_text_muted"
+            android:textSize="14sp" />
 
-        <TextView
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="140dp"
-            android:layout_marginTop="20dp"
-            android:background="@drawable/bg_route_gradient"
-            android:gravity="center"
-            android:text="IntelligentRouteX demo\nFast assignment, ETA, traffic-aware routing"
-            android:textColor="@android:color/white"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:layout_height="186dp"
+            android:layout_marginTop="18dp"
+            android:background="@drawable/bg_noir_hero">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:layout_gravity="bottom|start"
+                android:layout_marginStart="14dp"
+                android:layout_marginBottom="76dp"
+                android:background="@drawable/bg_pill"
+                android:gravity="center"
+                android:letterSpacing="0.08"
+                android:paddingStart="11dp"
+                android:paddingEnd="11dp"
+                android:text="CURATED"
+                android:textColor="@color/route_text_secondary"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="16dp"
+                android:text="The Omakase\nSeries"
+                android:textColor="@color/route_text_primary"
+                android:textSize="27sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView android:layout_width="wrap_content" android:layout_height="38dp" android:layout_marginEnd="8dp" android:background="@drawable/bg_primary_cta" android:gravity="center" android:minWidth="70dp" android:paddingStart="16dp" android:paddingEnd="16dp" android:text="All" android:textColor="@color/route_button_primary_text" android:textSize="12sp" android:textStyle="bold" />
+                <TextView android:layout_width="wrap_content" android:layout_height="38dp" android:layout_marginEnd="8dp" android:background="@drawable/bg_pill" android:gravity="center" android:paddingStart="16dp" android:paddingEnd="16dp" android:text="Sushi" android:textColor="@color/route_text_secondary" android:textSize="12sp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="38dp" android:layout_marginEnd="8dp" android:background="@drawable/bg_pill" android:gravity="center" android:paddingStart="16dp" android:paddingEnd="16dp" android:text="Italian" android:textColor="@color/route_text_secondary" android:textSize="12sp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="38dp" android:layout_marginEnd="8dp" android:background="@drawable/bg_pill" android:gravity="center" android:paddingStart="16dp" android:paddingEnd="16dp" android:text="Bakery" android:textColor="@color/route_text_secondary" android:textSize="12sp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="38dp" android:background="@drawable/bg_pill" android:gravity="center" android:paddingStart="16dp" android:paddingEnd="16dp" android:text="Healthy" android:textColor="@color/route_text_secondary" android:textSize="12sp" />
+            </LinearLayout>
+        </HorizontalScrollView>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Nearby restaurants"
+            android:layout_marginTop="22dp"
+            android:text="Trending Near You"
             android:textColor="@color/route_text_primary"
-            android:textSize="22sp"
+            android:textSize="20sp"
             android:textStyle="bold" />
 
         <TextView
@@ -64,7 +115,7 @@
             android:background="@drawable/bg_card"
             android:gravity="center"
             android:padding="20dp"
-            android:text="Loading HCMC restaurants..."
+            android:text="Loading nearby restaurants..."
             android:textColor="@color/route_text_secondary" />
 
         <androidx.recyclerview.widget.RecyclerView
@@ -73,5 +124,22 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:nestedScrollingEnabled="false" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="62dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_floating_bar"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp">
+
+            <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="HOME" android:textColor="@color/route_text_primary" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.08" />
+            <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="SEARCH" android:textColor="@color/route_text_muted" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.08" />
+            <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="ORDERS" android:textColor="@color/route_text_muted" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.08" />
+            <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="ME" android:textColor="@color/route_text_muted" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.08" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

@@ -1,13 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="route_green">#00B14F</color>
-    <color name="route_green_dark">#008C3A</color>
-    <color name="route_accent">#FFB000</color>
-    <color name="route_background">#F7F8FA</color>
-    <color name="route_surface">#FFFFFF</color>
-    <color name="route_text_primary">#111827</color>
-    <color name="route_text_secondary">#6B7280</color>
-    <color name="route_danger">#EF4444</color>
-    <color name="route_warning">#F59E0B</color>
-    <color name="route_success">#10B981</color>
+    <color name="route_green">#FFFFFF</color>
+    <color name="route_green_dark">#D6D6D6</color>
+    <color name="route_accent">#FFFFFF</color>
+    <color name="route_background">#050505</color>
+    <color name="route_background_secondary">#0B0B0D</color>
+    <color name="route_surface">#151515</color>
+    <color name="route_surface_strong">#202020</color>
+    <color name="route_glass_border">#2F2F2F</color>
+    <color name="route_text_primary">#F5F5F5</color>
+    <color name="route_text_secondary">#B8B8B8</color>
+    <color name="route_text_muted">#747474</color>
+    <color name="route_button_primary_text">#050505</color>
+    <color name="route_danger">#FF7B72</color>
+    <color name="route_warning">#F2CC60</color>
+    <color name="route_success">#7EE787</color>
 </resources>

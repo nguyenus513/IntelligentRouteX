@@ -4,29 +4,72 @@
     android:layout_height="match_parent"
     android:background="@color/route_background"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:paddingStart="18dp"
+    android:paddingTop="42dp"
+    android:paddingEnd="18dp"
+    android:paddingBottom="18dp">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Checkout"
+        android:gravity="center"
+        android:letterSpacing="0.18"
+        android:text="CHECKOUT"
         android:textColor="@color/route_text_primary"
-        android:textSize="28sp"
+        android:textSize="16sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:letterSpacing="0.1"
+        android:text="ORDER SUMMARY"
+        android:textColor="@color/route_text_secondary"
+        android:textSize="11sp"
         android:textStyle="bold" />
 
     <TextView
         android:id="@+id/checkoutSummaryText"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="10dp"
         android:layout_weight="1"
         android:background="@drawable/bg_card"
-        android:padding="20dp"
-        android:textColor="@color/route_text_primary" />
+        android:lineSpacingExtra="6dp"
+        android:padding="18dp"
+        android:textColor="@color/route_text_primary"
+        android:textSize="16sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="70dp"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/bg_search"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="123 Luxury Lane, District 1\nEstimated arrival: 25–35 min"
+        android:textColor="@color/route_text_primary"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="62dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_card"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="Apple Pay / COD Demo    ◉"
+        android:textColor="@color/route_text_primary"
+        android:textSize="15sp"
+        android:textStyle="bold" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/placeOrderButton"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:text="Place order" />
+        android:layout_height="54dp"
+        android:layout_marginTop="16dp"
+        android:text="PLACE ORDER  ›" />
 </LinearLayout>

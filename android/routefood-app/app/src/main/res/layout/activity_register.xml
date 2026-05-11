@@ -24,9 +24,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Create a Firebase account, then choose user or driver demo mode."
+            android:text="Tạo hồ sơ để lưu địa chỉ, giỏ hàng và trạng thái đơn realtime."
             android:textColor="@color/route_text_secondary"
-            android:textSize="16sp" />
+            android:textSize="15sp" />
 
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
@@ -39,6 +39,8 @@
                 android:id="@+id/registerEmailInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:textColor="@color/route_text_primary"
+                android:textColorHint="@color/route_text_muted"
                 android:inputType="textEmailAddress" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -53,6 +55,8 @@
                 android:id="@+id/registerPasswordInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:textColor="@color/route_text_primary"
+                android:textColorHint="@color/route_text_muted"
                 android:inputType="textPassword" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -61,13 +65,14 @@
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:layout_marginTop="24dp"
-            android:text="Create account" />
+            android:text="Tạo tài khoản" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/backToLoginButton"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Back to login" />
+            android:layout_height="56dp"
+            android:text="Quay lại đăng nhập"
+            android:textColor="@color/route_text_primary" />
     </LinearLayout>
 </ScrollView>

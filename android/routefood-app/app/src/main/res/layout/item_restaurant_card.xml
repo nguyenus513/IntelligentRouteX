@@ -4,37 +4,100 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="12dp"
-    app:cardCornerRadius="22dp"
-    app:cardElevation="1dp">
+    app:cardBackgroundColor="@color/route_surface"
+    app:cardCornerRadius="24dp"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/route_glass_border"
+    app:strokeWidth="1dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="12dp">
 
-        <TextView
-            android:id="@+id/restaurantNameText"
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="136dp"
+            android:background="@drawable/bg_noir_photo_food">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="10dp"
+                android:background="@drawable/bg_pill"
+                android:gravity="center"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="★ 4.9"
+                android:textColor="@color/route_text_primary"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="14dp"
+                android:letterSpacing="0.08"
+                android:text="QUIET DINING"
+                android:textColor="@color/route_text_secondary"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/route_text_primary"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:layout_marginTop="14dp"
+            android:gravity="bottom"
+            android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/restaurantMetaText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="@color/route_text_secondary"
-            android:textSize="14sp" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/restaurantAddressText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="@color/route_text_secondary"
-            android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/restaurantNameText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/route_text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/restaurantMetaText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:maxLines="1"
+                    android:textColor="@color/route_text_secondary"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/restaurantAddressText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:maxLines="1"
+                    android:textColor="@color/route_text_muted"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="88dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_primary_cta"
+                android:gravity="center"
+                android:text="VIEW"
+                android:textColor="@color/route_button_primary_text"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08" />
+        </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

@@ -1,7 +1,7 @@
 package com.routefood.app.feature.auth;
 
-import android.os.Bundle;
 import android.content.Intent;
+import android.os.Bundle;
 import android.widget.Toast;
 
 import com.google.android.material.textfield.TextInputEditText;
@@ -30,8 +30,7 @@ public class RegisterActivity extends BaseActivity {
         String email = textOf(emailInput);
         String password = textOf(passwordInput);
         if (!authManager.isFirebaseAvailable()) {
-            Toast.makeText(this, "Firebase config missing; continuing in local demo mode.", Toast.LENGTH_SHORT).show();
-            startActivity(new Intent(this, SelectRoleActivity.class));
+            startDemoMode("Firebase config missing; continuing in local demo mode.");
             return;
         }
         if (email.isEmpty() || password.length() < 6) {
@@ -40,7 +39,21 @@ public class RegisterActivity extends BaseActivity {
         }
         authManager.register(email, password)
                 .addOnSuccessListener(result -> startActivity(new Intent(this, SelectRoleActivity.class)))
-                .addOnFailureListener(error -> Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show());
+                .addOnFailureListener(this::handleAuthFailure);
+    }
+
+    private void handleAuthFailure(Exception error) {
+        String message = error.getMessage() == null ? "" : error.getMessage();
+        if (message.contains("CONFIGURATION_NOT_FOUND")) {
+            startDemoMode("Firebase Auth is not enabled; using Firebase demo data.");
+            return;
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    }
+
+    private void startDemoMode(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        startActivity(new Intent(this, SelectRoleActivity.class));
     }
 
     private String textOf(TextInputEditText input) {

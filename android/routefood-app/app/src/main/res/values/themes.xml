@@ -3,11 +3,14 @@
     <style name="Theme.RouteFood" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/route_green</item>
         <item name="colorPrimaryVariant">@color/route_green_dark</item>
-        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorOnPrimary">@color/route_button_primary_text</item>
         <item name="colorSecondary">@color/route_accent</item>
-        <item name="android:fontFamily">sans</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:statusBarColor">@color/route_background</item>
-        <item name="android:navigationBarColor">@color/route_surface</item>
+        <item name="android:navigationBarColor">@color/route_background</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="materialButtonStyle">@style/Widget.RouteFood.Button</item>
+        <item name="textInputStyle">@style/Widget.RouteFood.TextInputLayout</item>
     </style>
 </resources>

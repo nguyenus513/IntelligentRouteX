@@ -1,89 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/route_background"
-    android:orientation="vertical"
-    android:padding="20dp">
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Driver console"
-        android:textColor="@color/route_text_primary"
-        android:textSize="28sp"
-        android:textStyle="bold" />
-
-    <com.google.android.material.card.MaterialCardView
-        android:layout_width="match_parent"
-        android:layout_height="130dp"
-        android:layout_marginTop="24dp"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="2dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                android:id="@+id/driverStatusText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Offline"
-                android:textColor="@color/route_text_primary"
-                android:textSize="24sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/assignmentSummaryText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="Driver assignment flow will connect to Firebase next."
-                android:textColor="@color/route_text_secondary" />
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
-
-    <com.routefood.app.core.map.DemoMapView
-        android:id="@+id/driverMapView"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="16dp"
-        android:layout_weight="1" />
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/goOnlineButton"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:layout_marginTop="24dp"
-        android:text="Go online demo" />
+    android:background="@color/route_background">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:orientation="horizontal">
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingStart="18dp"
+        android:paddingTop="38dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="14dp">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/acceptAssignmentButton"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:enabled="false"
-            android:text="Accept" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/rejectAssignmentButton"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_marginStart="12dp"
-            android:layout_weight="1"
-            android:enabled="false"
-            android:text="Reject" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.12" android:text="NOIR DRIVER" android:textColor="@color/route_text_muted" android:textSize="10sp" android:textStyle="bold" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="Hello, Julian" android:textColor="@color/route_text_primary" android:textSize="25sp" android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView android:id="@+id/driverStatusText" android:layout_width="92dp" android:layout_height="34dp" android:background="@drawable/bg_pill" android:gravity="center" android:text="OFFLINE" android:textColor="@color/route_text_secondary" android:textSize="10sp" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="98dp"
+            android:layout_marginTop="14dp"
+            android:orientation="horizontal">
+
+            <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_marginEnd="8dp" android:layout_weight="1" android:background="@drawable/bg_card" android:gravity="center" android:text="TODAY\n$142.50" android:textColor="@color/route_text_primary" android:textSize="17sp" android:textStyle="bold" />
+            <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_marginEnd="8dp" android:layout_weight="1" android:background="@drawable/bg_card" android:gravity="center" android:text="BATCH\n+2 ORDERS" android:textColor="@color/route_success" android:textSize="16sp" android:textStyle="bold" />
+            <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:background="@drawable/bg_card" android:gravity="center" android:text="SAVED\n11 MIN" android:textColor="@color/route_warning" android:textSize="16sp" android:textStyle="bold" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="12dp"
+            android:layout_weight="1">
+
+            <com.routefood.app.core.map.LeafletMapView android:id="@+id/driverMapView" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/bg_noir_hero" />
+            <TextView android:layout_width="wrap_content" android:layout_height="32dp" android:layout_margin="12dp" android:background="@drawable/bg_pill" android:gravity="center" android:paddingStart="12dp" android:paddingEnd="12dp" android:text="Batch route • 2 orders" android:textColor="@color/route_text_primary" android:textSize="11sp" android:textStyle="bold" />
+        </FrameLayout>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:cardBackgroundColor="@color/route_surface"
+            app:cardCornerRadius="26dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/route_glass_border"
+            app:strokeWidth="1dp">
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:letterSpacing="0.1" android:text="BATCH MATCH FOUND" android:textColor="@color/route_success" android:textSize="10sp" android:textStyle="bold" />
+                    <TextView android:layout_width="44dp" android:layout_height="44dp" android:background="@drawable/bg_pill" android:gravity="center" android:text="15" android:textColor="@color/route_warning" android:textSize="16sp" android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="$11.40 total • 2 orders" android:textColor="@color/route_text_primary" android:textSize="26sp" android:textStyle="bold" />
+                <TextView android:id="@+id/assignmentSummaryText" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:lineSpacingExtra="3dp" android:text="Pickup A: Aura Kitchen • 3 items\nPickup B: Kuro Sushi • 2 items\nDropoff A: Saigon Pearl • Dropoff B: Landmark 81\nRoute merge saves 11 min vs separate trips" android:textColor="@color/route_text_secondary" android:textSize="13sp" />
+
+                <TextView android:layout_width="match_parent" android:layout_height="42dp" android:layout_marginTop="10dp" android:background="@drawable/bg_search" android:gravity="center_vertical" android:paddingStart="14dp" android:paddingEnd="14dp" android:text="Sequence: P1 → P2 → D1 → D2" android:textColor="@color/route_text_primary" android:textSize="13sp" android:textStyle="bold" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/goOnlineButton" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="12dp" android:text="GO ONLINE" />
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="9dp" android:orientation="horizontal">
+                    <com.google.android.material.button.MaterialButton android:id="@+id/rejectAssignmentButton" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="0dp" android:layout_height="50dp" android:layout_weight="1" android:enabled="true" android:text="DECLINE" android:textColor="@color/route_text_primary" app:strokeColor="@color/route_glass_border" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/acceptAssignmentButton" android:layout_width="0dp" android:layout_height="50dp" android:layout_marginStart="10dp" android:layout_weight="1" android:enabled="true" android:text="ACCEPT BATCH" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
-</LinearLayout>
+</FrameLayout>

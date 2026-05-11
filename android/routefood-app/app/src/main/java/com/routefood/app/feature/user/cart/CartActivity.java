@@ -19,12 +19,12 @@ public class CartActivity extends BaseActivity {
         CartStore cartStore = new CartStore(this);
         StringBuilder summary = new StringBuilder();
         if (cartStore.itemsPayload().isEmpty()) {
-            summary.append("Your cart is empty.");
+            summary.append("Giỏ hàng trống.\nKhám phá món ngon gần bạn.");
         } else {
             for (Map<String, Object> item : cartStore.itemsPayload()) {
-                summary.append(item.get("name")).append(" x").append(item.get("quantity")).append("\n");
+                summary.append(item.get("name")).append("  × ").append(item.get("quantity")).append("\n");
             }
-            summary.append("\nSubtotal: ").append(cartStore.subtotal()).append("đ");
+            summary.append("\nTạm tính: ").append(cartStore.subtotal()).append("đ");
         }
         ((TextView) findViewById(R.id.cartSummaryText)).setText(summary.toString());
         findViewById(R.id.checkoutButton).setOnClickListener(view -> startActivity(new Intent(this, CheckoutActivity.class)));

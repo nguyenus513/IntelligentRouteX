@@ -24,16 +24,19 @@ public class CheckoutActivity extends BaseActivity {
         setContentView(R.layout.activity_checkout);
         cartStore = new CartStore(this);
         long deliveryFee = cartStore.itemsPayload().isEmpty() ? 0 : 15000;
+        long serviceFee = cartStore.itemsPayload().isEmpty() ? 0 : 5000;
+        long total = cartStore.subtotal() + deliveryFee + serviceFee;
         ((TextView) findViewById(R.id.checkoutSummaryText)).setText(
-                "Delivery address: Nguyen Hue, Quan 1\nPayment: COD_DEMO\nSubtotal: "
-                        + cartStore.subtotal() + "đ\nDelivery fee: " + deliveryFee + "đ\nTotal: "
-                        + (cartStore.subtotal() + deliveryFee) + "đ");
+                "Tạm tính\n" + cartStore.subtotal() + "đ\n\n"
+                        + "Phí giao hàng\n" + deliveryFee + "đ\n\n"
+                        + "Phí dịch vụ\n" + serviceFee + "đ\n\n"
+                        + "Total\n" + total + "đ");
         findViewById(R.id.placeOrderButton).setOnClickListener(view -> placeOrder());
     }
 
     private void placeOrder() {
         if (cartStore.itemsPayload().isEmpty()) {
-            Toast.makeText(this, "Cart is empty.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Giỏ hàng trống.", Toast.LENGTH_SHORT).show();
             return;
         }
         Map<String, Object> dropoff = new HashMap<>();

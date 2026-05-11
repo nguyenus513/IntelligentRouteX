@@ -4,33 +4,107 @@
     android:layout_height="match_parent"
     android:background="@color/route_background"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:paddingStart="18dp"
+    android:paddingTop="26dp"
+    android:paddingEnd="18dp"
+    android:paddingBottom="14dp">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="190dp"
+        android:background="@drawable/bg_noir_hero">
+
+        <TextView
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_margin="12dp"
+            android:background="@drawable/bg_pill"
+            android:gravity="center"
+            android:text="‹"
+            android:textColor="@color/route_text_primary"
+            android:textSize="26sp" />
+
+        <TextView
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="12dp"
+            android:background="@drawable/bg_pill"
+            android:gravity="center"
+            android:text="♡"
+            android:textColor="@color/route_text_primary"
+            android:textSize="21sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="18dp"
+            android:letterSpacing="0.1"
+            android:text="SIGNATURES"
+            android:textColor="@color/route_text_secondary"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </FrameLayout>
 
     <TextView
         android:id="@+id/restaurantTitleText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
         android:textColor="@color/route_text_primary"
-        android:textSize="26sp"
+        android:textSize="24sp"
         android:textStyle="bold" />
 
     <TextView
         android:id="@+id/restaurantSubtitleText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:textColor="@color/route_text_secondary" />
+        android:layout_marginTop="4dp"
+        android:textColor="@color/route_text_secondary"
+        android:textSize="13sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_search"
+        android:gravity="center_vertical"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:text="Voucher  •  Save 20% up to 40k"
+        android:textColor="@color/route_text_secondary"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView android:layout_width="wrap_content" android:layout_height="34dp" android:layout_marginEnd="8dp" android:background="@drawable/bg_primary_cta" android:gravity="center" android:paddingStart="14dp" android:paddingEnd="14dp" android:text="BEST" android:textColor="@color/route_button_primary_text" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.08" />
+            <TextView android:layout_width="wrap_content" android:layout_height="34dp" android:layout_marginEnd="8dp" android:background="@drawable/bg_pill" android:gravity="center" android:paddingStart="14dp" android:paddingEnd="14dp" android:text="COMBO" android:textColor="@color/route_text_secondary" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.08" />
+            <TextView android:layout_width="wrap_content" android:layout_height="34dp" android:layout_marginEnd="8dp" android:background="@drawable/bg_pill" android:gravity="center" android:paddingStart="14dp" android:paddingEnd="14dp" android:text="MAIN" android:textColor="@color/route_text_secondary" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.08" />
+            <TextView android:layout_width="wrap_content" android:layout_height="34dp" android:background="@drawable/bg_pill" android:gravity="center" android:paddingStart="14dp" android:paddingEnd="14dp" android:text="DESSERT" android:textColor="@color/route_text_secondary" android:textSize="10sp" android:textStyle="bold" android:letterSpacing="0.08" />
+        </LinearLayout>
+    </HorizontalScrollView>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/menuRecyclerView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="14dp"
         android:layout_weight="1" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/openCartButton"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:text="Open cart" />
+        android:layout_height="54dp"
+        android:layout_marginTop="10dp"
+        android:text="VIEW BASKET" />
 </LinearLayout>

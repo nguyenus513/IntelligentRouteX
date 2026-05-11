@@ -14,7 +14,17 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="56dp"
+            android:layout_marginTop="44dp"
+            android:letterSpacing="0.12"
+            android:text="NOIR EATS"
+            android:textColor="@color/route_text_muted"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
             android:text="@string/login_title"
             android:textColor="@color/route_text_primary"
             android:textSize="30sp"
@@ -24,9 +34,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Start the HCMC delivery demo as a user or driver."
+            android:text="Nhập tài khoản để tiếp tục trải nghiệm giao đồ ăn tối giản, nhanh và mượt."
             android:textColor="@color/route_text_secondary"
-            android:textSize="16sp" />
+            android:textSize="15sp" />
 
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
@@ -39,6 +49,8 @@
                 android:id="@+id/emailInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:textColor="@color/route_text_primary"
+                android:textColorHint="@color/route_text_muted"
                 android:inputType="textEmailAddress" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -53,6 +65,8 @@
                 android:id="@+id/passwordInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:textColor="@color/route_text_primary"
+                android:textColorHint="@color/route_text_muted"
                 android:inputType="textPassword" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -61,13 +75,15 @@
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:layout_marginTop="24dp"
-            android:text="Continue demo" />
+            android:contentDescription="Tiếp tục đăng nhập"
+            android:text="Tiếp tục" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/registerButton"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Create account" />
+            android:layout_height="56dp"
+            android:text="Tạo tài khoản"
+            android:textColor="@color/route_text_primary" />
     </LinearLayout>
 </ScrollView>
