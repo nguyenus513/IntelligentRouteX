@@ -13,6 +13,8 @@ import com.routefood.app.core.ui.BaseActivity;
 import com.routefood.app.data.model.Restaurant;
 import com.routefood.app.data.repository.RepositoryCallback;
 import com.routefood.app.data.repository.RestaurantRepository;
+import com.routefood.app.feature.orders.OrdersListActivity;
+import com.routefood.app.feature.search.SearchActivity;
 import com.routefood.app.feature.user.home.RestaurantAdapter;
 import com.routefood.app.feature.user.restaurant.RestaurantDetailActivity;
 
@@ -33,7 +35,7 @@ public class UserMainActivity extends BaseActivity {
             intent.putExtra(RestaurantDetailActivity.EXTRA_RESTAURANT_ID, restaurant.id());
             intent.putExtra(RestaurantDetailActivity.EXTRA_RESTAURANT_NAME, restaurant.name());
             intent.putExtra(RestaurantDetailActivity.EXTRA_RESTAURANT_META,
-                    "Rating " + restaurant.rating() + " • " + restaurant.averagePrepTimeMin() + " min");
+                    "Rating " + restaurant.rating() + " â€¢ " + restaurant.averagePrepTimeMin() + " min");
             startActivity(intent);
         });
         restaurantRepository = new RestaurantRepository();
@@ -43,6 +45,22 @@ public class UserMainActivity extends BaseActivity {
         recyclerView.setAdapter(restaurantAdapter);
 
         loadRestaurants();
+    }
+
+    public void onSearchClick(android.view.View v) {
+        openSearch();
+    }
+
+    public void onOrdersClick(android.view.View v) {
+        openOrders();
+    }
+
+    private void openSearch() {
+        startActivity(new Intent(this, SearchActivity.class));
+    }
+
+    private void openOrders() {
+        startActivity(new Intent(this, OrdersListActivity.class));
     }
 
     private void loadRestaurants() {
@@ -68,3 +86,4 @@ public class UserMainActivity extends BaseActivity {
         });
     }
 }
+

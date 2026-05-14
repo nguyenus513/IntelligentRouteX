@@ -31,6 +31,10 @@ public class SupabaseRestClient {
     }
 
     public void select(String table, Map<String, String> query, JsonArrayCallback callback) {
+        select(table, query, null, callback);
+    }
+
+    public void select(String table, Map<String, String> query, String accessToken, JsonArrayCallback callback) {
         if (!isConfigured()) {
             callback.onError(new IllegalStateException("Supabase publishable key is not configured."));
             return;
@@ -43,7 +47,7 @@ public class SupabaseRestClient {
                 connection.setReadTimeout(6000);
                 connection.setRequestMethod("GET");
                 connection.setRequestProperty("apikey", SupabaseConfig.publishableKey());
-                connection.setRequestProperty("Authorization", "Bearer " + SupabaseConfig.publishableKey());
+                connection.setRequestProperty("Authorization", "Bearer " + (accessToken == null ? SupabaseConfig.publishableKey() : accessToken));
                 connection.setRequestProperty("Accept", "application/json");
                 int code = connection.getResponseCode();
                 if (code < 200 || code >= 300) {

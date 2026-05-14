@@ -87,6 +87,7 @@ import com.routefood.app.core.map.MapSnappedWaypoint
 import com.routefood.app.driver.model.DriverAssignmentDemo
 import com.routefood.app.driver.model.DriverLatLng
 import com.routefood.app.driver.model.DriverRouteStep
+import com.routefood.app.driver.ui.DriverHomeScreenLegacy
 import kotlinx.coroutines.delay
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -511,18 +512,17 @@ private fun AssignmentOfferPanel(
             MetricPill("Same-direction batch")
             MetricPill(paymentMix)
         }
-        CoreDecisionPanel(assignment)
+        CoreDecisionPanel(assignment, compact = true)
         RouteStepPreview(assignment)
         OfferOperationalSummary(assignment)
-        BatchStopList(assignment)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = onRouteDetail, shape = PillShape, modifier = Modifier.weight(1f).height(44.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = DriverText)) { Text("Route Detail", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-            OutlinedButton(onClick = onIntelligentRoute, shape = PillShape, modifier = Modifier.weight(1f).height(44.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Leaf)) { Text("Why this route?", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            OutlinedButton(onClick = onRouteDetail, shape = PillShape, modifier = Modifier.weight(1f).height(40.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = DriverText)) { Text("Route Detail", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            OutlinedButton(onClick = onIntelligentRoute, shape = PillShape, modifier = Modifier.weight(1f).height(40.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Leaf)) { Text("Why?", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
         }
         ErrorText(error)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = onReject, shape = PillShape, modifier = Modifier.weight(1f).height(54.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = DriverText)) { Text("Decline", fontWeight = FontWeight.Bold) }
-            Button(onClick = onAccept, shape = PillShape, modifier = Modifier.weight(1f).height(54.dp), colors = ButtonDefaults.buttonColors(containerColor = Leaf)) {
+            OutlinedButton(onClick = onReject, shape = PillShape, modifier = Modifier.weight(1f).height(50.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = DriverText)) { Text("Decline", fontWeight = FontWeight.Bold) }
+            Button(onClick = onAccept, shape = PillShape, modifier = Modifier.weight(1f).height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = Leaf)) {
                 Text(if (assignment.orderIds.size > 1) "Accept Batch" else "Accept", color = Color(0xFF03100B), fontWeight = FontWeight.Black)
             }
         }
@@ -541,8 +541,8 @@ private fun OfferMetric(value: String, label: String, modifier: Modifier = Modif
 
 @Composable
 private fun OfferOperationalSummary(assignment: DriverAssignmentDemo) {
-    val pickups = assignment.routePlan.sequence.filter { it.isPickup }.take(2)
-    val dropoffs = assignment.routePlan.sequence.filter { !it.isPickup }.take(2)
+    val pickups = assignment.routePlan.sequence.filter { it.isPickup }.take(1)
+    val dropoffs = assignment.routePlan.sequence.filter { !it.isPickup }.take(1)
     Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = .06f))) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Pickup / dropoff preview", color = DriverText, fontWeight = FontWeight.Black, fontSize = 13.sp)

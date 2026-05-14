@@ -2,21 +2,36 @@ package com.routefood.app.data.repository;
 
 import com.routefood.app.core.firebase.FunctionsClient;
 import com.routefood.app.core.firebase.FirebaseRefs;
+import com.routefood.app.core.auth.SessionStore;
+import com.routefood.app.core.supabase.SupabaseConfig;
+import com.routefood.app.core.supabase.SupabaseRpcClient;
 import com.routefood.app.data.model.Assignment;
 import com.routefood.app.data.model.GeoPoint;
 import com.routefood.app.data.model.RouteStop;
+
+import android.os.Handler;
+import android.os.Looper;
+
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class DriverRepository {
     private final FunctionsClient functionsClient;
     private final FirebaseRefs refs;
+    private final SessionStore sessionStore;
+    private final SupabaseRpcClient supabaseRpcClient = new SupabaseRpcClient();
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public DriverRepository(android.content.Context context) {
         functionsClient = new FunctionsClient(context);
+        sessionStore = new SessionStore(context);
         FirebaseRefs firebaseRefs;
         try {
             firebaseRefs = new FirebaseRefs();
@@ -27,6 +42,10 @@ public class DriverRepository {
     }
 
     public void setDriverOnline(Map<String, Object> payload, RepositoryCallback<Map<String, Object>> callback) {
+        if (SupabaseConfig.isConfigured() && sessionStore.getSupabaseAccessToken() != null) {
+            startSupabaseSession(payload, callback);
+            return;
+        }
         functionsClient.call("setSupabaseDriverOnline", payload)
                 .addOnSuccessListener(callback::onSuccess)
                 .addOnFailureListener(callback::onError);
@@ -53,6 +72,10 @@ public class DriverRepository {
     }
 
     public void setDriverOffline(RepositoryCallback<Map<String, Object>> callback) {
+        if (SupabaseConfig.isConfigured() && sessionStore.getSupabaseAccessToken() != null) {
+            callSupabaseRpc("end_driver_session", new JSONObject(), callback);
+            return;
+        }
         functionsClient.call("setSupabaseDriverOffline", new HashMap<>())
                 .addOnSuccessListener(callback::onSuccess)
                 .addOnFailureListener(callback::onError);
@@ -154,6 +177,40 @@ public class DriverRepository {
             }
         }
         return 0;
+    }
+
+    private Number number(Object value) {
+        return value instanceof Number ? (Number) value : 0;
+    }
+
+    private void startSupabaseSession(Map<String, Object> payload, RepositoryCallback<Map<String, Object>> callback) {
+        try {
+            Map<?, ?> location = (Map<?, ?>) payload.get("location");
+            JSONObject rpcPayload = new JSONObject()
+                    .put("p_lat", number(location == null ? null : location.get("lat")).doubleValue())
+                    .put("p_lng", number(location == null ? null : location.get("lng")).doubleValue())
+                    .put("p_zone_id", String.valueOf(payload.get("zoneId")));
+            callSupabaseRpc("start_driver_session", rpcPayload, callback);
+        } catch (Exception error) {
+            callback.onError(error);
+        }
+    }
+
+    private void callSupabaseRpc(String functionName, JSONObject payload, RepositoryCallback<Map<String, Object>> callback) {
+        executor.execute(() -> {
+            try {
+                JSONObject result = supabaseRpcClient.call(functionName, payload, sessionStore.getSupabaseAccessToken());
+                Map<String, Object> response = new HashMap<>();
+                java.util.Iterator<String> keys = result.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    response.put(key, result.opt(key));
+                }
+                mainHandler.post(() -> callback.onSuccess(response));
+            } catch (Exception error) {
+                mainHandler.post(() -> callback.onError(error));
+            }
+        });
     }
 
     private String routeSummary(Object routePlan) {

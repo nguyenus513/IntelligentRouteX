@@ -60,6 +60,31 @@
                 android:inputType="textPassword" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <RadioGroup
+            android:id="@+id/registerRoleGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/registerUserRole"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1"
+                android:checked="true"
+                android:text="Khách hàng"
+                android:textColor="@color/route_text_primary" />
+
+            <RadioButton
+                android:id="@+id/registerDriverRole"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1"
+                android:text="Tài xế"
+                android:textColor="@color/route_text_primary" />
+        </RadioGroup>
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/createAccountButton"
             android:layout_width="match_parent"

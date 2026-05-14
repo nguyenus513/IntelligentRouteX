@@ -1,7 +1,11 @@
 ﻿package com.routefood.app.core.map
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
 import android.util.AttributeSet
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -27,6 +31,12 @@ import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeOpacity
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
+import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.PropertyFactory.iconRotate
+import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
+import org.maplibre.android.style.layers.PropertyFactory.iconSize
 import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineJoin
@@ -38,8 +48,6 @@ import org.maplibre.android.style.layers.PropertyFactory.textField
 import org.maplibre.android.style.layers.PropertyFactory.textHaloColor
 import org.maplibre.android.style.layers.PropertyFactory.textHaloWidth
 import org.maplibre.android.style.layers.PropertyFactory.textIgnorePlacement
-import org.maplibre.android.style.layers.PropertyFactory.textRotationAlignment
-import org.maplibre.android.style.layers.PropertyFactory.textRotate
 import org.maplibre.android.style.layers.PropertyFactory.textSize
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
@@ -98,7 +106,8 @@ class MapLibreRouteView @JvmOverloads constructor(
             mapLibreMap.uiSettings.isScrollGesturesEnabled = true
             mapLibreMap.uiSettings.isRotateGesturesEnabled = false
             mapLibreMap.uiSettings.isTiltGesturesEnabled = false
-            mapLibreMap.setStyle(Style.Builder().fromJson(SAFE_2D_RASTER_STYLE)) {
+            mapLibreMap.setStyle(Style.Builder().fromJson(SAFE_2D_RASTER_STYLE)) { style ->
+                ensureDriverArrowImage(style)
                 pendingState?.let { render(it) }
             }
         }
@@ -217,10 +226,9 @@ class MapLibreRouteView @JvmOverloads constructor(
     private fun ensureMarkerLayers(style: Style) {
         addConnectorLayer(style)
         addCircleLayer(style, SNAPPED_LAYER_ID, SNAPPED_SOURCE_ID, "#0F766E", 5.5f, 1.4f, opacity = 0.86f)
-        addCircleLayer(style, DRIVER_SHADOW_LAYER_ID, DRIVER_SOURCE_ID, "#06111D", 24f, 0f, opacity = 0.42f, blur = 0.2f)
-        addCircleLayer(style, DRIVER_DOT_LAYER_ID, DRIVER_SOURCE_ID, "#18D674", 11f, 3.2f)
+        addCircleLayer(style, DRIVER_SHADOW_LAYER_ID, DRIVER_SOURCE_ID, "#03100B", 25f, 0f, opacity = 0.50f, blur = 0.18f)
+        addCircleLayer(style, DRIVER_DOT_LAYER_ID, DRIVER_SOURCE_ID, "#00C853", 15f, 3.4f)
         addDriverArrowLayer(style)
-        addLabelLayer(style, DRIVER_LABEL_LAYER_ID, DRIVER_SOURCE_ID, 12f, "#052E1A", "#FFFFFF")
         addCircleLayer(style, PICKUP_HALO_LAYER_ID, PICKUP_SOURCE_ID, "#FFFFFF", 18f, 0f, opacity = 0.82f, blur = 0.04f)
         addCircleLayer(style, DROPOFF_HALO_LAYER_ID, DROPOFF_SOURCE_ID, "#FFFFFF", 18f, 0f, opacity = 0.82f, blur = 0.04f)
         addCircleLayer(style, PICKUP_LAYER_ID, PICKUP_SOURCE_ID, "#FF8B26", 14f, 3.2f)
@@ -296,20 +304,63 @@ class MapLibreRouteView @JvmOverloads constructor(
 
     private fun addDriverArrowLayer(style: Style) {
         if (style.getLayer(DRIVER_LAYER_ID) != null) return
+        ensureDriverArrowImage(style)
         ensureEmptySource(style, DRIVER_SOURCE_ID)
         style.addLayer(
             SymbolLayer(DRIVER_LAYER_ID, DRIVER_SOURCE_ID).withProperties(
-                textField(get("arrow")),
-                textRotate(get("bearing")),
-                textRotationAlignment(Property.TEXT_ROTATION_ALIGNMENT_MAP),
-                textSize(42f),
-                textColor("#052E1A"),
-                textHaloColor("#18D674"),
-                textHaloWidth(3.6f),
-                textAllowOverlap(true),
-                textIgnorePlacement(true)
+                iconImage(DRIVER_ARROW_IMAGE_ID),
+                iconRotate(get("bearing")),
+                iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+                iconSize(1.0f),
+                iconAllowOverlap(true),
+                iconIgnorePlacement(true)
             )
         )
+    }
+
+    private fun ensureDriverArrowImage(style: Style) {
+        runCatching { style.addImage(DRIVER_ARROW_IMAGE_ID, createDriverArrowBitmap()) }
+    }
+
+    private fun createDriverArrowBitmap(): Bitmap {
+        val size = 96
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val center = size / 2f
+
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(120, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(center, center + 3f, 31f, shadowPaint)
+
+        val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(0, 200, 83)
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(center, center, 29f, basePaint)
+
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 5f
+            strokeJoin = Paint.Join.ROUND
+        }
+
+        val arrowPath = Path().apply {
+            moveTo(center, 13f)
+            lineTo(center + 19f, center + 23f)
+            lineTo(center, center + 12f)
+            lineTo(center - 19f, center + 23f)
+            close()
+        }
+        val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(3, 16, 11)
+            style = Paint.Style.FILL
+        }
+        canvas.drawPath(arrowPath, strokePaint)
+        canvas.drawPath(arrowPath, arrowPaint)
+        return bitmap
     }
 
     private fun ensureEmptySource(style: Style, sourceId: String) {
@@ -494,6 +545,7 @@ class MapLibreRouteView @JvmOverloads constructor(
         private const val ROUTE_TRAVELED_LAYER_ID = "routefood-route-traveled-line"
         private const val ROUTE_LAYER_ID = "routefood-route-line"
         private const val DRIVER_SOURCE_ID = "routefood-driver-source"
+        private const val DRIVER_ARROW_IMAGE_ID = "routefood-driver-arrow-image"
         private const val PICKUP_SOURCE_ID = "routefood-pickup-source"
         private const val DROPOFF_SOURCE_ID = "routefood-dropoff-source"
         private const val ACTIVE_SOURCE_ID = "routefood-active-source"

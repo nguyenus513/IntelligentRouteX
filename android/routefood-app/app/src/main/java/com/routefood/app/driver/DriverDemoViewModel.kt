@@ -6,6 +6,7 @@ import com.routefood.app.core.map.OsrmRouteClient.NavigationInstruction
 import com.routefood.app.core.map.routing.CompositeRoutingProvider
 import com.routefood.app.core.map.routing.OsrmRoutingProvider
 import com.routefood.app.core.map.routing.RoutingProvider
+import com.routefood.app.core.supabase.SupabaseRealtimeClient
 import com.routefood.app.data.model.GeoPoint
 import com.routefood.app.driver.data.DriverDemoRepository
 import com.routefood.app.driver.model.DriverAssignmentDemo
@@ -103,6 +104,12 @@ class DriverDemoViewModel(
     private var routeBaseStepIndex: Int = 0
     private var trafficHoldTicks: Int = 0
     private var simulatedAlongLocation: DriverLatLng? = null
+    private var realtimeRefreshJob: Job? = null
+    private val realtimeClient = SupabaseRealtimeClient(
+        scope = viewModelScope,
+        onStatus = { label -> _state.update { it.copy(lastUpdatedLabel = label) } },
+        onDatabaseChange = { table -> scheduleRealtimeRefresh(table) }
+    )
 
     fun goOnline() {
         _state.update { it.copy(online = true, loading = true, error = null) }
@@ -111,6 +118,8 @@ class DriverDemoViewModel(
 
     fun goOffline() {
         pollJob?.cancel()
+        realtimeClient.disconnect()
+        realtimeRefreshJob?.cancel()
         simulationJob?.cancel()
         resetNavigationSimulation()
         _state.update { it.copy(online = false, loading = false, assignment = null, error = null, lastUpdatedLabel = "Offline", simulationRunning = false, simulatedDriverLocation = null, roadGeometry = emptyList(), roadGeometryLoading = false, roadGeometryLabel = "Estimated route", navigationInstructions = emptyList(), simulatedSpeedKmh = 0, trafficLabel = "Normal traffic", driverHeadingDeg = 0.0, routeProgressIndex = 0, routeProgressMeters = 0.0, driverProjectedLocation = null, currentLegIndex = 0, currentLegEndMeters = 0.0, completedGeometry = emptyList(), remainingGeometry = emptyList(), snappedWaypoints = emptyList(), snapWarnings = emptyList(), maxSnapDistanceMeters = 0.0, cameraMode = NavigationCameraMode.OVERVIEW, stopWorkflow = DriverStopWorkflow.NAVIGATING, waitingSeconds = 0) }
@@ -625,23 +634,44 @@ class DriverDemoViewModel(
         pollJob?.cancel()
         pollJob = viewModelScope.launch {
             pollOnce()
-            while (true) {
-                delay(2_000)
-                pollOnce(silent = true)
-            }
+        }
+        realtimeClient.connectDemoRun(
+            demoRunId = DriverDemoRepository.DEFAULT_DEMO_RUN_ID,
+            tables = listOf("assignments", "orders", "drivers")
+        )
+    }
+
+    private fun scheduleRealtimeRefresh(table: String) {
+        realtimeRefreshJob?.cancel()
+        realtimeRefreshJob = viewModelScope.launch {
+            delay(200)
+            pollOnce(silent = true, source = table)
         }
     }
 
-    private suspend fun pollOnce(silent: Boolean = false) {
+    private suspend fun pollOnce(silent: Boolean = false, source: String = "Supabase") {
         if (!silent) _state.update { it.copy(loading = true, error = null) }
         repository.fetchActiveAssignment()
             .onSuccess { assignment ->
                 _state.update {
+                    val current = it.assignment
+                    val resolvedAssignment = when {
+                        assignment == null -> current?.takeIf { existing -> existing.id == DriverAssignmentDemo.sample().id }
+                        current != null && current.id == assignment.id && current.status in ACTIVE_STATUSES && assignment.status == "assigned" -> current
+                        current != null && current.id == DriverAssignmentDemo.sample().id && current.status in ACTIVE_STATUSES -> current
+                        else -> assignment
+                    }
                     it.copy(
                         loading = false,
-                        assignment = assignment ?: it.assignment?.takeIf { current -> current.id == DriverAssignmentDemo.sample().id },
+                        assignment = resolvedAssignment,
                         error = null,
-                        lastUpdatedLabel = if (assignment == null) "Waiting for IntelligentRouteX assignment" else "Synced ${assignment.assignmentCode}"
+                        lastUpdatedLabel = if (resolvedAssignment == null) {
+                            "Waiting for IntelligentRouteX assignment"
+                        } else if (resolvedAssignment === current && current.status in ACTIVE_STATUSES) {
+                            "Navigation active ${current.assignmentCode}"
+                        } else {
+                            "Realtime $source ${resolvedAssignment.assignmentCode}"
+                        }
                     )
                 }
             }
@@ -757,10 +787,13 @@ class DriverDemoViewModel(
         private const val SIMULATION_TICK_MS = 250L
         private const val MAX_ADVANCE_METERS_PER_TICK = 8.0
         private const val ARRIVAL_THRESHOLD_METERS = 10.0
+        private val ACTIVE_STATUSES = setOf("accepted", "in_progress")
     }
 
     override fun onCleared() {
         pollJob?.cancel()
+        realtimeRefreshJob?.cancel()
+        realtimeClient.disconnect()
         super.onCleared()
     }
 }

@@ -3,7 +3,7 @@ package com.routefood.app.core.auth;
 public enum UserRole {
     USER("user"),
     DRIVER("driver"),
-    ADMIN("admin");
+    ADMIN("ops_admin");
 
     private final String wireName;
 

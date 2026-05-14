@@ -1,23 +1,29 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/route_background">
+    android:background="#F6F7F9"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:paddingStart="24dp"
+        android:paddingTop="42dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="28dp">
 
         <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="44dp"
-            android:letterSpacing="0.12"
-            android:text="NOIR EATS"
-            android:textColor="@color/route_text_muted"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_grab_pill"
+            android:gravity="center"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="NOIR EATS DRIVER"
+            android:textColor="#006C3A"
             android:textSize="12sp"
             android:textStyle="bold" />
 
@@ -26,64 +32,112 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="28dp"
             android:text="@string/login_title"
-            android:textColor="@color/route_text_primary"
-            android:textSize="30sp"
+            android:textColor="#1F2937"
+            android:textSize="32sp"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Nhập tài khoản để tiếp tục trải nghiệm giao đồ ăn tối giản, nhanh và mượt."
-            android:textColor="@color/route_text_secondary"
-            android:textSize="15sp" />
+            android:lineSpacingExtra="3dp"
+            android:text="Đăng nhập để nhận đơn, xem batch tối ưu và theo dõi thu nhập của bạn."
+            android:textColor="#6B7280"
+            android:textSize="16sp" />
 
-        <com.google.android.material.textfield.TextInputLayout
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:hint="Email"
-            app:boxBackgroundMode="outline">
+            android:layout_marginTop="28dp"
+            android:background="@drawable/bg_light_auth_card"
+            android:orientation="vertical"
+            android:padding="18dp">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/emailInput"
+            <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="@color/route_text_primary"
-                android:textColorHint="@color/route_text_muted"
-                android:inputType="textEmailAddress" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:hint="Email hoặc số điện thoại"
+                app:boxBackgroundMode="outline"
+                app:boxCornerRadiusBottomEnd="16dp"
+                app:boxCornerRadiusBottomStart="16dp"
+                app:boxCornerRadiusTopEnd="16dp"
+                app:boxCornerRadiusTopStart="16dp"
+                app:boxStrokeColor="#00B14F"
+                app:hintTextColor="#006C3A">
 
-        <com.google.android.material.textfield.TextInputLayout
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/emailInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:inputType="textEmailAddress"
+                    android:textColor="#1F2937"
+                    android:textColorHint="#6B7280"
+                    android:textSize="16sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Mật khẩu"
+                app:boxBackgroundMode="outline"
+                app:boxCornerRadiusBottomEnd="16dp"
+                app:boxCornerRadiusBottomStart="16dp"
+                app:boxCornerRadiusTopEnd="16dp"
+                app:boxCornerRadiusTopStart="16dp"
+                app:boxStrokeColor="#00B14F"
+                app:hintTextColor="#006C3A">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/passwordInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:inputType="textPassword"
+                    android:textColor="#1F2937"
+                    android:textColorHint="#6B7280"
+                    android:textSize="16sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Demo nhanh: nhập email bắt đầu bằng demo để vào app tài xế."
+                android:textColor="#6B7280"
+                android:textSize="13sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/loginButton"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="20dp"
+                android:contentDescription="Tiếp tục đăng nhập"
+                android:text="Tiếp tục"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                app:backgroundTint="#00B14F"
+                app:cornerRadius="18dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/registerButton"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="8dp"
+                android:text="Tạo tài khoản"
+                android:textAllCaps="false"
+                android:textColor="#006C3A"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:hint="Password"
-            app:boxBackgroundMode="outline">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/passwordInput"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="@color/route_text_primary"
-                android:textColorHint="@color/route_text_muted"
-                android:inputType="textPassword" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/loginButton"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginTop="24dp"
-            android:contentDescription="Tiếp tục đăng nhập"
-            android:text="Tiếp tục" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/registerButton"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="Tạo tài khoản"
-            android:textColor="@color/route_text_primary" />
+            android:layout_marginTop="18dp"
+            android:gravity="center"
+            android:text="Bằng cách tiếp tục, bạn đồng ý với điều khoản dành cho tài xế."
+            android:textColor="#6B7280"
+            android:textSize="12sp" />
     </LinearLayout>
 </ScrollView>

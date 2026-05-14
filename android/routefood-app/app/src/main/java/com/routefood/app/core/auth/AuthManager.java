@@ -10,8 +10,10 @@ import com.google.firebase.auth.FirebaseUser;
 
 public class AuthManager {
     private final FirebaseAuth firebaseAuth;
+    private final SessionStore sessionStore;
 
     public AuthManager(Context context) {
+        sessionStore = new SessionStore(context);
         FirebaseAuth auth = null;
         if (!FirebaseApp.getApps(context.getApplicationContext()).isEmpty()) {
             try {
@@ -31,6 +33,18 @@ public class AuthManager {
         return firebaseAuth == null ? null : firebaseAuth.getCurrentUser();
     }
 
+    public boolean hasSignedInUser() {
+        return sessionStore.hasSupabaseSession() || currentUser() != null;
+    }
+
+    public String currentSupabaseUserId() {
+        return sessionStore.getSupabaseUserId();
+    }
+
+    public String currentSupabaseAccessToken() {
+        return sessionStore.getSupabaseAccessToken();
+    }
+
     public Task<AuthResult> signIn(String email, String password) {
         if (firebaseAuth == null) {
             throw new IllegalStateException("Firebase Auth is not configured.");
@@ -46,6 +60,7 @@ public class AuthManager {
     }
 
     public void signOut() {
+        sessionStore.clearSupabaseSession();
         if (firebaseAuth != null) {
             firebaseAuth.signOut();
         }

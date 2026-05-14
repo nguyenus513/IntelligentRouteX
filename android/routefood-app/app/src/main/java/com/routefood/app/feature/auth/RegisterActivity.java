@@ -7,10 +7,18 @@ import android.widget.Toast;
 import com.google.android.material.textfield.TextInputEditText;
 import com.routefood.app.R;
 import com.routefood.app.core.auth.AuthManager;
+import com.routefood.app.core.auth.SessionStore;
+import com.routefood.app.core.auth.SupabaseAuthClient;
+import com.routefood.app.core.auth.SupabaseAuthSession;
+import com.routefood.app.core.auth.SupabaseProfileClient;
+import com.routefood.app.core.auth.UserRole;
 import com.routefood.app.core.ui.BaseActivity;
 
 public class RegisterActivity extends BaseActivity {
     private AuthManager authManager;
+    private SupabaseAuthClient supabaseAuthClient;
+    private SupabaseProfileClient supabaseProfileClient;
+    private SessionStore sessionStore;
     private TextInputEditText emailInput;
     private TextInputEditText passwordInput;
 
@@ -19,6 +27,9 @@ public class RegisterActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_register);
         authManager = new AuthManager(this);
+        supabaseAuthClient = new SupabaseAuthClient();
+        supabaseProfileClient = new SupabaseProfileClient();
+        sessionStore = new SessionStore(this);
         emailInput = findViewById(R.id.registerEmailInput);
         passwordInput = findViewById(R.id.registerPasswordInput);
 
@@ -29,12 +40,39 @@ public class RegisterActivity extends BaseActivity {
     private void register() {
         String email = textOf(emailInput);
         String password = textOf(passwordInput);
-        if (!authManager.isFirebaseAvailable()) {
-            startDemoMode("Firebase config missing; continuing in local demo mode.");
-            return;
-        }
         if (email.isEmpty() || password.length() < 6) {
             Toast.makeText(this, "Enter email and a 6+ character password.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        UserRole role = ((android.widget.RadioButton) findViewById(R.id.registerDriverRole)).isChecked() ? UserRole.DRIVER : UserRole.USER;
+        if (supabaseAuthClient.isConfigured()) {
+            UserRole selectedRole = role;
+            supabaseAuthClient.signUp(email, password, new SupabaseAuthClient.AuthCallback() {
+                @Override
+                public void onSuccess(SupabaseAuthSession session) {
+                    supabaseProfileClient.upsertProfile(session, selectedRole, new SupabaseProfileClient.ProfileCallback() {
+                        @Override
+                        public void onSuccess(UserRole role) {
+                            sessionStore.saveSupabaseSession(session.userId(), session.email(), session.accessToken(), session.refreshToken(), role);
+                            startActivity(new Intent(RegisterActivity.this, SelectRoleActivity.class));
+                        }
+
+                        @Override
+                        public void onError(Exception error) {
+                            handleAuthFailure(error);
+                        }
+                    });
+                }
+
+                @Override
+                public void onError(Exception error) {
+                    handleAuthFailure(error);
+                }
+            });
+            return;
+        }
+        if (!authManager.isFirebaseAvailable()) {
+            startDemoMode("Supabase/Firebase config missing; continuing in local demo mode.");
             return;
         }
         authManager.register(email, password)
