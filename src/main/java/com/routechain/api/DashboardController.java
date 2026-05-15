@@ -34,6 +34,9 @@ import com.routechain.v2.hybrid.SolutionSeedRoute;
 import com.routechain.v2.hybrid.StopType;
 import com.routechain.v2.routing.BestPathRequest;
 import com.routechain.v2.routing.CachingRoutingProvider;
+import com.routechain.v2.routing.DistanceDurationMatrixSnapshot;
+import com.routechain.v2.routing.MatrixCostAdapter;
+import com.routechain.v2.routing.MatrixSnapshotBuilder;
 import com.routechain.v2.routing.RouteStop;
 import com.routechain.v2.routing.RoutingProvider;
 import com.routechain.v2.routing.RoutingRouteResult;
@@ -534,6 +537,13 @@ public final class DashboardController {
         String scenarioSeed = request.datasetId() == null || request.datasetId().isBlank() ? scenario.scenarioType() : request.datasetId();
         List<OrderDto> orders = generateOrders(scenario, scenarioSeed);
         List<DriverDto> drivers = generateDrivers(scenario, scenarioSeed);
+        String scenarioHash = scenarioHash(scenario, orders, drivers);
+        DistanceDurationMatrixSnapshot matrixSnapshot = new MatrixSnapshotBuilder().build(
+                request.datasetId() == null ? "raw-m" : request.datasetId(),
+                scenarioHash,
+                "FAST_GATE_MATRIX_FIRST_SYNTHETIC",
+                matrixNodes(orders, drivers));
+        MatrixCostAdapter matrixCost = new MatrixCostAdapter(matrixSnapshot);
         stageRuntime.put("scenarioLoadMs", elapsedMs(scenarioStarted));
         List<BenchmarkSolverResultDto> solverResults = new ArrayList<>();
         List<String> solvers = request.solvers();
@@ -542,17 +552,17 @@ public final class DashboardController {
         stageRuntime.put("coreDispatchMs", elapsedMs(coreStarted));
         long baselineStarted = System.nanoTime();
         for (String solver : solvers) {
-            solverResults.add(benchmarkSolver(solver, orders, drivers, irx));
+            solverResults.add(benchmarkSolver(solver, orders, drivers, irx, matrixCost));
         }
         stageRuntime.put("benchmarkBaselinesMs", elapsedMs(baselineStarted));
         long archiveStarted = System.nanoTime();
         EliteSolutionArchive eliteArchive = eliteSolutionArchive(solverResults, irx);
-        List<SeedRouteBinding> routeBindings = seedRouteBindings(eliteArchive, orders, drivers, irx, routingProvider);
+        List<SeedRouteBinding> routeBindings = seedRouteBindings(eliteArchive, orders, drivers, irx, matrixCost);
         stageRuntime.put("seedBindingMs", elapsedMs(archiveStarted));
         int hybridImprovementTopK = 2;
         long hybridStarted = System.nanoTime();
         List<ImprovedSolutionCandidate> improvedSeeds = new EliteMultiStartImprover().improve(routeBindings, hybridImprovementTopK,
-                (legId, fromLat, fromLng, toLat, toLng) -> roadDistanceKm(legId, fromLat, fromLng, toLat, toLng, routingProvider));
+                (legId, fromLat, fromLng, toLat, toLng) -> matrixCost.distanceKm(fromLat, fromLng, toLat, toLng));
         if (improvedSeeds.isEmpty()) {
             improvedSeeds = new EliteMultiStartImprover().improve(eliteArchive, hybridImprovementTopK);
         }
@@ -568,6 +578,7 @@ public final class DashboardController {
         ComparisonDto comparison = new ComparisonDto(null, irx.runId(), "Benchmark job " + jobId, BenchmarkVerdict.PASS_WITH_LIMITS, "phase1 honest benchmark: wired local baselines plus evidence gaps for incomplete external adapters");
         Map<String, Object> diagnostics = new LinkedHashMap<>(irx.diagnostics());
         diagnostics.put("benchmarkIdentity", benchmarkIdentity(request.datasetId(), scenario, jobId, irx, orders, drivers));
+        diagnostics.put("matrixSnapshot", matrixSnapshotDiagnostics(matrixSnapshot));
         diagnostics.put("stageRuntime", stageRuntime);
         diagnostics.put("globalRoutingCache", globalRoutingCacheDiagnostics(routingProvider, routingCacheStart));
         diagnostics.put("solverResults", solverResults);
@@ -591,6 +602,29 @@ public final class DashboardController {
         identity.put("orderCount", orders.size());
         identity.put("driverCount", drivers.size());
         return identity;
+    }
+
+    private static List<MatrixSnapshotBuilder.MatrixNode> matrixNodes(List<OrderDto> orders, List<DriverDto> drivers) {
+        List<MatrixSnapshotBuilder.MatrixNode> nodes = new ArrayList<>();
+        for (DriverDto driver : drivers) {
+            nodes.add(new MatrixSnapshotBuilder.MatrixNode("DRIVER:" + driver.driverId(), driver.lat(), driver.lng()));
+        }
+        for (OrderDto order : orders) {
+            nodes.add(new MatrixSnapshotBuilder.MatrixNode("PICKUP:" + order.orderId(), order.pickupLat(), order.pickupLng()));
+            nodes.add(new MatrixSnapshotBuilder.MatrixNode("DROPOFF:" + order.orderId(), order.dropoffLat(), order.dropoffLng()));
+        }
+        return nodes;
+    }
+
+    private static Map<String, Object> matrixSnapshotDiagnostics(DistanceDurationMatrixSnapshot snapshot) {
+        Map<String, Object> diagnostics = new LinkedHashMap<>();
+        diagnostics.put("cacheHit", snapshot.cacheHit());
+        diagnostics.put("nodeCount", snapshot.nodeIds().size());
+        diagnostics.put("buildMs", snapshot.buildMs());
+        diagnostics.put("provider", snapshot.matrixProvider());
+        diagnostics.put("routingMode", snapshot.routingMode());
+        diagnostics.put("fallbackApplied", snapshot.fallbackApplied());
+        return diagnostics;
     }
 
     private static Map<String, Object> globalRoutingCacheDiagnostics(RoutingProvider routingProvider) {
@@ -657,15 +691,15 @@ public final class DashboardController {
         return archive;
     }
 
-    private static List<SeedRouteBinding> seedRouteBindings(EliteSolutionArchive archive, List<OrderDto> orders, List<DriverDto> drivers, RunVisualizationDto irx, RoutingProvider routingProvider) {
+    private static List<SeedRouteBinding> seedRouteBindings(EliteSolutionArchive archive, List<OrderDto> orders, List<DriverDto> drivers, RunVisualizationDto irx, MatrixCostAdapter matrixCost) {
         Map<String, OrderDto> orderDtos = orders.stream().collect(java.util.stream.Collectors.toMap(OrderDto::orderId, order -> order, (left, right) -> left, LinkedHashMap::new));
         Map<String, DriverDto> driverDtos = drivers.stream().collect(java.util.stream.Collectors.toMap(DriverDto::driverId, driver -> driver, (left, right) -> left, LinkedHashMap::new));
         Map<String, Order> orderById = orders.stream().collect(java.util.stream.Collectors.toMap(OrderDto::orderId, DashboardController::toOrder, (left, right) -> left, LinkedHashMap::new));
         Map<String, Driver> driverById = drivers.stream().collect(java.util.stream.Collectors.toMap(DriverDto::driverId, DashboardController::toDriver, (left, right) -> left, LinkedHashMap::new));
         Map<CandidateSource, List<SolutionSeedRoute>> routeBySource = new LinkedHashMap<>();
-        routeBySource.put(CandidateSource.DISTANCE_SEED, distanceSeedRoutes(orders, drivers, routingProvider));
-        routeBySource.put(CandidateSource.ORTOOLS_SEED, ortoolsSeedRoutes(orders, drivers, routingProvider));
-        routeBySource.put(CandidateSource.SINGLETON, singletonSeedRoutes(orders, drivers, routingProvider));
+        routeBySource.put(CandidateSource.DISTANCE_SEED, distanceSeedRoutes(orders, drivers, matrixCost));
+        routeBySource.put(CandidateSource.ORTOOLS_SEED, ortoolsSeedRoutes(orders, drivers, matrixCost));
+        routeBySource.put(CandidateSource.SINGLETON, singletonSeedRoutes(orders, drivers, matrixCost));
         routeBySource.put(CandidateSource.IRX_NATIVE, solutionSeedFromRun(CandidateSource.IRX_NATIVE, "SOL-IRX-NATIVE", irx).routes());
         return archive.seeds().stream()
                 .map(seed -> bindSeed(seed, routeBySource.getOrDefault(seed.source(), seed.routes()), orderDtos, driverDtos, orderById, driverById))
@@ -719,7 +753,7 @@ public final class DashboardController {
         stops.add(new BoundStop("dropoff:" + order.orderId(), order.orderId(), StopType.DROPOFF, new GeoPoint(order.dropoffLat(), order.dropoffLng())));
     }
 
-    private static List<SolutionSeedRoute> distanceSeedRoutes(List<OrderDto> orders, List<DriverDto> drivers, RoutingProvider routingProvider) {
+    private static List<SolutionSeedRoute> distanceSeedRoutes(List<OrderDto> orders, List<DriverDto> drivers, MatrixCostAdapter matrixCost) {
         if (drivers.isEmpty()) {
             return List.of();
         }
@@ -727,23 +761,23 @@ public final class DashboardController {
         drivers.forEach(driver -> byDriver.put(driver.driverId(), new ArrayList<>()));
         for (OrderDto order : orders) {
             DriverDto nearest = drivers.stream()
-                    .min(Comparator.comparingDouble(driver -> roadDistanceKm("distance-seed-bind-" + driver.driverId() + "-" + order.orderId(), driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng(), routingProvider)))
+                    .min(Comparator.comparingDouble(driver -> matrixCost.distanceKm(driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng())))
                     .orElse(drivers.getFirst());
             byDriver.get(nearest.driverId()).add(order);
         }
         List<SolutionSeedRoute> routes = new ArrayList<>();
         for (DriverDto driver : drivers) {
             List<OrderDto> routeOrders = byDriver.get(driver.driverId()).stream()
-                    .sorted(Comparator.comparingDouble(order -> roadDistanceKm("distance-seed-sort-" + driver.driverId() + "-" + order.orderId(), driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng(), routingProvider)))
+                    .sorted(Comparator.comparingDouble(order -> matrixCost.distanceKm(driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng())))
                     .toList();
             if (!routeOrders.isEmpty()) {
-                routes.add(seedRoute("DIST-" + driver.driverId(), driver, routeOrders, routingProvider));
+                routes.add(seedRoute("DIST-" + driver.driverId(), driver, routeOrders, matrixCost));
             }
         }
         return routes;
     }
 
-    private static List<SolutionSeedRoute> ortoolsSeedRoutes(List<OrderDto> orders, List<DriverDto> drivers, RoutingProvider routingProvider) {
+    private static List<SolutionSeedRoute> ortoolsSeedRoutes(List<OrderDto> orders, List<DriverDto> drivers, MatrixCostAdapter matrixCost) {
         if (drivers.isEmpty()) {
             return List.of();
         }
@@ -753,36 +787,36 @@ public final class DashboardController {
         for (OrderDto order : orders.stream().sorted(Comparator.comparing(OrderDto::orderId)).toList()) {
             DriverDto best = drivers.stream()
                     .filter(driver -> byDriver.get(driver.driverId()).size() < maxLoad)
-                    .min(Comparator.comparingDouble(driver -> roadDistanceKm("ortools-seed-bind-" + driver.driverId() + "-" + order.orderId(), driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng(), routingProvider)
-                            + roadDistanceKm("ortools-seed-direct-" + order.orderId(), order.pickupLat(), order.pickupLng(), order.dropoffLat(), order.dropoffLng(), routingProvider)))
+                    .min(Comparator.comparingDouble(driver -> matrixCost.distanceKm(driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng())
+                            + matrixCost.distanceKm(order.pickupLat(), order.pickupLng(), order.dropoffLat(), order.dropoffLng())))
                     .orElse(drivers.getFirst());
             byDriver.get(best.driverId()).add(order);
         }
         List<SolutionSeedRoute> routes = new ArrayList<>();
         for (DriverDto driver : drivers) {
             List<OrderDto> routeOrders = byDriver.get(driver.driverId()).stream()
-                    .sorted(Comparator.comparingDouble(order -> roadDistanceKm("ortools-seed-sort-" + driver.driverId() + "-" + order.orderId(), driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng(), routingProvider)))
+                    .sorted(Comparator.comparingDouble(order -> matrixCost.distanceKm(driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng())))
                     .toList();
             if (!routeOrders.isEmpty()) {
-                routes.add(seedRoute("ORT-" + driver.driverId(), driver, routeOrders, routingProvider));
+                routes.add(seedRoute("ORT-" + driver.driverId(), driver, routeOrders, matrixCost));
             }
         }
         return routes;
     }
 
-    private static List<SolutionSeedRoute> singletonSeedRoutes(List<OrderDto> orders, List<DriverDto> drivers, RoutingProvider routingProvider) {
+    private static List<SolutionSeedRoute> singletonSeedRoutes(List<OrderDto> orders, List<DriverDto> drivers, MatrixCostAdapter matrixCost) {
         if (drivers.isEmpty()) {
             return List.of();
         }
         List<SolutionSeedRoute> routes = new ArrayList<>();
         for (int index = 0; index < orders.size(); index++) {
             DriverDto driver = drivers.get(index % drivers.size());
-            routes.add(seedRoute("SINGLE-" + orders.get(index).orderId(), driver, List.of(orders.get(index)), routingProvider));
+            routes.add(seedRoute("SINGLE-" + orders.get(index).orderId(), driver, List.of(orders.get(index)), matrixCost));
         }
         return routes;
     }
 
-    private static SolutionSeedRoute seedRoute(String routeId, DriverDto driver, List<OrderDto> routeOrders, RoutingProvider routingProvider) {
+    private static SolutionSeedRoute seedRoute(String routeId, DriverDto driver, List<OrderDto> routeOrders, MatrixCostAdapter matrixCost) {
         double previousLat = driver.lat();
         double previousLng = driver.lng();
         double distance = 0.0;
@@ -790,7 +824,7 @@ public final class DashboardController {
         long late = 0;
         List<String> sequence = new ArrayList<>();
         for (OrderDto order : routeOrders) {
-            double leg = roadDistanceKm("seed-route-" + routeId + "-pickup-" + order.orderId(), previousLat, previousLng, order.pickupLat(), order.pickupLng(), routingProvider);
+            double leg = matrixCost.distanceKm(previousLat, previousLng, order.pickupLat(), order.pickupLng());
             distance += leg;
             minutes += leg / 22.0 * 60.0;
             sequence.add("PICKUP:" + order.orderId());
@@ -798,7 +832,7 @@ public final class DashboardController {
             previousLng = order.pickupLng();
         }
         for (OrderDto order : routeOrders) {
-            double leg = roadDistanceKm("seed-route-" + routeId + "-dropoff-" + order.orderId(), previousLat, previousLng, order.dropoffLat(), order.dropoffLng(), routingProvider);
+            double leg = matrixCost.distanceKm(previousLat, previousLng, order.dropoffLat(), order.dropoffLng());
             distance += leg;
             minutes += leg / 22.0 * 60.0;
             if (minutes > order.deadlineMinutes()) {
@@ -1198,16 +1232,16 @@ public final class DashboardController {
         return value instanceof Number number ? number.longValue() : 0L;
     }
 
-    private BenchmarkSolverResultDto benchmarkSolver(String solver, List<OrderDto> orders, List<DriverDto> drivers, RunVisualizationDto irx) {
+    private BenchmarkSolverResultDto benchmarkSolver(String solver, List<OrderDto> orders, List<DriverDto> drivers, RunVisualizationDto irx, MatrixCostAdapter matrixCost) {
         String normalized = solver == null ? "" : solver.trim().toLowerCase();
         long started = System.nanoTime();
         if (normalized.equals("single-order") || normalized.equals("single order")) {
-            double distance = singleOrderDistanceKm(orders, drivers, routingProvider);
+            double distance = singleOrderDistanceKm(orders, drivers, matrixCost);
             long runtimeMs = (System.nanoTime() - started) / 1_000_000L;
             return new BenchmarkSolverResultDto("Single-order", SolverRunStatus.COMPLETED, BenchmarkVerdict.PASS_WITH_LIMITS, Math.min(orders.size(), drivers.size()), orders.size(), orders.size(), distance, 0, 100.0, runtimeMs, "wired baseline: one route per order, costly but full coverage", null);
         }
         if (normalized.equals("distance-batching") || normalized.equals("distance batching") || normalized.equals("distance-based batching")) {
-            double distance = distanceBatchingDistanceKm(orders, drivers, routingProvider);
+            double distance = distanceBatchingDistanceKm(orders, drivers, matrixCost);
             long late = Math.max(0, orders.size() / 6);
             long runtimeMs = (System.nanoTime() - started) / 1_000_000L;
             return new BenchmarkSolverResultDto("Distance batching", SolverRunStatus.COMPLETED, BenchmarkVerdict.PASS_WITH_LIMITS, drivers.size(), orders.size(), orders.size(), distance, late, Math.max(0, 100.0 - late * 100.0 / Math.max(1, orders.size())), runtimeMs, "wired baseline: nearest-driver greedy batching", null);
@@ -1216,7 +1250,7 @@ public final class DashboardController {
             return new BenchmarkSolverResultDto("IntelligentRouteX", SolverRunStatus.COMPLETED, BenchmarkVerdict.PASS_WITH_LIMITS, irx.routes().size(), irx.metrics().assignedOrderCount(), irx.orders().size(), irx.metrics().totalDistanceKm(), irx.metrics().lateOrderCount(), irx.metrics().slaSuccessRate(), irx.metrics().runtimeMs(), "wired: UnifiedDispatchCore coverage drain; winner decided by selected metric", irx.runId());
         }
         if (normalized.equals("or-tools") || normalized.equals("ortools") || normalized.equals("or tools")) {
-            return ortoolsBenchmark(orders, drivers, started);
+            return ortoolsBenchmark(orders, drivers, started, matrixCost);
         }
         if (normalized.equals("pyvrp")) {
             return externalAvailabilityBenchmark("PyVRP", List.of("py", "-3", "-c", "import pyvrp"), started);
@@ -1227,7 +1261,7 @@ public final class DashboardController {
         return new BenchmarkSolverResultDto(solver, SolverRunStatus.EVIDENCE_GAP, BenchmarkVerdict.EVIDENCE_GAP, 0, 0, orders.size(), 0, 0, 0, (System.nanoTime() - started) / 1_000_000L, "solver adapter not registered", null);
     }
 
-    private BenchmarkSolverResultDto ortoolsBenchmark(List<OrderDto> orders, List<DriverDto> drivers, long started) {
+    private BenchmarkSolverResultDto ortoolsBenchmark(List<OrderDto> orders, List<DriverDto> drivers, long started, MatrixCostAdapter matrixCost) {
         try {
             Loader.loadNativeLibraries();
             MPSolver solver = MPSolver.createSolver("SCIP");
@@ -1258,8 +1292,8 @@ public final class DashboardController {
                 OrderDto order = orders.get(orderIndex);
                 for (int driverIndex = 0; driverIndex < drivers.size(); driverIndex++) {
                     DriverDto driver = drivers.get(driverIndex);
-                    double distance = roadDistanceKm("ortools-" + orderIndex + "-" + driverIndex + "-to-pickup", driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng(), routingProvider)
-                            + roadDistanceKm("ortools-" + orderIndex + "-dropoff", order.pickupLat(), order.pickupLng(), order.dropoffLat(), order.dropoffLng(), routingProvider);
+                    double distance = matrixCost.distanceKm(driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng())
+                            + matrixCost.distanceKm(order.pickupLat(), order.pickupLng(), order.dropoffLat(), order.dropoffLng());
                     objective.setCoefficient(assign[orderIndex][driverIndex], distance);
                 }
             }
@@ -1294,7 +1328,7 @@ public final class DashboardController {
         }
     }
 
-    private static double singleOrderDistanceKm(List<OrderDto> orders, List<DriverDto> drivers, RoutingProvider routingProvider) {
+    private static double singleOrderDistanceKm(List<OrderDto> orders, List<DriverDto> drivers, MatrixCostAdapter matrixCost) {
         if (drivers.isEmpty()) {
             return 0.0;
         }
@@ -1302,13 +1336,13 @@ public final class DashboardController {
         for (int index = 0; index < orders.size(); index++) {
             OrderDto order = orders.get(index);
             DriverDto driver = drivers.get(index % drivers.size());
-            total += roadDistanceKm("single-" + index + "-to-pickup", driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng(), routingProvider);
-            total += roadDistanceKm("single-" + index + "-dropoff", order.pickupLat(), order.pickupLng(), order.dropoffLat(), order.dropoffLng(), routingProvider);
+            total += matrixCost.distanceKm(driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng());
+            total += matrixCost.distanceKm(order.pickupLat(), order.pickupLng(), order.dropoffLat(), order.dropoffLng());
         }
         return round(total);
     }
 
-    private static double distanceBatchingDistanceKm(List<OrderDto> orders, List<DriverDto> drivers, RoutingProvider routingProvider) {
+    private static double distanceBatchingDistanceKm(List<OrderDto> orders, List<DriverDto> drivers, MatrixCostAdapter matrixCost) {
         if (drivers.isEmpty()) {
             return 0.0;
         }
@@ -1316,7 +1350,7 @@ public final class DashboardController {
         drivers.forEach(driver -> byDriver.put(driver.driverId(), new ArrayList<>()));
         for (OrderDto order : orders) {
             DriverDto nearest = drivers.stream()
-                    .min(Comparator.comparingDouble(driver -> roadDistanceKm("distance-batching-nearest-" + driver.driverId() + "-" + order.orderId(), driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng(), routingProvider)))
+                    .min(Comparator.comparingDouble(driver -> matrixCost.distanceKm(driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng())))
                     .orElse(drivers.getFirst());
             byDriver.get(nearest.driverId()).add(order);
         }
@@ -1325,15 +1359,15 @@ public final class DashboardController {
             double previousLat = driver.lat();
             double previousLng = driver.lng();
             List<OrderDto> routeOrders = byDriver.get(driver.driverId()).stream()
-                    .sorted(Comparator.comparingDouble(order -> roadDistanceKm("distance-batching-sort-" + driver.driverId() + "-" + order.orderId(), driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng(), routingProvider)))
+                    .sorted(Comparator.comparingDouble(order -> matrixCost.distanceKm(driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng())))
                     .toList();
             for (OrderDto order : routeOrders) {
-                total += roadDistanceKm("distance-batching-" + driver.driverId() + "-pickup-" + order.orderId(), previousLat, previousLng, order.pickupLat(), order.pickupLng(), routingProvider);
+                total += matrixCost.distanceKm(previousLat, previousLng, order.pickupLat(), order.pickupLng());
                 previousLat = order.pickupLat();
                 previousLng = order.pickupLng();
             }
             for (OrderDto order : routeOrders) {
-                total += roadDistanceKm("distance-batching-" + driver.driverId() + "-dropoff-" + order.orderId(), previousLat, previousLng, order.dropoffLat(), order.dropoffLng(), routingProvider);
+                total += matrixCost.distanceKm(previousLat, previousLng, order.dropoffLat(), order.dropoffLng());
                 previousLat = order.dropoffLat();
                 previousLng = order.dropoffLng();
             }

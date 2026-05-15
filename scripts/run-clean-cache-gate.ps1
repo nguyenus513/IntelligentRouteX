@@ -69,6 +69,7 @@ foreach ($dataset in $Datasets) {
     $cache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats
     $globalCache = $result.diagnostics.globalRoutingCache
     $stageRuntime = $result.diagnostics.stageRuntime
+    $matrixSnapshot = $result.diagnostics.matrixSnapshot
     $rows += [pscustomobject]@{
       datasetId = $dataset
       jobId = $job.jobId
@@ -99,6 +100,11 @@ foreach ($dataset in $Datasets) {
       seedBindingMs = if ($stageRuntime) { $stageRuntime.seedBindingMs } else { 0 }
       hybridImprovementMs = if ($stageRuntime) { $stageRuntime.hybridImprovementMs } else { 0 }
       totalBenchmarkMs = if ($stageRuntime) { $stageRuntime.totalBenchmarkMs } else { 0 }
+      matrixSnapshotCacheHit = if ($matrixSnapshot) { $matrixSnapshot.cacheHit } else { $false }
+      matrixSnapshotNodeCount = if ($matrixSnapshot) { $matrixSnapshot.nodeCount } else { 0 }
+      matrixSnapshotBuildMs = if ($matrixSnapshot) { $matrixSnapshot.buildMs } else { 0 }
+      matrixSnapshotProvider = if ($matrixSnapshot) { $matrixSnapshot.provider } else { "" }
+      matrixSnapshotRoutingMode = if ($matrixSnapshot) { $matrixSnapshot.routingMode } else { "" }
       pass = ($result.diagnostics.baselineDominanceGuard.baselineDominancePassed -and $hybrid.lateOrderCount -eq 0 -and $hybrid.totalDistanceKm -le [double]$ortools.totalDistanceKm)
       failReason = ""
     }
@@ -133,6 +139,11 @@ foreach ($dataset in $Datasets) {
       seedBindingMs = 0
       hybridImprovementMs = 0
       totalBenchmarkMs = 0
+      matrixSnapshotCacheHit = $false
+      matrixSnapshotNodeCount = 0
+      matrixSnapshotBuildMs = 0
+      matrixSnapshotProvider = ""
+      matrixSnapshotRoutingMode = ""
       pass = $false
       failReason = $_.Exception.Message
     }
