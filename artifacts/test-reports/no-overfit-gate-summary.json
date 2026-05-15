@@ -1,0 +1,69 @@
+{
+    "createdAt":  "2026-05-15T23:22:13.3977436+07:00",
+    "rows":  [
+                 {
+                     "dataset":  "raw-s",
+                     "hybridKm":  86.0,
+                     "hybridLate":  0,
+                     "distanceKm":  93.6,
+                     "distanceLate":  2,
+                     "ortKm":  98.2,
+                     "ortLate":  0,
+                     "nativeKm":  115.9,
+                     "nativeLate":  8,
+                     "bestKm":  86,
+                     "bestLate":  0,
+                     "pass":  true
+                 },
+                 {
+                     "dataset":  "raw-m",
+                     "hybridKm":  145.0,
+                     "hybridLate":  0,
+                     "distanceKm":  147.6,
+                     "distanceLate":  3,
+                     "ortKm":  163.8,
+                     "ortLate":  0,
+                     "nativeKm":  181.3,
+                     "nativeLate":  18,
+                     "bestKm":  145,
+                     "bestLate":  0,
+                     "pass":  true
+                 },
+                 {
+                     "dataset":  "random-spread",
+                     "hybridKm":  81.7,
+                     "hybridLate":  0,
+                     "distanceKm":  95.1,
+                     "distanceLate":  3,
+                     "ortKm":  81.7,
+                     "ortLate":  0,
+                     "nativeKm":  108.0,
+                     "nativeLate":  23,
+                     "bestKm":  81.7,
+                     "bestLate":  0,
+                     "pass":  true
+                 },
+                 {
+                     "dataset":  "driver-scarcity-case",
+                     "hybridKm":  183.8,
+                     "hybridLate":  0,
+                     "distanceKm":  187.9,
+                     "distanceLate":  4,
+                     "ortKm":  196.0,
+                     "ortLate":  0,
+                     "nativeKm":  207.8,
+                     "nativeLate":  29,
+                     "bestKm":  183.8,
+                     "bestLate":  0,
+                     "pass":  true
+                 }
+             ],
+    "artifacts":  [
+                      "artifacts/test-reports/no-overfit-raw-s-BMJ-4DAEFD09.json",
+                      "artifacts/test-reports/no-overfit-raw-m-BMJ-2CD8F3C7.json",
+                      "artifacts/test-reports/no-overfit-random-spread-BMJ-F5BFFE0D.json",
+                      "artifacts/test-reports/no-overfit-driver-scarcity-case-BMJ-1BD28FE6.json"
+                  ],
+    "passCount":  4,
+    "total":  4
+}
