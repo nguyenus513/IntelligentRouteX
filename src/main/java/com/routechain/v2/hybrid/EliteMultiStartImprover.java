@@ -143,6 +143,22 @@ public final class EliteMultiStartImprover {
             reasons.add("swap-rejected:" + swap.traces().getFirst().rejectReason());
             reasons.add(cacheReason("swap", swap));
         }
+        MoveEvaluationResult crossInsert = crossRouteLocalSearch.crossInsertOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero);
+        if (crossInsert.accepted()) {
+            moveTraces.addAll(crossInsert.traces());
+            reasons.add("cross-insertion-accepted:" + crossInsert.traces().getFirst().moveId() + ":-" + round(crossInsert.oldKm() - crossInsert.newKm()) + "km");
+            reasons.add(cacheReason("cross-insertion", crossInsert));
+            SolutionSeedCandidate insertedSeed = moveSeed(seed, binding.routes(), crossInsert, binding.orderById().size(), "INSERTED");
+            if (LexicographicSolutionComparator.SLA_STRICT.compare(insertedSeed, improved) > 0) {
+                improved = insertedSeed;
+                totalKm = improved.totalDistanceKm();
+                totalLate = improved.lateOrderCount();
+            }
+        } else {
+            moveTraces.addAll(crossInsert.traces());
+            reasons.add("cross-insertion-rejected:" + crossInsert.traces().getFirst().rejectReason());
+            reasons.add(cacheReason("cross-insertion", crossInsert));
+        }
         boolean objectiveImproved = LexicographicSolutionComparator.SLA_STRICT.compare(improved, seed) > 0;
         SolutionSeedCandidate selected = objectiveImproved ? improved : seed;
         if (!objectiveImproved) {

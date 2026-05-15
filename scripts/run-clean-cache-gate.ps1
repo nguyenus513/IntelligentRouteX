@@ -69,6 +69,7 @@ foreach ($dataset in $Datasets) {
     $ortools = $result.diagnostics.solverResults | Where-Object solverName -eq "OR-Tools"
     $cache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "relocate-cache-stats:"
     $swapCache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "swap-cache-stats:"
+    $crossCache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "cross-insertion-cache-stats:"
     $globalCache = $result.diagnostics.globalRoutingCache
     $stageRuntime = $result.diagnostics.stageRuntime
     $matrixSnapshot = $result.diagnostics.matrixSnapshot
@@ -98,6 +99,10 @@ foreach ($dataset in $Datasets) {
       swapSkippedByBudget = $swapCache.skippedByBudget
       swapBudgetExhaustedCount = $swapCache.budgetExhaustedCount
       swapLegCacheHitRate = $swapCache.legCacheHitRate
+      crossInsertionAttempts = $crossCache.evaluatedMoves
+      crossInsertionSkippedByBudget = $crossCache.skippedByBudget
+      crossInsertionBudgetExhaustedCount = $crossCache.budgetExhaustedCount
+      crossInsertionLegCacheHitRate = $crossCache.legCacheHitRate
       routeCacheRequests = if ($globalCache) { $globalCache.routeCacheRequestDelta } else { 0 }
       routeCacheHitRate = if ($globalCache) { [math]::Round([double]$globalCache.routeCacheHitRateDelta, 2) } else { 0 }
       routeCacheSize = if ($globalCache) { $globalCache.routeCacheSize } else { 0 }
@@ -145,6 +150,10 @@ foreach ($dataset in $Datasets) {
       swapSkippedByBudget = 0
       swapBudgetExhaustedCount = 0
       swapLegCacheHitRate = 0
+      crossInsertionAttempts = 0
+      crossInsertionSkippedByBudget = 0
+      crossInsertionBudgetExhaustedCount = 0
+      crossInsertionLegCacheHitRate = 0
       routeCacheRequests = 0
       routeCacheHitRate = 0
       routeCacheSize = 0

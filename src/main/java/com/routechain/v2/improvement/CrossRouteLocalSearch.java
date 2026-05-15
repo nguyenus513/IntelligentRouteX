@@ -28,6 +28,10 @@ public final class CrossRouteLocalSearch {
     private static final int MAX_SWAP_ACCEPTED_MOVES = 1;
     private static final long SWAP_BUDGET_MS = 350;
     private static final int MAX_INSERTION_POSITIONS = 2;
+    private static final int MAX_CROSS_INSERTION_POSITIONS = 3;
+    private static final int MAX_CROSS_INSERTION_EVALUATED_MOVES = 6;
+    private static final int MAX_CROSS_INSERTION_ACCEPTED_MOVES = 1;
+    private static final long CROSS_INSERTION_BUDGET_MS = 350;
 
     private final RouteScheduleEvaluator evaluator = new RouteScheduleEvaluator();
     private final MoveAcceptancePolicy acceptancePolicy = new MoveAcceptancePolicy();
@@ -82,7 +86,8 @@ public final class CrossRouteLocalSearch {
                     }
                     routePairsTried++;
                     evaluatedMoves++;
-                    MoveEvaluationResult candidate = evaluateRelocate(binding, from, to, orderId, distanceCost, feasibleMode);
+                    MoveEvaluationResult candidate = evaluateInsertion(binding, from, to, orderId, distanceCost, feasibleMode,
+                            "RELOCATE_ORDER", "RELOCATE", MAX_INSERTION_POSITIONS);
                     if (candidate.accepted() && (best == null || candidate.newKm() < best.newKm())) {
                         best = candidate;
                         acceptedMoves++;
@@ -94,6 +99,48 @@ public final class CrossRouteLocalSearch {
             }
         }
         return withStats(best == null ? rejected(null, null, "no-accepted-relocate") : best);
+    }
+
+    public MoveEvaluationResult crossInsertOnce(SeedRouteBinding binding,
+                                                List<BoundRoute> routes,
+                                                DistanceCostFunction distanceCost,
+                                                boolean feasibleMode) {
+        if (binding == null || routes == null || routes.size() < 2 || distanceCost == null) {
+            return rejectedWith("INSERT-NONE", null, null, "CROSS_ROUTE_INSERTION", "insufficient-routes");
+        }
+        resetCaches();
+        activeBudgetMs = CROSS_INSERTION_BUDGET_MS;
+        startedAtMs = System.currentTimeMillis();
+        MoveEvaluationResult best = null;
+        for (BoundRoute from : routes) {
+            if (budgetDone()) {
+                break;
+            }
+            List<String> movableOrders = candidateOrders(from).stream().limit(2).toList();
+            if (movableOrders.isEmpty() || movableOrders.size() > MAX_ORDERS_PER_ROUTE) {
+                continue;
+            }
+            for (String orderId : movableOrders) {
+                for (BoundRoute to : routes) {
+                    if (from.routeId().equals(to.routeId())) {
+                        continue;
+                    }
+                    if (to.orderIds().size() >= MAX_ORDERS_PER_ROUTE || evaluatedMoves >= MAX_CROSS_INSERTION_EVALUATED_MOVES || routePairsTried >= MAX_ROUTE_PAIRS || acceptedMoves >= MAX_CROSS_INSERTION_ACCEPTED_MOVES || budgetDone()) {
+                        skippedByBudget++;
+                        continue;
+                    }
+                    routePairsTried++;
+                    evaluatedMoves++;
+                    MoveEvaluationResult candidate = evaluateInsertion(binding, from, to, orderId, distanceCost, feasibleMode,
+                            "CROSS_ROUTE_INSERTION", "INSERT", MAX_CROSS_INSERTION_POSITIONS);
+                    if (candidate.accepted() && (best == null || candidate.newKm() < best.newKm())) {
+                        best = candidate;
+                        acceptedMoves++;
+                    }
+                }
+            }
+        }
+        return withStats(best == null ? rejectedWith("INSERT-NONE", null, null, "CROSS_ROUTE_INSERTION", "no-accepted-cross-insertion") : best);
     }
 
     public MoveEvaluationResult swapOnce(SeedRouteBinding binding,
@@ -140,12 +187,15 @@ public final class CrossRouteLocalSearch {
         return withStats(best == null ? rejectedWith("SWAP-NONE", null, null, "SWAP_ORDERS", "no-accepted-swap") : best);
     }
 
-    private MoveEvaluationResult evaluateRelocate(SeedRouteBinding binding,
-                                                  BoundRoute from,
-                                                  BoundRoute to,
-                                                  String orderId,
-                                                  DistanceCostFunction distanceCost,
-                                                  boolean feasibleMode) {
+    private MoveEvaluationResult evaluateInsertion(SeedRouteBinding binding,
+                                                   BoundRoute from,
+                                                   BoundRoute to,
+                                                   String orderId,
+                                                   DistanceCostFunction distanceCost,
+                                                   boolean feasibleMode,
+                                                   String moveType,
+                                                   String movePrefix,
+                                                   int maxInsertionPositions) {
         List<BoundStop> fromPath = withoutDriverAndOrder(from, orderId);
         BoundStop pickup = findStop(from, orderId, StopType.PICKUP);
         BoundStop dropoff = findStop(from, orderId, StopType.DROPOFF);
@@ -153,7 +203,7 @@ public final class CrossRouteLocalSearch {
             return rejected(from, to, "missing-relocate-stops");
         }
         List<BoundStop> toBase = withoutDriver(to);
-        String moveKey = moveKey(binding, from, to, orderId);
+        String moveKey = moveKey(movePrefix, binding, from, to, orderId);
         MoveEvaluationResult cachedMove = moveEvalCache.get(moveKey);
         if (cachedMove != null) {
             moveEvalCacheHits++;
@@ -170,7 +220,7 @@ public final class CrossRouteLocalSearch {
         int insertionEvaluations = 0;
         for (int pickupIndex = 0; pickupIndex <= toBase.size(); pickupIndex++) {
             for (int dropoffIndex = pickupIndex + 1; dropoffIndex <= toBase.size() + 1; dropoffIndex++) {
-                if (insertionEvaluations >= MAX_INSERTION_POSITIONS || budgetDone()) {
+                if (insertionEvaluations >= maxInsertionPositions || budgetDone()) {
                     skippedByBudget++;
                     break;
                 }
@@ -197,18 +247,18 @@ public final class CrossRouteLocalSearch {
         double oldLateness = oldFrom.totalLatenessMinutes() + oldTo.totalLatenessMinutes();
         double newLateness = newFrom.totalLatenessMinutes() + bestTo.totalLatenessMinutes();
         boolean accepted = acceptancePolicy.accept(feasibleMode, oldKm, newKm, oldLate, newLate, oldLateness, newLateness);
-        String moveId = "RELOCATE-" + orderId + "-" + from.routeId() + "-" + to.routeId();
+        String moveId = movePrefix + "-" + orderId + "-" + from.routeId() + "-" + to.routeId();
         String rejectReason = accepted ? "accepted" : rejectReason(feasibleMode, oldKm, newKm, oldLate, newLate, oldLateness, newLateness);
         MoveEvaluationTrace trace = new MoveEvaluationTrace(
                 moveId,
                 from.routeId() + "->" + to.routeId(),
-                "RELOCATE_ORDER",
+                moveType,
                 round(oldKm),
                 round(newKm),
                 round(oldKm - newKm),
                 accepted,
                 rejectReason,
-                latenessTraces(moveId, oldFrom, oldTo, newFrom, bestTo));
+                latenessTraces(moveId, moveType, oldFrom, oldTo, newFrom, bestTo));
         BoundRoute newFromRoute = routeFromSchedule(from, fromPath, newFrom);
         bestToRoute = routeFromSchedule(to, bestToPath, bestTo);
         MoveEvaluationResult result = new MoveEvaluationResult(accepted, newFromRoute, bestToRoute, round(oldKm), round(newKm), oldLate, newLate, round(oldLateness), round(newLateness), List.of(trace), null);
@@ -367,8 +417,8 @@ public final class CrossRouteLocalSearch {
         return matrixProvider + ":" + schedulePolicy.policyVersion() + ":" + route.driverId() + ":" + start + ":" + sequence;
     }
 
-    private String moveKey(SeedRouteBinding binding, BoundRoute from, BoundRoute to, String orderId) {
-        return "RELOCATE:" + binding.seedId() + ":" + routeKey(from, null, binding.matrixProvider()) + ":" + routeKey(to, null, binding.matrixProvider()) + ":" + orderId + ":" + schedulePolicy.policyVersion();
+    private String moveKey(String operator, SeedRouteBinding binding, BoundRoute from, BoundRoute to, String orderId) {
+        return operator + ":" + binding.seedId() + ":" + routeKey(from, null, binding.matrixProvider()) + ":" + routeKey(to, null, binding.matrixProvider()) + ":" + orderId + ":" + schedulePolicy.policyVersion();
     }
 
     private String swapMoveKey(SeedRouteBinding binding, BoundRoute routeA, BoundRoute routeB, String orderA, String orderB) {
