@@ -18,8 +18,13 @@ import java.util.List;
 import java.util.Map;
 
 public final class CrossRouteLocalSearch {
-    private static final int MAX_EVALUATED_MOVES = 80;
+    private static final int MAX_EVALUATED_MOVES = 50;
     private static final int MAX_ORDERS_PER_ROUTE = 8;
+    private static final int MAX_ORDERS_PER_ROUTE_TO_TRY = 3;
+    private static final int MAX_ROUTE_PAIRS = 12;
+    private static final int MAX_ACCEPTED_MOVES = 5;
+    private static final long RELOCATE_BUDGET_MS = 1500;
+    private static final int MAX_INSERTION_POSITIONS = 12;
 
     private final RouteScheduleEvaluator evaluator = new RouteScheduleEvaluator();
     private final MoveAcceptancePolicy acceptancePolicy = new MoveAcceptancePolicy();
@@ -35,6 +40,10 @@ public final class CrossRouteLocalSearch {
     private int moveEvalCacheMisses;
     private int legCacheHits;
     private int legCacheMisses;
+    private long startedAtMs;
+    private boolean budgetExhausted;
+    private int routePairsTried;
+    private int acceptedMoves;
 
     public MoveEvaluationResult relocateOnce(SeedRouteBinding binding,
                                              List<BoundRoute> routes,
@@ -44,25 +53,37 @@ public final class CrossRouteLocalSearch {
             return rejected(null, null, "insufficient-routes");
         }
         resetCaches();
+        startedAtMs = System.currentTimeMillis();
         MoveEvaluationResult best = null;
         for (BoundRoute from : routes) {
-            List<String> movableOrders = from.orderIds();
+            if (budgetDone()) {
+                break;
+            }
+            List<String> movableOrders = candidateOrders(from);
             if (movableOrders.size() <= 1 || movableOrders.size() > MAX_ORDERS_PER_ROUTE) {
                 continue;
             }
             for (String orderId : movableOrders) {
+                if (budgetDone()) {
+                    break;
+                }
                 for (BoundRoute to : routes) {
                     if (from.routeId().equals(to.routeId())) {
                         continue;
                     }
-                    if (to.orderIds().size() >= MAX_ORDERS_PER_ROUTE || evaluatedMoves >= MAX_EVALUATED_MOVES) {
+                    if (to.orderIds().size() >= MAX_ORDERS_PER_ROUTE || evaluatedMoves >= MAX_EVALUATED_MOVES || routePairsTried >= MAX_ROUTE_PAIRS || acceptedMoves >= MAX_ACCEPTED_MOVES || budgetDone()) {
                         skippedByBudget++;
                         continue;
                     }
+                    routePairsTried++;
                     evaluatedMoves++;
                     MoveEvaluationResult candidate = evaluateRelocate(binding, from, to, orderId, distanceCost, feasibleMode);
                     if (candidate.accepted() && (best == null || candidate.newKm() < best.newKm())) {
                         best = candidate;
+                        acceptedMoves++;
+                        if (best.oldKm() - best.newKm() >= 3.0) {
+                            return withStats(best);
+                        }
                     }
                 }
             }
@@ -97,8 +118,14 @@ public final class CrossRouteLocalSearch {
         BoundRoute bestToRoute = null;
         RouteSchedule bestTo = null;
         List<BoundStop> bestToPath = null;
+        int insertionEvaluations = 0;
         for (int pickupIndex = 0; pickupIndex <= toBase.size(); pickupIndex++) {
             for (int dropoffIndex = pickupIndex + 1; dropoffIndex <= toBase.size() + 1; dropoffIndex++) {
+                if (insertionEvaluations >= MAX_INSERTION_POSITIONS || budgetDone()) {
+                    skippedByBudget++;
+                    break;
+                }
+                insertionEvaluations++;
                 List<BoundStop> candidatePath = new ArrayList<>(toBase);
                 candidatePath.add(pickupIndex, pickup);
                 candidatePath.add(dropoffIndex, dropoff);
@@ -184,7 +211,7 @@ public final class CrossRouteLocalSearch {
     }
 
     private SearchCacheStats stats() {
-        return new SearchCacheStats(evaluatedMoves, skippedByBudget, routeEvalCacheHits, routeEvalCacheMisses, routeEvalCache.size(), moveEvalCacheHits, moveEvalCacheMisses, moveEvalCache.size(), legCacheHits, legCacheMisses, legCostCache.size());
+        return new SearchCacheStats(evaluatedMoves, skippedByBudget, RELOCATE_BUDGET_MS, Math.max(0, System.currentTimeMillis() - startedAtMs), budgetExhausted, routeEvalCacheHits, routeEvalCacheMisses, routeEvalCache.size(), moveEvalCacheHits, moveEvalCacheMisses, moveEvalCache.size(), legCacheHits, legCacheMisses, legCostCache.size());
     }
 
     private void resetCaches() {
@@ -199,6 +226,23 @@ public final class CrossRouteLocalSearch {
         moveEvalCacheMisses = 0;
         legCacheHits = 0;
         legCacheMisses = 0;
+        budgetExhausted = false;
+        routePairsTried = 0;
+        acceptedMoves = 0;
+    }
+
+    private boolean budgetDone() {
+        boolean done = System.currentTimeMillis() - startedAtMs > RELOCATE_BUDGET_MS;
+        if (done) {
+            budgetExhausted = true;
+        }
+        return done;
+    }
+
+    private List<String> candidateOrders(BoundRoute route) {
+        return route.orderIds().stream()
+                .limit(MAX_ORDERS_PER_ROUTE_TO_TRY)
+                .toList();
     }
 
     private String routeKey(BoundRoute route, List<BoundStop> path, String matrixProvider) {

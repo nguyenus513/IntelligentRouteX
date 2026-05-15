@@ -20,6 +20,6 @@ public record MoveEvaluationResult(
 
     public MoveEvaluationResult {
         traces = traces == null ? List.of() : List.copyOf(traces);
-        cacheStats = cacheStats == null ? new SearchCacheStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) : cacheStats;
+        cacheStats = cacheStats == null ? new SearchCacheStats(0, 0, 0, 0, false, 0, 0, 0, 0, 0, 0, 0, 0, 0) : cacheStats;
     }
 }

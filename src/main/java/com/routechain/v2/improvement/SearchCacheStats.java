@@ -3,6 +3,9 @@ package com.routechain.v2.improvement;
 public record SearchCacheStats(
         int evaluatedMoves,
         int skippedByBudget,
+        long budgetMs,
+        long elapsedMs,
+        boolean budgetExhausted,
         int routeEvalCacheHits,
         int routeEvalCacheMisses,
         int routeEvalCacheSize,

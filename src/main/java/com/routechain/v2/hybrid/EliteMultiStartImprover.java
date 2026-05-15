@@ -151,6 +151,9 @@ public final class EliteMultiStartImprover {
         var stats = result.cacheStats();
         return "relocate-cache-stats:evaluated=" + stats.evaluatedMoves()
                 + ",skippedByBudget=" + stats.skippedByBudget()
+                + ",budgetMs=" + stats.budgetMs()
+                + ",elapsedMs=" + stats.elapsedMs()
+                + ",budgetExhausted=" + stats.budgetExhausted()
                 + ",routeHitRate=" + stats.routeEvalCacheHitRate()
                 + ",moveHitRate=" + stats.moveEvalCacheHitRate()
                 + ",legHitRate=" + stats.legCacheHitRate();

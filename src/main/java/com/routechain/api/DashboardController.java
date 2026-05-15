@@ -526,8 +526,9 @@ public final class DashboardController {
 
     private RunVisualizationDto benchmarkResult(String jobId, BenchmarkJobRequest request) {
         ScenarioGenerateRequest scenario = benchmarkScenario(request.datasetId()).withDefaults();
-        List<OrderDto> orders = generateOrders(scenario, jobId);
-        List<DriverDto> drivers = generateDrivers(scenario, jobId);
+        String scenarioSeed = request.datasetId() == null || request.datasetId().isBlank() ? scenario.scenarioType() : request.datasetId();
+        List<OrderDto> orders = generateOrders(scenario, scenarioSeed);
+        List<DriverDto> drivers = generateDrivers(scenario, scenarioSeed);
         List<BenchmarkSolverResultDto> solverResults = new ArrayList<>();
         List<String> solvers = request.solvers();
         RunVisualizationDto irx = dispatchVisualization(jobId, "IntelligentRouteX", "benchmark-phase1", orders, drivers, scenario.weatherProfile(), List.of());
