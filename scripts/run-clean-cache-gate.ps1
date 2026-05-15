@@ -70,6 +70,7 @@ foreach ($dataset in $Datasets) {
     $globalCache = $result.diagnostics.globalRoutingCache
     $stageRuntime = $result.diagnostics.stageRuntime
     $matrixSnapshot = $result.diagnostics.matrixSnapshot
+    $coreStage = $result.diagnostics.coreStageTiming
     $rows += [pscustomobject]@{
       datasetId = $dataset
       jobId = $job.jobId
@@ -105,6 +106,10 @@ foreach ($dataset in $Datasets) {
       matrixSnapshotBuildMs = if ($matrixSnapshot) { $matrixSnapshot.buildMs } else { 0 }
       matrixSnapshotProvider = if ($matrixSnapshot) { $matrixSnapshot.provider } else { "" }
       matrixSnapshotRoutingMode = if ($matrixSnapshot) { $matrixSnapshot.routingMode } else { "" }
+      routeProposalPoolMs = if ($coreStage) { $coreStage.routeProposalPoolMs } else { 0 }
+      bundleGenerationMs = if ($coreStage) { $coreStage.bundleGenerationMs } else { 0 }
+      driverShortlistMs = if ($coreStage) { $coreStage.driverShortlistMs } else { 0 }
+      selectorMs = if ($coreStage) { $coreStage.selectorMs } else { 0 }
       pass = ($result.diagnostics.baselineDominanceGuard.baselineDominancePassed -and $hybrid.lateOrderCount -eq 0 -and $hybrid.totalDistanceKm -le [double]$ortools.totalDistanceKm)
       failReason = ""
     }
@@ -144,6 +149,10 @@ foreach ($dataset in $Datasets) {
       matrixSnapshotBuildMs = 0
       matrixSnapshotProvider = ""
       matrixSnapshotRoutingMode = ""
+      routeProposalPoolMs = 0
+      bundleGenerationMs = 0
+      driverShortlistMs = 0
+      selectorMs = 0
       pass = $false
       failReason = $_.Exception.Message
     }

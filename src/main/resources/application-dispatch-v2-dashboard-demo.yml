@@ -46,27 +46,27 @@ routechain:
     cluster:
       max-size: 20
     bundle:
-      max-size: 5
-      top-neighbors: 8
-      beam-width: 8
+      max-size: 4
+      top-neighbors: 4
+      beam-width: 4
     candidate:
       max-anchors: 2
-      max-drivers: 4
+      max-drivers: 2
       max-route-alternatives: 1
       route-proposal-budget:
         enabled: true
-        local-lite-max-total: 24
-        full-adaptive-s-max-total: 32
-        full-adaptive-m-max-total: 48
-        max-drivers-per-bundle: 4
-        max-anchors-per-bundle: 2
+        local-lite-max-total: 12
+        full-adaptive-s-max-total: 16
+        full-adaptive-m-max-total: 20
+        max-drivers-per-bundle: 2
+        max-anchors-per-bundle: 1
         max-alternatives-per-tuple: 1
     context:
       timeouts:
         eta-ml-timeout: 3s
     pair:
       ml-timeout: 3s
-      max-candidate-neighbors-per-order: 6
+      max-candidate-neighbors-per-order: 3
     selector:
       ortools:
         timeout: 5s

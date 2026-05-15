@@ -580,6 +580,7 @@ public final class DashboardController {
         diagnostics.put("benchmarkIdentity", benchmarkIdentity(request.datasetId(), scenario, jobId, irx, orders, drivers));
         diagnostics.put("matrixSnapshot", matrixSnapshotDiagnostics(matrixSnapshot));
         diagnostics.put("stageRuntime", stageRuntime);
+        diagnostics.put("coreStageTiming", coreStageTiming(irx));
         diagnostics.put("globalRoutingCache", globalRoutingCacheDiagnostics(routingProvider, routingCacheStart));
         diagnostics.put("solverResults", solverResults);
         diagnostics.put("eliteSolutionArchive", eliteArchiveDiagnostics(eliteArchive));
@@ -625,6 +626,20 @@ public final class DashboardController {
         diagnostics.put("routingMode", snapshot.routingMode());
         diagnostics.put("fallbackApplied", snapshot.fallbackApplied());
         return diagnostics;
+    }
+
+    private static Map<String, Object> coreStageTiming(RunVisualizationDto irx) {
+        Map<String, Object> coreFunnel = objectMap(irx.diagnostics().get("coreFunnelAudit"));
+        Map<String, Object> stageLatency = objectMap(coreFunnel.get("stageLatencyMs"));
+        Map<String, Object> timing = new LinkedHashMap<>();
+        timing.put("pairGraphMs", number(stageLatency.get("pair-graph")));
+        timing.put("bundleGenerationMs", number(stageLatency.get("bundle-pool")));
+        timing.put("driverShortlistMs", number(stageLatency.get("driver-shortlist/rerank")));
+        timing.put("routeProposalPoolMs", number(stageLatency.get("route-proposal-pool")));
+        timing.put("scenarioEvaluationMs", number(stageLatency.get("scenario-evaluation")));
+        timing.put("selectorMs", number(stageLatency.get("global-selector")));
+        timing.put("coverageRepairMs", number(stageLatency.get("dispatch-executor")));
+        return timing;
     }
 
     private static Map<String, Object> globalRoutingCacheDiagnostics(RoutingProvider routingProvider) {
