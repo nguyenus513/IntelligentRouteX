@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
-function Parse-CacheStats($items) {
+function Parse-CacheStats($items, [string]$Prefix = "relocate-cache-stats:") {
   $stats = [ordered]@{
     evaluatedMoves = 0
     skippedByBudget = 0
@@ -21,7 +21,8 @@ function Parse-CacheStats($items) {
   $count = 0
   foreach ($item in $items) {
     if (-not ($item -is [string])) { continue }
-    $text = $item.Replace("relocate-cache-stats:", "")
+    if (-not $item.StartsWith($Prefix)) { continue }
+    $text = $item.Replace($Prefix, "")
     $map = @{}
     foreach ($part in $text.Split(',')) {
       $kv = $part.Split('=')
@@ -66,7 +67,8 @@ foreach ($dataset in $Datasets) {
     $hybrid = $result.diagnostics.solverResults | Where-Object solverName -eq "IRX ML-Fused Hybrid"
     $distance = $result.diagnostics.solverResults | Where-Object solverName -eq "Distance batching"
     $ortools = $result.diagnostics.solverResults | Where-Object solverName -eq "OR-Tools"
-    $cache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats
+    $cache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "relocate-cache-stats:"
+    $swapCache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "swap-cache-stats:"
     $globalCache = $result.diagnostics.globalRoutingCache
     $stageRuntime = $result.diagnostics.stageRuntime
     $matrixSnapshot = $result.diagnostics.matrixSnapshot
@@ -92,6 +94,10 @@ foreach ($dataset in $Datasets) {
       moveEvalCacheHitRate = $cache.moveEvalCacheHitRate
       legCacheHitRate = $cache.legCacheHitRate
       budgetExhaustedCount = $cache.budgetExhaustedCount
+      swapAttempts = $swapCache.evaluatedMoves
+      swapSkippedByBudget = $swapCache.skippedByBudget
+      swapBudgetExhaustedCount = $swapCache.budgetExhaustedCount
+      swapLegCacheHitRate = $swapCache.legCacheHitRate
       routeCacheRequests = if ($globalCache) { $globalCache.routeCacheRequestDelta } else { 0 }
       routeCacheHitRate = if ($globalCache) { [math]::Round([double]$globalCache.routeCacheHitRateDelta, 2) } else { 0 }
       routeCacheSize = if ($globalCache) { $globalCache.routeCacheSize } else { 0 }
@@ -135,6 +141,10 @@ foreach ($dataset in $Datasets) {
       moveEvalCacheHitRate = 0
       legCacheHitRate = 0
       budgetExhaustedCount = 0
+      swapAttempts = 0
+      swapSkippedByBudget = 0
+      swapBudgetExhaustedCount = 0
+      swapLegCacheHitRate = 0
       routeCacheRequests = 0
       routeCacheHitRate = 0
       routeCacheSize = 0

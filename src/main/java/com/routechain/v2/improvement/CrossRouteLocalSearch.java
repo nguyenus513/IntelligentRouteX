@@ -24,6 +24,9 @@ public final class CrossRouteLocalSearch {
     private static final int MAX_ROUTE_PAIRS = 6;
     private static final int MAX_ACCEPTED_MOVES = 2;
     private static final long RELOCATE_BUDGET_MS = 500;
+    private static final int MAX_SWAP_EVALUATED_MOVES = 6;
+    private static final int MAX_SWAP_ACCEPTED_MOVES = 1;
+    private static final long SWAP_BUDGET_MS = 350;
     private static final int MAX_INSERTION_POSITIONS = 2;
 
     private final RouteScheduleEvaluator evaluator = new RouteScheduleEvaluator();
@@ -41,6 +44,7 @@ public final class CrossRouteLocalSearch {
     private int legCacheHits;
     private int legCacheMisses;
     private long startedAtMs;
+    private long activeBudgetMs = RELOCATE_BUDGET_MS;
     private boolean budgetExhausted;
     private int routePairsTried;
     private int acceptedMoves;
@@ -53,6 +57,7 @@ public final class CrossRouteLocalSearch {
             return rejected(null, null, "insufficient-routes");
         }
         resetCaches();
+        activeBudgetMs = RELOCATE_BUDGET_MS;
         startedAtMs = System.currentTimeMillis();
         MoveEvaluationResult best = null;
         for (BoundRoute from : routes) {
@@ -89,6 +94,50 @@ public final class CrossRouteLocalSearch {
             }
         }
         return withStats(best == null ? rejected(null, null, "no-accepted-relocate") : best);
+    }
+
+    public MoveEvaluationResult swapOnce(SeedRouteBinding binding,
+                                         List<BoundRoute> routes,
+                                         DistanceCostFunction distanceCost,
+                                         boolean feasibleMode) {
+        if (binding == null || routes == null || routes.size() < 2 || distanceCost == null) {
+            return rejectedWith("SWAP-NONE", null, null, "SWAP_ORDERS", "insufficient-routes");
+        }
+        resetCaches();
+        activeBudgetMs = SWAP_BUDGET_MS;
+        startedAtMs = System.currentTimeMillis();
+        MoveEvaluationResult best = null;
+        for (BoundRoute routeA : routes) {
+            if (budgetDone()) {
+                break;
+            }
+            List<String> ordersA = candidateOrders(routeA).stream().limit(2).toList();
+            if (ordersA.isEmpty() || ordersA.size() > MAX_ORDERS_PER_ROUTE) {
+                continue;
+            }
+            for (BoundRoute routeB : routes) {
+                if (routeA.routeId().equals(routeB.routeId()) || routePairsTried >= MAX_ROUTE_PAIRS || budgetDone()) {
+                    continue;
+                }
+                List<String> ordersB = candidateOrders(routeB).stream().limit(2).toList();
+                for (String orderA : ordersA) {
+                    for (String orderB : ordersB) {
+                        if (evaluatedMoves >= MAX_SWAP_EVALUATED_MOVES || acceptedMoves >= MAX_SWAP_ACCEPTED_MOVES || budgetDone()) {
+                            skippedByBudget++;
+                            continue;
+                        }
+                        routePairsTried++;
+                        evaluatedMoves++;
+                        MoveEvaluationResult candidate = evaluateSwap(binding, routeA, routeB, orderA, orderB, distanceCost, feasibleMode);
+                        if (candidate.accepted() && (best == null || candidate.newKm() < best.newKm())) {
+                            best = candidate;
+                            acceptedMoves++;
+                        }
+                    }
+                }
+            }
+        }
+        return withStats(best == null ? rejectedWith("SWAP-NONE", null, null, "SWAP_ORDERS", "no-accepted-swap") : best);
     }
 
     private MoveEvaluationResult evaluateRelocate(SeedRouteBinding binding,
@@ -167,6 +216,69 @@ public final class CrossRouteLocalSearch {
         return result;
     }
 
+    private MoveEvaluationResult evaluateSwap(SeedRouteBinding binding,
+                                              BoundRoute routeA,
+                                              BoundRoute routeB,
+                                              String orderA,
+                                              String orderB,
+                                              DistanceCostFunction distanceCost,
+                                              boolean feasibleMode) {
+        BoundStop pickupA = findStop(routeA, orderA, StopType.PICKUP);
+        BoundStop dropoffA = findStop(routeA, orderA, StopType.DROPOFF);
+        BoundStop pickupB = findStop(routeB, orderB, StopType.PICKUP);
+        BoundStop dropoffB = findStop(routeB, orderB, StopType.DROPOFF);
+        if (pickupA == null || dropoffA == null || pickupB == null || dropoffB == null) {
+            return rejectedWith("SWAP-NONE", routeA, routeB, "SWAP_ORDERS", "missing-swap-stops");
+        }
+        String moveKey = swapMoveKey(binding, routeA, routeB, orderA, orderB);
+        MoveEvaluationResult cachedMove = moveEvalCache.get(moveKey);
+        if (cachedMove != null) {
+            moveEvalCacheHits++;
+            return cachedMove;
+        }
+        moveEvalCacheMisses++;
+        DistanceCostFunction cachedDistance = cachedDistance(distanceCost, binding.matrixProvider());
+        RouteSchedule oldA = evaluateRouteCached(routeA, null, cachedDistance, binding, "swap-old-a");
+        RouteSchedule oldB = evaluateRouteCached(routeB, null, cachedDistance, binding, "swap-old-b");
+        List<BoundStop> pathA = swapPath(routeA, orderA, pickupB, dropoffB);
+        List<BoundStop> pathB = swapPath(routeB, orderB, pickupA, dropoffA);
+        RouteSchedule newA = evaluateRouteCached(routeA, pathA, cachedDistance, binding, "swap-new-a");
+        RouteSchedule newB = evaluateRouteCached(routeB, pathB, cachedDistance, binding, "swap-new-b");
+        double oldKm = oldA.totalKm() + oldB.totalKm();
+        double newKm = newA.totalKm() + newB.totalKm();
+        long oldLate = oldA.lateOrderCount() + oldB.lateOrderCount();
+        long newLate = newA.lateOrderCount() + newB.lateOrderCount();
+        double oldLateness = oldA.totalLatenessMinutes() + oldB.totalLatenessMinutes();
+        double newLateness = newA.totalLatenessMinutes() + newB.totalLatenessMinutes();
+        boolean accepted = acceptancePolicy.accept(feasibleMode, oldKm, newKm, oldLate, newLate, oldLateness, newLateness);
+        String moveId = "SWAP-" + orderA + "-" + orderB + "-" + routeA.routeId() + "-" + routeB.routeId();
+        String reason = accepted ? "accepted" : rejectReason(feasibleMode, oldKm, newKm, oldLate, newLate, oldLateness, newLateness);
+        MoveEvaluationTrace trace = new MoveEvaluationTrace(
+                moveId,
+                routeA.routeId() + "<->" + routeB.routeId(),
+                "SWAP_ORDERS",
+                round(oldKm),
+                round(newKm),
+                round(oldKm - newKm),
+                accepted,
+                reason,
+                latenessTraces(moveId, "SWAP_ORDERS", oldA, oldB, newA, newB));
+        MoveEvaluationResult result = new MoveEvaluationResult(
+                accepted,
+                routeFromSchedule(routeA, pathA, newA),
+                routeFromSchedule(routeB, pathB, newB),
+                round(oldKm),
+                round(newKm),
+                oldLate,
+                newLate,
+                round(oldLateness),
+                round(newLateness),
+                List.of(trace),
+                null);
+        moveEvalCache.put(moveKey, result);
+        return result;
+    }
+
     private RouteSchedule evaluateRouteCached(BoundRoute route, List<BoundStop> path, DistanceCostFunction distanceCost, SeedRouteBinding binding, String legPrefix) {
         String key = routeKey(route, path, binding.matrixProvider());
         RouteSchedule cached = routeEvalCache.get(key);
@@ -211,7 +323,7 @@ public final class CrossRouteLocalSearch {
     }
 
     private SearchCacheStats stats() {
-        return new SearchCacheStats(evaluatedMoves, skippedByBudget, RELOCATE_BUDGET_MS, Math.max(0, System.currentTimeMillis() - startedAtMs), budgetExhausted, routeEvalCacheHits, routeEvalCacheMisses, routeEvalCache.size(), moveEvalCacheHits, moveEvalCacheMisses, moveEvalCache.size(), legCacheHits, legCacheMisses, legCostCache.size());
+        return new SearchCacheStats(evaluatedMoves, skippedByBudget, activeBudgetMs, Math.max(0, System.currentTimeMillis() - startedAtMs), budgetExhausted, routeEvalCacheHits, routeEvalCacheMisses, routeEvalCache.size(), moveEvalCacheHits, moveEvalCacheMisses, moveEvalCache.size(), legCacheHits, legCacheMisses, legCostCache.size());
     }
 
     private void resetCaches() {
@@ -232,7 +344,7 @@ public final class CrossRouteLocalSearch {
     }
 
     private boolean budgetDone() {
-        boolean done = System.currentTimeMillis() - startedAtMs > RELOCATE_BUDGET_MS;
+        boolean done = System.currentTimeMillis() - startedAtMs > activeBudgetMs;
         if (done) {
             budgetExhausted = true;
         }
@@ -259,14 +371,22 @@ public final class CrossRouteLocalSearch {
         return "RELOCATE:" + binding.seedId() + ":" + routeKey(from, null, binding.matrixProvider()) + ":" + routeKey(to, null, binding.matrixProvider()) + ":" + orderId + ":" + schedulePolicy.policyVersion();
     }
 
+    private String swapMoveKey(SeedRouteBinding binding, BoundRoute routeA, BoundRoute routeB, String orderA, String orderB) {
+        return "SWAP:" + binding.seedId() + ":" + routeKey(routeA, null, binding.matrixProvider()) + ":" + routeKey(routeB, null, binding.matrixProvider()) + ":" + orderA + ":" + orderB + ":" + schedulePolicy.policyVersion();
+    }
+
     private List<LatenessTrace> latenessTraces(String moveId, RouteSchedule oldFrom, RouteSchedule oldTo, RouteSchedule newFrom, RouteSchedule newTo) {
+        return latenessTraces(moveId, "RELOCATE_ORDER", oldFrom, oldTo, newFrom, newTo);
+    }
+
+    private List<LatenessTrace> latenessTraces(String moveId, String moveType, RouteSchedule oldFrom, RouteSchedule oldTo, RouteSchedule newFrom, RouteSchedule newTo) {
         List<LatenessTrace> traces = new ArrayList<>();
-        addLatenessTraces(moveId, oldFrom, newFrom, traces);
-        addLatenessTraces(moveId, oldTo, newTo, traces);
+        addLatenessTraces(moveId, moveType, oldFrom, newFrom, traces);
+        addLatenessTraces(moveId, moveType, oldTo, newTo, traces);
         return traces;
     }
 
-    private void addLatenessTraces(String moveId, RouteSchedule oldSchedule, RouteSchedule newSchedule, List<LatenessTrace> traces) {
+    private void addLatenessTraces(String moveId, String moveType, RouteSchedule oldSchedule, RouteSchedule newSchedule, List<LatenessTrace> traces) {
         for (OrderSchedule newOrder : newSchedule.orderSchedules().values()) {
             OrderSchedule oldOrder = oldSchedule.orderSchedules().get(newOrder.orderId());
             if (newOrder.late() || (oldOrder != null && newOrder.slackMinutes() < oldOrder.slackMinutes())) {
@@ -274,7 +394,7 @@ public final class CrossRouteLocalSearch {
                         newSchedule.routeId(),
                         newOrder.orderId(),
                         moveId,
-                        "RELOCATE_ORDER",
+                        moveType,
                         oldOrder == null ? 0.0 : oldOrder.deliveryEtaMinutes(),
                         newOrder.deliveryEtaMinutes(),
                         newOrder.dueTimeMinutes(),
@@ -297,6 +417,22 @@ public final class CrossRouteLocalSearch {
 
     private List<BoundStop> withoutDriver(BoundRoute route) {
         return route.stops().stream().filter(stop -> stop.type() != StopType.DRIVER_START).toList();
+    }
+
+    private List<BoundStop> swapPath(BoundRoute route, String removeOrderId, BoundStop incomingPickup, BoundStop incomingDropoff) {
+        List<BoundStop> path = new ArrayList<>();
+        for (BoundStop stop : withoutDriver(route)) {
+            if (!removeOrderId.equals(stop.orderId())) {
+                path.add(stop);
+                continue;
+            }
+            if (stop.type() == StopType.PICKUP) {
+                path.add(incomingPickup);
+            } else if (stop.type() == StopType.DROPOFF) {
+                path.add(incomingDropoff);
+            }
+        }
+        return path;
     }
 
     private List<BoundStop> withoutDriverAndOrder(BoundRoute route, String orderId) {
@@ -330,10 +466,14 @@ public final class CrossRouteLocalSearch {
     }
 
     private MoveEvaluationResult rejected(BoundRoute from, BoundRoute to, String reason) {
+        return rejectedWith("RELOCATE-NONE", from, to, "RELOCATE_ORDER", reason);
+    }
+
+    private MoveEvaluationResult rejectedWith(String moveId, BoundRoute from, BoundRoute to, String moveType, String reason) {
         MoveEvaluationTrace trace = new MoveEvaluationTrace(
-                "RELOCATE-NONE",
+                moveId,
                 (from == null ? "none" : from.routeId()) + "->" + (to == null ? "none" : to.routeId()),
-                "RELOCATE_ORDER",
+                moveType,
                 0.0,
                 0.0,
                 0.0,

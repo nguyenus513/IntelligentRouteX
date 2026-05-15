@@ -115,8 +115,8 @@ public final class EliteMultiStartImprover {
         if (relocate.accepted()) {
             moveTraces.addAll(relocate.traces());
             reasons.add("relocate-accepted:" + relocate.traces().getFirst().moveId() + ":-" + round(relocate.oldKm() - relocate.newKm()) + "km");
-            reasons.add(cacheReason(relocate));
-            SolutionSeedCandidate relocateSeed = relocateSeed(seed, binding.routes(), relocate, binding.orderById().size());
+            reasons.add(cacheReason("relocate", relocate));
+            SolutionSeedCandidate relocateSeed = moveSeed(seed, binding.routes(), relocate, binding.orderById().size(), "RELOCATED");
             if (LexicographicSolutionComparator.SLA_STRICT.compare(relocateSeed, improved) > 0) {
                 improved = relocateSeed;
                 totalKm = improved.totalDistanceKm();
@@ -125,7 +125,23 @@ public final class EliteMultiStartImprover {
         } else {
             moveTraces.addAll(relocate.traces());
             reasons.add("relocate-rejected:" + relocate.traces().getFirst().rejectReason());
-            reasons.add(cacheReason(relocate));
+            reasons.add(cacheReason("relocate", relocate));
+        }
+        MoveEvaluationResult swap = crossRouteLocalSearch.swapOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero);
+        if (swap.accepted()) {
+            moveTraces.addAll(swap.traces());
+            reasons.add("swap-accepted:" + swap.traces().getFirst().moveId() + ":-" + round(swap.oldKm() - swap.newKm()) + "km");
+            reasons.add(cacheReason("swap", swap));
+            SolutionSeedCandidate swapSeed = moveSeed(seed, binding.routes(), swap, binding.orderById().size(), "SWAPPED");
+            if (LexicographicSolutionComparator.SLA_STRICT.compare(swapSeed, improved) > 0) {
+                improved = swapSeed;
+                totalKm = improved.totalDistanceKm();
+                totalLate = improved.lateOrderCount();
+            }
+        } else {
+            moveTraces.addAll(swap.traces());
+            reasons.add("swap-rejected:" + swap.traces().getFirst().rejectReason());
+            reasons.add(cacheReason("swap", swap));
         }
         boolean objectiveImproved = LexicographicSolutionComparator.SLA_STRICT.compare(improved, seed) > 0;
         SolutionSeedCandidate selected = objectiveImproved ? improved : seed;
@@ -147,9 +163,9 @@ public final class EliteMultiStartImprover {
         return new ImprovedSolutionCandidate(seed, selected, trace);
     }
 
-    private String cacheReason(MoveEvaluationResult result) {
+    private String cacheReason(String operator, MoveEvaluationResult result) {
         var stats = result.cacheStats();
-        return "relocate-cache-stats:evaluated=" + stats.evaluatedMoves()
+        return operator + "-cache-stats:evaluated=" + stats.evaluatedMoves()
                 + ",skippedByBudget=" + stats.skippedByBudget()
                 + ",budgetMs=" + stats.budgetMs()
                 + ",elapsedMs=" + stats.elapsedMs()
@@ -159,7 +175,7 @@ public final class EliteMultiStartImprover {
                 + ",legHitRate=" + stats.legCacheHitRate();
     }
 
-    private SolutionSeedCandidate relocateSeed(SolutionSeedCandidate seed, List<BoundRoute> originalRoutes, MoveEvaluationResult relocate, int inputOrderCount) {
+    private SolutionSeedCandidate moveSeed(SolutionSeedCandidate seed, List<BoundRoute> originalRoutes, MoveEvaluationResult relocate, int inputOrderCount, String suffix) {
         List<SolutionSeedRoute> routes = originalRoutes.stream()
                 .map(route -> {
                     if (relocate.fromRoute() != null && route.routeId().equals(relocate.fromRoute().routeId())) {
@@ -176,7 +192,7 @@ public final class EliteMultiStartImprover {
         double coverage = inputOrderCount <= 0 ? seed.coverageRate() : coveredOrders(routes) / (double) inputOrderCount;
         double score = objective(Math.round(coverage * Math.max(1, inputOrderCount)), Math.max(1, inputOrderCount), totalKm, totalLate);
         return new SolutionSeedCandidate(
-                seed.solutionSeedId() + "-RELOCATED",
+                seed.solutionSeedId() + "-" + suffix,
                 seed.source(),
                 routes,
                 coverage,

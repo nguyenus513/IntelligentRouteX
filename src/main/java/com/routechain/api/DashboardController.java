@@ -980,7 +980,7 @@ public final class DashboardController {
         diagnostics.put("localSearchAttempts", 0);
         diagnostics.put("relocateCacheStats", improvedSeeds.stream()
                 .flatMap(candidate -> candidate.trace().reasons().stream())
-                .filter(reason -> reason.startsWith("relocate-cache-stats:"))
+                .filter(reason -> reason.startsWith("relocate-cache-stats:") || reason.startsWith("swap-cache-stats:"))
                 .toList());
         diagnostics.put("bestImprovedSource", bestImprovedSeed == null ? null : bestImprovedSeed.source());
         diagnostics.put("bestImprovedDistanceKm", bestImprovedSeed == null ? 0.0 : bestImprovedSeed.totalDistanceKm());
