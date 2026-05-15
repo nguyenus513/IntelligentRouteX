@@ -1,5 +1,10 @@
 package com.routechain.v2.hybrid;
 
+import com.routechain.v2.schedule.OrderSchedule;
+import com.routechain.v2.schedule.RouteSchedule;
+import com.routechain.v2.schedule.RouteScheduleEvaluator;
+import com.routechain.v2.schedule.SchedulePolicy;
+
 import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -7,6 +12,9 @@ import java.util.List;
 import java.util.Set;
 
 public final class EliteMultiStartImprover {
+    private final RouteScheduleEvaluator scheduleEvaluator = new RouteScheduleEvaluator();
+    private final SchedulePolicy schedulePolicy = SchedulePolicy.defaults();
+
     public List<ImprovedSolutionCandidate> improve(EliteSolutionArchive archive, int topK) {
         if (archive == null) {
             return List.of();
@@ -186,34 +194,25 @@ public final class EliteMultiStartImprover {
     }
 
     private RouteAttempt routeAttempt(BoundRoute route, BoundStop start, List<BoundStop> path, SeedRouteBinding binding, DistanceCostFunction distanceCost, String reason) {
-        double distance = 0.0;
-        double elapsedMinutes = 0.0;
-        long late = 0;
+        RouteSchedule oldSchedule = scheduleEvaluator.evaluate(route, null, distanceCost, binding.orderById(), schedulePolicy, "hybrid-old-schedule");
+        RouteSchedule newSchedule = scheduleEvaluator.evaluate(route, path, distanceCost, binding.orderById(), schedulePolicy, "hybrid-new-schedule");
         List<LatenessTrace> lateTraces = new ArrayList<>();
-        BoundStop previous = start;
-        for (BoundStop stop : path) {
-            double leg = distanceCost.distanceKm("hybrid-route-" + route.routeId() + "-" + previous.stopId() + "-" + stop.stopId(), previous.location().latitude(), previous.location().longitude(), stop.location().latitude(), stop.location().longitude());
-            distance += leg;
-            elapsedMinutes += leg / 22.0 * 60.0;
-            if (stop.type() == StopType.DROPOFF) {
-                var order = binding.orderById().get(stop.orderId());
-                if (order != null && elapsedMinutes > order.promisedEtaMinutes()) {
-                    late++;
-                    lateTraces.add(new LatenessTrace(
-                            route.routeId(),
-                            stop.orderId(),
-                            "PERM-" + route.routeId(),
-                            "PERMUTATION",
-                            0.0,
-                            round(elapsedMinutes),
-                            order.promisedEtaMinutes(),
-                            0.0,
-                            round(order.promisedEtaMinutes() - elapsedMinutes),
-                            round(elapsedMinutes - order.promisedEtaMinutes()),
-                            "candidate-dropoff-after-due-time"));
-                }
+        for (OrderSchedule newOrder : newSchedule.orderSchedules().values()) {
+            OrderSchedule oldOrder = oldSchedule.orderSchedules().get(newOrder.orderId());
+            if (newOrder.late() || (oldOrder != null && newOrder.slackMinutes() < oldOrder.slackMinutes())) {
+                lateTraces.add(new LatenessTrace(
+                        route.routeId(),
+                        newOrder.orderId(),
+                        "PERM-" + route.routeId(),
+                        "PERMUTATION",
+                        oldOrder == null ? 0.0 : oldOrder.deliveryEtaMinutes(),
+                        newOrder.deliveryEtaMinutes(),
+                        newOrder.dueTimeMinutes(),
+                        oldOrder == null ? 0.0 : oldOrder.slackMinutes(),
+                        newOrder.slackMinutes(),
+                        newOrder.latenessMinutes(),
+                        newOrder.late() ? "candidate-dropoff-after-due-time" : "candidate-slack-reduced"));
             }
-            previous = stop;
         }
         List<String> orderIds = path.stream().filter(stop -> stop.type() == StopType.PICKUP).map(BoundStop::orderId).distinct().toList();
         List<String> sequence = path.stream().map(stop -> stop.type() + ":" + stop.orderId()).toList();
@@ -221,13 +220,13 @@ public final class EliteMultiStartImprover {
                 "PERM-" + route.routeId(),
                 route.routeId(),
                 "PERMUTATION",
-                route.distanceKm(),
-                round(distance),
-                round(route.distanceKm() - distance),
+                oldSchedule.totalKm(),
+                newSchedule.totalKm(),
+                round(oldSchedule.totalKm() - newSchedule.totalKm()),
                 false,
                 reason,
                 lateTraces);
-        return new RouteAttempt(false, orderIds, sequence, round(distance), round(elapsedMinutes), late, reason, trace);
+        return new RouteAttempt(false, orderIds, sequence, newSchedule.totalKm(), newSchedule.durationMinutes(), newSchedule.lateOrderCount(), reason, trace);
     }
 
     private MoveEvaluationTrace moveTrace(BoundRoute route, RouteAttempt original, RouteAttempt candidate, int baselineLateCount, boolean seedRequiresLateZero) {
