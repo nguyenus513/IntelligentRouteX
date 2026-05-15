@@ -537,10 +537,11 @@ public final class DashboardController {
         }
         EliteSolutionArchive eliteArchive = eliteSolutionArchive(solverResults, irx);
         List<SeedRouteBinding> routeBindings = seedRouteBindings(eliteArchive, orders, drivers, irx, routingProvider);
-        List<ImprovedSolutionCandidate> improvedSeeds = new EliteMultiStartImprover().improve(routeBindings, 5,
+        int hybridImprovementTopK = 2;
+        List<ImprovedSolutionCandidate> improvedSeeds = new EliteMultiStartImprover().improve(routeBindings, hybridImprovementTopK,
                 (legId, fromLat, fromLng, toLat, toLng) -> roadDistanceKm(legId, fromLat, fromLng, toLat, toLng, routingProvider));
         if (improvedSeeds.isEmpty()) {
-            improvedSeeds = new EliteMultiStartImprover().improve(eliteArchive, 5);
+            improvedSeeds = new EliteMultiStartImprover().improve(eliteArchive, hybridImprovementTopK);
         }
         SolutionSeedCandidate bestImprovedSeed = improvedSeeds.stream()
                 .map(ImprovedSolutionCandidate::improvedSeed)
@@ -554,7 +555,7 @@ public final class DashboardController {
         diagnostics.put("benchmarkIdentity", benchmarkIdentity(request.datasetId(), scenario, jobId, irx, orders, drivers));
         diagnostics.put("solverResults", solverResults);
         diagnostics.put("eliteSolutionArchive", eliteArchiveDiagnostics(eliteArchive));
-        diagnostics.put("seedImprovement", improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings));
+        diagnostics.put("seedImprovement", improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK));
         diagnostics.put("baselineDominanceGuard", dominanceDiagnostics(dominance));
         diagnostics.put("ablationResults", ablationDiagnostics(solverResults, irx, dominance));
         diagnostics.put("rootCauseAudit", rootCauseAudit(irx, solverResults));
@@ -861,8 +862,10 @@ public final class DashboardController {
                 .orElse("no-seed-tradeoff");
     }
 
-    private static Map<String, Object> improvementDiagnostics(List<ImprovedSolutionCandidate> improvedSeeds, SolutionSeedCandidate bestImprovedSeed, List<SeedRouteBinding> bindings) {
+    private static Map<String, Object> improvementDiagnostics(List<ImprovedSolutionCandidate> improvedSeeds, SolutionSeedCandidate bestImprovedSeed, List<SeedRouteBinding> bindings, int configuredTopK) {
         Map<String, Object> diagnostics = new LinkedHashMap<>();
+        diagnostics.put("improvementMode", "FAST_GATE");
+        diagnostics.put("configuredTopKSeeds", configuredTopK);
         diagnostics.put("improvedSeedCount", improvedSeeds.size());
         diagnostics.put("topKSeedsImproved", improvedSeeds.size());
         diagnostics.put("routesBound", bindings != null && bindings.stream().anyMatch(binding -> !binding.routes().isEmpty()));

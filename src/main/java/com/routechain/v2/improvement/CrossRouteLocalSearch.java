@@ -18,13 +18,13 @@ import java.util.List;
 import java.util.Map;
 
 public final class CrossRouteLocalSearch {
-    private static final int MAX_EVALUATED_MOVES = 50;
+    private static final int MAX_EVALUATED_MOVES = 8;
     private static final int MAX_ORDERS_PER_ROUTE = 8;
     private static final int MAX_ORDERS_PER_ROUTE_TO_TRY = 3;
-    private static final int MAX_ROUTE_PAIRS = 12;
-    private static final int MAX_ACCEPTED_MOVES = 5;
-    private static final long RELOCATE_BUDGET_MS = 1500;
-    private static final int MAX_INSERTION_POSITIONS = 12;
+    private static final int MAX_ROUTE_PAIRS = 6;
+    private static final int MAX_ACCEPTED_MOVES = 2;
+    private static final long RELOCATE_BUDGET_MS = 500;
+    private static final int MAX_INSERTION_POSITIONS = 2;
 
     private final RouteScheduleEvaluator evaluator = new RouteScheduleEvaluator();
     private final MoveAcceptancePolicy acceptancePolicy = new MoveAcceptancePolicy();
