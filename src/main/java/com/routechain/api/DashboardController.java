@@ -33,6 +33,7 @@ import com.routechain.v2.hybrid.SolutionSeedCandidate;
 import com.routechain.v2.hybrid.SolutionSeedRoute;
 import com.routechain.v2.hybrid.StopType;
 import com.routechain.v2.routing.BestPathRequest;
+import com.routechain.v2.routing.CachingRoutingProvider;
 import com.routechain.v2.routing.RouteStop;
 import com.routechain.v2.routing.RoutingProvider;
 import com.routechain.v2.routing.RoutingRouteResult;
@@ -525,24 +526,37 @@ public final class DashboardController {
     }
 
     private RunVisualizationDto benchmarkResult(String jobId, BenchmarkJobRequest request) {
+        long benchmarkStarted = System.nanoTime();
+        Map<String, Object> stageRuntime = new LinkedHashMap<>();
+        Map<String, Object> routingCacheStart = globalRoutingCacheDiagnostics(routingProvider);
+        long scenarioStarted = System.nanoTime();
         ScenarioGenerateRequest scenario = benchmarkScenario(request.datasetId()).withDefaults();
         String scenarioSeed = request.datasetId() == null || request.datasetId().isBlank() ? scenario.scenarioType() : request.datasetId();
         List<OrderDto> orders = generateOrders(scenario, scenarioSeed);
         List<DriverDto> drivers = generateDrivers(scenario, scenarioSeed);
+        stageRuntime.put("scenarioLoadMs", elapsedMs(scenarioStarted));
         List<BenchmarkSolverResultDto> solverResults = new ArrayList<>();
         List<String> solvers = request.solvers();
+        long coreStarted = System.nanoTime();
         RunVisualizationDto irx = dispatchVisualization(jobId, "IntelligentRouteX", "benchmark-phase1", orders, drivers, scenario.weatherProfile(), List.of());
+        stageRuntime.put("coreDispatchMs", elapsedMs(coreStarted));
+        long baselineStarted = System.nanoTime();
         for (String solver : solvers) {
             solverResults.add(benchmarkSolver(solver, orders, drivers, irx));
         }
+        stageRuntime.put("benchmarkBaselinesMs", elapsedMs(baselineStarted));
+        long archiveStarted = System.nanoTime();
         EliteSolutionArchive eliteArchive = eliteSolutionArchive(solverResults, irx);
         List<SeedRouteBinding> routeBindings = seedRouteBindings(eliteArchive, orders, drivers, irx, routingProvider);
+        stageRuntime.put("seedBindingMs", elapsedMs(archiveStarted));
         int hybridImprovementTopK = 2;
+        long hybridStarted = System.nanoTime();
         List<ImprovedSolutionCandidate> improvedSeeds = new EliteMultiStartImprover().improve(routeBindings, hybridImprovementTopK,
                 (legId, fromLat, fromLng, toLat, toLng) -> roadDistanceKm(legId, fromLat, fromLng, toLat, toLng, routingProvider));
         if (improvedSeeds.isEmpty()) {
             improvedSeeds = new EliteMultiStartImprover().improve(eliteArchive, hybridImprovementTopK);
         }
+        stageRuntime.put("hybridImprovementMs", elapsedMs(hybridStarted));
         SolutionSeedCandidate bestImprovedSeed = improvedSeeds.stream()
                 .map(ImprovedSolutionCandidate::improvedSeed)
                 .max(LexicographicSolutionComparator.SLA_STRICT)
@@ -550,9 +564,12 @@ public final class DashboardController {
         SolutionSeedCandidate finalSeed = betterSeed(bestImprovedSeed, solutionSeedFromRun(CandidateSource.IRX_ML_FUSED, "SOL-IRX-FINAL", irx));
         BaselineDominanceResult dominance = new BaselineDominanceGuard().evaluate(finalSeed, eliteArchive);
         solverResults.add(hybridSolverResult(irx, eliteArchive, dominance, finalSeed));
+        stageRuntime.put("totalBenchmarkMs", elapsedMs(benchmarkStarted));
         ComparisonDto comparison = new ComparisonDto(null, irx.runId(), "Benchmark job " + jobId, BenchmarkVerdict.PASS_WITH_LIMITS, "phase1 honest benchmark: wired local baselines plus evidence gaps for incomplete external adapters");
         Map<String, Object> diagnostics = new LinkedHashMap<>(irx.diagnostics());
         diagnostics.put("benchmarkIdentity", benchmarkIdentity(request.datasetId(), scenario, jobId, irx, orders, drivers));
+        diagnostics.put("stageRuntime", stageRuntime);
+        diagnostics.put("globalRoutingCache", globalRoutingCacheDiagnostics(routingProvider, routingCacheStart));
         diagnostics.put("solverResults", solverResults);
         diagnostics.put("eliteSolutionArchive", eliteArchiveDiagnostics(eliteArchive));
         diagnostics.put("seedImprovement", improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK));
@@ -574,6 +591,44 @@ public final class DashboardController {
         identity.put("orderCount", orders.size());
         identity.put("driverCount", drivers.size());
         return identity;
+    }
+
+    private static Map<String, Object> globalRoutingCacheDiagnostics(RoutingProvider routingProvider) {
+        return globalRoutingCacheDiagnostics(routingProvider, Map.of());
+    }
+
+    private static Map<String, Object> globalRoutingCacheDiagnostics(RoutingProvider routingProvider, Map<String, Object> startStats) {
+        Map<String, Object> diagnostics = new LinkedHashMap<>();
+        diagnostics.put("matrixProvider", routingProvider == null ? "none" : routingProvider.providerId());
+        diagnostics.put("routingMode", "FAST_GATE_BOUNDED_OSRM_WITH_SYNTHETIC_FALLBACK");
+        diagnostics.put("distanceSemantics", "gate-stability-metric-not-production-road-benchmark");
+        diagnostics.put("globalMatrixCacheHit", false);
+        diagnostics.put("matrixBuildMs", 0);
+        diagnostics.put("osrmCalls", 0);
+        if (routingProvider instanceof CachingRoutingProvider cachingRoutingProvider) {
+            diagnostics.putAll(cachingRoutingProvider.stats());
+            Object requestValue = diagnostics.get("routeCacheRequests");
+            Object missValue = diagnostics.get("routeCacheMisses");
+            int requests = requestValue instanceof Integer value ? value : 0;
+            int misses = missValue instanceof Integer value ? value : 0;
+            int startRequests = intValue(startStats.get("routeCacheRequests"));
+            int startHits = intValue(startStats.get("routeCacheHits"));
+            int startMisses = intValue(startStats.get("routeCacheMisses"));
+            int requestDelta = Math.max(0, requests - startRequests);
+            int hitDelta = Math.max(0, intValue(diagnostics.get("routeCacheHits")) - startHits);
+            int missDelta = Math.max(0, misses - startMisses);
+            diagnostics.put("routeCacheRequestDelta", requestDelta);
+            diagnostics.put("routeCacheHitDelta", hitDelta);
+            diagnostics.put("routeCacheMissDelta", missDelta);
+            diagnostics.put("routeCacheHitRateDelta", requestDelta == 0 ? 0.0 : hitDelta / (double) requestDelta);
+            diagnostics.put("globalMatrixCacheHit", requestDelta > 0 && missDelta == 0);
+            diagnostics.put("osrmCalls", missDelta);
+        }
+        return diagnostics;
+    }
+
+    private static int intValue(Object value) {
+        return value instanceof Number number ? number.intValue() : 0;
     }
 
     private static ScenarioGenerateRequest benchmarkScenario(String datasetId) {
@@ -1559,6 +1614,10 @@ public final class DashboardController {
             return round(haversineKm(fromLat, fromLng, toLat, toLng));
         }
         return round(route.legVector().distanceMeters() / 1000.0);
+    }
+
+    private static long elapsedMs(long startedNanos) {
+        return Math.max(0L, java.time.Duration.ofNanos(System.nanoTime() - startedNanos).toMillis());
     }
 
     private static void appendPolyline(List<GeoPointDto> polyline, RoutingRouteResult route, double fallbackLat, double fallbackLng) {

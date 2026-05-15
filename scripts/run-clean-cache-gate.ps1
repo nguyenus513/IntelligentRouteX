@@ -67,6 +67,8 @@ foreach ($dataset in $Datasets) {
     $distance = $result.diagnostics.solverResults | Where-Object solverName -eq "Distance batching"
     $ortools = $result.diagnostics.solverResults | Where-Object solverName -eq "OR-Tools"
     $cache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats
+    $globalCache = $result.diagnostics.globalRoutingCache
+    $stageRuntime = $result.diagnostics.stageRuntime
     $rows += [pscustomobject]@{
       datasetId = $dataset
       jobId = $job.jobId
@@ -88,6 +90,15 @@ foreach ($dataset in $Datasets) {
       moveEvalCacheHitRate = $cache.moveEvalCacheHitRate
       legCacheHitRate = $cache.legCacheHitRate
       budgetExhaustedCount = $cache.budgetExhaustedCount
+      routeCacheRequests = if ($globalCache) { $globalCache.routeCacheRequestDelta } else { 0 }
+      routeCacheHitRate = if ($globalCache) { [math]::Round([double]$globalCache.routeCacheHitRateDelta, 2) } else { 0 }
+      routeCacheSize = if ($globalCache) { $globalCache.routeCacheSize } else { 0 }
+      osrmCalls = if ($globalCache) { $globalCache.osrmCalls } else { 0 }
+      coreDispatchMs = if ($stageRuntime) { $stageRuntime.coreDispatchMs } else { 0 }
+      benchmarkBaselinesMs = if ($stageRuntime) { $stageRuntime.benchmarkBaselinesMs } else { 0 }
+      seedBindingMs = if ($stageRuntime) { $stageRuntime.seedBindingMs } else { 0 }
+      hybridImprovementMs = if ($stageRuntime) { $stageRuntime.hybridImprovementMs } else { 0 }
+      totalBenchmarkMs = if ($stageRuntime) { $stageRuntime.totalBenchmarkMs } else { 0 }
       pass = ($result.diagnostics.baselineDominanceGuard.baselineDominancePassed -and $hybrid.lateOrderCount -eq 0 -and $hybrid.totalDistanceKm -le [double]$ortools.totalDistanceKm)
       failReason = ""
     }
@@ -113,6 +124,15 @@ foreach ($dataset in $Datasets) {
       moveEvalCacheHitRate = 0
       legCacheHitRate = 0
       budgetExhaustedCount = 0
+      routeCacheRequests = 0
+      routeCacheHitRate = 0
+      routeCacheSize = 0
+      osrmCalls = 0
+      coreDispatchMs = 0
+      benchmarkBaselinesMs = 0
+      seedBindingMs = 0
+      hybridImprovementMs = 0
+      totalBenchmarkMs = 0
       pass = $false
       failReason = $_.Exception.Message
     }

@@ -78,6 +78,7 @@ import com.routechain.v2.route.RouteProposalValidator;
 import com.routechain.v2.route.RouteValueScorer;
 import com.routechain.v2.routing.BestPathRouter;
 import com.routechain.v2.routing.BudgetedRoutingProvider;
+import com.routechain.v2.routing.CachingRoutingProvider;
 import com.routechain.v2.routing.HttpOsrmRoutingProvider;
 import com.routechain.v2.routing.HttpTomTomRoutingProvider;
 import com.routechain.v2.routing.DurationMatrixCache;
@@ -717,7 +718,7 @@ public class DispatchV2Configuration {
                     properties.getRouting().getReadTimeout(),
                     routeCostFunction,
                     syntheticProvider);
-            return new BudgetedRoutingProvider(osrmProvider, syntheticProvider, properties.getRouting().getRefineLimitPerTick());
+            return new CachingRoutingProvider(new BudgetedRoutingProvider(osrmProvider, syntheticProvider, properties.getRouting().getRefineLimitPerTick()));
         }
         if ("tomtom".equalsIgnoreCase(properties.getRouting().getProvider())) {
             RoutingProvider tomTomProvider = new HttpTomTomRoutingProvider(
@@ -727,7 +728,7 @@ public class DispatchV2Configuration {
                     properties.getRouting().getReadTimeout(),
                     routeCostFunction,
                     syntheticProvider);
-            return new BudgetedRoutingProvider(tomTomProvider, syntheticProvider, properties.getRouting().getRefineLimitPerTick());
+            return new CachingRoutingProvider(new BudgetedRoutingProvider(tomTomProvider, syntheticProvider, properties.getRouting().getRefineLimitPerTick()));
         }
         return syntheticProvider;
     }

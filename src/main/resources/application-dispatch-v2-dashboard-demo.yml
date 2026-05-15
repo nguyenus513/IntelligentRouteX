@@ -20,7 +20,7 @@ routechain:
     routing:
       provider: osrm
       base-url: https://router.project-osrm.org
-      refine-limit-per-tick: 300
+      refine-limit-per-tick: 40
       connect-timeout: 2s
       read-timeout: 5s
     ml:
