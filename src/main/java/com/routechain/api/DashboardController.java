@@ -550,6 +550,7 @@ public final class DashboardController {
         solverResults.add(hybridSolverResult(irx, eliteArchive, dominance, finalSeed));
         ComparisonDto comparison = new ComparisonDto(null, irx.runId(), "Benchmark job " + jobId, BenchmarkVerdict.PASS_WITH_LIMITS, "phase1 honest benchmark: wired local baselines plus evidence gaps for incomplete external adapters");
         Map<String, Object> diagnostics = new LinkedHashMap<>(irx.diagnostics());
+        diagnostics.put("benchmarkIdentity", benchmarkIdentity(request.datasetId(), scenario, jobId, irx, orders, drivers));
         diagnostics.put("solverResults", solverResults);
         diagnostics.put("eliteSolutionArchive", eliteArchiveDiagnostics(eliteArchive));
         diagnostics.put("seedImprovement", improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings));
@@ -558,6 +559,19 @@ public final class DashboardController {
         diagnostics.put("rootCauseAudit", rootCauseAudit(irx, solverResults));
         diagnostics.put("verdictReasons", List.of("same raw snapshot for every wired solver", "PyVRP/VROOM require local runtime if selected"));
         return irx.withSolver("Benchmark Arena", "phase1-job").withComparison(comparison).withDiagnostics(diagnostics);
+    }
+
+    private static Map<String, Object> benchmarkIdentity(String datasetId, ScenarioGenerateRequest scenario, String jobId, RunVisualizationDto irx, List<OrderDto> orders, List<DriverDto> drivers) {
+        Map<String, Object> identity = new LinkedHashMap<>();
+        identity.put("datasetId", datasetId == null ? "raw-m" : datasetId);
+        identity.put("scenarioId", scenario.scenarioType());
+        identity.put("jobId", jobId);
+        identity.put("runId", irx.runId());
+        identity.put("seed", jobId);
+        identity.put("scenarioHash", scenarioHash(scenario, orders, drivers));
+        identity.put("orderCount", orders.size());
+        identity.put("driverCount", drivers.size());
+        return identity;
     }
 
     private static ScenarioGenerateRequest benchmarkScenario(String datasetId) {
@@ -856,6 +870,10 @@ public final class DashboardController {
         diagnostics.put("permutationAttempts", improvedSeeds.stream().mapToInt(candidate -> candidate.trace().acceptedMoves() + candidate.trace().rejectedMoves()).sum());
         diagnostics.put("permutationAccepted", improvedSeeds.stream().mapToInt(candidate -> candidate.trace().acceptedMoves()).sum());
         diagnostics.put("localSearchAttempts", 0);
+        diagnostics.put("relocateCacheStats", improvedSeeds.stream()
+                .flatMap(candidate -> candidate.trace().reasons().stream())
+                .filter(reason -> reason.startsWith("relocate-cache-stats:"))
+                .toList());
         diagnostics.put("bestImprovedSource", bestImprovedSeed == null ? null : bestImprovedSeed.source());
         diagnostics.put("bestImprovedDistanceKm", bestImprovedSeed == null ? 0.0 : bestImprovedSeed.totalDistanceKm());
         diagnostics.put("finalKm", bestImprovedSeed == null ? 0.0 : bestImprovedSeed.totalDistanceKm());
@@ -1472,6 +1490,31 @@ public final class DashboardController {
 
     private static String id(String prefix) {
         return prefix + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+    }
+
+    private static String scenarioHash(ScenarioGenerateRequest scenario, List<OrderDto> orders, List<DriverDto> drivers) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(scenario.scenarioType()).append('|')
+                .append(scenario.orderCount()).append('|')
+                .append(scenario.driverCount()).append('|')
+                .append(scenario.weatherProfile()).append('|')
+                .append(scenario.trafficMode()).append('|')
+                .append(scenario.riskRate());
+        for (OrderDto order : orders) {
+            builder.append('|').append(order.orderId())
+                    .append('@').append("%.6f".formatted(order.pickupLat()))
+                    .append(',').append("%.6f".formatted(order.pickupLng()))
+                    .append('>').append("%.6f".formatted(order.dropoffLat()))
+                    .append(',').append("%.6f".formatted(order.dropoffLng()))
+                    .append('#').append(order.deadlineMinutes());
+        }
+        for (DriverDto driver : drivers) {
+            builder.append('|').append(driver.driverId())
+                    .append('@').append("%.6f".formatted(driver.lat()))
+                    .append(',').append("%.6f".formatted(driver.lng()))
+                    .append('#').append(driver.capacity());
+        }
+        return Integer.toHexString(builder.toString().hashCode()).toUpperCase();
     }
 
     private static String pad(int value) {

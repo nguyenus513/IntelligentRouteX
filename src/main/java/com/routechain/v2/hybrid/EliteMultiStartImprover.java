@@ -115,6 +115,7 @@ public final class EliteMultiStartImprover {
         if (relocate.accepted()) {
             moveTraces.addAll(relocate.traces());
             reasons.add("relocate-accepted:" + relocate.traces().getFirst().moveId() + ":-" + round(relocate.oldKm() - relocate.newKm()) + "km");
+            reasons.add(cacheReason(relocate));
             SolutionSeedCandidate relocateSeed = relocateSeed(seed, binding.routes(), relocate, binding.orderById().size());
             if (LexicographicSolutionComparator.SLA_STRICT.compare(relocateSeed, improved) > 0) {
                 improved = relocateSeed;
@@ -124,6 +125,7 @@ public final class EliteMultiStartImprover {
         } else {
             moveTraces.addAll(relocate.traces());
             reasons.add("relocate-rejected:" + relocate.traces().getFirst().rejectReason());
+            reasons.add(cacheReason(relocate));
         }
         boolean objectiveImproved = LexicographicSolutionComparator.SLA_STRICT.compare(improved, seed) > 0;
         SolutionSeedCandidate selected = objectiveImproved ? improved : seed;
@@ -143,6 +145,15 @@ public final class EliteMultiStartImprover {
                 reasons,
                 moveTraces);
         return new ImprovedSolutionCandidate(seed, selected, trace);
+    }
+
+    private String cacheReason(MoveEvaluationResult result) {
+        var stats = result.cacheStats();
+        return "relocate-cache-stats:evaluated=" + stats.evaluatedMoves()
+                + ",skippedByBudget=" + stats.skippedByBudget()
+                + ",routeHitRate=" + stats.routeEvalCacheHitRate()
+                + ",moveHitRate=" + stats.moveEvalCacheHitRate()
+                + ",legHitRate=" + stats.legCacheHitRate();
     }
 
     private SolutionSeedCandidate relocateSeed(SolutionSeedCandidate seed, List<BoundRoute> originalRoutes, MoveEvaluationResult relocate, int inputOrderCount) {

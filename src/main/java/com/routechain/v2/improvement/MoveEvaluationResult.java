@@ -15,9 +15,11 @@ public record MoveEvaluationResult(
         long newLateCount,
         double oldTotalLatenessMinutes,
         double newTotalLatenessMinutes,
-        List<MoveEvaluationTrace> traces) {
+        List<MoveEvaluationTrace> traces,
+        SearchCacheStats cacheStats) {
 
     public MoveEvaluationResult {
         traces = traces == null ? List.of() : List.copyOf(traces);
+        cacheStats = cacheStats == null ? new SearchCacheStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) : cacheStats;
     }
 }
