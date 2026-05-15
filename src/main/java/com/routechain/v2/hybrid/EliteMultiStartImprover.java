@@ -4,6 +4,8 @@ import com.routechain.v2.schedule.OrderSchedule;
 import com.routechain.v2.schedule.RouteSchedule;
 import com.routechain.v2.schedule.RouteScheduleEvaluator;
 import com.routechain.v2.schedule.SchedulePolicy;
+import com.routechain.v2.improvement.CrossRouteLocalSearch;
+import com.routechain.v2.improvement.MoveEvaluationResult;
 
 import java.util.Comparator;
 import java.util.ArrayList;
@@ -14,6 +16,7 @@ import java.util.Set;
 public final class EliteMultiStartImprover {
     private final RouteScheduleEvaluator scheduleEvaluator = new RouteScheduleEvaluator();
     private final SchedulePolicy schedulePolicy = SchedulePolicy.defaults();
+    private final CrossRouteLocalSearch crossRouteLocalSearch = new CrossRouteLocalSearch();
 
     public List<ImprovedSolutionCandidate> improve(EliteSolutionArchive archive, int topK) {
         if (archive == null) {
@@ -108,6 +111,20 @@ public final class EliteMultiStartImprover {
                 seed.hardInvalidReason(),
                 seed.softPenaltyReasons(),
                 new HybridCostBreakdown(totalKm, totalLate * 10.0, 0.0, 0.0, 0.0, 0.0, score));
+        MoveEvaluationResult relocate = crossRouteLocalSearch.relocateOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero);
+        if (relocate.accepted()) {
+            moveTraces.addAll(relocate.traces());
+            reasons.add("relocate-accepted:" + relocate.traces().getFirst().moveId() + ":-" + round(relocate.oldKm() - relocate.newKm()) + "km");
+            SolutionSeedCandidate relocateSeed = relocateSeed(seed, binding.routes(), relocate, binding.orderById().size());
+            if (LexicographicSolutionComparator.SLA_STRICT.compare(relocateSeed, improved) > 0) {
+                improved = relocateSeed;
+                totalKm = improved.totalDistanceKm();
+                totalLate = improved.lateOrderCount();
+            }
+        } else {
+            moveTraces.addAll(relocate.traces());
+            reasons.add("relocate-rejected:" + relocate.traces().getFirst().rejectReason());
+        }
         boolean objectiveImproved = LexicographicSolutionComparator.SLA_STRICT.compare(improved, seed) > 0;
         SolutionSeedCandidate selected = objectiveImproved ? improved : seed;
         if (!objectiveImproved) {
@@ -126,6 +143,47 @@ public final class EliteMultiStartImprover {
                 reasons,
                 moveTraces);
         return new ImprovedSolutionCandidate(seed, selected, trace);
+    }
+
+    private SolutionSeedCandidate relocateSeed(SolutionSeedCandidate seed, List<BoundRoute> originalRoutes, MoveEvaluationResult relocate, int inputOrderCount) {
+        List<SolutionSeedRoute> routes = originalRoutes.stream()
+                .map(route -> {
+                    if (relocate.fromRoute() != null && route.routeId().equals(relocate.fromRoute().routeId())) {
+                        return solutionRoute(relocate.fromRoute());
+                    }
+                    if (relocate.toRoute() != null && route.routeId().equals(relocate.toRoute().routeId())) {
+                        return solutionRoute(relocate.toRoute());
+                    }
+                    return solutionRoute(route);
+                })
+                .toList();
+        double totalKm = routes.stream().mapToDouble(SolutionSeedRoute::distanceKm).sum();
+        long totalLate = routes.stream().mapToLong(SolutionSeedRoute::lateOrderCount).sum();
+        double coverage = inputOrderCount <= 0 ? seed.coverageRate() : coveredOrders(routes) / (double) inputOrderCount;
+        double score = objective(Math.round(coverage * Math.max(1, inputOrderCount)), Math.max(1, inputOrderCount), totalKm, totalLate);
+        return new SolutionSeedCandidate(
+                seed.solutionSeedId() + "-RELOCATED",
+                seed.source(),
+                routes,
+                coverage,
+                round(totalKm),
+                totalLate,
+                routes.stream().map(route -> new DriverSeedLoad(route.driverId(), route.orderIds().size())).toList(),
+                seed.hardFeasible(),
+                seed.hardInvalidReason(),
+                seed.softPenaltyReasons(),
+                new HybridCostBreakdown(round(totalKm), totalLate * 10.0, 0.0, 0.0, 0.0, 0.0, score));
+    }
+
+    private SolutionSeedRoute solutionRoute(BoundRoute route) {
+        return new SolutionSeedRoute(
+                route.routeId(),
+                route.driverId(),
+                route.orderIds(),
+                route.stops().stream().filter(stop -> stop.type() != StopType.DRIVER_START).map(stop -> stop.type() + ":" + stop.orderId()).toList(),
+                route.distanceKm(),
+                route.durationMinutes(),
+                route.lateOrderCount());
     }
 
     private RouteAttempt permuteRoute(BoundRoute route, SeedRouteBinding binding, DistanceCostFunction distanceCost, boolean seedRequiresLateZero) {
