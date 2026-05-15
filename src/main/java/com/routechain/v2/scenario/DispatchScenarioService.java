@@ -207,9 +207,10 @@ public final class DispatchScenarioService {
         DemandShiftFeatureVector demandShiftFeatures = demandShiftFeatureBuilder.build(request, etaContext, context, routeProposalStage, bundleStage);
         ZoneBurstFeatureVector zoneBurstFeatures = zoneBurstFeatureBuilder.build(request, etaContext, context, routeProposalStage);
         PostDropShiftFeatureVector postDropShiftFeatures = postDropShiftFeatureBuilder.build(request, etaContext, context, routeProposalStage, routeCandidateStage);
-        ForecastResult demandShift = forecastClient.forecastDemandShift(demandShiftFeatures, 180L);
-        ForecastResult zoneBurst = forecastClient.forecastZoneBurst(zoneBurstFeatures, 180L);
-        ForecastResult postDropShift = forecastClient.forecastPostDropShift(postDropShiftFeatures, 180L);
+        long forecastTimeoutMs = Math.max(1L, properties.getMl().getForecast().getReadTimeout().toMillis());
+        ForecastResult demandShift = forecastClient.forecastDemandShift(demandShiftFeatures, forecastTimeoutMs);
+        ForecastResult zoneBurst = forecastClient.forecastZoneBurst(zoneBurstFeatures, forecastTimeoutMs);
+        ForecastResult postDropShift = forecastClient.forecastPostDropShift(postDropShiftFeatures, forecastTimeoutMs);
         if (harvestRecorder != null) {
             String traceId = demandShiftFeatures.traceId();
             harvestRecorder.recordForecastTeacher(traceId, demandShiftFeatures.corridorId(), "demand-shift", demandShiftFeatures, demandShift);
