@@ -72,15 +72,15 @@ public final class SelectorCandidateBuilder {
                 degradeReasons.add("selector-missing-upstream-context");
                 continue;
             }
-            if ("REJECT_SHAPE".equals(RouteShapeQuality.verdict(proposal))) {
-                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-reject-zigzag-route"));
-                degradeReasons.add("selector-reject-zigzag-route");
-                continue;
+            String shapeVerdict = RouteShapeQuality.verdict(proposal);
+            boolean weakShape = shouldRejectWeakShape(proposal);
+            if ("REJECT_SHAPE".equals(shapeVerdict)) {
+                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-zigzag-penalty-applied"));
+                degradeReasons.add("selector-zigzag-penalty-applied");
             }
-            if (shouldRejectWeakShape(proposal)) {
-                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-reject-weak-shape-route"));
-                degradeReasons.add("selector-reject-weak-shape-route");
-                continue;
+            if (weakShape) {
+                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-weak-shape-penalty-applied"));
+                degradeReasons.add("selector-weak-shape-penalty-applied");
             }
 
             SelectorCandidate candidate = new SelectorCandidate(
@@ -95,7 +95,7 @@ public final class SelectorCandidateBuilder {
                     proposal.source(),
                     bundleCandidate.clusterId(),
                     bundleCandidate.boundaryCross(),
-                    selectionScore(proposal, robustUtility, driverCandidate, context),
+                    selectionScore(proposal, robustUtility, driverCandidate, context, shapeVerdict, weakShape),
                     proposal.feasible(),
                     buildReasons(proposal, driverCandidate),
                     List.copyOf(proposal.degradeReasons()));
@@ -176,7 +176,9 @@ public final class SelectorCandidateBuilder {
     private double selectionScore(RouteProposal proposal,
                                   RobustUtility robustUtility,
                                   DriverCandidate driverCandidate,
-                                  DispatchCandidateContext context) {
+                                  DispatchCandidateContext context,
+                                  String shapeVerdict,
+                                  boolean weakShape) {
         double score = HybridOptimizerObjective.selectorScore(
                 proposal,
                 robustUtility,
@@ -192,6 +194,11 @@ public final class SelectorCandidateBuilder {
         }
         if (proposal.source() == RouteProposalSource.FALLBACK_SIMPLE && "REJECT_SHAPE".equals(analysis.verdict())) {
             score -= 0.08;
+        }
+        if ("REJECT_SHAPE".equals(shapeVerdict)) {
+            score -= 0.20;
+        } else if ("WEAK_SHAPE".equals(shapeVerdict) || weakShape) {
+            score -= 0.10;
         }
         return score;
     }

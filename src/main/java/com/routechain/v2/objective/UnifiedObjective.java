@@ -21,7 +21,9 @@ public final class UnifiedObjective {
         double diversityReward = diversityReward(candidate);
         double routeChurnPenalty = routeChurnPenalty(candidate);
         double baseUtility = normalizer.clamp01(candidate.selectionScore()) * Math.max(1, candidate.orderIds().size());
+        double coverageFirstReward = Math.max(1, candidate.orderIds().size()) * 2.0;
         double totalUtility = Math.max(0.0, baseUtility + coverageReward + batchingReward + diversityReward
+                + coverageFirstReward
                 - routeShapePenalty - boundaryPenalty - fallbackPenalty - tailRiskPenalty - freshnessPenalty - routeChurnPenalty);
         if (tailRiskPenalty > 0.0) {
             reasons.add("objective-tail-risk-penalty");
@@ -50,7 +52,7 @@ public final class UnifiedObjective {
         FairnessCost fairness = new FairnessCost(0.0, routeChurnPenalty);
         RuntimeCost runtime = new RuntimeCost(0.0, 0.0, Math.min(0.06, Math.max(0, candidate.orderIds().size() - 3) * 0.02));
         RewardTerm reward = new RewardTerm(batchingReward, diversityReward, coverageReward);
-        double totalCost = quality.total() + risk.total() + fairness.total() + runtime.total() - reward.total();
+        double totalCost = quality.total() + risk.total() + fairness.total() + runtime.total() - reward.total() - coverageFirstReward;
         return new ObjectiveBreakdown(
                 "objective-breakdown/v1",
                 candidate.feasible() ? HardConstraintReport.ok() : HardConstraintReport.infeasible(List.of("candidate-marked-infeasible")),

@@ -914,6 +914,11 @@ public class DispatchV2Configuration {
     }
 
     @Bean
+    com.routechain.v2.unified.UnifiedDispatchCore unifiedDispatchCore(DispatchV2CompatibleCore dispatchV2CompatibleCore) {
+        return new com.routechain.v2.unified.UnifiedDispatchCore(dispatchV2CompatibleCore);
+    }
+
+    @Bean
     DispatchOpsReadinessService dispatchOpsReadinessService(RouteChainDispatchV2Properties properties,
                                                             WarmStartManager warmStartManager,
                                                             TabularScoringClient tabularScoringClient,

@@ -1,0 +1,96 @@
+﻿spring:
+  config:
+    activate:
+      on-profile: dispatch-v2-dashboard-demo
+
+routechain:
+  dispatch-v2:
+    enabled: true
+    ml-enabled: true
+    sidecar-required: true
+    selector-ortools-enabled: true
+    warm-start-enabled: true
+    hot-start-enabled: true
+    tomtom-enabled: false
+    open-meteo-enabled: false
+    weather:
+      enabled: false
+    traffic:
+      enabled: false
+    routing:
+      provider: osrm
+      base-url: https://router.project-osrm.org
+      refine-limit-per-tick: 300
+      connect-timeout: 2s
+      read-timeout: 5s
+    ml:
+      tabular:
+        enabled: true
+        read-timeout: 5s
+      routefinder:
+        enabled: true
+        read-timeout: 5s
+        alternatives-timeout: 5s
+        refine-timeout: 5s
+        max-alternatives-per-driver-candidate: 1
+      greedrl:
+        enabled: true
+        read-timeout: 5s
+        bundle-timeout: 5s
+        sequence-timeout: 5s
+        max-orders-per-request: 5
+        max-proposals-per-cluster: 2
+      forecast:
+        enabled: true
+        read-timeout: 3s
+    cluster:
+      max-size: 20
+    bundle:
+      max-size: 5
+      top-neighbors: 8
+      beam-width: 8
+    candidate:
+      max-anchors: 2
+      max-drivers: 4
+      max-route-alternatives: 1
+      route-proposal-budget:
+        enabled: true
+        local-lite-max-total: 24
+        full-adaptive-s-max-total: 32
+        full-adaptive-m-max-total: 48
+        max-drivers-per-bundle: 4
+        max-anchors-per-bundle: 2
+        max-alternatives-per-tuple: 1
+    context:
+      timeouts:
+        eta-ml-timeout: 3s
+    pair:
+      ml-timeout: 3s
+      max-candidate-neighbors-per-order: 6
+    selector:
+      ortools:
+        timeout: 5s
+    feedback:
+      storage-mode: FILE
+      base-dir: E:/irx-materialization/dispatch-v2-feedback
+    warm-hot-start:
+      load-latest-snapshot-on-boot: false
+    compute:
+      adaptive:
+        enabled: true
+        profile-name: dispatch-v2-dashboard-demo
+        machine-profile: local
+        require-worker-device-audit: true
+        fail-open-when-worker-metadata-missing: false
+        routefinder-max-tuples-per-dispatch: 1
+        routefinder-eta-ambiguity-threshold-minutes: 1.5
+        routefinder-stop-count-threshold: 3
+        greedrl-min-working-orders: 4
+        greedrl-min-accepted-boundary-orders: 1
+        greedrl-support-spread-threshold: 0.12
+        forecast-enabled-in-hot-path-by-default: false
+        forecast-ambiguity-threshold-minutes: 1.8
+        forecast-min-proposal-count: 2
+    performance:
+      telemetry-enabled: true
+      budget-enforcement-enabled: false

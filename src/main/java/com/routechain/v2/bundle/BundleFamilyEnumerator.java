@@ -54,6 +54,7 @@ public final class BundleFamilyEnumerator {
                 neighborhoodOrdered(preferredSeed, prioritizedOrders), Math.min(3, properties.getBundle().getMaxSize()), context));
         candidates.addAll(candidateSeries(seed, BundleFamily.HOLD_TO_BATCH,
                 holdToBatchOrdered(preferredSeed, prioritizedOrders), Math.min(3, properties.getBundle().getMaxSize()), context));
+        workingOrders.forEach(order -> candidates.add(candidate(seed, BundleFamily.SINGLETON_FALLBACK, List.of(order.orderId()), context)));
         if (urgentOrder != null) {
             candidates.addAll(candidateSeries(seed, BundleFamily.LATE_RISK_RESCUE,
                     urgentOrdered(urgentOrder, prioritizedOrders), Math.min(2, properties.getBundle().getMaxSize()), context));

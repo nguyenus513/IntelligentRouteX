@@ -113,6 +113,49 @@ public record DispatchV2Result(
                 degradeReasons);
     }
 
+    public DispatchV2Result withAssignments(List<DispatchAssignment> newAssignments, List<String> newDegradeReasons) {
+        return new DispatchV2Result(
+                schemaVersion,
+                traceId,
+                fallbackUsed,
+                selectedRouteId,
+                decisionStages,
+                etaContext,
+                etaStageTrace,
+                freshnessMetadata,
+                bufferedOrderWindow,
+                pairGraphSummary,
+                microClusters,
+                microClusterSummary,
+                boundaryExpansions,
+                boundaryExpansionSummary,
+                bundleCandidates,
+                bundlePoolSummary,
+                pickupAnchors,
+                pickupAnchorSummary,
+                driverCandidates,
+                driverShortlistSummary,
+                routeProposals,
+                routeProposalSummary,
+                scenarioEvaluations,
+                robustUtilities,
+                scenarioEvaluationSummary,
+                stageLatencies,
+                latencyBudgetSummary,
+                mlStageMetadata,
+                liveStageMetadata,
+                selectorCandidates,
+                conflictGraph,
+                globalSelectionResult,
+                globalSelectorSummary,
+                newAssignments == null ? List.of() : List.copyOf(newAssignments),
+                dispatchExecutionSummary,
+                warmStartState,
+                hotStartState,
+                activeRepairTelemetry,
+                newDegradeReasons == null ? degradeReasons : List.copyOf(newDegradeReasons));
+    }
+
     public static DispatchV2Result fallback(String traceId) {
         return new DispatchV2Result(
                 "dispatch-v2-result/v1",

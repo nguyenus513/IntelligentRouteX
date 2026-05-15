@@ -20,7 +20,8 @@ public final class BundleValidator {
     public BundleCandidate validate(BundleCandidate candidate, BundleContext context) {
         List<String> degradeReasons = new ArrayList<>(candidate.degradeReasons());
         if (candidate.orderIds().size() < properties.getBundle().getMinSize()
-                && candidate.family() != BundleFamily.URGENT_SINGLE_FALLBACK) {
+                && candidate.family() != BundleFamily.URGENT_SINGLE_FALLBACK
+                && candidate.family() != BundleFamily.SINGLETON_FALLBACK) {
             degradeReasons.add("bundle-size-below-minimum");
         }
         if (candidate.orderIds().size() > properties.getBundle().getMaxSize()) {
@@ -29,7 +30,7 @@ public final class BundleValidator {
         if (candidate.orderIds().size() != candidate.orderIds().stream().distinct().count()) {
             degradeReasons.add("bundle-contains-duplicate-orders");
         }
-        if (!context.hasConnectedSupport(candidate.orderIds()) && !hasMlSafeGeometrySupport(candidate, context)) {
+        if (candidate.orderIds().size() > 1 && !context.hasConnectedSupport(candidate.orderIds()) && !hasMlSafeGeometrySupport(candidate, context)) {
             degradeReasons.add("bundle-lacks-connected-support");
         }
         if (candidate.boundaryCross()) {

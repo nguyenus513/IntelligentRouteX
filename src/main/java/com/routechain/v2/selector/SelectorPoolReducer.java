@@ -63,7 +63,13 @@ public final class SelectorPoolReducer {
                     feasibleBestObjectiveUtility);
         }
 
+        int protectedOrderCount = distinctOrderCount(feasible);
+        if (protectedOrderCount > effectiveMaxPoolSize) {
+            effectiveMaxPoolSize = protectedOrderCount;
+        }
+        final int poolSizeLimit = effectiveMaxPoolSize;
         Map<String, SelectorCandidateEnvelope> retainedByProposalId = new LinkedHashMap<>();
+        retainCoverageProtected(feasible, retainedByProposalId, poolSizeLimit);
         Map<RouteProposalSource, List<SelectorCandidateEnvelope>> bySource = new LinkedHashMap<>();
         for (SelectorCandidateEnvelope envelope : feasible) {
             bySource.computeIfAbsent(envelope.candidate().source(), ignored -> new ArrayList<>()).add(envelope);
@@ -71,23 +77,23 @@ public final class SelectorPoolReducer {
         for (List<SelectorCandidateEnvelope> sourceCandidates : bySource.values()) {
             sourceCandidates.stream()
                     .limit(1)
-                    .forEach(envelope -> retainIfRoom(retainedByProposalId, envelope, effectiveMaxPoolSize));
+                    .forEach(envelope -> retainIfRoom(retainedByProposalId, envelope, poolSizeLimit));
         }
         feasible.stream()
                 .filter(envelope -> envelope.candidate().source() == RouteProposalSource.ACTIVE_ROUTE_INSERTION)
                 .limit(MIN_ACTIVE_REPAIR)
-                .forEach(envelope -> retainIfRoom(retainedByProposalId, envelope, effectiveMaxPoolSize));
+                .forEach(envelope -> retainIfRoom(retainedByProposalId, envelope, poolSizeLimit));
         for (List<SelectorCandidateEnvelope> sourceCandidates : bySource.values()) {
             sourceCandidates.stream()
                     .limit(MIN_PER_SOURCE)
-                    .forEach(envelope -> retainIfRoom(retainedByProposalId, envelope, effectiveMaxPoolSize));
+                    .forEach(envelope -> retainIfRoom(retainedByProposalId, envelope, poolSizeLimit));
         }
-        retainTopByDriver(feasible, retainedByProposalId, effectiveMaxPoolSize);
-        retainTopByOrder(feasible, retainedByProposalId, effectiveMaxPoolSize);
+        retainTopByDriver(feasible, retainedByProposalId, poolSizeLimit);
+        retainTopByOrder(feasible, retainedByProposalId, poolSizeLimit);
         feasible.stream()
                 .sorted(Comparator.comparingDouble((SelectorCandidateEnvelope envelope) -> envelope.candidate().selectionScore()).reversed())
                     .forEach(envelope -> {
-                    if (retainedByProposalId.size() < effectiveMaxPoolSize) {
+                    if (retainedByProposalId.size() < poolSizeLimit) {
                         retainedByProposalId.putIfAbsent(envelope.candidate().proposalId(), envelope);
                     }
                 });
@@ -97,7 +103,7 @@ public final class SelectorPoolReducer {
         return new SelectorPoolReductionResult(
                 reduced,
                 feasibilityRejectedCount + feasible.size() - reduced.size(),
-                List.of("selector-pool-reduced-before-exact", "selector-pool-feasibility-filter-applied"),
+                poolReasons(maxPoolSize, effectiveMaxPoolSize),
                 candidateEnvelopes.size(),
                 feasible.size(),
                 violationCountsByCode,
@@ -105,6 +111,41 @@ public final class SelectorPoolReducer {
                 true,
                 bestObjective(reduced),
                 feasibleBestObjectiveUtility);
+    }
+
+    private void retainCoverageProtected(List<SelectorCandidateEnvelope> feasible,
+                                          Map<String, SelectorCandidateEnvelope> retainedByProposalId,
+                                          int maxPoolSize) {
+        Map<String, Integer> retainedByOrder = new LinkedHashMap<>();
+        for (SelectorCandidateEnvelope envelope : feasible) {
+            if (retainedByProposalId.size() >= maxPoolSize) {
+                return;
+            }
+            for (String orderId : envelope.candidate().orderIds()) {
+                if (retainedByOrder.getOrDefault(orderId, 0) == 0 && retainIfRoom(retainedByProposalId, envelope, maxPoolSize)) {
+                    envelope.candidate().orderIds().forEach(coveredOrderId -> retainedByOrder.merge(coveredOrderId, 1, Integer::sum));
+                    break;
+                }
+            }
+        }
+    }
+
+    private int distinctOrderCount(List<SelectorCandidateEnvelope> feasible) {
+        return (int) feasible.stream()
+                .flatMap(envelope -> envelope.candidate().orderIds().stream())
+                .distinct()
+                .count();
+    }
+
+    private List<String> poolReasons(int originalMaxPoolSize, int effectiveMaxPoolSize) {
+        List<String> reasons = new ArrayList<>();
+        reasons.add("selector-pool-reduced-before-exact");
+        reasons.add("selector-pool-feasibility-filter-applied");
+        reasons.add("selector-coverage-protected-candidates-retained");
+        if (effectiveMaxPoolSize > originalMaxPoolSize) {
+            reasons.add("coverage-pool-expanded");
+        }
+        return List.copyOf(reasons);
     }
 
     private void retainTopByDriver(List<SelectorCandidateEnvelope> feasible,
