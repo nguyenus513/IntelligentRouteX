@@ -94,6 +94,7 @@ foreach ($dataset in $Datasets) {
     $cache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "relocate-cache-stats:"
     $swapCache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "swap-cache-stats:"
     $crossCache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "cross-insertion-cache-stats:"
+    $swapStarCache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "swap-star-cache-stats:"
     $globalCache = $result.diagnostics.globalRoutingCache
     $stageRuntime = $result.diagnostics.stageRuntime
     $matrixSnapshot = $result.diagnostics.matrixSnapshot
@@ -135,6 +136,10 @@ foreach ($dataset in $Datasets) {
       crossInsertionSkippedByBudget = $crossCache.skippedByBudget
       crossInsertionBudgetExhaustedCount = $crossCache.budgetExhaustedCount
       crossInsertionLegCacheHitRate = $crossCache.legCacheHitRate
+      swapStarAttempts = $swapStarCache.evaluatedMoves
+      swapStarSkippedByBudget = $swapStarCache.skippedByBudget
+      swapStarBudgetExhaustedCount = $swapStarCache.budgetExhaustedCount
+      swapStarLegCacheHitRate = $swapStarCache.legCacheHitRate
       routeCacheRequests = if ($globalCache) { $globalCache.routeCacheRequestDelta } else { 0 }
       routeCacheHitRate = if ($globalCache) { [math]::Round([double]$globalCache.routeCacheHitRateDelta, 2) } else { 0 }
       routeCacheSize = if ($globalCache) { $globalCache.routeCacheSize } else { 0 }
@@ -194,6 +199,10 @@ foreach ($dataset in $Datasets) {
       crossInsertionSkippedByBudget = 0
       crossInsertionBudgetExhaustedCount = 0
       crossInsertionLegCacheHitRate = 0
+      swapStarAttempts = 0
+      swapStarSkippedByBudget = 0
+      swapStarBudgetExhaustedCount = 0
+      swapStarLegCacheHitRate = 0
       routeCacheRequests = 0
       routeCacheHitRate = 0
       routeCacheSize = 0

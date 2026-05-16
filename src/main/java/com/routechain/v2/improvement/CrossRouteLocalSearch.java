@@ -32,6 +32,10 @@ public final class CrossRouteLocalSearch {
     private static final int MAX_CROSS_INSERTION_EVALUATED_MOVES = 6;
     private static final int MAX_CROSS_INSERTION_ACCEPTED_MOVES = 1;
     private static final long CROSS_INSERTION_BUDGET_MS = 350;
+    private static final int MAX_SWAP_STAR_EVALUATED_MOVES = 6;
+    private static final int MAX_SWAP_STAR_ACCEPTED_MOVES = 1;
+    private static final int MAX_SWAP_STAR_INSERTION_POSITIONS = 2;
+    private static final long SWAP_STAR_BUDGET_MS = 500;
 
     private final RouteScheduleEvaluator evaluator = new RouteScheduleEvaluator();
     private final MoveAcceptancePolicy acceptancePolicy = new MoveAcceptancePolicy();
@@ -187,6 +191,47 @@ public final class CrossRouteLocalSearch {
         return withStats(best == null ? rejectedWith("SWAP-NONE", null, null, "SWAP_ORDERS", "no-accepted-swap") : best);
     }
 
+    public MoveEvaluationResult swapStarOnce(SeedRouteBinding binding,
+                                             List<BoundRoute> routes,
+                                             DistanceCostFunction distanceCost,
+                                             boolean feasibleMode) {
+        if (binding == null || routes == null || routes.size() < 2 || distanceCost == null) {
+            return rejectedWith("SWAPSTAR-NONE", null, null, "SWAP_STAR", "insufficient-routes");
+        }
+        resetCaches();
+        activeBudgetMs = SWAP_STAR_BUDGET_MS;
+        startedAtMs = System.currentTimeMillis();
+        MoveEvaluationResult best = null;
+        for (BoundRoute routeA : routes) {
+            if (budgetDone()) {
+                break;
+            }
+            List<String> ordersA = candidateOrders(routeA).stream().limit(2).toList();
+            for (BoundRoute routeB : routes) {
+                if (routeA.routeId().equals(routeB.routeId()) || routePairsTried >= MAX_ROUTE_PAIRS || budgetDone()) {
+                    continue;
+                }
+                List<String> ordersB = candidateOrders(routeB).stream().limit(2).toList();
+                for (String orderA : ordersA) {
+                    for (String orderB : ordersB) {
+                        if (evaluatedMoves >= MAX_SWAP_STAR_EVALUATED_MOVES || acceptedMoves >= MAX_SWAP_STAR_ACCEPTED_MOVES || budgetDone()) {
+                            skippedByBudget++;
+                            continue;
+                        }
+                        routePairsTried++;
+                        evaluatedMoves++;
+                        MoveEvaluationResult candidate = evaluateSwapStar(binding, routeA, routeB, orderA, orderB, distanceCost, feasibleMode);
+                        if (candidate.accepted() && (best == null || candidate.newKm() < best.newKm())) {
+                            best = candidate;
+                            acceptedMoves++;
+                        }
+                    }
+                }
+            }
+        }
+        return withStats(best == null ? rejectedWith("SWAPSTAR-NONE", null, null, "SWAP_STAR", "no-accepted-swap-star") : best);
+    }
+
     private MoveEvaluationResult evaluateInsertion(SeedRouteBinding binding,
                                                    BoundRoute from,
                                                    BoundRoute to,
@@ -329,6 +374,100 @@ public final class CrossRouteLocalSearch {
         return result;
     }
 
+    private MoveEvaluationResult evaluateSwapStar(SeedRouteBinding binding,
+                                                  BoundRoute routeA,
+                                                  BoundRoute routeB,
+                                                  String orderA,
+                                                  String orderB,
+                                                  DistanceCostFunction distanceCost,
+                                                  boolean feasibleMode) {
+        BoundStop pickupA = findStop(routeA, orderA, StopType.PICKUP);
+        BoundStop dropoffA = findStop(routeA, orderA, StopType.DROPOFF);
+        BoundStop pickupB = findStop(routeB, orderB, StopType.PICKUP);
+        BoundStop dropoffB = findStop(routeB, orderB, StopType.DROPOFF);
+        if (pickupA == null || dropoffA == null || pickupB == null || dropoffB == null) {
+            return rejectedWith("SWAPSTAR-NONE", routeA, routeB, "SWAP_STAR", "missing-swap-star-stops");
+        }
+        String moveKey = swapStarMoveKey(binding, routeA, routeB, orderA, orderB);
+        MoveEvaluationResult cachedMove = moveEvalCache.get(moveKey);
+        if (cachedMove != null) {
+            moveEvalCacheHits++;
+            return cachedMove;
+        }
+        moveEvalCacheMisses++;
+        DistanceCostFunction cachedDistance = cachedDistance(distanceCost, binding.matrixProvider());
+        RouteSchedule oldA = evaluateRouteCached(routeA, null, cachedDistance, binding, "swap-star-old-a");
+        RouteSchedule oldB = evaluateRouteCached(routeB, null, cachedDistance, binding, "swap-star-old-b");
+        InsertionChoice bestA = bestInsertion(routeA, withoutDriverAndOrder(routeA, orderA), pickupB, dropoffB, cachedDistance, binding, "swap-star-new-a");
+        InsertionChoice bestB = bestInsertion(routeB, withoutDriverAndOrder(routeB, orderB), pickupA, dropoffA, cachedDistance, binding, "swap-star-new-b");
+        if (bestA == null || bestB == null) {
+            MoveEvaluationResult rejected = rejectedWith("SWAPSTAR-NONE", routeA, routeB, "SWAP_STAR", "no-swap-star-insertion-position");
+            moveEvalCache.put(moveKey, rejected);
+            return rejected;
+        }
+        double oldKm = oldA.totalKm() + oldB.totalKm();
+        double newKm = bestA.schedule().totalKm() + bestB.schedule().totalKm();
+        long oldLate = oldA.lateOrderCount() + oldB.lateOrderCount();
+        long newLate = bestA.schedule().lateOrderCount() + bestB.schedule().lateOrderCount();
+        double oldLateness = oldA.totalLatenessMinutes() + oldB.totalLatenessMinutes();
+        double newLateness = bestA.schedule().totalLatenessMinutes() + bestB.schedule().totalLatenessMinutes();
+        boolean accepted = acceptancePolicy.accept(feasibleMode, oldKm, newKm, oldLate, newLate, oldLateness, newLateness);
+        String moveId = "SWAPSTAR-" + orderA + "-" + orderB + "-" + routeA.routeId() + "-" + routeB.routeId();
+        String reason = accepted ? "accepted" : rejectReason(feasibleMode, oldKm, newKm, oldLate, newLate, oldLateness, newLateness);
+        MoveEvaluationTrace trace = new MoveEvaluationTrace(
+                moveId,
+                routeA.routeId() + "<->" + routeB.routeId(),
+                "SWAP_STAR",
+                round(oldKm),
+                round(newKm),
+                round(oldKm - newKm),
+                accepted,
+                reason,
+                latenessTraces(moveId, "SWAP_STAR", oldA, oldB, bestA.schedule(), bestB.schedule()));
+        MoveEvaluationResult result = new MoveEvaluationResult(
+                accepted,
+                routeFromSchedule(routeA, bestA.path(), bestA.schedule()),
+                routeFromSchedule(routeB, bestB.path(), bestB.schedule()),
+                round(oldKm),
+                round(newKm),
+                oldLate,
+                newLate,
+                round(oldLateness),
+                round(newLateness),
+                List.of(trace),
+                null);
+        moveEvalCache.put(moveKey, result);
+        return result;
+    }
+
+    private InsertionChoice bestInsertion(BoundRoute route,
+                                          List<BoundStop> basePath,
+                                          BoundStop pickup,
+                                          BoundStop dropoff,
+                                          DistanceCostFunction distanceCost,
+                                          SeedRouteBinding binding,
+                                          String legPrefix) {
+        InsertionChoice best = null;
+        int insertionEvaluations = 0;
+        for (int pickupIndex = 0; pickupIndex <= basePath.size(); pickupIndex++) {
+            for (int dropoffIndex = pickupIndex + 1; dropoffIndex <= basePath.size() + 1; dropoffIndex++) {
+                if (insertionEvaluations >= MAX_SWAP_STAR_INSERTION_POSITIONS || budgetDone()) {
+                    skippedByBudget++;
+                    break;
+                }
+                insertionEvaluations++;
+                List<BoundStop> candidatePath = new ArrayList<>(basePath);
+                candidatePath.add(pickupIndex, pickup);
+                candidatePath.add(dropoffIndex, dropoff);
+                RouteSchedule candidateSchedule = evaluateRouteCached(route, candidatePath, distanceCost, binding, legPrefix);
+                if (best == null || candidateSchedule.totalKm() < best.schedule().totalKm()) {
+                    best = new InsertionChoice(candidatePath, candidateSchedule);
+                }
+            }
+        }
+        return best;
+    }
+
     private RouteSchedule evaluateRouteCached(BoundRoute route, List<BoundStop> path, DistanceCostFunction distanceCost, SeedRouteBinding binding, String legPrefix) {
         String key = routeKey(route, path, binding.matrixProvider());
         RouteSchedule cached = routeEvalCache.get(key);
@@ -423,6 +562,13 @@ public final class CrossRouteLocalSearch {
 
     private String swapMoveKey(SeedRouteBinding binding, BoundRoute routeA, BoundRoute routeB, String orderA, String orderB) {
         return "SWAP:" + binding.seedId() + ":" + routeKey(routeA, null, binding.matrixProvider()) + ":" + routeKey(routeB, null, binding.matrixProvider()) + ":" + orderA + ":" + orderB + ":" + schedulePolicy.policyVersion();
+    }
+
+    private String swapStarMoveKey(SeedRouteBinding binding, BoundRoute routeA, BoundRoute routeB, String orderA, String orderB) {
+        return "SWAPSTAR:" + binding.seedId() + ":" + routeKey(routeA, null, binding.matrixProvider()) + ":" + routeKey(routeB, null, binding.matrixProvider()) + ":" + orderA + ":" + orderB + ":" + schedulePolicy.policyVersion();
+    }
+
+    private record InsertionChoice(List<BoundStop> path, RouteSchedule schedule) {
     }
 
     private List<LatenessTrace> latenessTraces(String moveId, RouteSchedule oldFrom, RouteSchedule oldTo, RouteSchedule newFrom, RouteSchedule newTo) {

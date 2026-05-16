@@ -159,6 +159,22 @@ public final class EliteMultiStartImprover {
             reasons.add("cross-insertion-rejected:" + crossInsert.traces().getFirst().rejectReason());
             reasons.add(cacheReason("cross-insertion", crossInsert));
         }
+        MoveEvaluationResult swapStar = crossRouteLocalSearch.swapStarOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero);
+        if (swapStar.accepted()) {
+            moveTraces.addAll(swapStar.traces());
+            reasons.add("swap-star-accepted:" + swapStar.traces().getFirst().moveId() + ":-" + round(swapStar.oldKm() - swapStar.newKm()) + "km");
+            reasons.add(cacheReason("swap-star", swapStar));
+            SolutionSeedCandidate swapStarSeed = moveSeed(seed, binding.routes(), swapStar, binding.orderById().size(), "SWAPSTAR");
+            if (LexicographicSolutionComparator.SLA_STRICT.compare(swapStarSeed, improved) > 0) {
+                improved = swapStarSeed;
+                totalKm = improved.totalDistanceKm();
+                totalLate = improved.lateOrderCount();
+            }
+        } else {
+            moveTraces.addAll(swapStar.traces());
+            reasons.add("swap-star-rejected:" + swapStar.traces().getFirst().rejectReason());
+            reasons.add(cacheReason("swap-star", swapStar));
+        }
         boolean objectiveImproved = LexicographicSolutionComparator.SLA_STRICT.compare(improved, seed) > 0;
         SolutionSeedCandidate selected = objectiveImproved ? improved : seed;
         if (!objectiveImproved) {
