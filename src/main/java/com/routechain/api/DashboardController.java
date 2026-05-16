@@ -586,6 +586,7 @@ public final class DashboardController {
         diagnostics.put("coreStageTiming", coreStageTiming(irx));
         diagnostics.put("globalRoutingCache", globalRoutingCacheDiagnostics(routingProvider, routingCacheStart));
         diagnostics.put("solverResults", solverResults);
+        diagnostics.putAll(benchmarkHybridRunService.objectiveAwareDiagnostics(solverResults));
         diagnostics.put("eliteSolutionArchive", hybridDispatchService.eliteArchiveDiagnostics(eliteArchive));
         diagnostics.put("seedImprovement", hybridDispatchService.improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK));
         diagnostics.put("baselineDominanceGuard", hybridDispatchService.dominanceDiagnostics(dominance));
