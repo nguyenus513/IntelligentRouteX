@@ -535,7 +535,7 @@ public final class DashboardController {
     private RunVisualizationDto benchmarkResult(String jobId, BenchmarkJobRequest request) {
         long benchmarkStarted = System.nanoTime();
         Map<String, Object> stageRuntime = new LinkedHashMap<>();
-        Map<String, Object> routingCacheStart = globalRoutingCacheDiagnostics(routingProvider);
+        Map<String, Object> routingCacheStart = benchmarkHybridRunService.globalRoutingCacheDiagnostics(routingProvider);
         long scenarioStarted = System.nanoTime();
         ScenarioGenerateRequest scenario = benchmarkScenario(request.datasetId()).withDefaults();
         String scenarioSeed = request.datasetId() == null || request.datasetId().isBlank() ? scenario.scenarioType() : request.datasetId();
@@ -546,7 +546,7 @@ public final class DashboardController {
                 request.datasetId() == null ? "raw-m" : request.datasetId(),
                 scenarioHash,
                 "FAST_GATE_MATRIX_FIRST_SYNTHETIC",
-                matrixNodes(orders, drivers));
+                benchmarkHybridRunService.matrixNodes(orders, drivers));
         MatrixCostAdapter matrixCost = new MatrixCostAdapter(matrixSnapshot);
         stageRuntime.put("scenarioLoadMs", elapsedMs(scenarioStarted));
         List<BenchmarkSolverResultDto> solverResults = new ArrayList<>();
@@ -580,11 +580,11 @@ public final class DashboardController {
         stageRuntime.put("totalBenchmarkMs", elapsedMs(benchmarkStarted));
         ComparisonDto comparison = new ComparisonDto(null, irx.runId(), "Benchmark job " + jobId, BenchmarkVerdict.PASS_WITH_LIMITS, "phase1 honest benchmark: wired local baselines plus evidence gaps for incomplete external adapters");
         Map<String, Object> diagnostics = new LinkedHashMap<>(irx.diagnostics());
-        diagnostics.put("benchmarkIdentity", benchmarkIdentity(request.datasetId(), scenario, jobId, irx, orders, drivers));
-        diagnostics.put("matrixSnapshot", matrixSnapshotDiagnostics(matrixSnapshot));
+        diagnostics.put("benchmarkIdentity", benchmarkHybridRunService.benchmarkIdentity(request.datasetId(), scenario, jobId, irx, orders, drivers, scenarioHash));
+        diagnostics.put("matrixSnapshot", benchmarkHybridRunService.matrixSnapshotDiagnostics(matrixSnapshot));
         diagnostics.put("stageRuntime", stageRuntime);
-        diagnostics.put("coreStageTiming", coreStageTiming(irx));
-        diagnostics.put("globalRoutingCache", globalRoutingCacheDiagnostics(routingProvider, routingCacheStart));
+        diagnostics.put("coreStageTiming", benchmarkHybridRunService.coreStageTiming(irx));
+        diagnostics.put("globalRoutingCache", benchmarkHybridRunService.globalRoutingCacheDiagnostics(routingProvider, routingCacheStart));
         diagnostics.put("solverResults", solverResults);
         diagnostics.putAll(benchmarkHybridRunService.objectiveAwareDiagnostics(solverResults));
         diagnostics.put("eliteSolutionArchive", hybridDispatchService.eliteArchiveDiagnostics(eliteArchive));
@@ -594,94 +594,6 @@ public final class DashboardController {
         diagnostics.put("rootCauseAudit", hybridDispatchService.rootCauseAudit(irx, solverResults));
         diagnostics.put("verdictReasons", List.of("same raw snapshot for every wired solver", "PyVRP/VROOM require local runtime if selected"));
         return irx.withSolver("Benchmark Arena", "phase1-job").withComparison(comparison).withDiagnostics(diagnostics);
-    }
-
-    private static Map<String, Object> benchmarkIdentity(String datasetId, ScenarioGenerateRequest scenario, String jobId, RunVisualizationDto irx, List<OrderDto> orders, List<DriverDto> drivers) {
-        Map<String, Object> identity = new LinkedHashMap<>();
-        identity.put("datasetId", datasetId == null ? "raw-m" : datasetId);
-        identity.put("scenarioId", scenario.scenarioType());
-        identity.put("jobId", jobId);
-        identity.put("runId", irx.runId());
-        identity.put("seed", jobId);
-        identity.put("scenarioHash", scenarioHash(scenario, orders, drivers));
-        identity.put("orderCount", orders.size());
-        identity.put("driverCount", drivers.size());
-        return identity;
-    }
-
-    private static List<MatrixSnapshotBuilder.MatrixNode> matrixNodes(List<OrderDto> orders, List<DriverDto> drivers) {
-        List<MatrixSnapshotBuilder.MatrixNode> nodes = new ArrayList<>();
-        for (DriverDto driver : drivers) {
-            nodes.add(new MatrixSnapshotBuilder.MatrixNode("DRIVER:" + driver.driverId(), driver.lat(), driver.lng()));
-        }
-        for (OrderDto order : orders) {
-            nodes.add(new MatrixSnapshotBuilder.MatrixNode("PICKUP:" + order.orderId(), order.pickupLat(), order.pickupLng()));
-            nodes.add(new MatrixSnapshotBuilder.MatrixNode("DROPOFF:" + order.orderId(), order.dropoffLat(), order.dropoffLng()));
-        }
-        return nodes;
-    }
-
-    private static Map<String, Object> matrixSnapshotDiagnostics(DistanceDurationMatrixSnapshot snapshot) {
-        Map<String, Object> diagnostics = new LinkedHashMap<>();
-        diagnostics.put("cacheHit", snapshot.cacheHit());
-        diagnostics.put("nodeCount", snapshot.nodeIds().size());
-        diagnostics.put("buildMs", snapshot.buildMs());
-        diagnostics.put("provider", snapshot.matrixProvider());
-        diagnostics.put("routingMode", snapshot.routingMode());
-        diagnostics.put("fallbackApplied", snapshot.fallbackApplied());
-        return diagnostics;
-    }
-
-    private static Map<String, Object> coreStageTiming(RunVisualizationDto irx) {
-        Map<String, Object> coreFunnel = objectMap(irx.diagnostics().get("coreFunnelAudit"));
-        Map<String, Object> stageLatency = objectMap(coreFunnel.get("stageLatencyMs"));
-        Map<String, Object> timing = new LinkedHashMap<>();
-        timing.put("pairGraphMs", number(stageLatency.get("pair-graph")));
-        timing.put("bundleGenerationMs", number(stageLatency.get("bundle-pool")));
-        timing.put("driverShortlistMs", number(stageLatency.get("driver-shortlist/rerank")));
-        timing.put("routeProposalPoolMs", number(stageLatency.get("route-proposal-pool")));
-        timing.put("scenarioEvaluationMs", number(stageLatency.get("scenario-evaluation")));
-        timing.put("selectorMs", number(stageLatency.get("global-selector")));
-        timing.put("coverageRepairMs", number(stageLatency.get("dispatch-executor")));
-        return timing;
-    }
-
-    private static Map<String, Object> globalRoutingCacheDiagnostics(RoutingProvider routingProvider) {
-        return globalRoutingCacheDiagnostics(routingProvider, Map.of());
-    }
-
-    private static Map<String, Object> globalRoutingCacheDiagnostics(RoutingProvider routingProvider, Map<String, Object> startStats) {
-        Map<String, Object> diagnostics = new LinkedHashMap<>();
-        diagnostics.put("matrixProvider", routingProvider == null ? "none" : routingProvider.providerId());
-        diagnostics.put("routingMode", "FAST_GATE_BOUNDED_OSRM_WITH_SYNTHETIC_FALLBACK");
-        diagnostics.put("distanceSemantics", "gate-stability-metric-not-production-road-benchmark");
-        diagnostics.put("globalMatrixCacheHit", false);
-        diagnostics.put("matrixBuildMs", 0);
-        diagnostics.put("osrmCalls", 0);
-        if (routingProvider instanceof CachingRoutingProvider cachingRoutingProvider) {
-            diagnostics.putAll(cachingRoutingProvider.stats());
-            Object requestValue = diagnostics.get("routeCacheRequests");
-            Object missValue = diagnostics.get("routeCacheMisses");
-            int requests = requestValue instanceof Integer value ? value : 0;
-            int misses = missValue instanceof Integer value ? value : 0;
-            int startRequests = intValue(startStats.get("routeCacheRequests"));
-            int startHits = intValue(startStats.get("routeCacheHits"));
-            int startMisses = intValue(startStats.get("routeCacheMisses"));
-            int requestDelta = Math.max(0, requests - startRequests);
-            int hitDelta = Math.max(0, intValue(diagnostics.get("routeCacheHits")) - startHits);
-            int missDelta = Math.max(0, misses - startMisses);
-            diagnostics.put("routeCacheRequestDelta", requestDelta);
-            diagnostics.put("routeCacheHitDelta", hitDelta);
-            diagnostics.put("routeCacheMissDelta", missDelta);
-            diagnostics.put("routeCacheHitRateDelta", requestDelta == 0 ? 0.0 : hitDelta / (double) requestDelta);
-            diagnostics.put("globalMatrixCacheHit", requestDelta > 0 && missDelta == 0);
-            diagnostics.put("osrmCalls", missDelta);
-        }
-        return diagnostics;
-    }
-
-    private static int intValue(Object value) {
-        return value instanceof Number number ? number.intValue() : 0;
     }
 
     private static ScenarioGenerateRequest benchmarkScenario(String datasetId) {

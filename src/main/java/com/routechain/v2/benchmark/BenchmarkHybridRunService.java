@@ -1,6 +1,10 @@
 package com.routechain.v2.benchmark;
 
 import com.routechain.api.DashboardController;
+import com.routechain.v2.routing.CachingRoutingProvider;
+import com.routechain.v2.routing.DistanceDurationMatrixSnapshot;
+import com.routechain.v2.routing.MatrixSnapshotBuilder;
+import com.routechain.v2.routing.RoutingProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -41,6 +45,95 @@ public final class BenchmarkHybridRunService {
                 "distanceObjectiveSummary", diagnostics.get("distanceObjectiveSummary"),
                 "ortoolsObjectiveSummary", diagnostics.get("ortoolsObjectiveSummary"),
                 "distanceTradeoffReason", diagnostics.get("distanceTradeoffReason")));
+        return diagnostics;
+    }
+
+    public Map<String, Object> benchmarkIdentity(String datasetId,
+                                                  DashboardController.ScenarioGenerateRequest scenario,
+                                                  String jobId,
+                                                  DashboardController.RunVisualizationDto irx,
+                                                  List<DashboardController.OrderDto> orders,
+                                                  List<DashboardController.DriverDto> drivers,
+                                                  String scenarioHash) {
+        Map<String, Object> identity = new LinkedHashMap<>();
+        identity.put("datasetId", datasetId == null ? "raw-m" : datasetId);
+        identity.put("scenarioId", scenario.scenarioType());
+        identity.put("jobId", jobId);
+        identity.put("runId", irx.runId());
+        identity.put("seed", jobId);
+        identity.put("scenarioHash", scenarioHash);
+        identity.put("orderCount", orders.size());
+        identity.put("driverCount", drivers.size());
+        return identity;
+    }
+
+    public Map<String, Object> matrixSnapshotDiagnostics(DistanceDurationMatrixSnapshot snapshot) {
+        Map<String, Object> diagnostics = new LinkedHashMap<>();
+        diagnostics.put("cacheHit", snapshot.cacheHit());
+        diagnostics.put("nodeCount", snapshot.nodeIds().size());
+        diagnostics.put("buildMs", snapshot.buildMs());
+        diagnostics.put("provider", snapshot.matrixProvider());
+        diagnostics.put("routingMode", snapshot.routingMode());
+        diagnostics.put("fallbackApplied", snapshot.fallbackApplied());
+        return diagnostics;
+    }
+
+    public List<MatrixSnapshotBuilder.MatrixNode> matrixNodes(List<DashboardController.OrderDto> orders,
+                                                              List<DashboardController.DriverDto> drivers) {
+        List<MatrixSnapshotBuilder.MatrixNode> nodes = new java.util.ArrayList<>();
+        for (DashboardController.DriverDto driver : drivers) {
+            nodes.add(new MatrixSnapshotBuilder.MatrixNode("DRIVER:" + driver.driverId(), driver.lat(), driver.lng()));
+        }
+        for (DashboardController.OrderDto order : orders) {
+            nodes.add(new MatrixSnapshotBuilder.MatrixNode("PICKUP:" + order.orderId(), order.pickupLat(), order.pickupLng()));
+            nodes.add(new MatrixSnapshotBuilder.MatrixNode("DROPOFF:" + order.orderId(), order.dropoffLat(), order.dropoffLng()));
+        }
+        return nodes;
+    }
+
+    public Map<String, Object> coreStageTiming(DashboardController.RunVisualizationDto irx) {
+        Map<String, Object> coreFunnel = objectMap(irx.diagnostics().get("coreFunnelAudit"));
+        Map<String, Object> stageLatency = objectMap(coreFunnel.get("stageLatencyMs"));
+        Map<String, Object> timing = new LinkedHashMap<>();
+        timing.put("pairGraphMs", number(stageLatency.get("pair-graph")));
+        timing.put("bundleGenerationMs", number(stageLatency.get("bundle-pool")));
+        timing.put("driverShortlistMs", number(stageLatency.get("driver-shortlist/rerank")));
+        timing.put("routeProposalPoolMs", number(stageLatency.get("route-proposal-pool")));
+        timing.put("scenarioEvaluationMs", number(stageLatency.get("scenario-evaluation")));
+        timing.put("selectorMs", number(stageLatency.get("global-selector")));
+        timing.put("coverageRepairMs", number(stageLatency.get("dispatch-executor")));
+        return timing;
+    }
+
+    public Map<String, Object> globalRoutingCacheDiagnostics(RoutingProvider routingProvider) {
+        return globalRoutingCacheDiagnostics(routingProvider, Map.of());
+    }
+
+    public Map<String, Object> globalRoutingCacheDiagnostics(RoutingProvider routingProvider, Map<String, Object> startStats) {
+        Map<String, Object> diagnostics = new LinkedHashMap<>();
+        diagnostics.put("matrixProvider", routingProvider == null ? "none" : routingProvider.providerId());
+        diagnostics.put("routingMode", "FAST_GATE_BOUNDED_OSRM_WITH_SYNTHETIC_FALLBACK");
+        diagnostics.put("distanceSemantics", "gate-stability-metric-not-production-road-benchmark");
+        diagnostics.put("globalMatrixCacheHit", false);
+        diagnostics.put("matrixBuildMs", 0);
+        diagnostics.put("osrmCalls", 0);
+        if (routingProvider instanceof CachingRoutingProvider cachingRoutingProvider) {
+            diagnostics.putAll(cachingRoutingProvider.stats());
+            int requests = intValue(diagnostics.get("routeCacheRequests"));
+            int misses = intValue(diagnostics.get("routeCacheMisses"));
+            int startRequests = intValue(startStats.get("routeCacheRequests"));
+            int startHits = intValue(startStats.get("routeCacheHits"));
+            int startMisses = intValue(startStats.get("routeCacheMisses"));
+            int requestDelta = Math.max(0, requests - startRequests);
+            int hitDelta = Math.max(0, intValue(diagnostics.get("routeCacheHits")) - startHits);
+            int missDelta = Math.max(0, misses - startMisses);
+            diagnostics.put("routeCacheRequestDelta", requestDelta);
+            diagnostics.put("routeCacheHitDelta", hitDelta);
+            diagnostics.put("routeCacheMissDelta", missDelta);
+            diagnostics.put("routeCacheHitRateDelta", requestDelta == 0 ? 0.0 : hitDelta / (double) requestDelta);
+            diagnostics.put("globalMatrixCacheHit", requestDelta > 0 && missDelta == 0);
+            diagnostics.put("osrmCalls", missDelta);
+        }
         return diagnostics;
     }
 
@@ -114,5 +207,18 @@ public final class BenchmarkHybridRunService {
 
     private boolean isWinOrTie(String result) {
         return "WIN".equals(result) || "TIE".equals(result);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> objectMap(Object value) {
+        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+    }
+
+    private long number(Object value) {
+        return value instanceof Number number ? number.longValue() : 0L;
+    }
+
+    private int intValue(Object value) {
+        return value instanceof Number number ? number.intValue() : 0;
     }
 }
