@@ -15,7 +15,12 @@ param(
     "random-pickups-clustered-dropoffs",
     "long-tail-distance",
     "tight-capacity",
-    "high-priority-orders"
+    "high-priority-orders",
+    "active-route-insertion",
+    "driver-location-shift",
+    "deferred-order-aging",
+    "rescue-like-rebalance",
+    "high-density-lunch-rush"
   ),
   [int]$DatasetTimeoutSeconds = 420,
   [string]$OutputDir = "artifacts/test-reports/quality"

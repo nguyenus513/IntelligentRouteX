@@ -3,8 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { Activity, BarChart3, Boxes, CheckCircle2, ChevronRight, Circle, Clapperboard, Gauge, Map, Radar, Route, ShieldAlert, SlidersHorizontal, Trophy, WifiOff, Zap } from 'lucide-react';
 import { api, defaultScenario } from './lib/api';
 import { ControlMap } from './components/ControlMap';
+import { buildRawScenario, ScenarioBuilderMap } from './components/ScenarioBuilderMap';
 import { Badge, Card, EmptyState, Kpi } from './components/Ui';
-import type { AssignmentDto, BenchmarkJob, DriverDto, RouteVisualizationDto, RunVisualizationDto, ScenarioGenerateRequest } from './types/dispatch';
+import type { AssignmentDto, BenchmarkJob, DriverDto, ManualScenarioDto, RouteVisualizationDto, RunVisualizationDto, ScenarioGenerateRequest } from './types/dispatch';
 import './styles.css';
 
 type Screen = 'Overview' | 'Scenario Generator' | 'Dispatch War Room' | 'Bundle Inspector' | 'Route Detail' | 'Chaos Event Panel' | 'Route Rescue Center' | 'Decision Movie' | 'Benchmark Arena' | 'Benchmark Comparison Map';
@@ -28,12 +29,15 @@ const stages = ['ETA Context', 'Order Buffer', 'Pair Graph', 'Micro Cluster', 'B
 function App() {
   const [screen, setScreen] = useState<Screen>('Overview');
   const [scenario, setScenario] = useState<ScenarioGenerateRequest>(defaultScenario);
+  const [manualScenario, setManualScenario] = useState<ManualScenarioDto>(() => buildRawScenario('Raw Demo M — City Demand', 20, 4));
   const [baseRun, setBaseRun] = useState<RunVisualizationDto | null>(null);
   const [dispatchRun, setDispatchRun] = useState<RunVisualizationDto | null>(null);
   const [rescueRun, setRescueRun] = useState<RunVisualizationDto | null>(null);
   const [benchmarkRun, setBenchmarkRun] = useState<RunVisualizationDto | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
   const [job, setJob] = useState<BenchmarkJob | null>(null);
+  const [transport, setTransport] = useState<'ASYNC_PIPELINE' | 'REST_DIRECT'>('ASYNC_PIPELINE');
+  const [kafkaReceipt, setKafkaReceipt] = useState<string | null>(null);
   const [busy, setBusy] = useState<FlowStep | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,9 +78,49 @@ function App() {
     });
   }
 
+  async function saveManualScenario() {
+    await runStep('Generate', async () => {
+      const run = await api.saveManualScenario(manualScenario);
+      setBaseRun(run);
+      setDispatchRun(null);
+      setRescueRun(null);
+      setSelectedRouteId(undefined);
+    });
+  }
+
+  async function runAsyncDispatch(base?: RunVisualizationDto) {
+    const job = await api.createDispatchJob(scenario, base);
+    setKafkaReceipt(`ASYNC ${job.status}: ${job.orderCount} orders / ${job.driverCount} drivers queued`);
+    for (let attempt = 0; attempt < 90; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const current = await api.dispatchJob(job.jobId);
+      setKafkaReceipt(`ASYNC ${current.status}: ${current.workerId ?? 'waiting'} ? ${current.orderCount} orders / ${current.driverCount} drivers`);
+      if (current.status === 'COMPLETED') {
+        return api.dispatchJobResult(job.jobId);
+      }
+      if (current.status === 'FAILED' || current.status === 'CANCELLED' || current.status === 'TIMEOUT') {
+        throw new Error(current.error ?? `dispatch job ${current.status}`);
+      }
+    }
+    throw new Error('dispatch job timeout');
+  }
+
+  async function dispatchManualScenario() {
+    await runStep('Dispatch', async () => {
+      const saved = await api.saveManualScenario(manualScenario);
+      setBaseRun(saved);
+      const run = transport === 'ASYNC_PIPELINE' ? await runAsyncDispatch(saved) : await api.runDispatch(scenario, saved);
+      setKafkaReceipt(null);
+      setDispatchRun(run);
+      setRescueRun(null);
+      setSelectedRouteId(run.routes[0]?.routeId);
+      setScreen('Dispatch War Room');
+    });
+  }
+
   async function dispatch() {
     await runStep('Dispatch', async () => {
-      const run = await api.runDispatch(scenario, baseRun ?? undefined);
+      const run = transport === 'ASYNC_PIPELINE' ? await runAsyncDispatch(baseRun ?? undefined) : await api.runDispatch(scenario, baseRun ?? undefined);
       setDispatchRun(run);
       setRescueRun(null);
       setSelectedRouteId(run.routes[0]?.routeId);
@@ -105,6 +149,41 @@ function App() {
     });
   }
 
+  async function runFullDemo() {
+    setError(null);
+    setBenchmarkRun(null);
+    setRescueRun(null);
+    setDispatchRun(null);
+    try {
+      setBusy('Generate');
+      setKafkaReceipt('FULL DEMO: saving raw 20-order / 4-driver scenario');
+      const saved = await api.saveManualScenario(manualScenario);
+      setBaseRun(saved);
+
+      setBusy('Dispatch');
+      const dispatched = transport === 'ASYNC_PIPELINE' ? await runAsyncDispatch(saved) : await api.runDispatch(scenario, saved);
+      setDispatchRun(dispatched);
+      setSelectedRouteId(dispatched.routes[0]?.routeId);
+
+      setBusy('Rescue');
+      const rescued = await api.simulateRescue(dispatched.runId);
+      setRescueRun(rescued);
+
+      setBusy('Benchmark');
+      const created = await api.createBenchmarkJob();
+      setJob(created);
+      const benchmarkResult = await api.benchmarkResult(created.jobId);
+      setBenchmarkRun(benchmarkResult);
+      setKafkaReceipt(`FULL DEMO DONE: ${dispatched.metrics.assignedOrderCount}/${dispatched.orders.length} assigned ? ${dispatched.routes.length} routes ? ${formatMs(dispatched.metrics.runtimeMs)}`);
+      setScreen('Benchmark Comparison Map');
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Unknown full demo error';
+      setError(message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="shell">
       <aside className="nav" aria-label="Dashboard screens">
@@ -118,16 +197,15 @@ function App() {
             <h1 className="title">{screen}</h1>
           </div>
           <div className="actions">
-            <button className="btn secondary" onClick={generate} disabled={!!busy}>{busy === 'Generate' ? 'Generating...' : 'Generate Scenario'}</button>
-            <button className="btn" onClick={dispatch} disabled={!!busy}>{busy === 'Dispatch' ? 'Dispatching...' : 'Run IntelligentRouteX'}</button>
-            <button className="btn secondary" onClick={benchmark} disabled={!!busy}>{busy === 'Benchmark' ? 'Benchmarking...' : 'Benchmark'}</button>
+            <button className="btn demo-run" onClick={runFullDemo} disabled={!!busy}>{busy ? `Running ${busy}...` : 'RUN FULL DEMO'}</button>
+            <button className="btn secondary" onClick={dispatch} disabled={!!busy}>{busy === 'Dispatch' ? 'Dispatching...' : 'Dispatch Only'}</button>
           </div>
         </div>
         <CoreStatusBar activeRun={active} busy={busy} error={error} />
         <DemoFlowBar screen={screen} baseRun={baseRun} dispatchRun={dispatchRun} rescueRun={rescueRun} benchmarkRun={benchmarkRun} busy={busy} setScreen={setScreen} />
         {error ? <div className="error-strip"><WifiOff size={16} />{error}</div> : null}
-        {screen === 'Overview' && <Overview run={active} job={job} setScreen={setScreen} />}
-        {screen === 'Scenario Generator' && <ScenarioGenerator scenario={scenario} setScenario={setScenario} generate={generate} baseRun={baseRun} busy={busy === 'Generate'} />}
+        {screen === 'Overview' && <Overview run={active} job={job} setScreen={setScreen} runFullDemo={runFullDemo} busy={busy} />}
+        {screen === 'Scenario Generator' && <ScenarioGenerator scenario={scenario} setScenario={setScenario} generate={generate} baseRun={baseRun} busy={busy === 'Generate'} manualScenario={manualScenario} setManualScenario={setManualScenario} saveManualScenario={saveManualScenario} dispatchManualScenario={dispatchManualScenario} dispatching={busy === 'Dispatch'} transport={transport} setTransport={setTransport} kafkaReceipt={kafkaReceipt} />}
         {screen === 'Dispatch War Room' && <WarRoom run={dispatchRun ?? baseRun} selectedRouteId={selectedRouteId} setSelectedRouteId={setSelectedRouteId} dispatch={dispatch} openInspector={() => setScreen('Bundle Inspector')} busy={busy === 'Dispatch'} />}
         {screen === 'Bundle Inspector' && <BundleInspector run={active} assignment={selectedAssignment} route={selectedRoute} openRescue={() => setScreen('Chaos Event Panel')} />}
         {screen === 'Route Detail' && <RouteDetail route={selectedRoute} />}
@@ -173,7 +251,7 @@ function DemoFlowBar({ screen, baseRun, dispatchRun, rescueRun, benchmarkRun, bu
   </button>)}</div>;
 }
 
-function Overview({ run, job, setScreen }: { run: RunVisualizationDto | null; job: BenchmarkJob | null; setScreen: (screen: Screen) => void }) {
+function Overview({ run, job, setScreen, runFullDemo, busy }: { run: RunVisualizationDto | null; job: BenchmarkJob | null; setScreen: (screen: Screen) => void; runFullDemo: () => void; busy: FlowStep | null }) {
   return <div className="grid overview-grid">
     <div className="grid cols-4">
       <Kpi label="Orders" value={run?.orders.length ?? 0} trend="scenario buffer" />
@@ -191,27 +269,39 @@ function Overview({ run, job, setScreen }: { run: RunVisualizationDto | null; jo
           <div className="row"><span>Solver</span><strong>{run?.solverName ?? 'waiting'}</strong></div>
           <div className="row"><span>Benchmark job</span><strong>{job?.status ?? 'NOT_RUN'}</strong></div>
         </div>
-        <div className="actions block"><button className="btn" onClick={() => setScreen('Dispatch War Room')}>Open War Room</button><button className="btn secondary" onClick={() => setScreen('Benchmark Comparison Map')}>Open Benchmark Map</button></div>
+        <div className="actions block"><button className="btn demo-run" onClick={runFullDemo} disabled={!!busy}>{busy ? `Running ${busy}...` : 'RUN FULL DEMO'}</button><button className="btn secondary" onClick={() => setScreen('Dispatch War Room')}>Open Results</button></div>
       </Card>
       <Card className="map-wrap compact"><ControlMap orders={run?.orders ?? []} drivers={run?.drivers ?? []} routes={run?.routes ?? []} /></Card>
     </div>
   </div>;
 }
 
-function ScenarioGenerator({ scenario, setScenario, generate, baseRun, busy }: { scenario: ScenarioGenerateRequest; setScenario: (next: ScenarioGenerateRequest) => void; generate: () => void; baseRun: RunVisualizationDto | null; busy: boolean }) {
-  return <div className="grid split">
-    <Card>
-      <div className="panel-title"><h3>Scenario Generator</h3><Badge>HCM demo</Badge></div>
-      <div className="form">
-        <label>Orders<input type="number" min={1} max={100} value={scenario.orderCount} onChange={(event) => setScenario({ ...scenario, orderCount: Number(event.target.value) })} /></label>
-        <label>Drivers<input type="number" min={1} max={30} value={scenario.driverCount} onChange={(event) => setScenario({ ...scenario, driverCount: Number(event.target.value) })} /></label>
-        <label>Scenario<select value={scenario.scenarioType} onChange={(event) => setScenario({ ...scenario, scenarioType: event.target.value })}><option value="rush_hour">Rush hour</option><option value="cluster">Clustered food delivery</option><option value="random">Random city load</option></select></label>
-        <label>Weather<select value={scenario.weatherProfile} onChange={(event) => setScenario({ ...scenario, weatherProfile: event.target.value })}><option>CLEAR</option><option>LIGHT_RAIN</option><option>HEAVY_RAIN</option></select></label>
-        <label>Traffic<select value={scenario.trafficMode} onChange={(event) => setScenario({ ...scenario, trafficMode: event.target.value })}><option>normal</option><option>jam</option><option>shock</option></select></label>
-        <button className="btn" onClick={generate} disabled={busy}>{busy ? 'Generating...' : 'Generate / Save / Preview'}</button>
+function ScenarioGenerator({ scenario, setScenario, generate, baseRun, busy, manualScenario, setManualScenario, saveManualScenario, dispatchManualScenario, dispatching, transport, setTransport, kafkaReceipt }: { scenario: ScenarioGenerateRequest; setScenario: (next: ScenarioGenerateRequest) => void; generate: () => void; baseRun: RunVisualizationDto | null; busy: boolean; manualScenario: ManualScenarioDto; setManualScenario: (next: ManualScenarioDto) => void; saveManualScenario: () => void; dispatchManualScenario: () => void; dispatching: boolean; transport: 'ASYNC_PIPELINE' | 'REST_DIRECT'; setTransport: (next: 'ASYNC_PIPELINE' | 'REST_DIRECT') => void; kafkaReceipt: string | null }) {
+  return <div className="grid">
+    <Card className="transport-card">
+      <div className="panel-title"><h3>Dispatch Transport</h3><Badge tone={transport === 'ASYNC_PIPELINE' ? 'win' : ''}>{transport}</Badge></div>
+      <div className="transport-toggle">
+        <button className={transport === 'ASYNC_PIPELINE' ? 'active' : ''} onClick={() => setTransport('ASYNC_PIPELINE')}>Async Pipeline</button>
+        <button className={transport === 'REST_DIRECT' ? 'active' : ''} onClick={() => setTransport('REST_DIRECT')}>REST Direct debug</button>
       </div>
+      <p className="muted">Async mode sends one full raw snapshot to an in-memory worker pool. Unified core owns grouping, driver choice, routing, coverage drain and load balance.</p>
+      {kafkaReceipt ? <div className="evidence-gap"><Badge tone="win">Async</Badge><span>{kafkaReceipt}</span></div> : null}
     </Card>
-    <Card className="map-wrap compact"><ControlMap orders={baseRun?.orders ?? []} drivers={baseRun?.drivers ?? []} routes={[]} /></Card>
+    <ScenarioBuilderMap scenario={manualScenario} onChange={setManualScenario} onSave={saveManualScenario} onRun={dispatchManualScenario} busy={busy || dispatching} />
+    <div className="grid split preset-row">
+      <Card>
+        <div className="panel-title"><h3>API Preset Generator</h3><Badge>fallback generator</Badge></div>
+        <div className="form">
+          <label>Orders<input type="number" min={1} max={100} value={scenario.orderCount} onChange={(event) => setScenario({ ...scenario, orderCount: Number(event.target.value) })} /></label>
+          <label>Drivers<input type="number" min={1} max={30} value={scenario.driverCount} onChange={(event) => setScenario({ ...scenario, driverCount: Number(event.target.value) })} /></label>
+          <label>Scenario<select value={scenario.scenarioType} onChange={(event) => setScenario({ ...scenario, scenarioType: event.target.value })}><option value="raw-s">Raw Demo S</option><option value="raw-m">Raw Demo M</option><option value="raw-l">Raw Demo L</option><option value="hcm-dinner-peak">HCM Dinner Peak</option><option value="heavy-rain-case">Heavy Rain Case</option><option value="driver-scarcity-case">Driver Scarcity</option></select></label>
+          <label>Weather<select value={scenario.weatherProfile} onChange={(event) => setScenario({ ...scenario, weatherProfile: event.target.value })}><option>CLEAR</option><option>LIGHT_RAIN</option><option>HEAVY_RAIN</option></select></label>
+          <label>Traffic<select value={scenario.trafficMode} onChange={(event) => setScenario({ ...scenario, trafficMode: event.target.value })}><option>normal</option><option>jam</option><option>shock</option></select></label>
+          <button className="btn" onClick={generate} disabled={busy}>{busy ? 'Generating...' : 'Generate API Preset'}</button>
+        </div>
+      </Card>
+      <Card className="map-wrap compact"><ControlMap orders={baseRun?.orders ?? []} drivers={baseRun?.drivers ?? []} routes={[]} /></Card>
+    </div>
   </div>;
 }
 
@@ -228,7 +318,10 @@ function WarRoom({ run, selectedRouteId, setSelectedRouteId, dispatch, openInspe
         <MetricTile label="Drivers" value={run.drivers.length} />
         <MetricTile label="Batches" value={run.batches.length} />
         <MetricTile label="SLA" value={`${run.metrics.slaSuccessRate.toFixed(1)}%`} />
+        <MetricTile label="Avg/driver" value={run.routes.length ? (run.metrics.assignedOrderCount / run.routes.length).toFixed(1) : '0.0'} />
+        <MetricTile label="Stages" value={`${stageCount(run)}/12`} />
       </div>
+      <LatencyPanel run={run} />
       <button className="btn wide" onClick={dispatch} disabled={busy}>{busy ? 'Core running...' : 'RUN INTELLIGENTROUTEX'}</button>
       <div className="layer-chips"><span>Orders</span><span>Drivers</span><span>Routes</span><span>Risk</span></div>
     </div>
@@ -260,7 +353,7 @@ function BundleInspector({ run, assignment, route, openRescue }: { run: RunVisua
   return <div className="grid inspector-grid">
     <div className="grid cols-4">
       <Kpi label="Batch" value={assignment.batchId} />
-      <Kpi label="Orders" value={orders.length} trend="cluster size" />
+      <Kpi label="Orders" value={orders.length} trend="core discovered" />
       <Kpi label="Driver" value={assignment.driverId} trend="selected" />
       <Kpi label="Saving" value={`${saving}%`} trend="derived vs single" />
     </div>
@@ -279,7 +372,7 @@ function BundleInspector({ run, assignment, route, openRescue }: { run: RunVisua
           </ul>
         </div>
         <div className="tabs"><button className="tab active">Overview</button><button className="tab">Orders</button><button className="tab">Driver Selection</button><button className="tab">Route & ETA</button><button className="tab">Why</button></div>
-        <Table title="Orders in cluster" headers={['Order', 'Demand', 'Priority', 'Deadline', 'ETA', 'Slack']} rows={orders.map((order) => {
+        <Table title="Orders discovered in bundle" headers={['Order', 'Demand', 'Priority', 'Deadline', 'ETA', 'Slack']} rows={orders.map((order) => {
           const stop = route.stops.find((candidate) => candidate.orderId === order.orderId && candidate.type === 'DROPOFF') ?? route.stops.find((candidate) => candidate.orderId === order.orderId);
           return [order.orderId, `${order.demand}kg`, order.priority, `${order.deadlineMinutes}m`, `${stop?.etaMinutes ?? 0}m`, `${stop?.deadlineSlackMinutes ?? 0}m`];
         })} />
@@ -343,7 +436,7 @@ function DecisionMovie({ run }: { run: RunVisualizationDto | null }) {
 
 function BenchmarkArena({ run, job, benchmark, busy }: { run: RunVisualizationDto | null; job: BenchmarkJob | null; benchmark: () => void; busy: boolean }) {
   const solverResults = solverRows(run);
-  return <div className="grid benchmark-grid"><Card><div className="panel-title"><h3>Benchmark Job</h3><Badge>{job?.status ?? 'NOT_RUN'}</Badge></div><p className="muted">Phase 1 runs three wired solvers. External OR-Tools / PyVRP / VROOM are shown as evidence gaps until real artifacts exist.</p><button className="btn wide" onClick={benchmark} disabled={busy}>{busy ? 'Running...' : 'Run 3-solver benchmark'}</button><EvidenceGap /></Card><Card><SolverTable rows={solverResults} /></Card></div>;
+  return <div className="grid benchmark-grid"><Card><div className="panel-title"><h3>Benchmark Job</h3><Badge>{job?.status ?? 'NOT_RUN'}</Badge></div><p className="muted">Phase 1 runs wired local baselines plus OR-Tools assignment. PyVRP/VROOM stay evidence-gap unless local runtimes are available.</p><button className="btn wide" onClick={benchmark} disabled={busy}>{busy ? 'Running...' : 'Run 3-solver benchmark'}</button><EvidenceGap /></Card><Card><SolverTable rows={solverResults} /></Card></div>;
 }
 
 function BenchmarkMap({ run, benchmark, busy }: { run: RunVisualizationDto | null; benchmark: () => void; busy: boolean }) {
@@ -354,19 +447,41 @@ function BenchmarkMap({ run, benchmark, busy }: { run: RunVisualizationDto | nul
     <div className="floating glass-panel">
       <div className="panel-title"><h3>Comparison Mode</h3><Badge tone="win">Overlay</Badge></div>
       <div className="mode-tabs"><button className="tab active">Single</button><button className="tab active">Split</button><button className="tab active">Overlay ≤3</button></div>
-      <p className="muted">Visible claim limited to Single-order, Distance batching, IntelligentRouteX.</p>
+      <p className="muted">Visible claim is metric-based: local baselines, OR-Tools assignment, UnifiedDispatchCore, evidence gaps.</p>
       <button className="btn wide" onClick={benchmark} disabled={busy}>{busy ? 'Running...' : 'Rerun benchmark'}</button>
     </div>
-    <div className="floating right glass-panel benchmark-panel"><SolverTable rows={rows} compact /><EvidenceGap /></div>
+    <div className="floating right glass-panel benchmark-panel"><SolverTable rows={rows} compact /><VictoryReport run={run} /><EvidenceGap /></div>
   </Card>;
 }
 
+function VictoryReport({ run }: { run: RunVisualizationDto }) {
+  const report = asRecord(run.diagnostics.victoryReport);
+  const profile = asRecord(report.profile);
+  const objective = asRecord(report.objectiveSummary);
+  const why = asRecord(report.whySelected);
+  const moves = asRecord(report.moveTraceSummary);
+  const contributors = asRecord(profile.externalContributorStatus);
+  const contributorRows = Object.entries(contributors).map(([name, value]) => ({ name, status: String(asRecord(value).status ?? 'EVIDENCE_GAP') }));
+  if (!Object.keys(report).length) return null;
+  return <div className="victory-report">
+    <div className="victory-head"><span>Victory Report</span><Badge tone="win">IRX Final</Badge></div>
+    <div className="victory-grid">
+      <div><small>Profile</small><strong>{String(profile.benchmarkMode ?? 'FAST_GATE')}</strong><span>{String(profile.routingMode ?? 'matrix')}</span></div>
+      <div><small>vs Distance</small><strong>{String(objective.vsDistanceObjective ?? run.diagnostics.vsDistanceObjective ?? '—')}</strong><span>{Number(objective.hybridLateAdjustedKm ?? 0).toFixed(1)} late-km</span></div>
+      <div><small>vs OR-Tools</small><strong>{String(objective.vsOrtoolsObjective ?? run.diagnostics.vsOrtoolsObjective ?? '—')}</strong><span>dominance guarded</span></div>
+      <div><small>Moves</small><strong>{String(moves.permutationAccepted ?? 0)} accepted</strong><span>{String(moves.improvedSeedCount ?? 0)} improved seeds</span></div>
+    </div>
+    <div className="why-selected"><span>Why selected</span><strong>{String(why.selectionReason ?? 'objective-aware dominance')}</strong><em>{String(objective.distanceTradeoffReason ?? why.objectiveTradeoffReason ?? 'SLA-first objective')}</em></div>
+    {contributorRows.length ? <div className="contributor-strip">{contributorRows.map((row) => <Badge key={row.name} tone={row.status === 'OK' ? 'win' : row.status === 'EVIDENCE_GAP' ? 'warn' : ''}>{row.name}: {row.status}</Badge>)}</div> : null}
+  </div>;
+}
+
 function EvidenceGap() {
-  return <div className="evidence-gap"><Badge tone="warn">EVIDENCE GAP</Badge><span>External solver not wired in Phase 1: OR-Tools / PyVRP / VROOM.</span></div>;
+  return <div className="evidence-gap"><Badge tone="warn">EVIDENCE GAP</Badge><span>PyVRP/VROOM require local solver adapters; OR-Tools assignment baseline is wired when native library loads.</span></div>;
 }
 
 function SolverTable({ rows, compact = false }: { rows: SolverRow[]; compact?: boolean }) {
-  return <div className={compact ? 'solver-table compact' : 'solver-table'}><table className="table"><thead><tr><th>Solver</th><th>Distance</th><th>Late</th><th>SLA</th><th>Runtime</th><th>Verdict</th></tr></thead><tbody>{rows.map((solver) => <tr key={solver.solverName}><td>{solver.solverName}</td><td>{solver.totalDistanceKm.toFixed(1)}km</td><td>{solver.lateOrderCount}</td><td>{solver.slaSuccessRate.toFixed(1)}%</td><td>{formatMs(solver.runtimeMs)}</td><td><Badge tone={solver.verdict === 'WIN' ? 'win' : solver.verdict === 'EVIDENCE_GAP' ? 'warn' : ''}>{solver.verdict}</Badge></td></tr>)}</tbody></table></div>;
+  return <div className={compact ? 'solver-table compact' : 'solver-table'}><table className="table"><thead><tr><th>Solver</th><th>Status</th><th>Distance</th><th>Late</th><th>SLA</th><th>Runtime</th><th>Verdict</th></tr></thead><tbody>{rows.map((solver) => <tr key={solver.solverName}><td>{solver.solverName}</td><td><Badge tone={solver.status === 'COMPLETED' ? 'win' : solver.status === 'EVIDENCE_GAP' ? 'warn' : ''}>{solver.status ?? 'SIM'}</Badge></td><td>{solver.totalDistanceKm.toFixed(1)}km</td><td>{solver.lateOrderCount}</td><td>{solver.slaSuccessRate.toFixed(1)}%</td><td>{formatMs(solver.runtimeMs)}</td><td><Badge tone={solver.verdict === 'WIN' ? 'win' : solver.verdict === 'EVIDENCE_GAP' ? 'warn' : ''}>{solver.verdict}</Badge></td></tr>)}</tbody></table></div>;
 }
 
 function Table({ title, headers, rows }: { title?: string; headers: (string | number)[]; rows: (string | number)[][] }) {
@@ -377,12 +492,31 @@ function MetricTile({ label, value }: { label: string; value: string | number })
   return <div className="metric-tile"><span>{label}</span><strong>{value}</strong></div>;
 }
 
+function LatencyPanel({ run }: { run: RunVisualizationDto }) {
+  const latencies = ((run.diagnostics.stageLatencies as { stageName: string; elapsedMs: number; budgetBreached?: boolean }[] | undefined) ?? []).slice().sort((left, right) => right.elapsedMs - left.elapsedMs);
+  const slowest = latencies[0];
+  const targetMs = run.orders.length <= 12 ? 15000 : run.orders.length <= 20 ? 30000 : 45000;
+  const overTarget = run.metrics.runtimeMs > targetMs;
+  return <div className={`latency-panel ${overTarget ? 'warn' : 'ok'}`}>
+    <div><span>Total runtime</span><strong>{formatMs(run.metrics.runtimeMs)}</strong></div>
+    <div><span>Target</span><strong>{formatMs(targetMs)}</strong></div>
+    <div><span>Slowest stage</span><strong>{slowest ? `${slowest.stageName} ${formatMs(slowest.elapsedMs)}` : 'n/a'}</strong></div>
+    {overTarget ? <p>Bounded warning: full Dispatch V2 completed, but runtime exceeds dashboard target.</p> : <p>Runtime target met for this demo size.</p>}
+  </div>;
+}
+
+function stageCount(run: RunVisualizationDto) {
+  const stagesValue = run.diagnostics.decisionStages;
+  return Array.isArray(stagesValue) ? stagesValue.length : 0;
+}
+
 function Timeline({ count, active }: { count: number; active: number }) {
   return <div className="timeline">{Array.from({ length: count }, (_, index) => <span key={index} className={`stage ${index < active ? 'active' : ''}`} title={stages[index]} />)}</div>;
 }
 
 interface SolverRow {
   solverName: string;
+  status?: string;
   verdict: string;
   totalDistanceKm: number;
   lateOrderCount: number;
@@ -394,15 +528,19 @@ function solverRows(run: RunVisualizationDto | null): SolverRow[] {
   const rows = (run?.diagnostics.solverResults as SolverRow[] | undefined) ?? [];
   if (rows.length) return rows;
   if (!run) return [
-    { solverName: 'Single-order', verdict: 'NOT_RUN', totalDistanceKm: 0, lateOrderCount: 0, slaSuccessRate: 0, runtimeMs: 0 },
-    { solverName: 'Distance batching', verdict: 'NOT_RUN', totalDistanceKm: 0, lateOrderCount: 0, slaSuccessRate: 0, runtimeMs: 0 },
-    { solverName: 'IntelligentRouteX', verdict: 'NOT_RUN', totalDistanceKm: 0, lateOrderCount: 0, slaSuccessRate: 0, runtimeMs: 0 }
+    { solverName: 'Single-order', status: 'NOT_RUN', verdict: 'NOT_RUN', totalDistanceKm: 0, lateOrderCount: 0, slaSuccessRate: 0, runtimeMs: 0 },
+    { solverName: 'Distance batching', status: 'NOT_RUN', verdict: 'NOT_RUN', totalDistanceKm: 0, lateOrderCount: 0, slaSuccessRate: 0, runtimeMs: 0 },
+    { solverName: 'IntelligentRouteX', status: 'NOT_RUN', verdict: 'NOT_RUN', totalDistanceKm: 0, lateOrderCount: 0, slaSuccessRate: 0, runtimeMs: 0 }
   ];
   return [
-    { solverName: 'Single-order', verdict: 'PASS_WITH_LIMITS', totalDistanceKm: run.metrics.totalDistanceKm * 1.42, lateOrderCount: Math.max(0, run.metrics.lateOrderCount - 1), slaSuccessRate: Math.min(100, run.metrics.slaSuccessRate + 1.5), runtimeMs: 10 },
-    { solverName: 'Distance batching', verdict: 'PASS_WITH_LIMITS', totalDistanceKm: run.metrics.totalDistanceKm * 1.16, lateOrderCount: run.metrics.lateOrderCount + 4, slaSuccessRate: Math.max(0, run.metrics.slaSuccessRate - 8), runtimeMs: 40 },
-    { solverName: 'IntelligentRouteX', verdict: 'WIN', totalDistanceKm: run.metrics.totalDistanceKm, lateOrderCount: run.metrics.lateOrderCount, slaSuccessRate: run.metrics.slaSuccessRate, runtimeMs: run.metrics.runtimeMs }
+    { solverName: 'Single-order', status: 'SIMULATED', verdict: 'PASS_WITH_LIMITS', totalDistanceKm: run.metrics.totalDistanceKm * 1.42, lateOrderCount: Math.max(0, run.metrics.lateOrderCount - 1), slaSuccessRate: Math.min(100, run.metrics.slaSuccessRate + 1.5), runtimeMs: 10 },
+    { solverName: 'Distance batching', status: 'SIMULATED', verdict: 'PASS_WITH_LIMITS', totalDistanceKm: run.metrics.totalDistanceKm * 1.16, lateOrderCount: run.metrics.lateOrderCount + 4, slaSuccessRate: Math.max(0, run.metrics.slaSuccessRate - 8), runtimeMs: 40 },
+    { solverName: 'IntelligentRouteX', status: 'COMPLETED', verdict: 'PASS_WITH_LIMITS', totalDistanceKm: run.metrics.totalDistanceKm, lateOrderCount: run.metrics.lateOrderCount, slaSuccessRate: run.metrics.slaSuccessRate, runtimeMs: run.metrics.runtimeMs }
   ];
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function deriveDriverCandidates(drivers: DriverDto[], selectedDriver: DriverDto | undefined, route: RouteVisualizationDto, assignment: AssignmentDto) {
@@ -427,3 +565,7 @@ function formatMs(value?: number) {
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
+
+
+
+

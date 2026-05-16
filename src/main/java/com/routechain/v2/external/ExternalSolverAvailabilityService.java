@@ -16,7 +16,7 @@ public final class ExternalSolverAvailabilityService {
             return disabledCache;
         }
         Map<String, ExternalSolverAvailability> result = new LinkedHashMap<>();
-        result.put("vroom", check("vroom", enabled, List.of("vroom", "--version"), "vroom-runtime-not-configured"));
+        result.put("vroom", checkVroom(enabled));
         result.put("pyvrp", check("pyvrp", enabled, List.of("py", "-3", "-c", "import pyvrp; print(getattr(pyvrp, '__version__', 'unknown'))"), "pyvrp-runtime-not-configured"));
         if (enabled) {
             enabledCache = Map.copyOf(result);
@@ -24,6 +24,21 @@ public final class ExternalSolverAvailabilityService {
         }
         disabledCache = Map.copyOf(result);
         return disabledCache;
+    }
+
+    private ExternalSolverAvailability checkVroom(boolean enabled) {
+        if (!enabled) {
+            return new ExternalSolverAvailability("vroom", ExternalContributorStatus.DISABLED, "disabled-in-fast-gate", "", Map.of("supportedModes", List.of("VROOM_BASE_URL", "VROOM_BIN")));
+        }
+        String baseUrl = System.getenv("VROOM_BASE_URL");
+        if (baseUrl != null && !baseUrl.isBlank()) {
+            return new ExternalSolverAvailability("vroom", ExternalContributorStatus.OK, "available-http", baseUrl, Map.of("mode", "HTTP", "baseUrl", baseUrl));
+        }
+        String bin = System.getenv("VROOM_BIN");
+        if (bin != null && !bin.isBlank()) {
+            return check("vroom", true, List.of(bin, "--version"), "vroom-runtime-not-configured");
+        }
+        return check("vroom", true, List.of("vroom", "--version"), "vroom-runtime-not-configured");
     }
 
     private ExternalSolverAvailability check(String solverId, boolean enabled, List<String> command, String evidenceGapReason) {

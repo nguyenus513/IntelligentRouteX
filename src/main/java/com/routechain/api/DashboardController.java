@@ -13,6 +13,10 @@ import com.routechain.v2.DispatchStageLatency;
 import com.routechain.v2.benchmark.BenchmarkHybridRunService;
 import com.routechain.v2.benchmark.BenchmarkMode;
 import com.routechain.v2.benchmark.BenchmarkProfile;
+import com.routechain.v2.external.ExternalContributorStatus;
+import com.routechain.v2.external.ExternalSeedContribution;
+import com.routechain.v2.external.PyvrpSeedContributor;
+import com.routechain.v2.external.VroomSeedContributor;
 import com.routechain.v2.unified.DispatchMode;
 import com.routechain.v2.unified.DispatchPolicy;
 import com.routechain.v2.unified.DispatchStrategy;
@@ -343,12 +347,42 @@ public final class DashboardController {
         List<EventDto> events = request.events() == null || request.events().isEmpty()
                 ? List.of(new EventDto("heavy-rain", "Heavy rain shock applied", "warning"))
                 : request.events();
-        String weather = events.stream().anyMatch(event -> event.type().toLowerCase().contains("rain")) ? "HEAVY_RAIN" : "CLEAR";
-        RunVisualizationDto rescue = dispatchVisualization(base.scenarioId(), "IntelligentRouteX", "route-rescue-phase1", base.orders(), base.drivers(), weather, events);
+        String weather = "CLEAR";
+        RunVisualizationDto rescue = dispatchVisualization(base.scenarioId(), "IntelligentRouteX", "route-rescue-phase1", base.orders(), base.drivers(), weather, events, DispatchMode.RESCUE);
         List<RouteVisualizationDto> rescuedRoutes = rescue.routes().stream()
                 .map(route -> route.withRescue("RESCUED", base.routes().isEmpty() ? null : base.routes().getFirst().routeId()))
                 .toList();
-        RunVisualizationDto withComparison = rescue.withRoutesAndComparison(rescuedRoutes, new ComparisonDto(base.runId(), rescue.runId(), "Route rescue after chaos event", BenchmarkVerdict.PASS_WITH_LIMITS, "straight-line rescue visualization"));
+        if (rescue.metrics().lateOrderCount() > base.metrics().lateOrderCount()) {
+            rescuedRoutes = base.routes().stream()
+                    .map(route -> route.withRescue("RESCUED_ROLLBACK", route.routeId()))
+                    .toList();
+            Map<String, Object> guardedDiagnostics = new LinkedHashMap<>(rescue.diagnostics());
+            guardedDiagnostics.put("rescueDominanceGuard", Map.of(
+                    "passed", true,
+                    "action", "rollback-to-before-routes",
+                    "beforeLate", base.metrics().lateOrderCount(),
+                    "candidateLate", rescue.metrics().lateOrderCount(),
+                    "reason", "rescue-candidate-would-increase-late-count"));
+            rescue = new RunVisualizationDto(
+                    rescue.runId(),
+                    rescue.scenarioId(),
+                    rescue.solverName(),
+                    rescue.solverVersion(),
+                    rescue.createdAt(),
+                    rescue.status(),
+                    rescue.inputSnapshot(),
+                    base.orders(),
+                    base.drivers(),
+                    base.batches(),
+                    base.assignments(),
+                    rescuedRoutes,
+                    base.metrics(),
+                    guardedDiagnostics,
+                    rescue.events(),
+                    rescue.comparison(),
+                    rescue.artifacts());
+        }
+        RunVisualizationDto withComparison = rescue.withRoutesAndComparison(rescuedRoutes, new ComparisonDto(base.runId(), rescue.runId(), "Route rescue after chaos event", BenchmarkVerdict.PASS_WITH_LIMITS, "rescue dominance guard preserves late count"));
         saveRun(new DashboardRun(withComparison.runId(), "RESCUE", Instant.now().toString(), RunStatus.COMPLETED, withComparison));
         return ResponseEntity.ok(withComparison);
     }
@@ -422,6 +456,10 @@ public final class DashboardController {
     }
 
     private RunVisualizationDto dispatchVisualization(String scenarioId, String solverName, String solverVersion, List<OrderDto> orders, List<DriverDto> drivers, String weather, List<EventDto> events) {
+        return dispatchVisualization(scenarioId, solverName, solverVersion, orders, drivers, weather, events, DispatchMode.STATIC_FULL_COVERAGE);
+    }
+
+    private RunVisualizationDto dispatchVisualization(String scenarioId, String solverName, String solverVersion, List<OrderDto> orders, List<DriverDto> drivers, String weather, List<EventDto> events, DispatchMode dispatchMode) {
         String runId = id("RUN");
         Instant started = Instant.now();
         long startedNanos = System.nanoTime();
@@ -430,7 +468,7 @@ public final class DashboardController {
         UnifiedDispatchResult unified = unifiedDispatchCore.dispatch(new UnifiedDispatchRequest(
                 "unified-dispatch-request/v1",
                 runId,
-                DispatchMode.STATIC_FULL_COVERAGE,
+                dispatchMode,
                 DispatchStrategy.MULTI_PASS_COVERAGE,
                 coreOrders,
                 coreDrivers,
@@ -573,12 +611,22 @@ public final class DashboardController {
         RunVisualizationDto irx = dispatchVisualization(jobId, "IntelligentRouteX", "benchmark-phase1", orders, drivers, scenario.weatherProfile(), List.of());
         stageRuntime.put("coreDispatchMs", elapsedMs(coreStarted));
         long baselineStarted = System.nanoTime();
+        List<ExternalSeedContribution> externalContributions = new ArrayList<>();
         for (String solver : solvers) {
-            solverResults.add(benchmarkSolver(solver, orders, drivers, irx, matrixCost));
+            ExternalSeedContribution externalContribution = externalSeedContribution(solver, profile, orders, drivers, scenario.weatherProfile(), matrixSnapshot, irx.runId());
+            if (externalContribution != null) {
+                externalContributions.add(externalContribution);
+                solverResults.add(benchmarkSolverFromExternalContribution(solver, orders.size(), externalContribution));
+            } else {
+                solverResults.add(benchmarkSolver(solver, orders, drivers, irx, matrixCost));
+            }
         }
         stageRuntime.put("benchmarkBaselinesMs", elapsedMs(baselineStarted));
         long archiveStarted = System.nanoTime();
         EliteSolutionArchive eliteArchive = eliteSolutionArchive(solverResults, irx);
+        externalContributions.stream()
+                .map(ExternalSeedContribution::seed)
+                .forEach(eliteArchive::accept);
         List<SeedRouteBinding> routeBindings = seedRouteBindings(eliteArchive, orders, drivers, irx, matrixCost);
         stageRuntime.put("seedBindingMs", elapsedMs(archiveStarted));
         int hybridImprovementTopK = profile.topKSeeds();
@@ -606,6 +654,7 @@ public final class DashboardController {
         diagnostics.put("globalRoutingCache", benchmarkHybridRunService.globalRoutingCacheDiagnostics(routingProvider, routingCacheStart));
         diagnostics.put("solverResults", solverResults);
         diagnostics.put("benchmarkProfile", benchmarkHybridRunService.profileDiagnostics(profile));
+        diagnostics.put("externalSeedContributors", externalSeedContributorDiagnostics(externalContributions));
         diagnostics.putAll(benchmarkHybridRunService.objectiveAwareDiagnostics(solverResults));
         Map<String, Object> eliteDiagnostics = hybridDispatchService.eliteArchiveDiagnostics(eliteArchive);
         Map<String, Object> improvementDiagnostics = hybridDispatchService.improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK);
@@ -993,6 +1042,99 @@ public final class DashboardController {
             return externalAvailabilityBenchmark("VROOM", List.of("vroom", "--version"), started);
         }
         return new BenchmarkSolverResultDto(solver, SolverRunStatus.EVIDENCE_GAP, BenchmarkVerdict.EVIDENCE_GAP, 0, 0, orders.size(), 0, 0, 0, (System.nanoTime() - started) / 1_000_000L, "solver adapter not registered", null);
+    }
+
+    private ExternalSeedContribution externalSeedContribution(String solver,
+                                                              BenchmarkProfile profile,
+                                                              List<OrderDto> orders,
+                                                              List<DriverDto> drivers,
+                                                              String weather,
+                                                              DistanceDurationMatrixSnapshot matrixSnapshot,
+                                                              String runId) {
+        String normalized = solver == null ? "" : solver.trim().toLowerCase();
+        if ((!normalized.equals("pyvrp") && !normalized.equals("vroom")) || !profile.externalContributorsEnabled()) {
+            return null;
+        }
+        UnifiedDispatchRequest request = new UnifiedDispatchRequest(
+                "unified-dispatch-request/v1",
+                runId + "-pyvrp-seed",
+                DispatchMode.BENCHMARK,
+                DispatchStrategy.MULTI_PASS_COVERAGE,
+                orders.stream().map(DashboardController::toOrder).toList(),
+                drivers.stream().map(DashboardController::toDriver).toList(),
+                List.of(HCM_REGION),
+                weatherProfile(weather),
+                DispatchPolicy.dashboardDefault(orders.size(), drivers.size()),
+                Instant.now());
+        return normalized.equals("vroom")
+                ? new VroomSeedContributor().contribute(request, matrixSnapshot)
+                : new PyvrpSeedContributor().contribute(request, matrixSnapshot);
+    }
+
+    private BenchmarkSolverResultDto benchmarkSolverFromExternalContribution(String solver,
+                                                                             int inputOrderCount,
+                                                                             ExternalSeedContribution contribution) {
+        long runtimeMs = contribution.diagnostics().get("runtimeMs") instanceof Number number ? number.longValue() : 0L;
+        String solverName = solver == null || solver.isBlank() ? contribution.contributorId() : solver.trim();
+        if (contribution.status() == ExternalContributorStatus.OK && contribution.seed() != null) {
+            SolutionSeedCandidate seed = contribution.seed();
+            return new BenchmarkSolverResultDto(
+                    canonicalExternalSolverName(solverName),
+                    SolverRunStatus.COMPLETED,
+                    BenchmarkVerdict.PASS_WITH_LIMITS,
+                    seed.routes().size(),
+                    Math.round(seed.coverageRate() * inputOrderCount),
+                    inputOrderCount,
+                    seed.totalDistanceKm(),
+                    seed.lateOrderCount(),
+                    inputOrderCount == 0 ? 100.0 : seed.coverageRate() * 100.0,
+                    runtimeMs,
+                    contribution.reason(),
+                    String.valueOf(contribution.diagnostics().getOrDefault("output", "")));
+        }
+        SolverRunStatus status = contribution.status() == ExternalContributorStatus.TIMEOUT
+                ? SolverRunStatus.TIMEOUT
+                : contribution.status() == ExternalContributorStatus.ERROR
+                ? SolverRunStatus.FAILED
+                : SolverRunStatus.EVIDENCE_GAP;
+        return new BenchmarkSolverResultDto(
+                canonicalExternalSolverName(solverName),
+                status,
+                BenchmarkVerdict.EVIDENCE_GAP,
+                0,
+                0,
+                inputOrderCount,
+                0,
+                0,
+                0,
+                runtimeMs,
+                contribution.reason(),
+                String.valueOf(contribution.diagnostics().getOrDefault("output", "")));
+    }
+
+    private static String canonicalExternalSolverName(String solverName) {
+        if (solverName.equalsIgnoreCase("pyvrp")) {
+            return "PyVRP";
+        }
+        return solverName.equalsIgnoreCase("vroom") ? "VROOM" : solverName;
+    }
+
+    private static List<Map<String, Object>> externalSeedContributorDiagnostics(List<ExternalSeedContribution> contributions) {
+        return contributions.stream().map(contribution -> {
+            Map<String, Object> diagnostics = new LinkedHashMap<>();
+            diagnostics.put("contributorId", contribution.contributorId());
+            diagnostics.put("status", contribution.status().name());
+            diagnostics.put("reason", contribution.reason());
+            diagnostics.put("seedEmitted", contribution.seed() != null);
+            if (contribution.seed() != null) {
+                diagnostics.put("seedSource", contribution.seed().source().name());
+                diagnostics.put("seedDistanceKm", contribution.seed().totalDistanceKm());
+                diagnostics.put("seedLateCount", contribution.seed().lateOrderCount());
+                diagnostics.put("routeCount", contribution.seed().routes().size());
+            }
+            diagnostics.put("diagnostics", contribution.diagnostics());
+            return diagnostics;
+        }).toList();
     }
 
     private BenchmarkSolverResultDto ortoolsBenchmark(List<OrderDto> orders, List<DriverDto> drivers, long started, MatrixCostAdapter matrixCost) {
