@@ -689,6 +689,9 @@ public final class DashboardController {
             case "heavy-rain-case" -> new ScenarioGenerateRequest(20, 4, "heavy-rain-case", "HEAVY_RAIN", "slow", 0.22);
             case "driver-scarcity-case" -> new ScenarioGenerateRequest(24, 3, "driver-scarcity-case", "CLEAR", "scarce", 0.16);
             case "random-spread" -> new ScenarioGenerateRequest(20, 4, "random-spread", "CLEAR", "normal", 0.12);
+            case "tight-deadline-case" -> new ScenarioGenerateRequest(20, 4, "tight-deadline-case", "CLEAR", "normal", 0.22);
+            case "wide-deadline-case" -> new ScenarioGenerateRequest(20, 4, "wide-deadline-case", "CLEAR", "normal", 0.08);
+            case "driver-imbalanced-case" -> new ScenarioGenerateRequest(22, 4, "driver-imbalanced-case", "CLEAR", "imbalanced", 0.14);
             case "random-rush" -> new ScenarioGenerateRequest(20, 4, "rush_hour", "CLEAR", "rush", 0.18);
             default -> new ScenarioGenerateRequest(20, 4, "raw-m", "CLEAR", "normal", 0.12);
         };
@@ -1489,10 +1492,19 @@ public final class DashboardController {
         Random random = new Random(seedText.hashCode() + 42L);
         List<OrderDto> orders = new ArrayList<>();
         for (int index = 1; index <= config.orderCount(); index++) {
-            GeoPoint pickup = jitter(HCM_CENTER, random, config.scenarioType().equals("unused") ? 0.018 : 0.045);
+            double pickupSpread = config.scenarioType().equals("driver-imbalanced-case") ? 0.020 : 0.045;
+            GeoPoint pickup = jitter(HCM_CENTER, random, config.scenarioType().equals("unused") ? 0.018 : pickupSpread);
             GeoPoint dropoff = jitter(pickup, random, config.scenarioType().equals("rush_hour") ? 0.035 : 0.025);
             int priority = random.nextDouble() < config.riskRate() ? 2 : 1;
-            orders.add(new OrderDto("ORD-" + pad(index), "R" + (1 + random.nextInt(18)), pickup.latitude(), pickup.longitude(), dropoff.latitude(), dropoff.longitude(), 1 + random.nextInt(4), priority, 35 + random.nextInt(35)));
+            int deadline = 35 + random.nextInt(35);
+            if (config.scenarioType().equals("tight-deadline-case")) {
+                deadline = 24 + random.nextInt(18);
+            } else if (config.scenarioType().equals("wide-deadline-case")) {
+                deadline = 80 + random.nextInt(50);
+            } else if (config.scenarioType().equals("driver-imbalanced-case")) {
+                deadline = 45 + random.nextInt(35);
+            }
+            orders.add(new OrderDto("ORD-" + pad(index), "R" + (1 + random.nextInt(18)), pickup.latitude(), pickup.longitude(), dropoff.latitude(), dropoff.longitude(), 1 + random.nextInt(4), priority, deadline));
         }
         return orders;
     }
@@ -1504,7 +1516,9 @@ public final class DashboardController {
         Random random = new Random(seedText.hashCode() + 7L);
         List<DriverDto> drivers = new ArrayList<>();
         for (int index = 1; index <= config.driverCount(); index++) {
-            GeoPoint point = jitter(HCM_CENTER, random, 0.04);
+            GeoPoint point = config.scenarioType().equals("driver-imbalanced-case") && index > 2
+                    ? jitter(new GeoPoint(10.815, 106.745), random, 0.018)
+                    : jitter(HCM_CENTER, random, config.scenarioType().equals("driver-imbalanced-case") ? 0.012 : 0.04);
             drivers.add(new DriverDto("D" + pad(index), point.latitude(), point.longitude(), 20, random.nextInt(4), "IDLE"));
         }
         return drivers;
