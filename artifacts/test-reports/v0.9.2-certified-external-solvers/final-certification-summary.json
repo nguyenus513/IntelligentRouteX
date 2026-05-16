@@ -1,0 +1,71 @@
+{
+    "overallPass":  true,
+    "commit":  "b51c8546e",
+    "tag":  "v0.9.2-certified-external-solvers",
+    "createdAt":  "2026-05-16T23:13:46.1670890+07:00",
+    "backendCompile":  "PASS",
+    "dashboardTypecheck":  "PASS",
+    "dashboardBuild":  "PASS",
+    "fastGate":  {
+                     "pass":  "PASS",
+                     "completed":  "7/7",
+                     "runtimeMs":  228474,
+                     "lateRegression":  0,
+                     "dominanceFailures":  0,
+                     "distanceObjective":  "7W/0T/0L",
+                     "ortoolsObjective":  "4W/3T/0L"
+                 },
+    "qualityBenchmark":  {
+                             "pass":  "PASS",
+                             "completed":  "20/20",
+                             "runtimeMs":  917567,
+                             "lateRegression":  0,
+                             "dominanceFailures":  0,
+                             "distanceObjective":  "20W/0T/0L",
+                             "ortoolsObjective":  "15W/5T/0L"
+                         },
+    "academicStatic":  {
+                           "pass":  true,
+                           "cvrpCompleted":  true,
+                           "vrptwCompleted":  true,
+                           "lateRegression":  0,
+                           "dominanceFailures":  0
+                       },
+    "pdptw":  {
+                  "pass":  true,
+                  "pickupBeforeDropoffViolations":  0,
+                  "capacityViolations":  0,
+                  "lateRegression":  0,
+                  "dominanceFailures":  0
+              },
+    "externalSolvers":  {
+                            "pyvrp":  "COMPLETED",
+                            "vroom":  "COMPLETED",
+                            "pyvrpReason":  "pyvrp-seed-emitted",
+                            "vroomReason":  "vroom-seed-emitted"
+                        },
+    "liveStress":  {
+                       "pass":  true,
+                       "cycles":  4,
+                       "assignedOrderCount":  35,
+                       "bufferedOrderCount":  0,
+                       "mode":  "LIVE_ROLLING"
+                   },
+    "rescue":  {
+                   "pass":  true,
+                   "beforeLate":  11,
+                   "afterLate":  11,
+                   "rescuedRouteCount":  6
+               },
+    "finalSolver":  "IRX_ML_FUSED_HYBRID",
+    "artifacts":  {
+                      "finalSystem":  "artifacts/test-reports/v0.9.2-certified-external-solvers/final-system/final-system-summary.json",
+                      "external":  "artifacts/test-reports/v0.9.2-certified-external-solvers/external/external-solver-gate-summary.json",
+                      "fast":  "artifacts/test-reports/v0.9.2-certified-external-solvers/final-system/fast/clean-cache-gate-summary.json",
+                      "quality":  "artifacts/test-reports/v0.9.2-certified-external-solvers/final-system/quality/clean-cache-gate-summary.json",
+                      "academic":  "artifacts/test-reports/v0.9.2-certified-external-solvers/academic/academic-static-gate-summary.json",
+                      "pdptw":  "artifacts/test-reports/v0.9.2-certified-external-solvers/pdptw/pdptw-gate-summary.json",
+                      "live":  "artifacts/test-reports/v0.9.2-certified-external-solvers/final-system/live-stress/live-stress-gate-summary.json",
+                      "rescue":  "artifacts/test-reports/v0.9.2-certified-external-solvers/final-system/rescue/rescue-gate-summary.json"
+                  }
+}

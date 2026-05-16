@@ -2,6 +2,17 @@
 
 Status: certified demo gate PASS.
 
+## v0.9.2 External Solver Certification
+
+- Tag target: `v0.9.2-certified-external-solvers`.
+- Summary: `artifacts/test-reports/v0.9.2-certified-external-solvers/final-certification-summary.json`.
+- Backend compile: PASS; dashboard typecheck/build: PASS.
+- External solver gate: PASS; PyVRP `COMPLETED`; VROOM `COMPLETED`; both emitted real seed contributors.
+- FAST_GATE: PASS; `7/7`; runtime `228474ms`; late regression `0`; dominance failures `0`.
+- QUALITY_BENCHMARK: PASS; `20/20`; Distance objective `20W/0T/0L`; OR-Tools objective `15W/5T/0L`; late regression `0`; dominance failures `0`.
+- Academic/static: PASS; PDPTW: PASS; live stress: PASS; rescue: PASS.
+- Final solver invariant: `IRX_ML_FUSED_HYBRID`.
+
 ## Commit and Tag
 
 - Certification commit at run time: `54bf6ad2e`.

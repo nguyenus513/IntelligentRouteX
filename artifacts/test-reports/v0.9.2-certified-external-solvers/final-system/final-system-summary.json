@@ -1,0 +1,59 @@
+{
+    "createdAt":  "2026-05-16T23:13:08.5577862+07:00",
+    "pass":  true,
+    "compileJava":  "PASS",
+    "dashboardTypecheck":  "PASS",
+    "dashboardBuild":  "PASS",
+    "fastGate":  "PASS",
+    "fastGateTotal":  7,
+    "fastGateRuntimeMs":  228474,
+    "qualityBenchmark":  "PASS",
+    "qualityGateTotal":  20,
+    "qualityRuntimeMs":  917567,
+    "liveStressPass":  true,
+    "rescuePass":  true,
+    "externalSolvers":  {
+                            "pyvrp":  "COMPLETED",
+                            "vroom":  "COMPLETED"
+                        },
+    "externalSolverSmoke":  [
+                                {
+                                    "solverName":  "PyVRP",
+                                    "status":  "COMPLETED",
+                                    "verdict":  "PASS_WITH_LIMITS",
+                                    "driverCount":  2,
+                                    "assignedOrderCount":  4,
+                                    "inputOrderCount":  12,
+                                    "totalDistanceKm":  31.3,
+                                    "lateOrderCount":  0,
+                                    "slaSuccessRate":  33.33333333333333,
+                                    "runtimeMs":  1249,
+                                    "reason":  "pyvrp-seed-emitted",
+                                    "artifactPath":  "artifacts\\external-seeds\\pyvrp\\RUN-CA488E72-pyvrp-seed-output.json"
+                                },
+                                {
+                                    "solverName":  "VROOM",
+                                    "status":  "COMPLETED",
+                                    "verdict":  "PASS_WITH_LIMITS",
+                                    "driverCount":  2,
+                                    "assignedOrderCount":  12,
+                                    "inputOrderCount":  12,
+                                    "totalDistanceKm":  33.5,
+                                    "lateOrderCount":  0,
+                                    "slaSuccessRate":  100.0,
+                                    "runtimeMs":  1079,
+                                    "reason":  "vroom-seed-emitted",
+                                    "artifactPath":  ""
+                                }
+                            ],
+    "finalSolverInvariant":  "IRX ML-Fused Hybrid",
+    "lateRegression":  0,
+    "dominanceFailures":  0,
+    "summaries":  {
+                      "liveStress":  "live-stress/live-stress-gate-summary.json",
+                      "fast":  "fast/clean-cache-gate-summary.json",
+                      "quality":  "quality/clean-cache-gate-summary.json",
+                      "externalSmoke":  "pyvrp-vroom-smoke-BMJ-0F775889.json",
+                      "rescue":  "rescue/rescue-gate-summary.json"
+                  }
+}

@@ -1,0 +1,79 @@
+{
+    "createdAt":  "2026-05-16T22:07:08.6159613+07:00",
+    "pass":  true,
+    "pyvrp":  "COMPLETED",
+    "vroom":  "COMPLETED",
+    "pyvrpReason":  "pyvrp-seed-emitted",
+    "vroomReason":  "vroom-seed-emitted",
+    "finalSolverInvariant":  "IRX_ML_FUSED_HYBRID",
+    "externalSeedContributors":  [
+                                     {
+                                         "contributorId":  "PYVRP",
+                                         "status":  "OK",
+                                         "reason":  "pyvrp-seed-emitted",
+                                         "seedEmitted":  true,
+                                         "seedSource":  "PYVRP_SEED",
+                                         "seedDistanceKm":  31.3,
+                                         "seedLateCount":  0,
+                                         "routeCount":  2,
+                                         "diagnostics":  {
+                                                             "output":  "artifacts\\external-seeds\\pyvrp\\RUN-38661540-pyvrp-seed-output.json",
+                                                             "input":  "artifacts\\external-seeds\\pyvrp\\RUN-38661540-pyvrp-seed-input.json",
+                                                             "expectedSource":  "PYVRP_SEED",
+                                                             "routeCount":  2,
+                                                             "runtimeMs":  1598,
+                                                             "seedLateCount":  0,
+                                                             "seedDistanceKm":  31.3,
+                                                             "pyvrpVersion":  "0.13.3",
+                                                             "runnerRuntimeMs":  1150
+                                                         }
+                                     },
+                                     {
+                                         "contributorId":  "VROOM",
+                                         "status":  "OK",
+                                         "reason":  "vroom-seed-emitted",
+                                         "seedEmitted":  true,
+                                         "seedSource":  "VROOM_SEED",
+                                         "seedDistanceKm":  33.5,
+                                         "seedLateCount":  0,
+                                         "routeCount":  2,
+                                         "diagnostics":  {
+                                                             "routeCount":  2,
+                                                             "summary":  {
+                                                                             "cost":  5481,
+                                                                             "routes":  2,
+                                                                             "unassigned":  0,
+                                                                             "delivery":  [
+                                                                                              12
+                                                                                          ],
+                                                                             "amount":  [
+                                                                                            12
+                                                                                        ],
+                                                                             "pickup":  [
+                                                                                            12
+                                                                                        ],
+                                                                             "setup":  0,
+                                                                             "service":  0,
+                                                                             "duration":  5481,
+                                                                             "waiting_time":  0,
+                                                                             "priority":  0,
+                                                                             "distance":  33500,
+                                                                             "violations":  [
+
+                                                                                            ],
+                                                                             "computing_times":  {
+                                                                                                     "loading":  0,
+                                                                                                     "solving":  15,
+                                                                                                     "routing":  0
+                                                                                                 }
+                                                                         },
+                                                             "seedLateCount":  0,
+                                                             "seedDistanceKm":  33.5,
+                                                             "expectedSource":  "VROOM_SEED",
+                                                             "runtimeMs":  956,
+                                                             "mode":  "BINARY"
+                                                         }
+                                     }
+                                 ],
+    "artifact":  "artifacts\\test-reports\\v0.9.2-certified-external-solvers\\external\\external-solver-gate-BMJ-EF9C8938.json"
+}

@@ -1,0 +1,18 @@
+{
+    "createdAt":  "2026-05-16T22:37:41.0802733+07:00",
+    "pass":  true,
+    "datasetCount":  7,
+    "pickupBeforeDropoffViolations":  0,
+    "capacityViolations":  0,
+    "lateRegression":  0,
+    "dominanceFailures":  0,
+    "artifacts":  [
+                      "artifacts\\test-reports\\v0.9.2-certified-external-solvers\\pdptw\\clean-cache-gate-random-spread-BMJ-EAE3ACBF.json",
+                      "artifacts\\test-reports\\v0.9.2-certified-external-solvers\\pdptw\\clean-cache-gate-clustered-pickups-random-dropoffs-BMJ-C322D4D5.json",
+                      "artifacts\\test-reports\\v0.9.2-certified-external-solvers\\pdptw\\clean-cache-gate-random-pickups-clustered-dropoffs-BMJ-B6EB342F.json",
+                      "artifacts\\test-reports\\v0.9.2-certified-external-solvers\\pdptw\\clean-cache-gate-opposite-direction-dropoffs-BMJ-B6170567.json",
+                      "artifacts\\test-reports\\v0.9.2-certified-external-solvers\\pdptw\\clean-cache-gate-tight-capacity-BMJ-DD5706ED.json",
+                      "artifacts\\test-reports\\v0.9.2-certified-external-solvers\\pdptw\\clean-cache-gate-tight-deadline-case-BMJ-0EFAF4AB.json",
+                      "artifacts\\test-reports\\v0.9.2-certified-external-solvers\\pdptw\\clean-cache-gate-active-route-insertion-BMJ-DBDA1C56.json"
+                  ]
+}

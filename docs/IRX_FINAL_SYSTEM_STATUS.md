@@ -2,6 +2,18 @@
 
 Status: production-demo closeout and full certification gates passed after goal-loop rerun.
 
+## v0.9.2-certified-external-solvers
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.2-certified-external-solvers/final-certification-summary.json`.
+- External solvers: PyVRP `COMPLETED`; VROOM `COMPLETED`; reasons `pyvrp-seed-emitted`, `vroom-seed-emitted`.
+- FAST_GATE: 7/7 completed; runtime `228474ms`; late regression `0`; dominance failures `0`; Distance objective `7W / 0T / 0L`; OR-Tools objective `4W / 3T / 0L`.
+- QUALITY_BENCHMARK: 20/20 completed; runtime `917567ms`; late regression `0`; dominance failures `0`; Distance objective `20W / 0T / 0L`; OR-Tools objective `15W / 5T / 0L`.
+- Academic/static: PASS; CVRP-like and VRPTW-like conversions completed.
+- PDPTW: PASS; pickup-before-dropoff violations `0`; capacity violations `0`.
+- Live stress: PASS; 4 cycles; 35 assigned; 0 buffered stale orders; mode `LIVE_ROLLING`.
+- Rescue: PASS; before late `11`; after late `11`; rescued route count `6`.
+- Final solver invariant: `IRX_ML_FUSED_HYBRID`.
+
 ## Final Gate Evidence
 
 - Compile: `compileJava` PASS.
