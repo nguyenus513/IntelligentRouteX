@@ -1,6 +1,6 @@
 # IRX Final System Status
 
-Status: production-demo closeout passed after goal-loop rerun.
+Status: production-demo closeout and full certification gates passed after goal-loop rerun.
 
 ## Final Gate Evidence
 
@@ -14,6 +14,9 @@ Status: production-demo closeout passed after goal-loop rerun.
 - Rescue: PASS after dominance rollback guard; before late `16`, after late `16`; mode `RESCUE`.
 - External smoke: PyVRP `COMPLETED`; VROOM `EVIDENCE_GAP` because no runtime configured.
 - Final solver invariant: `IRX ML-Fused Hybrid` remains the final solver row.
+- Academic/static gate: PASS.
+- PDPTW gate: PASS; pickup-before-dropoff violations `0`; capacity violations `0`.
+- Final certification summary: `artifacts/test-reports/final-certification/final-certification-summary.json`.
 
 ## Artifacts
 

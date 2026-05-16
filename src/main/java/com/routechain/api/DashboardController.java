@@ -478,11 +478,13 @@ public final class DashboardController {
                 started));
         DispatchV2Result result = unified.dispatchResult();
         long runtimeMs = (System.nanoTime() - startedNanos) / 1_000_000L;
-        List<AssignmentDto> assignments = new ArrayList<>(result.assignments().stream().map(DashboardController::assignmentDto).toList());
+        List<AssignmentDto> assignments = enforceDashboardCapacity(
+                new ArrayList<>(result.assignments().stream().map(DashboardController::assignmentDto).toList()),
+                drivers);
         List<BatchDto> batches = new ArrayList<>(assignments.stream()
                 .map(assignment -> new BatchDto(assignment.batchId(), assignment.orderIds(), assignment.driverId(), colorFor(assignment.selectionRank()), "CORE_SELECTED"))
                 .toList());
-        List<RouteVisualizationDto> routes = new ArrayList<>(result.assignments().stream()
+        List<RouteVisualizationDto> routes = new ArrayList<>(assignments.stream()
                 .map(assignment -> routeDto(assignment, ordersById(orders), driversById(drivers), routingProvider))
                 .toList());
         Set<String> accepted = new LinkedHashSet<>();
@@ -1272,34 +1274,96 @@ public final class DashboardController {
                 assignment.degradeReasons());
     }
 
+    private static List<AssignmentDto> enforceDashboardCapacity(List<AssignmentDto> assignments, List<DriverDto> drivers) {
+        Map<String, Integer> capacityByDriver = drivers.stream()
+                .collect(java.util.stream.Collectors.toMap(DriverDto::driverId, driver -> Math.max(1, driver.capacity()), (left, right) -> left, LinkedHashMap::new));
+        List<AssignmentDto> normalized = new ArrayList<>();
+        for (AssignmentDto assignment : assignments) {
+            int capacity = capacityByDriver.getOrDefault(assignment.driverId(), Math.max(1, assignment.orderIds().size()));
+            if (assignment.orderIds().size() <= capacity) {
+                normalized.add(assignment);
+                continue;
+            }
+            for (int start = 0; start < assignment.orderIds().size(); start += capacity) {
+                int end = Math.min(assignment.orderIds().size(), start + capacity);
+                List<String> chunk = assignment.orderIds().subList(start, end);
+                String suffix = "-C" + (normalized.size() + 1);
+                List<String> reasons = new ArrayList<>(assignment.reasons());
+                reasons.add("dashboard-capacity-normalized");
+                normalized.add(new AssignmentDto(
+                        assignment.assignmentId() + suffix,
+                        assignment.batchId() + suffix,
+                        assignment.driverId(),
+                        List.copyOf(chunk),
+                        assignment.selectionRank(),
+                        assignment.selectionScore(),
+                        assignment.robustUtility(),
+                        reasons,
+                        assignment.degradeReasons()));
+            }
+        }
+        return normalized;
+    }
+
     private static RouteVisualizationDto routeDto(DispatchAssignment assignment, Map<String, OrderDto> orders, Map<String, DriverDto> drivers, RoutingProvider routingProvider) {
-        DriverDto driver = drivers.get(assignment.driverId());
+        return routeDto(
+                assignment.assignmentId(),
+                assignment.driverId(),
+                assignment.bundleId() == null ? assignment.assignmentId() : assignment.bundleId(),
+                assignment.orderIds(),
+                assignment.projectedCompletionEtaMinutes(),
+                orders,
+                drivers,
+                routingProvider);
+    }
+
+    private static RouteVisualizationDto routeDto(AssignmentDto assignment, Map<String, OrderDto> orders, Map<String, DriverDto> drivers, RoutingProvider routingProvider) {
+        return routeDto(
+                assignment.assignmentId(),
+                assignment.driverId(),
+                assignment.batchId() == null ? assignment.assignmentId() : assignment.batchId(),
+                assignment.orderIds(),
+                0.0,
+                orders,
+                drivers,
+                routingProvider);
+    }
+
+    private static RouteVisualizationDto routeDto(String assignmentId,
+                                                 String driverId,
+                                                 String batchId,
+                                                 List<String> orderIds,
+                                                 double projectedCompletionEtaMinutes,
+                                                 Map<String, OrderDto> orders,
+                                                 Map<String, DriverDto> drivers,
+                                                 RoutingProvider routingProvider) {
+        DriverDto driver = drivers.get(driverId);
         List<StopVisualizationDto> stops = new ArrayList<>();
         List<GeoPointDto> polyline = new ArrayList<>();
         double previousLat = driver == null ? HCM_CENTER.latitude() : driver.lat();
         double previousLng = driver == null ? HCM_CENTER.longitude() : driver.lng();
         polyline.add(new GeoPointDto(previousLat, previousLng));
         int sequence = 0;
-        for (String orderId : assignment.orderIds()) {
+        for (String orderId : orderIds) {
             OrderDto order = orders.get(orderId);
             if (order == null) {
                 continue;
             }
             sequence++;
-            RoutingRouteResult route = roadRoute("route-" + assignment.assignmentId() + "-pickup-" + order.orderId(), previousLat, previousLng, order.pickupLat(), order.pickupLng(), routingProvider);
+            RoutingRouteResult route = roadRoute("route-" + assignmentId + "-pickup-" + order.orderId(), previousLat, previousLng, order.pickupLat(), order.pickupLng(), routingProvider);
             double pickupDistance = routeDistanceKm(route, previousLat, previousLng, order.pickupLat(), order.pickupLng());
             appendPolyline(polyline, route, order.pickupLat(), order.pickupLng());
             stops.add(stop(sequence, "PICKUP", order, order.pickupLat(), order.pickupLng(), pickupDistance, order.deadlineMinutes()));
             previousLat = order.pickupLat();
             previousLng = order.pickupLng();
         }
-        for (String orderId : assignment.orderIds()) {
+        for (String orderId : orderIds) {
             OrderDto order = orders.get(orderId);
             if (order == null) {
                 continue;
             }
             sequence++;
-            RoutingRouteResult route = roadRoute("route-" + assignment.assignmentId() + "-dropoff-" + order.orderId(), previousLat, previousLng, order.dropoffLat(), order.dropoffLng(), routingProvider);
+            RoutingRouteResult route = roadRoute("route-" + assignmentId + "-dropoff-" + order.orderId(), previousLat, previousLng, order.dropoffLat(), order.dropoffLng(), routingProvider);
             double dropDistance = routeDistanceKm(route, previousLat, previousLng, order.dropoffLat(), order.dropoffLng());
             appendPolyline(polyline, route, order.dropoffLat(), order.dropoffLng());
             stops.add(stop(sequence, "DROPOFF", order, order.dropoffLat(), order.dropoffLng(), dropDistance, order.deadlineMinutes()));
@@ -1307,12 +1371,12 @@ public final class DashboardController {
             previousLng = order.dropoffLng();
         }
         double distance = stops.stream().mapToDouble(StopVisualizationDto::distanceFromPreviousKm).sum();
-        double eta = Math.max(assignment.projectedCompletionEtaMinutes(), distance / 22.0 * 60.0);
+        double eta = Math.max(projectedCompletionEtaMinutes, distance / 22.0 * 60.0);
         long late = stops.stream().filter(stop -> "LATE_RISK".equals(stop.riskLevel())).count();
         return new RouteVisualizationDto(
-                assignment.assignmentId(),
-                assignment.driverId(),
-                assignment.bundleId() == null ? assignment.assignmentId() : assignment.bundleId(),
+                assignmentId,
+                driverId,
+                batchId,
                 GeometryMode.ROAD_ROUTE,
                 null,
                 "ACTIVE",

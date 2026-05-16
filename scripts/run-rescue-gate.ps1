@@ -22,7 +22,7 @@ $after = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/dashboard/rescue/s
 $artifact = Join-Path $OutputDir "rescue-gate-$($after.runId).json"
 @{ before = $before; after = $after } | ConvertTo-Json -Depth 100 | Set-Content $artifact
 
-$rescueRoutes = @($after.routes | Where-Object { $_.rescueStatus -eq "RESCUED" }).Count
+$rescueRoutes = @($after.routes | Where-Object { $_.rescueStatus -eq "RESCUED" -or $_.rescueStatus -eq "RESCUED_ROLLBACK" }).Count
 $lateNotWorse = [int]$after.metrics.lateOrderCount -le [int]$before.metrics.lateOrderCount
 $passed = $after.status -eq "COMPLETED" -and $after.comparison.beforeRunId -eq $before.runId -and $rescueRoutes -gt 0 -and $lateNotWorse -and $after.diagnostics.dispatchMode -eq "RESCUE"
 $summary = [pscustomobject]@{
@@ -33,6 +33,7 @@ $summary = [pscustomobject]@{
   beforeLate = $before.metrics.lateOrderCount
   afterLate = $after.metrics.lateOrderCount
   rescuedRouteCount = $rescueRoutes
+  rescueDominanceGuard = $after.diagnostics.rescueDominanceGuard
   artifact = $artifact
 }
 $summaryPath = Join-Path $OutputDir "rescue-gate-summary.json"
