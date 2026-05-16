@@ -13,18 +13,17 @@ import com.routechain.v2.DispatchStageLatency;
 import com.routechain.v2.unified.DispatchMode;
 import com.routechain.v2.unified.DispatchPolicy;
 import com.routechain.v2.unified.DispatchStrategy;
+import com.routechain.v2.unified.UnifiedHybridDispatchService;
 import com.routechain.v2.unified.UnifiedDispatchCore;
 import com.routechain.v2.unified.UnifiedDispatchRequest;
 import com.routechain.v2.unified.UnifiedDispatchResult;
 import com.routechain.v2.executor.DispatchAssignment;
-import com.routechain.v2.hybrid.BaselineDominanceGuard;
 import com.routechain.v2.hybrid.BaselineDominanceResult;
 import com.routechain.v2.hybrid.BoundRoute;
 import com.routechain.v2.hybrid.BoundStop;
 import com.routechain.v2.hybrid.CandidateSource;
 import com.routechain.v2.hybrid.DriverSeedLoad;
 import com.routechain.v2.hybrid.EliteSolutionArchive;
-import com.routechain.v2.hybrid.EliteMultiStartImprover;
 import com.routechain.v2.hybrid.HybridCostBreakdown;
 import com.routechain.v2.hybrid.ImprovedSolutionCandidate;
 import com.routechain.v2.hybrid.LexicographicSolutionComparator;
@@ -89,6 +88,7 @@ public final class DashboardController {
 
     private final DispatchV2CompatibleCore dispatchCore;
     private final UnifiedDispatchCore unifiedDispatchCore;
+    private final UnifiedHybridDispatchService hybridDispatchService;
     private final RoutingProvider routingProvider;
     private final RouteChainDispatchV2Properties properties;
     private final ObjectProvider<KafkaTemplate<String, Object>> kafkaTemplateProvider;
@@ -104,9 +104,10 @@ public final class DashboardController {
         return thread;
     });
 
-    public DashboardController(DispatchV2CompatibleCore dispatchCore, UnifiedDispatchCore unifiedDispatchCore, RoutingProvider routingProvider, RouteChainDispatchV2Properties properties, ObjectProvider<KafkaTemplate<String, Object>> kafkaTemplateProvider) {
+    public DashboardController(DispatchV2CompatibleCore dispatchCore, UnifiedDispatchCore unifiedDispatchCore, UnifiedHybridDispatchService hybridDispatchService, RoutingProvider routingProvider, RouteChainDispatchV2Properties properties, ObjectProvider<KafkaTemplate<String, Object>> kafkaTemplateProvider) {
         this.dispatchCore = dispatchCore;
         this.unifiedDispatchCore = unifiedDispatchCore;
+        this.hybridDispatchService = hybridDispatchService;
         this.routingProvider = routingProvider;
         this.properties = properties;
         this.kafkaTemplateProvider = kafkaTemplateProvider;
@@ -561,18 +562,17 @@ public final class DashboardController {
         stageRuntime.put("seedBindingMs", elapsedMs(archiveStarted));
         int hybridImprovementTopK = 2;
         long hybridStarted = System.nanoTime();
-        List<ImprovedSolutionCandidate> improvedSeeds = new EliteMultiStartImprover().improve(routeBindings, hybridImprovementTopK,
-                (legId, fromLat, fromLng, toLat, toLng) -> matrixCost.distanceKm(fromLat, fromLng, toLat, toLng));
-        if (improvedSeeds.isEmpty()) {
-            improvedSeeds = new EliteMultiStartImprover().improve(eliteArchive, hybridImprovementTopK);
-        }
+        UnifiedHybridDispatchService.HybridRunResult hybrid = hybridDispatchService.run(
+                eliteArchive,
+                routeBindings,
+                solutionSeedFromRun(CandidateSource.IRX_ML_FUSED, "SOL-IRX-FINAL", irx),
+                (legId, fromLat, fromLng, toLat, toLng) -> matrixCost.distanceKm(fromLat, fromLng, toLat, toLng),
+                hybridImprovementTopK);
         stageRuntime.put("hybridImprovementMs", elapsedMs(hybridStarted));
-        SolutionSeedCandidate bestImprovedSeed = improvedSeeds.stream()
-                .map(ImprovedSolutionCandidate::improvedSeed)
-                .max(LexicographicSolutionComparator.SLA_STRICT)
-                .orElseGet(() -> solutionSeedFromRun(CandidateSource.IRX_ML_FUSED, "SOL-IRX-FINAL", irx));
-        SolutionSeedCandidate finalSeed = betterSeed(bestImprovedSeed, solutionSeedFromRun(CandidateSource.IRX_ML_FUSED, "SOL-IRX-FINAL", irx));
-        BaselineDominanceResult dominance = new BaselineDominanceGuard().evaluate(finalSeed, eliteArchive);
+        List<ImprovedSolutionCandidate> improvedSeeds = hybrid.improvedSeeds();
+        SolutionSeedCandidate bestImprovedSeed = hybrid.bestImprovedSeed();
+        SolutionSeedCandidate finalSeed = hybrid.finalSeed();
+        BaselineDominanceResult dominance = hybrid.dominance();
         solverResults.add(hybridSolverResult(irx, eliteArchive, dominance, finalSeed));
         stageRuntime.put("totalBenchmarkMs", elapsedMs(benchmarkStarted));
         ComparisonDto comparison = new ComparisonDto(null, irx.runId(), "Benchmark job " + jobId, BenchmarkVerdict.PASS_WITH_LIMITS, "phase1 honest benchmark: wired local baselines plus evidence gaps for incomplete external adapters");
@@ -912,16 +912,6 @@ public final class DashboardController {
                 run.status() == RunStatus.COMPLETED ? "" : "run-not-completed",
                 List.of("dashboard-run-seed"),
                 new HybridCostBreakdown(run.metrics().totalDistanceKm(), run.metrics().lateOrderCount() * 10.0, 0.0, 0.0, 0.0, 0.0, score));
-    }
-
-    private static SolutionSeedCandidate betterSeed(SolutionSeedCandidate left, SolutionSeedCandidate right) {
-        if (left == null) {
-            return right;
-        }
-        if (right == null) {
-            return left;
-        }
-        return LexicographicSolutionComparator.SLA_STRICT.better(left, right);
     }
 
     private static double solutionObjective(long assignedOrders, long inputOrders, double distanceKm, long lateOrders, double repairPenalty) {
