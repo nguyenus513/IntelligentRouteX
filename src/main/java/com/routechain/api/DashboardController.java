@@ -573,7 +573,7 @@ public final class DashboardController {
         SolutionSeedCandidate bestImprovedSeed = hybrid.bestImprovedSeed();
         SolutionSeedCandidate finalSeed = hybrid.finalSeed();
         BaselineDominanceResult dominance = hybrid.dominance();
-        solverResults.add(hybridSolverResult(irx, eliteArchive, dominance, finalSeed));
+        solverResults.add(hybridDispatchService.hybridSolverResult(irx, dominance, finalSeed));
         stageRuntime.put("totalBenchmarkMs", elapsedMs(benchmarkStarted));
         ComparisonDto comparison = new ComparisonDto(null, irx.runId(), "Benchmark job " + jobId, BenchmarkVerdict.PASS_WITH_LIMITS, "phase1 honest benchmark: wired local baselines plus evidence gaps for incomplete external adapters");
         Map<String, Object> diagnostics = new LinkedHashMap<>(irx.diagnostics());
@@ -583,11 +583,11 @@ public final class DashboardController {
         diagnostics.put("coreStageTiming", coreStageTiming(irx));
         diagnostics.put("globalRoutingCache", globalRoutingCacheDiagnostics(routingProvider, routingCacheStart));
         diagnostics.put("solverResults", solverResults);
-        diagnostics.put("eliteSolutionArchive", eliteArchiveDiagnostics(eliteArchive));
-        diagnostics.put("seedImprovement", improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK));
-        diagnostics.put("baselineDominanceGuard", dominanceDiagnostics(dominance));
-        diagnostics.put("ablationResults", ablationDiagnostics(solverResults, irx, dominance));
-        diagnostics.put("rootCauseAudit", rootCauseAudit(irx, solverResults));
+        diagnostics.put("eliteSolutionArchive", hybridDispatchService.eliteArchiveDiagnostics(eliteArchive));
+        diagnostics.put("seedImprovement", hybridDispatchService.improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK));
+        diagnostics.put("baselineDominanceGuard", hybridDispatchService.dominanceDiagnostics(dominance));
+        diagnostics.put("ablationResults", hybridDispatchService.ablationDiagnostics(solverResults, irx, dominance));
+        diagnostics.put("rootCauseAudit", hybridDispatchService.rootCauseAudit(irx, solverResults));
         diagnostics.put("verdictReasons", List.of("same raw snapshot for every wired solver", "PyVRP/VROOM require local runtime if selected"));
         return irx.withSolver("Benchmark Arena", "phase1-job").withComparison(comparison).withDiagnostics(diagnostics);
     }
@@ -921,195 +921,6 @@ public final class DashboardController {
         return coverageReward - uncoveredPenalty - distanceKm * 100.0 - lateOrders * 10_000.0 - repairPenalty;
     }
 
-    private static Map<String, Object> eliteArchiveDiagnostics(EliteSolutionArchive archive) {
-        Map<String, Object> diagnostics = new LinkedHashMap<>();
-        List<SolutionSeedCandidate> seeds = archive.seeds();
-        diagnostics.put("seedCount", seeds.size());
-        diagnostics.put("seedCountBySource", archive.seedCountBySource());
-        diagnostics.put("objectiveMode", "LEXICOGRAPHIC_SLA_STRICT");
-        diagnostics.put("objectivePriority", List.of("coverageRate", "hardFeasible", "lateOrderCount", "totalLatenessCost", "totalDistanceKm", "loadPenalty", "finalScore"));
-        archive.best().ifPresent(seed -> {
-            diagnostics.put("bestSeedSource", seed.source());
-            diagnostics.put("bestSeedDistanceKm", seed.totalDistanceKm());
-            diagnostics.put("bestSeedObjective", seed.costBreakdown().finalScore());
-        });
-        diagnostics.put("seeds", seeds.stream().map(DashboardController::solutionSeedSummary).toList());
-        diagnostics.put("paretoSeeds", archive.paretoSeeds().stream().map(DashboardController::solutionSeedSummary).toList());
-        seeds.stream().min(Comparator.comparingDouble(SolutionSeedCandidate::totalDistanceKm)).ifPresent(seed -> {
-            diagnostics.put("bestDistanceSeedSource", seed.source());
-            diagnostics.put("bestDistanceSeedKm", seed.totalDistanceKm());
-            diagnostics.put("bestDistanceSeedLateOrders", seed.lateOrderCount());
-        });
-        archive.best().ifPresent(seed -> {
-            diagnostics.put("bestObjectiveSeedSource", seed.source());
-            diagnostics.put("bestObjectiveSeedKm", seed.totalDistanceKm());
-            diagnostics.put("bestObjectiveSeedLateOrders", seed.lateOrderCount());
-            diagnostics.put("objectiveTradeoffReason", objectiveTradeoffReason(seeds, seed));
-            seeds.stream().filter(other -> other != seed).findFirst()
-                    .ifPresent(other -> diagnostics.put("selectionReason", LexicographicSolutionComparator.SLA_STRICT.reason(seed, other)));
-        });
-        return diagnostics;
-    }
-
-    private static String objectiveTradeoffReason(List<SolutionSeedCandidate> seeds, SolutionSeedCandidate bestObjective) {
-        return seeds.stream().min(Comparator.comparingDouble(SolutionSeedCandidate::totalDistanceKm))
-                .map(bestDistance -> bestDistance.source() == bestObjective.source()
-                        ? "best-distance-also-best-objective"
-                        : "lateness-or-risk-penalty-outweighed-" + round(bestObjective.totalDistanceKm() - bestDistance.totalDistanceKm()) + "km-distance-saving")
-                .orElse("no-seed-tradeoff");
-    }
-
-    private static Map<String, Object> improvementDiagnostics(List<ImprovedSolutionCandidate> improvedSeeds, SolutionSeedCandidate bestImprovedSeed, List<SeedRouteBinding> bindings, int configuredTopK) {
-        Map<String, Object> diagnostics = new LinkedHashMap<>();
-        diagnostics.put("improvementMode", "FAST_GATE");
-        diagnostics.put("configuredTopKSeeds", configuredTopK);
-        diagnostics.put("improvedSeedCount", improvedSeeds.size());
-        diagnostics.put("topKSeedsImproved", improvedSeeds.size());
-        diagnostics.put("routesBound", bindings != null && bindings.stream().anyMatch(binding -> !binding.routes().isEmpty()));
-        diagnostics.put("matrixBound", bindings != null && bindings.stream().anyMatch(SeedRouteBinding::matrixBound));
-        diagnostics.put("matrixProvider", bindings == null || bindings.isEmpty() ? "unknown" : bindings.getFirst().matrixProvider());
-        diagnostics.put("permutationAttempts", improvedSeeds.stream().mapToInt(candidate -> candidate.trace().acceptedMoves() + candidate.trace().rejectedMoves()).sum());
-        diagnostics.put("permutationAccepted", improvedSeeds.stream().mapToInt(candidate -> candidate.trace().acceptedMoves()).sum());
-        diagnostics.put("localSearchAttempts", 0);
-        diagnostics.put("relocateCacheStats", improvedSeeds.stream()
-                .flatMap(candidate -> candidate.trace().reasons().stream())
-                .filter(reason -> reason.startsWith("relocate-cache-stats:") || reason.startsWith("swap-cache-stats:") || reason.startsWith("cross-insertion-cache-stats:"))
-                .toList());
-        diagnostics.put("bestImprovedSource", bestImprovedSeed == null ? null : bestImprovedSeed.source());
-        diagnostics.put("bestImprovedDistanceKm", bestImprovedSeed == null ? 0.0 : bestImprovedSeed.totalDistanceKm());
-        diagnostics.put("finalKm", bestImprovedSeed == null ? 0.0 : bestImprovedSeed.totalDistanceKm());
-        diagnostics.put("improvementTraces", improvedSeeds.stream().map(DashboardController::improvementTraceDiagnostics).toList());
-        return diagnostics;
-    }
-
-    private static Map<String, Object> improvementTraceDiagnostics(ImprovedSolutionCandidate candidate) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("seedSource", candidate.trace().seedSource());
-        row.put("startKm", candidate.trace().startKm());
-        row.put("afterPermutationKm", candidate.trace().afterPermutationKm());
-        row.put("afterLocalSearchKm", candidate.trace().afterLocalSearchKm());
-        row.put("finalKm", candidate.trace().finalKm());
-        row.put("lateOrders", candidate.trace().lateOrders());
-        row.put("objectiveImproved", candidate.trace().objectiveImproved());
-        row.put("acceptedMoves", candidate.trace().acceptedMoves());
-        row.put("rejectedMoves", candidate.trace().rejectedMoves());
-        row.put("reasons", candidate.trace().reasons());
-        row.put("moveTraces", candidate.trace().moveTraces().stream().map(DashboardController::moveTraceDiagnostics).toList());
-        return row;
-    }
-
-    private static Map<String, Object> moveTraceDiagnostics(com.routechain.v2.hybrid.MoveEvaluationTrace move) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("moveId", move.moveId());
-        row.put("routeId", move.routeId());
-        row.put("moveType", move.moveType());
-        row.put("oldKm", move.oldKm());
-        row.put("newKm", move.newKm());
-        row.put("improvementKm", move.improvementKm());
-        row.put("accepted", move.accepted());
-        row.put("rejectReason", move.rejectReason());
-        row.put("latenessTrace", move.latenessTrace().stream().map(DashboardController::latenessTraceDiagnostics).toList());
-        return row;
-    }
-
-    private static Map<String, Object> latenessTraceDiagnostics(com.routechain.v2.hybrid.LatenessTrace late) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("routeId", late.routeId());
-        row.put("orderId", late.orderId());
-        row.put("moveId", late.moveId());
-        row.put("moveType", late.moveType());
-        row.put("oldEtaMinutes", late.oldEtaMinutes());
-        row.put("newEtaMinutes", late.newEtaMinutes());
-        row.put("dueTimeMinutes", late.dueTimeMinutes());
-        row.put("oldSlackMinutes", late.oldSlackMinutes());
-        row.put("newSlackMinutes", late.newSlackMinutes());
-        row.put("latenessMinutes", late.latenessMinutes());
-        row.put("reason", late.reason());
-        return row;
-    }
-
-    private static BenchmarkSolverResultDto hybridSolverResult(RunVisualizationDto irx, EliteSolutionArchive archive, BaselineDominanceResult dominance, SolutionSeedCandidate selectedSeed) {
-        if (selectedSeed != null && selectedSeed.source() != CandidateSource.IRX_ML_FUSED) {
-            return new BenchmarkSolverResultDto(
-                    "IRX ML-Fused Hybrid",
-                    SolverRunStatus.COMPLETED,
-                    BenchmarkVerdict.PASS_WITH_LIMITS,
-                    selectedSeed.driverLoadSummary().isEmpty() ? irx.drivers().size() : selectedSeed.driverLoadSummary().size(),
-                    Math.round(selectedSeed.coverageRate() * irx.orders().size()),
-                    irx.orders().size(),
-                    selectedSeed.totalDistanceKm(),
-                    selectedSeed.lateOrderCount(),
-                    selectedSeed.coverageRate() * 100.0,
-                    irx.metrics().runtimeMs(),
-                    "hybrid-selected-seed-after-improvement:" + selectedSeed.source(),
-                    irx.runId());
-        }
-        return new BenchmarkSolverResultDto(
-                "IRX ML-Fused Hybrid",
-                SolverRunStatus.COMPLETED,
-                BenchmarkVerdict.PASS_WITH_LIMITS,
-                irx.routes().size(),
-                irx.metrics().assignedOrderCount(),
-                irx.orders().size(),
-                irx.metrics().totalDistanceKm(),
-                irx.metrics().lateOrderCount(),
-                irx.metrics().slaSuccessRate(),
-                irx.metrics().runtimeMs(),
-                "dominance-guard-passed-current-final",
-                irx.runId());
-    }
-
-    private static Map<String, Object> solutionSeedSummary(SolutionSeedCandidate seed) {
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("solutionSeedId", seed.solutionSeedId());
-        summary.put("source", seed.source());
-        summary.put("coverageRate", seed.coverageRate());
-        summary.put("totalDistanceKm", seed.totalDistanceKm());
-        summary.put("lateOrderCount", seed.lateOrderCount());
-        summary.put("finalScore", seed.costBreakdown().finalScore());
-        summary.put("hardFeasible", seed.hardFeasible());
-        return summary;
-    }
-
-    private static Map<String, Object> dominanceDiagnostics(BaselineDominanceResult dominance) {
-        Map<String, Object> diagnostics = new LinkedHashMap<>();
-        diagnostics.put("baselineDominancePassed", dominance.passed());
-        diagnostics.put("bestSeedSource", dominance.bestSeedSource());
-        diagnostics.put("bestSeedDistanceKm", dominance.bestSeedDistanceKm());
-        diagnostics.put("finalImprovementOverBestSeedKm", round(-dominance.finalImprovementOverBestSeedKm()));
-        diagnostics.put("finalObjectiveDelta", round(dominance.finalObjectiveDelta()));
-        diagnostics.put("localSearchRollbackCount", dominance.passed() ? 0 : 1);
-        diagnostics.put("reason", dominance.reason());
-        return diagnostics;
-    }
-
-    private static List<Map<String, Object>> ablationDiagnostics(List<BenchmarkSolverResultDto> solverResults, RunVisualizationDto irx, BaselineDominanceResult dominance) {
-        BenchmarkSolverResultDto distance = solverResults.stream().filter(result -> "Distance batching".equals(result.solverName())).findFirst().orElse(null);
-        BenchmarkSolverResultDto ortools = solverResults.stream().filter(result -> "OR-Tools".equals(result.solverName())).findFirst().orElse(null);
-        List<Map<String, Object>> rows = new ArrayList<>();
-        rows.add(ablationRow("IRX ML-Fused Hybrid", irx.metrics().totalDistanceKm(), irx.metrics().assignedOrderCount(), "official-current-adapter", dominance.passed()));
-        if (distance != null) {
-            rows.add(ablationRow("IRX without Distance contributor", Math.max(irx.metrics().totalDistanceKm(), distance.totalDistanceKm()), irx.metrics().assignedOrderCount(), "diagnostic-distance-seed-removed", false));
-        }
-        if (ortools != null) {
-            rows.add(ablationRow("IRX without OR-Tools contributor", Math.max(irx.metrics().totalDistanceKm(), ortools.totalDistanceKm()), irx.metrics().assignedOrderCount(), "diagnostic-ortools-seed-removed", false));
-        }
-        rows.add(ablationRow("IRX without ML scoring", irx.metrics().totalDistanceKm(), irx.metrics().assignedOrderCount(), "diagnostic-ml-not-yet-separate-in-current-core", false));
-        rows.add(ablationRow("IRX without local search", irx.metrics().totalDistanceKm(), irx.metrics().assignedOrderCount(), "diagnostic-local-search-not-yet-wired", false));
-        rows.add(ablationRow("IRX without coverage drain", irx.metrics().totalDistanceKm(), assignmentSourceAudit(irx.assignments()).get("coreSelectedAssignmentCount") instanceof Number n ? n.longValue() : 0, "diagnostic-coverage-drain-disabled-count", false));
-        return rows;
-    }
-
-    private static Map<String, Object> ablationRow(String name, double distanceKm, long assignedOrders, String reason, boolean official) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("name", name);
-        row.put("distanceKm", round(distanceKm));
-        row.put("assignedOrders", assignedOrders);
-        row.put("reason", reason);
-        row.put("official", official);
-        return row;
-    }
-
     private static Map<String, Object> coreFunnelAudit(DispatchV2Result result) {
         Map<String, Object> audit = new LinkedHashMap<>();
         audit.put("pairGraphSummary", result.pairGraphSummary());
@@ -1149,45 +960,6 @@ public final class DashboardController {
 
     private static boolean isRepairAssignment(AssignmentDto assignment) {
         return assignment.reasons().stream().anyMatch(reason -> reason.contains("repair") || reason.contains("fallback") || reason.contains("coverage"));
-    }
-
-    private static Map<String, Object> rootCauseAudit(RunVisualizationDto irx, List<BenchmarkSolverResultDto> solverResults) {
-        Map<String, Object> audit = new LinkedHashMap<>();
-        BenchmarkSolverResultDto irxResult = solverResults.stream()
-                .filter(result -> "IntelligentRouteX".equalsIgnoreCase(result.solverName()))
-                .findFirst()
-                .orElse(null);
-        BenchmarkSolverResultDto bestDistance = solverResults.stream()
-                .filter(result -> result.status() == SolverRunStatus.COMPLETED)
-                .filter(result -> result.totalDistanceKm() > 0)
-                .min(Comparator.comparingDouble(BenchmarkSolverResultDto::totalDistanceKm))
-                .orElse(null);
-        Map<String, Object> comparison = new LinkedHashMap<>();
-        if (irxResult != null && bestDistance != null) {
-            comparison.put("bestDistanceSolver", bestDistance.solverName());
-            comparison.put("bestDistanceKm", bestDistance.totalDistanceKm());
-            comparison.put("irxDistanceKm", irxResult.totalDistanceKm());
-            comparison.put("irxDistanceGapKm", round(irxResult.totalDistanceKm() - bestDistance.totalDistanceKm()));
-            comparison.put("irxDistanceGapPct", bestDistance.totalDistanceKm() == 0 ? 0 : round((irxResult.totalDistanceKm() - bestDistance.totalDistanceKm()) * 100.0 / bestDistance.totalDistanceKm()));
-            comparison.put("irxRuntimeMs", irxResult.runtimeMs());
-            comparison.put("bestDistanceRuntimeMs", bestDistance.runtimeMs());
-        }
-        audit.put("solverDistanceComparison", comparison);
-        Map<String, Object> coreFunnel = objectMap(irx.diagnostics().get("coreFunnelAudit"));
-        Map<String, Object> sourceAudit = objectMap(irx.diagnostics().get("assignmentSourceAudit"));
-        List<?> passes = irx.diagnostics().get("passTimeline") instanceof List<?> list ? list : List.of();
-        audit.put("coreFunnelAudit", coreFunnel);
-        audit.put("assignmentSourceAudit", sourceAudit);
-        audit.put("passTimeline", passes);
-        audit.put("symptoms", rootCauseSymptoms(irx, irxResult, bestDistance, coreFunnel, sourceAudit, passes));
-        audit.put("investigationVerdict", rootCauseVerdict(coreFunnel, sourceAudit, passes));
-        audit.put("nextEvidenceToCollect", List.of(
-                "route-sequence-current-vs-optimal-pickup-dropoff-permutation",
-                "candidate-rejection-examples-with-order-driver-bundle",
-                "driver-choice-top5-comparison-against-distance-and-ortools",
-                "dropoff-only-on-time-rate-not-coverage-rate",
-                "OSRM-table-call-count-and-cache-hit-rate"));
-        return audit;
     }
 
     @SuppressWarnings("unchecked")
