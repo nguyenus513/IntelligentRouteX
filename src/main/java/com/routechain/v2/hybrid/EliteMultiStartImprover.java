@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Set;
 
 public final class EliteMultiStartImprover {
+    private static final boolean FAST_GATE_SWAP_STAR_ENABLED = false;
+
     private final RouteScheduleEvaluator scheduleEvaluator = new RouteScheduleEvaluator();
     private final SchedulePolicy schedulePolicy = SchedulePolicy.defaults();
     private final CrossRouteLocalSearch crossRouteLocalSearch = new CrossRouteLocalSearch();
@@ -159,21 +161,25 @@ public final class EliteMultiStartImprover {
             reasons.add("cross-insertion-rejected:" + crossInsert.traces().getFirst().rejectReason());
             reasons.add(cacheReason("cross-insertion", crossInsert));
         }
-        MoveEvaluationResult swapStar = crossRouteLocalSearch.swapStarOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero);
-        if (swapStar.accepted()) {
-            moveTraces.addAll(swapStar.traces());
-            reasons.add("swap-star-accepted:" + swapStar.traces().getFirst().moveId() + ":-" + round(swapStar.oldKm() - swapStar.newKm()) + "km");
-            reasons.add(cacheReason("swap-star", swapStar));
-            SolutionSeedCandidate swapStarSeed = moveSeed(seed, binding.routes(), swapStar, binding.orderById().size(), "SWAPSTAR");
-            if (LexicographicSolutionComparator.SLA_STRICT.compare(swapStarSeed, improved) > 0) {
-                improved = swapStarSeed;
-                totalKm = improved.totalDistanceKm();
-                totalLate = improved.lateOrderCount();
+        if (FAST_GATE_SWAP_STAR_ENABLED) {
+            MoveEvaluationResult swapStar = crossRouteLocalSearch.swapStarOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero);
+            if (swapStar.accepted()) {
+                moveTraces.addAll(swapStar.traces());
+                reasons.add("swap-star-accepted:" + swapStar.traces().getFirst().moveId() + ":-" + round(swapStar.oldKm() - swapStar.newKm()) + "km");
+                reasons.add(cacheReason("swap-star", swapStar));
+                SolutionSeedCandidate swapStarSeed = moveSeed(seed, binding.routes(), swapStar, binding.orderById().size(), "SWAPSTAR");
+                if (LexicographicSolutionComparator.SLA_STRICT.compare(swapStarSeed, improved) > 0) {
+                    improved = swapStarSeed;
+                    totalKm = improved.totalDistanceKm();
+                    totalLate = improved.lateOrderCount();
+                }
+            } else {
+                moveTraces.addAll(swapStar.traces());
+                reasons.add("swap-star-rejected:" + swapStar.traces().getFirst().rejectReason());
+                reasons.add(cacheReason("swap-star", swapStar));
             }
         } else {
-            moveTraces.addAll(swapStar.traces());
-            reasons.add("swap-star-rejected:" + swapStar.traces().getFirst().rejectReason());
-            reasons.add(cacheReason("swap-star", swapStar));
+            reasons.add("swap-star-skipped:fast-gate-disabled");
         }
         boolean objectiveImproved = LexicographicSolutionComparator.SLA_STRICT.compare(improved, seed) > 0;
         SolutionSeedCandidate selected = objectiveImproved ? improved : seed;

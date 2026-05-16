@@ -16,8 +16,12 @@ import com.routechain.v2.unified.DispatchPolicy;
 import com.routechain.v2.unified.DispatchStrategy;
 import com.routechain.v2.unified.UnifiedHybridDispatchService;
 import com.routechain.v2.unified.UnifiedDispatchCore;
+import com.routechain.v2.unified.UnifiedBenchmarkDispatchRequest;
+import com.routechain.v2.unified.UnifiedBenchmarkDispatchResult;
 import com.routechain.v2.unified.UnifiedDispatchRequest;
 import com.routechain.v2.unified.UnifiedDispatchResult;
+import com.routechain.v2.unified.UnifiedDispatchObjectiveProfile;
+import com.routechain.v2.unified.UnifiedDispatchRoutingMode;
 import com.routechain.v2.executor.DispatchAssignment;
 import com.routechain.v2.hybrid.BaselineDominanceResult;
 import com.routechain.v2.hybrid.BoundRoute;
@@ -372,7 +376,17 @@ public final class DashboardController {
         String jobId = id("BMJ");
         BenchmarkJob created = new BenchmarkJob(jobId, config.datasetId(), config.solvers(), RunStatus.RUNNING, Instant.now().toString(), null, null);
         benchmarkJobs.put(jobId, created);
-        RunVisualizationDto result = benchmarkHybridRunService.run(jobId, config, this::benchmarkResult);
+        UnifiedBenchmarkDispatchResult<RunVisualizationDto> dispatchResult = unifiedDispatchCore.dispatchBenchmark(new UnifiedBenchmarkDispatchRequest<>(
+                "unified-benchmark-dispatch-request/v1",
+                jobId,
+                config.datasetId(),
+                config.datasetId(),
+                null,
+                UnifiedDispatchObjectiveProfile.FAST_GATE,
+                UnifiedDispatchRoutingMode.FAST_GATE_MATRIX_FIRST_SYNTHETIC,
+                () -> benchmarkHybridRunService.run(jobId, config, this::benchmarkResult),
+                Map.of("source", "dashboard-benchmark-job")));
+        RunVisualizationDto result = withUnifiedBenchmarkEntrypoint(dispatchResult.result(), dispatchResult.diagnostics());
         BenchmarkJob completed = created.withStatus(RunStatus.COMPLETED, result.runId(), null);
         benchmarkJobs.put(jobId, completed);
         saveRun(new DashboardRun(result.runId(), "BENCHMARK", Instant.now().toString(), RunStatus.COMPLETED, result));
@@ -594,6 +608,12 @@ public final class DashboardController {
         diagnostics.put("rootCauseAudit", hybridDispatchService.rootCauseAudit(irx, solverResults));
         diagnostics.put("verdictReasons", List.of("same raw snapshot for every wired solver", "PyVRP/VROOM require local runtime if selected"));
         return irx.withSolver("Benchmark Arena", "phase1-job").withComparison(comparison).withDiagnostics(diagnostics);
+    }
+
+    private static RunVisualizationDto withUnifiedBenchmarkEntrypoint(RunVisualizationDto run, Map<String, Object> coreDiagnostics) {
+        Map<String, Object> diagnostics = new LinkedHashMap<>(run.diagnostics());
+        diagnostics.put("unifiedDispatchCore", coreDiagnostics);
+        return run.withDiagnostics(diagnostics);
     }
 
     private static ScenarioGenerateRequest benchmarkScenario(String datasetId) {

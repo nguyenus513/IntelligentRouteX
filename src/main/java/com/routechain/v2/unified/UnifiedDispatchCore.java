@@ -53,4 +53,28 @@ public final class UnifiedDispatchCore {
                 drain.driverLoadSummary(),
                 diagnostics);
     }
+
+    public <T> UnifiedBenchmarkDispatchResult<T> dispatchBenchmark(UnifiedBenchmarkDispatchRequest<T> request) {
+        if (request == null || request.runner() == null) {
+            throw new IllegalArgumentException("benchmark dispatch runner is required");
+        }
+        T result = request.runner().get();
+        Map<String, Object> diagnostics = new LinkedHashMap<>();
+        diagnostics.put("dispatchMode", DispatchMode.BENCHMARK.name());
+        diagnostics.put("objectiveProfile", request.objectiveProfile().name());
+        diagnostics.put("routingMode", request.routingMode().name());
+        diagnostics.put("datasetId", request.datasetId());
+        diagnostics.put("scenarioId", request.scenarioId());
+        diagnostics.put("scenarioHash", request.scenarioHash());
+        diagnostics.put("coreEntrypoint", "UnifiedDispatchCore.dispatchBenchmark");
+        return new UnifiedBenchmarkDispatchResult<>(
+                "unified-benchmark-dispatch-result/v1",
+                request.requestId(),
+                request.datasetId(),
+                request.scenarioHash(),
+                request.objectiveProfile(),
+                request.routingMode(),
+                result,
+                diagnostics);
+    }
 }
