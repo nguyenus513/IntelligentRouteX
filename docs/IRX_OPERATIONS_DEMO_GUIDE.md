@@ -29,7 +29,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts/run-final-system-gate.ps1 -
 ```powershell
 $env:VROOM_BASE_URL='http://localhost:3000'
 # or
-$env:VROOM_BIN='C:\path\to\vroom.exe'
+$env:VROOM_BIN=(Resolve-Path '.\tools\vroom\vroom-wsl.cmd').Path
 ```
 
 PyVRP is detected through Python:

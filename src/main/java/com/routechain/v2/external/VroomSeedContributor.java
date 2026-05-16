@@ -111,13 +111,22 @@ public final class VroomSeedContributor implements ExternalSeedContributor {
     }
 
     private Map<String, Object> vroomRequest(UnifiedDispatchRequest request, DistanceDurationMatrixSnapshot matrixSnapshot) {
+        Map<String, NodeCoord> coordinates = coordinates(request);
+        List<NodeCoord> indexedCoordinates = new ArrayList<>(coordinates.values());
+        Map<String, Integer> locationIndex = new LinkedHashMap<>();
+        int index = 0;
+        for (String key : coordinates.keySet()) {
+            locationIndex.put(key, index++);
+        }
+        MatrixCostAdapter matrix = new MatrixCostAdapter(matrixSnapshot);
+
         List<Map<String, Object>> vehicles = new ArrayList<>();
         int vehicleIndex = 1;
         for (Driver driver : request.drivers()) {
             vehicles.add(Map.of(
                     "id", vehicleIndex++,
                     "description", driver.driverId(),
-                    "start", List.of(driver.currentLocation().longitude(), driver.currentLocation().latitude()),
+                    "start_index", locationIndex.get("DRIVER:" + driver.driverId()),
                     "capacity", List.of(Math.max(1, request.orders().size()))));
         }
         List<Map<String, Object>> shipments = new ArrayList<>();
@@ -129,16 +138,33 @@ public final class VroomSeedContributor implements ExternalSeedContributor {
                     "pickup", Map.of(
                             "id", shipmentIndex * 10 + 1,
                             "description", "PICKUP:" + order.orderId(),
-                            "location", List.of(order.pickupPoint().longitude(), order.pickupPoint().latitude()),
+                            "location_index", locationIndex.get("PICKUP:" + order.orderId()),
                             "time_windows", List.of(List.of(0, Math.max(60, order.promisedEtaMinutes() * 60)))),
                     "delivery", Map.of(
                             "id", shipmentIndex * 10 + 2,
                             "description", "DROPOFF:" + order.orderId(),
-                            "location", List.of(order.dropoffPoint().longitude(), order.dropoffPoint().latitude()),
+                            "location_index", locationIndex.get("DROPOFF:" + order.orderId()),
                             "time_windows", List.of(List.of(0, Math.max(60, order.promisedEtaMinutes() * 60))))));
         }
+        List<List<Long>> durations = new ArrayList<>();
+        List<List<Long>> distances = new ArrayList<>();
+        for (NodeCoord from : indexedCoordinates) {
+            List<Long> durationRow = new ArrayList<>();
+            List<Long> distanceRow = new ArrayList<>();
+            for (NodeCoord to : indexedCoordinates) {
+                durationRow.add(Math.max(0L, Math.round(matrix.durationMinutes(from.lat(), from.lng(), to.lat(), to.lng()) * 60.0)));
+                distanceRow.add(Math.max(0L, Math.round(matrix.distanceKm(from.lat(), from.lng(), to.lat(), to.lng()) * 1000.0)));
+            }
+            durations.add(durationRow);
+            distances.add(distanceRow);
+        }
         Map<String, Object> options = Map.of("g", false);
-        return Map.of("vehicles", vehicles, "shipments", shipments, "options", options, "_irxMatrix", Map.of("routingMode", matrixSnapshot.routingMode()));
+        return Map.of(
+                "vehicles", vehicles,
+                "shipments", shipments,
+                "options", options,
+                "matrices", Map.of("car", Map.of("durations", durations, "distances", distances)),
+                "_irxMatrix", Map.of("routingMode", matrixSnapshot.routingMode(), "customMatrix", true));
     }
 
     private SolutionSeedCandidate seedFromResponse(UnifiedDispatchRequest request, DistanceDurationMatrixSnapshot matrixSnapshot, JsonNode response) {

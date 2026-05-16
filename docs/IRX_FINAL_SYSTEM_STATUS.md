@@ -12,7 +12,7 @@ Status: production-demo closeout and full certification gates passed after goal-
 - Objective vs OR-Tools: `15W / 5T / 0L`.
 - Live stress: PASS; 4 cycles; 35 assigned; 0 buffered stale orders; mode `LIVE_ROLLING`.
 - Rescue: PASS after dominance rollback guard; before late `16`, after late `16`; mode `RESCUE`.
-- External smoke: PyVRP `COMPLETED`; VROOM `EVIDENCE_GAP` because no runtime configured.
+- External smoke: PyVRP `COMPLETED`; VROOM `COMPLETED` via WSL binary wrapper `tools/vroom/vroom-wsl.cmd`.
 - Final solver invariant: `IRX ML-Fused Hybrid` remains the final solver row.
 - Academic/static gate: PASS.
 - PDPTW gate: PASS; pickup-before-dropoff violations `0`; capacity violations `0`.
@@ -27,10 +27,11 @@ Status: production-demo closeout and full certification gates passed after goal-
 - Live stress summary: `artifacts/test-reports/final-system-closeout/live-stress/live-stress-gate-summary.json`.
 - Rescue rerun summary: `artifacts/test-reports/final-system-closeout/rescue-rerun/rescue-gate-summary.json`.
 - External solver smoke: `artifacts/test-reports/final-system-closeout/pyvrp-vroom-smoke-BMJ-044D6247.json`.
+- VROOM WSL solver gate: `artifacts/test-reports/final-certification/external-vroom-wsl/external-solver-gate-summary.json`.
 
 ## Limitations
 
-- VROOM is contributor-ready but not claimed unless `VROOM_BASE_URL` or `VROOM_BIN` is configured.
+- VROOM is now locally available through WSL Ubuntu 24.04 and `VROOM_BIN=tools/vroom/vroom-wsl.cmd`; if that env var is missing, it still reports `EVIDENCE_GAP` by design.
 - PyVRP seed uses the current VRPTW bridge and may emit partial-coverage seeds; the archive/objective/dominance guard prevents final regression.
 - QUALITY_BENCHMARK is intentionally slower than FAST_GATE and is used for evidence, not quick regression.
 - Rescue currently applies a dominance rollback guard when a rescue candidate increases late count.

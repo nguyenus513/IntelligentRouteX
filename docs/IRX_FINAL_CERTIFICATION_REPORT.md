@@ -16,7 +16,7 @@ Status: certified demo gate PASS.
 - QUALITY_BENCHMARK: PASS; `20/20`; Distance objective `20W/0T/0L`; OR-Tools objective `15W/5T/0L`; late regression `0`; dominance failures `0`.
 - Academic/static gate: PASS; CVRP-like and VRPTW-like datasets completed.
 - PDPTW gate: PASS; pickup-before-dropoff violations `0`; capacity violations `0`.
-- External solver gate: PASS; PyVRP `COMPLETED`; VROOM `EVIDENCE_GAP`.
+- External solver gate: PASS; PyVRP `COMPLETED`; VROOM `COMPLETED` in the WSL rerun.
 - Live rolling stress: PASS; `4` cycles; stale buffered orders `0`.
 - Rescue gate: PASS; late not worse.
 - Final solver invariant: `IRX_ML_FUSED_HYBRID`.
@@ -31,8 +31,8 @@ Status: certified demo gate PASS.
 ## External Solvers
 
 - PyVRP emitted a real seed in the external smoke gate.
-- VROOM is contributor-ready but not configured; status is correctly reported as `EVIDENCE_GAP`.
-- No claim is made against VROOM unless `VROOM_BASE_URL` or `VROOM_BIN` is configured and `VROOM_SEED` is emitted.
+- VROOM emitted a real `VROOM_SEED` after installing VROOM 1.15.0 in WSL Ubuntu 24.04 and setting `VROOM_BIN=tools/vroom/vroom-wsl.cmd`.
+- If `VROOM_BIN` or `VROOM_BASE_URL` is not configured, VROOM correctly falls back to `EVIDENCE_GAP` and is not included in win/loss claims.
 
 ## Known Limitations
 
@@ -47,6 +47,7 @@ Status: certified demo gate PASS.
 - Academic: `artifacts/test-reports/final-certification/academic/academic-static-gate-summary.json`.
 - PDPTW: `artifacts/test-reports/final-certification/pdptw-rerun-3/pdptw-gate-summary.json`.
 - External: `artifacts/test-reports/final-certification/external/external-solver-gate-summary.json`.
+- External VROOM WSL rerun: `artifacts/test-reports/final-certification/external-vroom-wsl/external-solver-gate-summary.json`.
 - Live: `artifacts/test-reports/final-certification/live/live-stress-gate-summary.json`.
 - Rescue: `artifacts/test-reports/final-certification/rescue-rerun/rescue-gate-summary.json`.
 

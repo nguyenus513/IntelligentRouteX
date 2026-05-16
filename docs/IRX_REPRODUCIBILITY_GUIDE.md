@@ -51,8 +51,8 @@ VROOM options:
 ```powershell
 $env:VROOM_BASE_URL='http://localhost:3000'
 # or
-$env:VROOM_BIN='C:\path\to\vroom.exe'
+$env:VROOM_BIN=(Resolve-Path '.\tools\vroom\vroom-wsl.cmd').Path
 ```
 
-If VROOM is not configured, expected status is `EVIDENCE_GAP`.
+The local non-Docker setup uses WSL Ubuntu 24.04 with VROOM 1.15.0 at `/opt/irx/vroom/bin/vroom` and the Windows wrapper `tools/vroom/vroom-wsl.cmd`. If VROOM is not configured, expected status is `EVIDENCE_GAP`.
 
