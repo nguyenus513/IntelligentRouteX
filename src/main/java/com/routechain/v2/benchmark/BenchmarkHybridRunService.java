@@ -1,7 +1,7 @@
 package com.routechain.v2.benchmark;
 
 import com.routechain.api.DashboardController;
-import com.routechain.v2.external.ExternalContributorStatus;
+import com.routechain.v2.external.ExternalSolverAvailabilityService;
 import com.routechain.v2.routing.CachingRoutingProvider;
 import com.routechain.v2.routing.DistanceDurationMatrixSnapshot;
 import com.routechain.v2.routing.MatrixSnapshotBuilder;
@@ -14,6 +14,8 @@ import java.util.Map;
 
 @Service
 public final class BenchmarkHybridRunService {
+    private final ExternalSolverAvailabilityService externalAvailabilityService = new ExternalSolverAvailabilityService();
+
     public DashboardController.RunVisualizationDto run(String jobId,
                                                        DashboardController.BenchmarkJobRequest request,
                                                        BenchmarkRunExecutor executor) {
@@ -154,12 +156,11 @@ public final class BenchmarkHybridRunService {
 
     private Map<String, Object> externalContributorStatus(BenchmarkProfile profile) {
         Map<String, Object> status = new LinkedHashMap<>();
-        status.put("vroom", Map.of(
-                "status", profile.externalContributorsEnabled() ? ExternalContributorStatus.EVIDENCE_GAP.name() : ExternalContributorStatus.DISABLED.name(),
-                "reason", profile.externalContributorsEnabled() ? "vroom-runtime-not-configured" : "disabled-in-fast-gate"));
-        status.put("pyvrp", Map.of(
-                "status", profile.externalContributorsEnabled() ? ExternalContributorStatus.EVIDENCE_GAP.name() : ExternalContributorStatus.DISABLED.name(),
-                "reason", profile.externalContributorsEnabled() ? "pyvrp-runtime-not-configured" : "disabled-in-fast-gate"));
+        externalAvailabilityService.availability(profile.externalContributorsEnabled()).forEach((solver, availability) -> status.put(solver, Map.of(
+                "status", availability.status().name(),
+                "reason", availability.reason(),
+                "version", availability.version(),
+                "diagnostics", availability.diagnostics())));
         return status;
     }
 
