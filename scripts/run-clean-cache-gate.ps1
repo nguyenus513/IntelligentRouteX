@@ -44,6 +44,22 @@ function Parse-CacheStats($items, [string]$Prefix = "relocate-cache-stats:") {
   return $stats
 }
 
+function Compare-RawKm($leftKm, $rightKm) {
+  if ([double]$leftKm -lt [double]$rightKm) { return "WIN" }
+  if ([double]$leftKm -eq [double]$rightKm) { return "TIE" }
+  return "LOSS"
+}
+
+function Compare-Objective($leftKm, $leftLate, $rightKm, $rightLate) {
+  if ([int]$leftLate -lt [int]$rightLate) { return "WIN" }
+  if ([int]$leftLate -gt [int]$rightLate) { return "LOSS" }
+  return Compare-RawKm $leftKm $rightKm
+}
+
+function Late-AdjustedKm($km, $late) {
+  return [math]::Round(([double]$km + ([double]$late * 25.0)), 1)
+}
+
 $rows = @()
 $artifacts = @()
 $seenJobs = @{}
@@ -67,8 +83,14 @@ foreach ($dataset in $Datasets) {
     $hybrid = $result.diagnostics.solverResults | Where-Object solverName -eq "IRX ML-Fused Hybrid"
     $distance = $result.diagnostics.solverResults | Where-Object solverName -eq "Distance batching"
     $ortools = $result.diagnostics.solverResults | Where-Object solverName -eq "OR-Tools"
-    $vsDistance = if ([double]$hybrid.totalDistanceKm -lt [double]$distance.totalDistanceKm) { "WIN" } elseif ([double]$hybrid.totalDistanceKm -eq [double]$distance.totalDistanceKm) { "TIE" } else { "LOSS" }
-    $vsOrtools = if ([double]$hybrid.totalDistanceKm -lt [double]$ortools.totalDistanceKm) { "WIN" } elseif ([double]$hybrid.totalDistanceKm -eq [double]$ortools.totalDistanceKm) { "TIE" } else { "LOSS" }
+    $vsDistance = Compare-RawKm $hybrid.totalDistanceKm $distance.totalDistanceKm
+    $vsOrtools = Compare-RawKm $hybrid.totalDistanceKm $ortools.totalDistanceKm
+    $vsDistanceObjective = Compare-Objective $hybrid.totalDistanceKm $hybrid.lateOrderCount $distance.totalDistanceKm $distance.lateOrderCount
+    $vsOrtoolsObjective = Compare-Objective $hybrid.totalDistanceKm $hybrid.lateOrderCount $ortools.totalDistanceKm $ortools.lateOrderCount
+    $hybridLateAdjustedKm = Late-AdjustedKm $hybrid.totalDistanceKm $hybrid.lateOrderCount
+    $distanceLateAdjustedKm = Late-AdjustedKm $distance.totalDistanceKm $distance.lateOrderCount
+    $ortoolsLateAdjustedKm = Late-AdjustedKm $ortools.totalDistanceKm $ortools.lateOrderCount
+    $distanceTradeoffReason = if ($vsDistance -eq "LOSS" -and [int]$distance.lateOrderCount -gt [int]$hybrid.lateOrderCount) { "baseline-distance-is-shorter-but-late" } elseif ($vsDistance -eq "LOSS") { "baseline-distance-is-shorter-same-or-better-late" } else { "irx-raw-distance-win-or-tie" }
     $cache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "relocate-cache-stats:"
     $swapCache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "swap-cache-stats:"
     $crossCache = Parse-CacheStats $result.diagnostics.seedImprovement.relocateCacheStats "cross-insertion-cache-stats:"
@@ -92,6 +114,12 @@ foreach ($dataset in $Datasets) {
       ortLate = $ortools.lateOrderCount
       vsDistance = $vsDistance
       vsOrtools = $vsOrtools
+      vsDistanceObjective = $vsDistanceObjective
+      vsOrtoolsObjective = $vsOrtoolsObjective
+      hybridLateAdjustedKm = $hybridLateAdjustedKm
+      distanceLateAdjustedKm = $distanceLateAdjustedKm
+      ortoolsLateAdjustedKm = $ortoolsLateAdjustedKm
+      distanceTradeoffReason = $distanceTradeoffReason
       dominancePassed = $result.diagnostics.baselineDominanceGuard.baselineDominancePassed
       evaluatedMoves = $cache.evaluatedMoves
       skippedByBudget = $cache.skippedByBudget
@@ -145,6 +173,12 @@ foreach ($dataset in $Datasets) {
       ortLate = 0
       vsDistance = "FAIL"
       vsOrtools = "FAIL"
+      vsDistanceObjective = "FAIL"
+      vsOrtoolsObjective = "FAIL"
+      hybridLateAdjustedKm = 0
+      distanceLateAdjustedKm = 0
+      ortoolsLateAdjustedKm = 0
+      distanceTradeoffReason = "gate-failed"
       dominancePassed = $false
       evaluatedMoves = 0
       skippedByBudget = 0
@@ -191,6 +225,12 @@ $distanceLosses = ($rows | Where-Object { $_.vsDistance -eq "LOSS" }).Count
 $ortWins = ($rows | Where-Object { $_.vsOrtools -eq "WIN" }).Count
 $ortTies = ($rows | Where-Object { $_.vsOrtools -eq "TIE" }).Count
 $ortLosses = ($rows | Where-Object { $_.vsOrtools -eq "LOSS" }).Count
+$distanceObjectiveWins = ($rows | Where-Object { $_.vsDistanceObjective -eq "WIN" }).Count
+$distanceObjectiveTies = ($rows | Where-Object { $_.vsDistanceObjective -eq "TIE" }).Count
+$distanceObjectiveLosses = ($rows | Where-Object { $_.vsDistanceObjective -eq "LOSS" }).Count
+$ortObjectiveWins = ($rows | Where-Object { $_.vsOrtoolsObjective -eq "WIN" }).Count
+$ortObjectiveTies = ($rows | Where-Object { $_.vsOrtoolsObjective -eq "TIE" }).Count
+$ortObjectiveLosses = ($rows | Where-Object { $_.vsOrtoolsObjective -eq "LOSS" }).Count
 [pscustomobject]@{
   createdAt = (Get-Date).ToString("o")
   identityAssertions = if (($rows | Where-Object { -not $_.pass -and $_.failReason -like "*identity*" }).Count -eq 0) { "PASS" } else { "FAIL" }
@@ -203,6 +243,11 @@ $ortLosses = ($rows | Where-Object { $_.vsOrtools -eq "LOSS" }).Count
   totalRuntimeMs = ($rows | Measure-Object -Property runtimeMs -Sum).Sum
   distanceSummary = [pscustomobject]@{ win = $distanceWins; tie = $distanceTies; loss = $distanceLosses }
   ortoolsSummary = [pscustomobject]@{ win = $ortWins; tie = $ortTies; loss = $ortLosses }
+  distanceObjectiveSummary = [pscustomobject]@{ win = $distanceObjectiveWins; tie = $distanceObjectiveTies; loss = $distanceObjectiveLosses }
+  ortoolsObjectiveSummary = [pscustomobject]@{ win = $ortObjectiveWins; tie = $ortObjectiveTies; loss = $ortObjectiveLosses }
+  rawDistanceWinThresholdPassed = ($distanceWins -ge 4)
+  objectiveDistanceWinTieThresholdPassed = (($distanceObjectiveWins + $distanceObjectiveTies) -ge 6)
+  objectiveOrtoolsWinTieThresholdPassed = (($ortObjectiveWins + $ortObjectiveTies) -ge 6)
   lateRegressionCount = ($rows | Where-Object { $_.hybridLate -gt $_.ortLate }).Count
   dominanceFailures = ($rows | Where-Object { -not $_.dominancePassed }).Count
 } | ConvertTo-Json -Depth 20 | Set-Content $summaryPath
