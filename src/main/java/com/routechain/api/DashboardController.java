@@ -607,11 +607,15 @@ public final class DashboardController {
         diagnostics.put("solverResults", solverResults);
         diagnostics.put("benchmarkProfile", benchmarkHybridRunService.profileDiagnostics(profile));
         diagnostics.putAll(benchmarkHybridRunService.objectiveAwareDiagnostics(solverResults));
-        diagnostics.put("eliteSolutionArchive", hybridDispatchService.eliteArchiveDiagnostics(eliteArchive));
-        diagnostics.put("seedImprovement", hybridDispatchService.improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK));
-        diagnostics.put("baselineDominanceGuard", hybridDispatchService.dominanceDiagnostics(dominance));
+        Map<String, Object> eliteDiagnostics = hybridDispatchService.eliteArchiveDiagnostics(eliteArchive);
+        Map<String, Object> improvementDiagnostics = hybridDispatchService.improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK);
+        Map<String, Object> dominanceDiagnostics = hybridDispatchService.dominanceDiagnostics(dominance);
+        diagnostics.put("eliteSolutionArchive", eliteDiagnostics);
+        diagnostics.put("seedImprovement", improvementDiagnostics);
+        diagnostics.put("baselineDominanceGuard", dominanceDiagnostics);
         diagnostics.put("ablationResults", hybridDispatchService.ablationDiagnostics(solverResults, irx, dominance));
         diagnostics.put("rootCauseAudit", hybridDispatchService.rootCauseAudit(irx, solverResults));
+        diagnostics.put("victoryReport", benchmarkHybridRunService.victoryReportDiagnostics(profile, solverResults, eliteDiagnostics, improvementDiagnostics, dominanceDiagnostics));
         diagnostics.put("verdictReasons", List.of("same raw snapshot for every wired solver", "PyVRP/VROOM require local runtime if selected"));
         return irx.withSolver("Benchmark Arena", "phase1-job").withComparison(comparison).withDiagnostics(diagnostics);
     }

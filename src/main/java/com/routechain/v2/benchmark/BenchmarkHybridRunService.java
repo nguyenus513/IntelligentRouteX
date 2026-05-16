@@ -51,6 +51,38 @@ public final class BenchmarkHybridRunService {
         return diagnostics;
     }
 
+    public Map<String, Object> victoryReportDiagnostics(BenchmarkProfile profile,
+                                                         List<DashboardController.BenchmarkSolverResultDto> solverResults,
+                                                         Map<String, Object> eliteArchive,
+                                                         Map<String, Object> seedImprovement,
+                                                         Map<String, Object> dominanceGuard) {
+        DashboardController.BenchmarkSolverResultDto hybrid = solverResult(solverResults, "IRX ML-Fused Hybrid");
+        DashboardController.BenchmarkSolverResultDto distance = solverResult(solverResults, "Distance batching");
+        DashboardController.BenchmarkSolverResultDto ortools = solverResult(solverResults, "OR-Tools");
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("profile", profileDiagnostics(profile));
+        report.put("objectiveSummary", Map.of(
+                "vsDistanceObjective", compareObjective(hybrid, distance),
+                "vsOrtoolsObjective", compareObjective(hybrid, ortools),
+                "hybridLateAdjustedKm", lateAdjustedKm(hybrid),
+                "distanceLateAdjustedKm", lateAdjustedKm(distance),
+                "ortoolsLateAdjustedKm", lateAdjustedKm(ortools),
+                "distanceTradeoffReason", distanceTradeoffReason(hybrid, distance, compareRawKm(hybrid, distance))));
+        report.put("whySelected", Map.of(
+                "bestDistanceSeedSource", value(eliteArchive, "bestDistanceSeedSource"),
+                "bestObjectiveSeedSource", value(eliteArchive, "bestObjectiveSeedSource"),
+                "selectionReason", value(eliteArchive, "selectionReason"),
+                "objectiveTradeoffReason", value(eliteArchive, "objectiveTradeoffReason"),
+                "dominanceReason", value(dominanceGuard, "reason")));
+        report.put("moveTraceSummary", Map.of(
+                "improvedSeedCount", value(seedImprovement, "improvedSeedCount"),
+                "permutationAttempts", value(seedImprovement, "permutationAttempts"),
+                "permutationAccepted", value(seedImprovement, "permutationAccepted"),
+                "hasMoveTraces", seedImprovement != null && seedImprovement.get("improvementTraces") != null));
+        report.put("finalSolver", hybrid == null ? "IRX ML-Fused Hybrid" : hybrid.solverName());
+        return report;
+    }
+
     public Map<String, Object> profileDiagnostics(BenchmarkProfile profile) {
         BenchmarkProfile safeProfile = profile == null ? BenchmarkProfile.of(BenchmarkMode.FAST_GATE) : profile;
         Map<String, Object> diagnostics = new LinkedHashMap<>();
@@ -234,6 +266,10 @@ public final class BenchmarkHybridRunService {
 
     private boolean isWinOrTie(String result) {
         return "WIN".equals(result) || "TIE".equals(result);
+    }
+
+    private Object value(Map<String, Object> map, String key) {
+        return map == null ? "" : map.getOrDefault(key, "");
     }
 
     @SuppressWarnings("unchecked")
