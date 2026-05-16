@@ -1,6 +1,7 @@
 param(
   [string]$BaseUrl = "http://localhost:8080",
   [string[]]$Datasets = @("raw-s", "raw-m", "random-spread", "driver-scarcity-case", "tight-deadline-case", "wide-deadline-case", "driver-imbalanced-case"),
+  [string]$Mode = "FAST_GATE",
   [int]$DatasetTimeoutSeconds = 300,
   [string]$OutputDir = "artifacts/test-reports"
 )
@@ -67,7 +68,7 @@ $seenRuns = @{}
 
 foreach ($dataset in $Datasets) {
   $started = Get-Date
-  $body = @{ datasetId = $dataset; solvers = @("single-order", "distance-batching", "OR-Tools", "IntelligentRouteX") } | ConvertTo-Json
+  $body = @{ datasetId = $dataset; mode = $Mode; solvers = @("single-order", "distance-batching", "OR-Tools", "IntelligentRouteX") } | ConvertTo-Json
   try {
     $job = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/dashboard/benchmarks/jobs" -ContentType "application/json" -Body $body -TimeoutSec $DatasetTimeoutSeconds
     if ($seenJobs.ContainsKey($job.jobId)) { throw "duplicate-jobId:$($job.jobId)" }
@@ -242,6 +243,7 @@ $ortObjectiveTies = ($rows | Where-Object { $_.vsOrtoolsObjective -eq "TIE" }).C
 $ortObjectiveLosses = ($rows | Where-Object { $_.vsOrtoolsObjective -eq "LOSS" }).Count
 [pscustomobject]@{
   createdAt = (Get-Date).ToString("o")
+  benchmarkMode = $Mode
   identityAssertions = if (($rows | Where-Object { -not $_.pass -and $_.failReason -like "*identity*" }).Count -eq 0) { "PASS" } else { "FAIL" }
   rows = $rows
   artifacts = $artifacts

@@ -14,8 +14,6 @@ import java.util.List;
 import java.util.Set;
 
 public final class EliteMultiStartImprover {
-    private static final boolean FAST_GATE_SWAP_STAR_ENABLED = false;
-
     private final RouteScheduleEvaluator scheduleEvaluator = new RouteScheduleEvaluator();
     private final SchedulePolicy schedulePolicy = SchedulePolicy.defaults();
     private final CrossRouteLocalSearch crossRouteLocalSearch = new CrossRouteLocalSearch();
@@ -39,12 +37,16 @@ public final class EliteMultiStartImprover {
     }
 
     public List<ImprovedSolutionCandidate> improve(List<SeedRouteBinding> bindings, int topK, DistanceCostFunction distanceCost) {
+        return improve(bindings, topK, distanceCost, false);
+    }
+
+    public List<ImprovedSolutionCandidate> improve(List<SeedRouteBinding> bindings, int topK, DistanceCostFunction distanceCost, boolean swapStarEnabled) {
         if (bindings == null || bindings.isEmpty() || distanceCost == null) {
             return List.of();
         }
         return bindings.stream()
                 .limit(Math.max(1, topK))
-                .map(binding -> improveBinding(binding, distanceCost))
+                .map(binding -> improveBinding(binding, distanceCost, swapStarEnabled))
                 .toList();
     }
 
@@ -64,7 +66,7 @@ public final class EliteMultiStartImprover {
         return new ImprovedSolutionCandidate(seed, seed, trace);
     }
 
-    private ImprovedSolutionCandidate improveBinding(SeedRouteBinding binding, DistanceCostFunction distanceCost) {
+    private ImprovedSolutionCandidate improveBinding(SeedRouteBinding binding, DistanceCostFunction distanceCost, boolean swapStarEnabled) {
         SolutionSeedCandidate seed = binding.seed();
         if (seed == null || binding.routes().isEmpty() || !binding.matrixBound()) {
             return improveSeed(seed == null ? emptySeed(binding) : seed);
@@ -161,7 +163,7 @@ public final class EliteMultiStartImprover {
             reasons.add("cross-insertion-rejected:" + crossInsert.traces().getFirst().rejectReason());
             reasons.add(cacheReason("cross-insertion", crossInsert));
         }
-        if (FAST_GATE_SWAP_STAR_ENABLED) {
+        if (swapStarEnabled) {
             MoveEvaluationResult swapStar = crossRouteLocalSearch.swapStarOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero);
             if (swapStar.accepted()) {
                 moveTraces.addAll(swapStar.traces());

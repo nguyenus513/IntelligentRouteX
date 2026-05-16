@@ -11,6 +11,8 @@ import com.routechain.v2.DispatchV2Request;
 import com.routechain.v2.DispatchV2Result;
 import com.routechain.v2.DispatchStageLatency;
 import com.routechain.v2.benchmark.BenchmarkHybridRunService;
+import com.routechain.v2.benchmark.BenchmarkMode;
+import com.routechain.v2.benchmark.BenchmarkProfile;
 import com.routechain.v2.unified.DispatchMode;
 import com.routechain.v2.unified.DispatchPolicy;
 import com.routechain.v2.unified.DispatchStrategy;
@@ -376,16 +378,17 @@ public final class DashboardController {
         String jobId = id("BMJ");
         BenchmarkJob created = new BenchmarkJob(jobId, config.datasetId(), config.solvers(), RunStatus.RUNNING, Instant.now().toString(), null, null);
         benchmarkJobs.put(jobId, created);
+        BenchmarkProfile profile = BenchmarkProfile.of(config.modeEnum());
         UnifiedBenchmarkDispatchResult<RunVisualizationDto> dispatchResult = unifiedDispatchCore.dispatchBenchmark(new UnifiedBenchmarkDispatchRequest<>(
                 "unified-benchmark-dispatch-request/v1",
                 jobId,
                 config.datasetId(),
                 config.datasetId(),
                 null,
-                UnifiedDispatchObjectiveProfile.FAST_GATE,
-                UnifiedDispatchRoutingMode.FAST_GATE_MATRIX_FIRST_SYNTHETIC,
+                profile.mode().quality() ? UnifiedDispatchObjectiveProfile.QUALITY_BENCHMARK : UnifiedDispatchObjectiveProfile.FAST_GATE,
+                profile.mode().quality() ? UnifiedDispatchRoutingMode.ROAD_OSRM_BOUNDED : UnifiedDispatchRoutingMode.FAST_GATE_MATRIX_FIRST_SYNTHETIC,
                 () -> benchmarkHybridRunService.run(jobId, config, this::benchmarkResult),
-                Map.of("source", "dashboard-benchmark-job")));
+                Map.of("source", "dashboard-benchmark-job", "benchmarkMode", profile.mode().name())));
         RunVisualizationDto result = withUnifiedBenchmarkEntrypoint(dispatchResult.result(), dispatchResult.diagnostics());
         BenchmarkJob completed = created.withStatus(RunStatus.COMPLETED, result.runId(), null);
         benchmarkJobs.put(jobId, completed);
@@ -556,10 +559,11 @@ public final class DashboardController {
         List<OrderDto> orders = generateOrders(scenario, scenarioSeed);
         List<DriverDto> drivers = generateDrivers(scenario, scenarioSeed);
         String scenarioHash = scenarioHash(scenario, orders, drivers);
+        BenchmarkProfile profile = BenchmarkProfile.of(request.modeEnum());
         DistanceDurationMatrixSnapshot matrixSnapshot = new MatrixSnapshotBuilder().build(
                 request.datasetId() == null ? "raw-m" : request.datasetId(),
                 scenarioHash,
-                "FAST_GATE_MATRIX_FIRST_SYNTHETIC",
+                profile.routingMode(),
                 benchmarkHybridRunService.matrixNodes(orders, drivers));
         MatrixCostAdapter matrixCost = new MatrixCostAdapter(matrixSnapshot);
         stageRuntime.put("scenarioLoadMs", elapsedMs(scenarioStarted));
@@ -577,14 +581,15 @@ public final class DashboardController {
         EliteSolutionArchive eliteArchive = eliteSolutionArchive(solverResults, irx);
         List<SeedRouteBinding> routeBindings = seedRouteBindings(eliteArchive, orders, drivers, irx, matrixCost);
         stageRuntime.put("seedBindingMs", elapsedMs(archiveStarted));
-        int hybridImprovementTopK = 2;
+        int hybridImprovementTopK = profile.topKSeeds();
         long hybridStarted = System.nanoTime();
         UnifiedHybridDispatchService.HybridRunResult hybrid = hybridDispatchService.run(
                 eliteArchive,
                 routeBindings,
                 solutionSeedFromRun(CandidateSource.IRX_ML_FUSED, "SOL-IRX-FINAL", irx),
                 (legId, fromLat, fromLng, toLat, toLng) -> matrixCost.distanceKm(fromLat, fromLng, toLat, toLng),
-                hybridImprovementTopK);
+                hybridImprovementTopK,
+                profile.swapStarEnabled());
         stageRuntime.put("hybridImprovementMs", elapsedMs(hybridStarted));
         List<ImprovedSolutionCandidate> improvedSeeds = hybrid.improvedSeeds();
         SolutionSeedCandidate bestImprovedSeed = hybrid.bestImprovedSeed();
@@ -600,6 +605,7 @@ public final class DashboardController {
         diagnostics.put("coreStageTiming", benchmarkHybridRunService.coreStageTiming(irx));
         diagnostics.put("globalRoutingCache", benchmarkHybridRunService.globalRoutingCacheDiagnostics(routingProvider, routingCacheStart));
         diagnostics.put("solverResults", solverResults);
+        diagnostics.put("benchmarkProfile", benchmarkHybridRunService.profileDiagnostics(profile));
         diagnostics.putAll(benchmarkHybridRunService.objectiveAwareDiagnostics(solverResults));
         diagnostics.put("eliteSolutionArchive", hybridDispatchService.eliteArchiveDiagnostics(eliteArchive));
         diagnostics.put("seedImprovement", hybridDispatchService.improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK));
@@ -628,6 +634,14 @@ public final class DashboardController {
             case "tight-deadline-case" -> new ScenarioGenerateRequest(20, 4, "tight-deadline-case", "CLEAR", "normal", 0.22);
             case "wide-deadline-case" -> new ScenarioGenerateRequest(20, 4, "wide-deadline-case", "CLEAR", "normal", 0.08);
             case "driver-imbalanced-case" -> new ScenarioGenerateRequest(22, 4, "driver-imbalanced-case", "CLEAR", "imbalanced", 0.14);
+            case "many-orders-few-drivers" -> new ScenarioGenerateRequest(28, 3, "many-orders-few-drivers", "CLEAR", "scarce", 0.18);
+            case "few-orders-many-drivers" -> new ScenarioGenerateRequest(10, 6, "few-orders-many-drivers", "CLEAR", "normal", 0.08);
+            case "opposite-direction-dropoffs" -> new ScenarioGenerateRequest(20, 4, "opposite-direction-dropoffs", "CLEAR", "opposite", 0.14);
+            case "clustered-pickups-random-dropoffs" -> new ScenarioGenerateRequest(22, 4, "clustered-pickups-random-dropoffs", "CLEAR", "clustered-pickups", 0.14);
+            case "random-pickups-clustered-dropoffs" -> new ScenarioGenerateRequest(22, 4, "random-pickups-clustered-dropoffs", "CLEAR", "clustered-dropoffs", 0.14);
+            case "long-tail-distance" -> new ScenarioGenerateRequest(22, 4, "long-tail-distance", "CLEAR", "long-tail", 0.12);
+            case "tight-capacity" -> new ScenarioGenerateRequest(24, 4, "tight-capacity", "CLEAR", "tight-capacity", 0.16);
+            case "high-priority-orders" -> new ScenarioGenerateRequest(20, 4, "high-priority-orders", "CLEAR", "high-priority", 0.35);
             case "random-rush" -> new ScenarioGenerateRequest(20, 4, "rush_hour", "CLEAR", "rush", 0.18);
             default -> new ScenarioGenerateRequest(20, 4, "raw-m", "CLEAR", "normal", 0.12);
         };
@@ -1190,10 +1204,10 @@ public final class DashboardController {
         Random random = new Random(seedText.hashCode() + 42L);
         List<OrderDto> orders = new ArrayList<>();
         for (int index = 1; index <= config.orderCount(); index++) {
-            double pickupSpread = config.scenarioType().equals("driver-imbalanced-case") ? 0.020 : 0.045;
-            GeoPoint pickup = jitter(HCM_CENTER, random, config.scenarioType().equals("unused") ? 0.018 : pickupSpread);
-            GeoPoint dropoff = jitter(pickup, random, config.scenarioType().equals("rush_hour") ? 0.035 : 0.025);
-            int priority = random.nextDouble() < config.riskRate() ? 2 : 1;
+            double pickupSpread = config.scenarioType().equals("driver-imbalanced-case") || config.scenarioType().equals("clustered-pickups-random-dropoffs") ? 0.020 : 0.045;
+            GeoPoint pickup = jitter(HCM_CENTER, random, pickupSpread);
+            GeoPoint dropoff = dropoffPoint(config.scenarioType(), pickup, random, index);
+            int priority = random.nextDouble() < config.riskRate() || config.scenarioType().equals("high-priority-orders") ? 2 : 1;
             int deadline = 35 + random.nextInt(35);
             if (config.scenarioType().equals("tight-deadline-case")) {
                 deadline = 24 + random.nextInt(18);
@@ -1201,10 +1215,29 @@ public final class DashboardController {
                 deadline = 80 + random.nextInt(50);
             } else if (config.scenarioType().equals("driver-imbalanced-case")) {
                 deadline = 45 + random.nextInt(35);
+            } else if (config.scenarioType().equals("high-priority-orders")) {
+                deadline = 30 + random.nextInt(25);
             }
-            orders.add(new OrderDto("ORD-" + pad(index), "R" + (1 + random.nextInt(18)), pickup.latitude(), pickup.longitude(), dropoff.latitude(), dropoff.longitude(), 1 + random.nextInt(4), priority, deadline));
+            int demand = config.scenarioType().equals("tight-capacity") ? 2 + random.nextInt(3) : 1 + random.nextInt(4);
+            orders.add(new OrderDto("ORD-" + pad(index), "R" + (1 + random.nextInt(18)), pickup.latitude(), pickup.longitude(), dropoff.latitude(), dropoff.longitude(), demand, priority, deadline));
         }
         return orders;
+    }
+
+    private static GeoPoint dropoffPoint(String scenarioType, GeoPoint pickup, Random random, int index) {
+        if ("opposite-direction-dropoffs".equals(scenarioType)) {
+            return jitter(new GeoPoint(10.735 + (index % 2) * 0.11, 106.645 + (index % 3) * 0.055), random, 0.018);
+        }
+        if ("clustered-pickups-random-dropoffs".equals(scenarioType)) {
+            return jitter(HCM_CENTER, random, 0.070);
+        }
+        if ("random-pickups-clustered-dropoffs".equals(scenarioType)) {
+            return jitter(new GeoPoint(10.790, 106.710), random, 0.016);
+        }
+        if ("long-tail-distance".equals(scenarioType) && index % 5 == 0) {
+            return jitter(new GeoPoint(10.860, 106.790), random, 0.025);
+        }
+        return jitter(pickup, random, "rush_hour".equals(scenarioType) ? 0.035 : 0.025);
     }
 
     private List<DriverDto> generateDrivers(ScenarioGenerateRequest config, String seedText) {
@@ -1217,7 +1250,8 @@ public final class DashboardController {
             GeoPoint point = config.scenarioType().equals("driver-imbalanced-case") && index > 2
                     ? jitter(new GeoPoint(10.815, 106.745), random, 0.018)
                     : jitter(HCM_CENTER, random, config.scenarioType().equals("driver-imbalanced-case") ? 0.012 : 0.04);
-            drivers.add(new DriverDto("D" + pad(index), point.latitude(), point.longitude(), 20, random.nextInt(4), "IDLE"));
+            int capacity = config.scenarioType().equals("tight-capacity") ? 5 : 20;
+            drivers.add(new DriverDto("D" + pad(index), point.latitude(), point.longitude(), capacity, random.nextInt(4), "IDLE"));
         }
         return drivers;
     }
@@ -1476,9 +1510,10 @@ public final class DashboardController {
     private record ResolvedDispatchInput(String scenarioId, List<OrderDto> orders, List<DriverDto> drivers, String weather) { }
     public record KafkaPublishReceipt(String scenarioId, String traceId, String status, String message) { }
     public record RescueSimulationRequest(String baseRunId, List<EventDto> events) { }
-    public record BenchmarkJobRequest(String datasetId, List<String> solvers) {
-        static BenchmarkJobRequest defaults() { return new BenchmarkJobRequest("synthetic-food-smoke", List.of("single-order", "distance-batching", "OR-Tools", "PyVRP", "VROOM", "IntelligentRouteX")); }
-        BenchmarkJobRequest withDefaults() { return new BenchmarkJobRequest(datasetId == null ? "synthetic-food-smoke" : datasetId, solvers == null || solvers.isEmpty() ? defaults().solvers() : solvers); }
+    public record BenchmarkJobRequest(String datasetId, List<String> solvers, String mode) {
+        static BenchmarkJobRequest defaults() { return new BenchmarkJobRequest("synthetic-food-smoke", List.of("single-order", "distance-batching", "OR-Tools", "PyVRP", "VROOM", "IntelligentRouteX"), BenchmarkMode.FAST_GATE.name()); }
+        BenchmarkJobRequest withDefaults() { return new BenchmarkJobRequest(datasetId == null ? "synthetic-food-smoke" : datasetId, solvers == null || solvers.isEmpty() ? defaults().solvers() : solvers, mode == null || mode.isBlank() ? BenchmarkMode.FAST_GATE.name() : mode); }
+        BenchmarkMode modeEnum() { return BenchmarkMode.from(mode); }
     }
 
     public record DashboardRun(String runId, String kind, String createdAt, RunStatus status, RunVisualizationDto visualization) { }

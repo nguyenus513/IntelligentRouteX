@@ -1,6 +1,7 @@
 package com.routechain.v2.benchmark;
 
 import com.routechain.api.DashboardController;
+import com.routechain.v2.external.ExternalContributorStatus;
 import com.routechain.v2.routing.CachingRoutingProvider;
 import com.routechain.v2.routing.DistanceDurationMatrixSnapshot;
 import com.routechain.v2.routing.MatrixSnapshotBuilder;
@@ -45,6 +46,20 @@ public final class BenchmarkHybridRunService {
                 "distanceObjectiveSummary", diagnostics.get("distanceObjectiveSummary"),
                 "ortoolsObjectiveSummary", diagnostics.get("ortoolsObjectiveSummary"),
                 "distanceTradeoffReason", diagnostics.get("distanceTradeoffReason")));
+        return diagnostics;
+    }
+
+    public Map<String, Object> profileDiagnostics(BenchmarkProfile profile) {
+        BenchmarkProfile safeProfile = profile == null ? BenchmarkProfile.of(BenchmarkMode.FAST_GATE) : profile;
+        Map<String, Object> diagnostics = new LinkedHashMap<>();
+        diagnostics.put("benchmarkMode", safeProfile.mode().name());
+        diagnostics.put("routingMode", safeProfile.routingMode());
+        diagnostics.put("distanceClaimType", safeProfile.distanceClaimType());
+        diagnostics.put("fastGateSynthetic", safeProfile.fastGateSynthetic());
+        diagnostics.put("swapStarEnabled", safeProfile.swapStarEnabled());
+        diagnostics.put("externalContributorsEnabled", safeProfile.externalContributorsEnabled());
+        diagnostics.put("topKSeeds", safeProfile.topKSeeds());
+        diagnostics.put("externalContributorStatus", externalContributorStatus(safeProfile));
         return diagnostics;
     }
 
@@ -135,6 +150,17 @@ public final class BenchmarkHybridRunService {
             diagnostics.put("osrmCalls", missDelta);
         }
         return diagnostics;
+    }
+
+    private Map<String, Object> externalContributorStatus(BenchmarkProfile profile) {
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("vroom", Map.of(
+                "status", profile.externalContributorsEnabled() ? ExternalContributorStatus.EVIDENCE_GAP.name() : ExternalContributorStatus.DISABLED.name(),
+                "reason", profile.externalContributorsEnabled() ? "vroom-runtime-not-configured" : "disabled-in-fast-gate"));
+        status.put("pyvrp", Map.of(
+                "status", profile.externalContributorsEnabled() ? ExternalContributorStatus.EVIDENCE_GAP.name() : ExternalContributorStatus.DISABLED.name(),
+                "reason", profile.externalContributorsEnabled() ? "pyvrp-runtime-not-configured" : "disabled-in-fast-gate"));
+        return status;
     }
 
     @FunctionalInterface

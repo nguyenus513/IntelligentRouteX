@@ -31,7 +31,16 @@ public final class UnifiedHybridDispatchService {
                                SolutionSeedCandidate nativeSeed,
                                DistanceCostFunction distanceCost,
                                int topK) {
-        List<ImprovedSolutionCandidate> improvedSeeds = improver.improve(routeBindings, topK, distanceCost);
+        return run(archive, routeBindings, nativeSeed, distanceCost, topK, false);
+    }
+
+    public HybridRunResult run(EliteSolutionArchive archive,
+                               List<SeedRouteBinding> routeBindings,
+                               SolutionSeedCandidate nativeSeed,
+                               DistanceCostFunction distanceCost,
+                               int topK,
+                               boolean swapStarEnabled) {
+        List<ImprovedSolutionCandidate> improvedSeeds = improver.improve(routeBindings, topK, distanceCost, swapStarEnabled);
         if (improvedSeeds.isEmpty()) {
             improvedSeeds = improver.improve(archive, topK);
         }
