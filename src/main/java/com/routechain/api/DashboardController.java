@@ -10,6 +10,7 @@ import com.routechain.v2.DispatchV2CompatibleCore;
 import com.routechain.v2.DispatchV2Request;
 import com.routechain.v2.DispatchV2Result;
 import com.routechain.v2.DispatchStageLatency;
+import com.routechain.v2.benchmark.BenchmarkHybridRunService;
 import com.routechain.v2.unified.DispatchMode;
 import com.routechain.v2.unified.DispatchPolicy;
 import com.routechain.v2.unified.DispatchStrategy;
@@ -88,6 +89,7 @@ public final class DashboardController {
 
     private final DispatchV2CompatibleCore dispatchCore;
     private final UnifiedDispatchCore unifiedDispatchCore;
+    private final BenchmarkHybridRunService benchmarkHybridRunService;
     private final UnifiedHybridDispatchService hybridDispatchService;
     private final RoutingProvider routingProvider;
     private final RouteChainDispatchV2Properties properties;
@@ -104,9 +106,10 @@ public final class DashboardController {
         return thread;
     });
 
-    public DashboardController(DispatchV2CompatibleCore dispatchCore, UnifiedDispatchCore unifiedDispatchCore, UnifiedHybridDispatchService hybridDispatchService, RoutingProvider routingProvider, RouteChainDispatchV2Properties properties, ObjectProvider<KafkaTemplate<String, Object>> kafkaTemplateProvider) {
+    public DashboardController(DispatchV2CompatibleCore dispatchCore, UnifiedDispatchCore unifiedDispatchCore, BenchmarkHybridRunService benchmarkHybridRunService, UnifiedHybridDispatchService hybridDispatchService, RoutingProvider routingProvider, RouteChainDispatchV2Properties properties, ObjectProvider<KafkaTemplate<String, Object>> kafkaTemplateProvider) {
         this.dispatchCore = dispatchCore;
         this.unifiedDispatchCore = unifiedDispatchCore;
+        this.benchmarkHybridRunService = benchmarkHybridRunService;
         this.hybridDispatchService = hybridDispatchService;
         this.routingProvider = routingProvider;
         this.properties = properties;
@@ -369,7 +372,7 @@ public final class DashboardController {
         String jobId = id("BMJ");
         BenchmarkJob created = new BenchmarkJob(jobId, config.datasetId(), config.solvers(), RunStatus.RUNNING, Instant.now().toString(), null, null);
         benchmarkJobs.put(jobId, created);
-        RunVisualizationDto result = benchmarkResult(jobId, config);
+        RunVisualizationDto result = benchmarkHybridRunService.run(jobId, config, this::benchmarkResult);
         BenchmarkJob completed = created.withStatus(RunStatus.COMPLETED, result.runId(), null);
         benchmarkJobs.put(jobId, completed);
         saveRun(new DashboardRun(result.runId(), "BENCHMARK", Instant.now().toString(), RunStatus.COMPLETED, result));
