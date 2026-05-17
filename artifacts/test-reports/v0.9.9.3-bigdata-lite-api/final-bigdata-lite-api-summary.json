@@ -1,0 +1,20 @@
+{
+    "version":  "v0.9.9.3-bigdata-lite-api",
+    "overallPass":  true,
+    "compileJava":  "PASS",
+    "dashboardBuild":  "PASS",
+    "batchIngest":  "PASS",
+    "normalization":  "PASS",
+    "idempotency":  "PASS",
+    "queueRouting":  "PASS",
+    "backpressure":  "PASS",
+    "asyncLifecycle":  "PASS",
+    "pagination":  "PASS",
+    "artifactOutput":  "PASS",
+    "eventLog":  "PASS",
+    "eventStream":  "PASS",
+    "deadLetter":  "PASS",
+    "liveCoalescing":  "PASS",
+    "runtimeMetrics":  "PASS",
+    "dockerComposeSmoke":  "PASS"
+}

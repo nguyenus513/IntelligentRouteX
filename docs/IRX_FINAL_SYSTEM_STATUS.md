@@ -91,3 +91,13 @@ Status: production-demo closeout and full certification gates passed after goal-
 - Observability: PASS; `/v1/admin/queues`, `/v1/admin/workers`, and `/v1/admin/metrics` expose queue, worker, rate-limit, artifact, and Adaptive ML metrics.
 - Deployment profile: PASS file-level Docker Compose smoke for `irx-api`, `dashboard`, optional `redis`, `postgres`, and `minio` services.
 - Dashboard/runtime validation: `compileJava`, dashboard `typecheck`, and dashboard `build` pass.
+
+## v0.9.9.3-bigdata-lite-api
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.9.3-bigdata-lite-api/final-bigdata-lite-api-summary.json`.
+- Batch ingest: PASS for `100` and `1000` order batches through `/api/v1/ingest/orders/batch`, with strict invalid-row rejection evidence.
+- Runtime flow: PASS for `Ingest -> Normalize -> Queue -> Worker -> Store -> Paginate/Stream/Artifact` using `STATIC_QUEUE`, `LIVE_QUEUE`, `RESCUE_QUEUE`, and `DEAD_LETTER_QUEUE`.
+- Protection: PASS for idempotency duplicate replay, idempotency conflict, queue backpressure, API-key guard, and path traversal blocking on artifact access.
+- Output scale: PASS for summary-only result, routes/assignments/events cursor pagination, artifact listing/download, event log, and SSE progress stream.
+- Recovery/observability: PASS for retry-to-dead-letter, DLQ requeue, live telemetry coalescing, runtime state, queue counts, worker status, metrics, and Docker Compose smoke.
+- Validation: `compileJava`, dashboard `typecheck`, and dashboard `build` pass in the final BigData-lite gate.

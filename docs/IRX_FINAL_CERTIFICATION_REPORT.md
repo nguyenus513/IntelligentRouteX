@@ -99,3 +99,10 @@ Status: certified demo gate PASS.
 - Observability: PASS; `/v1/admin/queues`, `/v1/admin/workers`, and `/v1/admin/metrics` expose queue, worker, rate-limit, artifact, and Adaptive ML metrics.
 - Deployment profile: PASS file-level Docker Compose smoke for `irx-api`, `dashboard`, optional `redis`, `postgres`, and `minio` services.
 - Dashboard/runtime validation: `compileJava`, dashboard `typecheck`, and dashboard `build` pass.
+
+## v0.9.9.3 BigData-lite API
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.9.3-bigdata-lite-api/final-bigdata-lite-api-summary.json`.
+- Certification scope: BigData-lite API runtime for large-but-light inputs without Kafka/Spark: batch ingest, normalization, async queue lifecycle, backpressure, retry/dead-letter, paginated outputs, split artifacts, event stream, live telemetry coalescing, and runtime metrics.
+- Gate evidence: `compileJava=PASS`, `dashboardBuild=PASS`, `batchIngest=PASS`, `normalization=PASS`, `idempotency=PASS`, `queueRouting=PASS`, `backpressure=PASS`, `asyncLifecycle=PASS`, `pagination=PASS`, `artifactOutput=PASS`, `eventLog=PASS`, `eventStream=PASS`, `deadLetter=PASS`, `liveCoalescing=PASS`, `runtimeMetrics=PASS`, `dockerComposeSmoke=PASS`.
+- Claim boundary: this is an in-memory BigData-lite MVP with file/artifact-style outputs and runtime diagnostics; Kafka/Spark/Postgres-backed persistence remains later production hardening.
