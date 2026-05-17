@@ -1,0 +1,164 @@
+openapi: 3.0.3
+info:
+  title: IntelligentRouteX API
+  version: v1
+  description: IRX API-first dispatch platform MVP for static dispatch, live rolling dispatch, rescue, idempotency, tenant guard, and Adaptive ML diagnostics.
+servers:
+  - url: http://localhost:18116
+security:
+  - ApiKeyAuth: []
+paths:
+  /v1/health:
+    get:
+      summary: API health
+      responses:
+        '200': { description: OK }
+  /v1/version:
+    get:
+      summary: API/platform version
+      responses:
+        '200': { description: OK }
+  /v1/dispatch/jobs:
+    post:
+      summary: Create static dispatch job
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DispatchJobRequest' }
+      responses:
+        '202': { description: Accepted }
+        '400': { description: Validation error }
+        '401': { description: Missing API key }
+        '409': { description: Idempotency conflict }
+  /v1/dispatch/jobs/{jobId}:
+    get:
+      summary: Get dispatch job status
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200': { description: OK }
+        '403': { description: Cross-tenant access denied }
+  /v1/dispatch/jobs/{jobId}/result:
+    get:
+      summary: Get dispatch job result
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200': { description: Completed result with routes, metrics, diagnostics }
+  /v1/live/sessions:
+    post:
+      summary: Create live rolling session
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '201': { description: Created }
+  /v1/live/sessions/{sessionId}/orders:
+    post:
+      summary: Buffer a dynamic order
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '201': { description: Buffered }
+  /v1/live/sessions/{sessionId}/drivers/{driverId}/telemetry:
+    post:
+      summary: Update driver telemetry
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: driverId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Updated }
+  /v1/live/sessions/{sessionId}/cycles:
+    post:
+      summary: Run rolling dispatch cycle
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200': { description: Cycle completed }
+  /v1/live/sessions/{sessionId}/state:
+    get:
+      summary: Get live session state
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200': { description: State }
+  /v1/live/sessions/{sessionId}/events:
+    get:
+      summary: Live session SSE events
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200': { description: text/event-stream }
+  /v1/rescue/jobs:
+    post:
+      summary: Create rescue job
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '202': { description: Accepted }
+  /v1/rescue/jobs/{jobId}:
+    get:
+      summary: Get rescue job status
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200': { description: OK }
+  /v1/rescue/jobs/{jobId}/result:
+    get:
+      summary: Get rescue result
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200': { description: Completed rescue result }
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+  parameters:
+    TenantId:
+      name: X-Tenant-Id
+      in: header
+      required: true
+      schema: { type: string }
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string }
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    DispatchJobRequest:
+      type: object
+      required: [requestId, tenantId]
+      properties:
+        requestId: { type: string }
+        tenantId: { type: string }
+        profile: { type: string, enum: [FAST_GATE, QUALITY_BENCHMARK, QUALITY_SEEKING] }
+        datasetId: { type: string }
+        adaptiveMl:
+          type: object
+          properties:
+            enabled: { type: boolean }
+            mode: { type: string, enum: [OFF, DIAGNOSTIC, TOP_K_ASSISTED, QUALITY_SEEKING] }
+            topKMoves: { type: integer }
+            explorationRate: { type: number }
+            qualityBudgetMs: { type: integer }

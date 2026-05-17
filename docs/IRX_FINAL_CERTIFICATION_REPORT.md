@@ -78,3 +78,13 @@ Status: certified demo gate PASS.
 - Final report: `artifacts/test-reports/adaptive-ml-policy/v0.9.9-quality-seeking-final-report.json`.
 - QUALITY_SEEKING 20-case sanity: `20/20` completed; improved cases `2`; total distance gain `1.6km`; loss cases `0`; late regression `0`; dominance failures `0`; coverage regression `0`.
 - Claim boundary: Adaptive ML is certified for quality-seeking on this evidence suite; evaluator and dominance guard remain final authority.
+
+## v0.9.9.1 IRX API Platform
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.9.1-api-platform/final-api-platform-summary.json`.
+- API contract: `docs/openapi/irx-api-v1.yaml` exposes `/v1/health`, `/v1/version`, static dispatch jobs, live rolling sessions, rescue jobs, and live event stream.
+- Static dispatch API: PASS; async job/result facade returns `IRX_ML_FUSED_HYBRID`, metrics, routes, diagnostics, and Adaptive ML policy output.
+- Live dynamic API: PASS; session creation, dynamic order buffering, driver telemetry, rolling cycle, active routes, and state query verified.
+- Rescue API: PASS; rescue result includes `rescueDominanceGuard` with late/coverage safety.
+- Platform guards: idempotency, request validation, tenant guard, API-key guard, and event stream gates PASS.
+- Dashboard validation: `npm run typecheck` PASS and `npm run build` PASS.

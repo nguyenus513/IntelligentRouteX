@@ -70,3 +70,13 @@ Status: production-demo closeout and full certification gates passed after goal-
 - 5-case gate: PASS; improved cases `1/5`; distance gain `1.1km`; loss `0`; late regression `0`; dominance failures `0`; coverage regression `0`.
 - 20-case sanity: PASS; completed `20/20`; improved cases `2/20`; distance gain `1.6km`; loss `0`; late regression `0`; dominance failures `0`; coverage regression `0`.
 - Safety model: evaluator still owns accept/reject decisions; adaptive results remain protected by heuristic fallback and dominance guard.
+
+## v0.9.9.1-irx-api-platform
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.9.1-api-platform/final-api-platform-summary.json`.
+- API contract: `docs/openapi/irx-api-v1.yaml` exposes `/v1/health`, `/v1/version`, static dispatch jobs, live rolling sessions, rescue jobs, and live event stream.
+- Static dispatch API: PASS; async job/result facade returns `IRX_ML_FUSED_HYBRID`, metrics, routes, diagnostics, and Adaptive ML policy output.
+- Live dynamic API: PASS; session creation, dynamic order buffering, driver telemetry, rolling cycle, active routes, and state query verified.
+- Rescue API: PASS; rescue result includes `rescueDominanceGuard` with late/coverage safety.
+- Platform guards: idempotency, request validation, tenant guard, API-key guard, and event stream gates PASS.
+- Dashboard validation: `npm run typecheck` PASS and `npm run build` PASS.

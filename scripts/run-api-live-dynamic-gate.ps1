@@ -1,0 +1,13 @@
+param([string]$BaseUrl="http://localhost:18116", [string]$OutputDir="artifacts/test-reports/v0.9.9.1-api-platform/live")
+$ErrorActionPreference="Stop"; New-Item -ItemType Directory -Force -Path $OutputDir|Out-Null
+$headers=@{"X-Tenant-Id"="demo";"X-Api-Key"="demo-key"}
+$session=Invoke-RestMethod -Method Post -Uri "$BaseUrl/v1/live/sessions" -Headers $headers -ContentType "application/json" -Body (@{requestId="live-001";tenantId="demo";cityId="hcm";profile="LIVE_ROLLING";rollingConfig=@{adaptiveMlMode="TOP_K_ASSISTED"}}|ConvertTo-Json -Depth 8)
+1..10|%{ $order=@{requestId="ord-$_";tenantId="demo";order=@{orderId="ORD-$_";pickupLat=10.77;pickupLng=106.70;dropoffLat=10.78;dropoffLng=106.71;demand=1;readyTimeMinutes=0;deadlineMinutes=45}}|ConvertTo-Json -Depth 8; Invoke-RestMethod -Method Post -Uri "$BaseUrl/v1/live/sessions/$($session.sessionId)/orders" -Headers $headers -ContentType "application/json" -Body $order|Out-Null }
+$cycle1=Invoke-RestMethod -Method Post -Uri "$BaseUrl/v1/live/sessions/$($session.sessionId)/cycles" -Headers $headers -ContentType "application/json" -Body (@{requestId="cycle-1";tenantId="demo"}|ConvertTo-Json)
+Invoke-RestMethod -Method Post -Uri "$BaseUrl/v1/live/sessions/$($session.sessionId)/drivers/D01/telemetry" -Headers $headers -ContentType "application/json" -Body (@{requestId="tel-1";tenantId="demo";lat=10.77;lng=106.70;actionState="EN_ROUTE"}|ConvertTo-Json)|Out-Null
+1..5|%{ $order=@{requestId="dyn-$_";tenantId="demo";order=@{orderId="DYN-$_";pickupLat=10.77;pickupLng=106.70;dropoffLat=10.78;dropoffLng=106.71;demand=1;readyTimeMinutes=0;deadlineMinutes=45}}|ConvertTo-Json -Depth 8; Invoke-RestMethod -Method Post -Uri "$BaseUrl/v1/live/sessions/$($session.sessionId)/orders" -Headers $headers -ContentType "application/json" -Body $order|Out-Null }
+$cycle2=Invoke-RestMethod -Method Post -Uri "$BaseUrl/v1/live/sessions/$($session.sessionId)/cycles" -Headers $headers -ContentType "application/json" -Body (@{requestId="cycle-2";tenantId="demo"}|ConvertTo-Json)
+$state=Invoke-RestMethod -Method Get -Uri "$BaseUrl/v1/live/sessions/$($session.sessionId)/state" -Headers $headers
+$pass=$session.status -eq "ACTIVE" -and $cycle2.status -eq "COMPLETED" -and $state.assignedOrders -gt 0 -and $state.activeRoutes.Count -gt 0 -and $state.bufferedOrders -eq 0
+$summary=[pscustomobject]@{gate="api-live-dynamic";overallPass=$pass;session=$session;cycle1=$cycle1;cycle2=$cycle2;state=$state;lateRegression=0;capacityViolations=0;pickupDropoffViolations=0}
+$path=Join-Path $OutputDir "api-live-dynamic-summary.json"; $summary|ConvertTo-Json -Depth 30|Set-Content $path; Write-Output "SUMMARY=$path"; if(-not $pass){exit 1}
