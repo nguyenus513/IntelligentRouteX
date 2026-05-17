@@ -162,3 +162,13 @@ components:
             topKMoves: { type: integer }
             explorationRate: { type: number }
             qualityBudgetMs: { type: integer }
+
+# v0.9.9.4 contract-final endpoint groups:
+# /api/v1/jobs
+# /api/v1/static/dispatch
+# /api/v1/live/start
+# /api/v1/rescue/jobs
+# /api/v1/bigdata/batches
+# /api/v1/artifacts
+# /api/v1/events
+# /api/v1/metrics

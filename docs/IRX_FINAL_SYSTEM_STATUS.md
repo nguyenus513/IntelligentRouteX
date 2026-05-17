@@ -101,3 +101,13 @@ Status: production-demo closeout and full certification gates passed after goal-
 - Output scale: PASS for summary-only result, routes/assignments/events cursor pagination, artifact listing/download, event log, and SSE progress stream.
 - Recovery/observability: PASS for retry-to-dead-letter, DLQ requeue, live telemetry coalescing, runtime state, queue counts, worker status, metrics, and Docker Compose smoke.
 - Validation: `compileJava`, dashboard `typecheck`, and dashboard `build` pass in the final BigData-lite gate.
+
+## v0.9.9.4-api-contract-final
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.9.4-api-contract-final/api-contract-summary.json`.
+- Contract envelope: PASS for success/error `{ ok, requestId, data/error, meta }` with stable `NOT_FOUND` and `CONFLICT` checks.
+- Job lifecycle: PASS for create/get/result/cancel-conflict and clear links/progress/status fields.
+- API groups: PASS for static dispatch, live rolling, rescue, BigData-lite, artifact, event, runtime state, queues, workers, and metrics.
+- Idempotency: PASS for same-key replay and same-key/different-payload conflict.
+- BigData-lite: PASS for batch ingest, invalid-row normalization, pagination, metrics, and dead-letter visibility.
+- Docs: OpenAPI marker coverage plus `docs/API_REFERENCE.md`, `docs/API_EXAMPLES.md`, and `docs/BIGDATA_LITE_API.md` present.

@@ -106,3 +106,9 @@ Status: certified demo gate PASS.
 - Certification scope: BigData-lite API runtime for large-but-light inputs without Kafka/Spark: batch ingest, normalization, async queue lifecycle, backpressure, retry/dead-letter, paginated outputs, split artifacts, event stream, live telemetry coalescing, and runtime metrics.
 - Gate evidence: `compileJava=PASS`, `dashboardBuild=PASS`, `batchIngest=PASS`, `normalization=PASS`, `idempotency=PASS`, `queueRouting=PASS`, `backpressure=PASS`, `asyncLifecycle=PASS`, `pagination=PASS`, `artifactOutput=PASS`, `eventLog=PASS`, `eventStream=PASS`, `deadLetter=PASS`, `liveCoalescing=PASS`, `runtimeMetrics=PASS`, `dockerComposeSmoke=PASS`.
 - Claim boundary: this is an in-memory BigData-lite MVP with file/artifact-style outputs and runtime diagnostics; Kafka/Spark/Postgres-backed persistence remains later production hardening.
+
+## v0.9.9.4 API Contract Final
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.9.4-api-contract-final/api-contract-summary.json`.
+- Certified groups: health, response envelope, error envelope, job lifecycle, static API, live API, rescue API, BigData-lite API, idempotency, rate-limit placeholder, artifact guard, event stream/log, observability, and OpenAPI/docs.
+- Contract boundary: API is now locked for Playground work; future UI must consume these `/api/v1` contracts instead of shaping backend responses ad hoc.
