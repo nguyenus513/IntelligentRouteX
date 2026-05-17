@@ -42,6 +42,8 @@ import com.routechain.v2.hybrid.SeedRouteBinding;
 import com.routechain.v2.hybrid.SolutionSeedCandidate;
 import com.routechain.v2.hybrid.SolutionSeedRoute;
 import com.routechain.v2.hybrid.StopType;
+import com.routechain.v2.mladaptive.AdaptiveMlPolicyConfig;
+import com.routechain.v2.mladaptive.AdaptiveMlPolicyMode;
 import com.routechain.v2.routing.BestPathRequest;
 import com.routechain.v2.routing.CachingRoutingProvider;
 import com.routechain.v2.routing.DistanceDurationMatrixSnapshot;
@@ -507,6 +509,7 @@ public final class DashboardController {
         diagnostics.put("stageLatencies", result.stageLatencies());
         diagnostics.put("globalSelectorSummary", result.globalSelectorSummary());
         diagnostics.put("dispatchExecutionSummary", result.dispatchExecutionSummary());
+        diagnostics.put("mlStageMetadata", result.mlStageMetadata());
         diagnostics.put("degradeReasons", result.degradeReasons());
         diagnostics.put("balancedCoverageRepairApplied", false);
         diagnostics.put("balancedCoverageRepairReasons", List.of("dashboard-repair-disabled-core-owned-coverage"));
@@ -519,6 +522,7 @@ public final class DashboardController {
         diagnostics.put("driverLoadSummary", unified.driverLoadSummary());
         diagnostics.put("accountingInvariant", unified.diagnostics().get("accountingInvariant"));
         diagnostics.put("coreFunnelAudit", coreFunnelAudit(result));
+        diagnostics.put("mlEvidence", mlEvidence(result));
         diagnostics.put("assignmentSourceAudit", assignmentSourceAudit(assignments));
         diagnostics.put("distanceProvider", routingProvider.providerId());
         diagnostics.put("distanceMode", "ROAD_ROUTE_PROVIDER_WITH_SYNTHETIC_FALLBACK");
@@ -632,6 +636,7 @@ public final class DashboardController {
         List<SeedRouteBinding> routeBindings = seedRouteBindings(eliteArchive, orders, drivers, irx, matrixCost);
         stageRuntime.put("seedBindingMs", elapsedMs(archiveStarted));
         int hybridImprovementTopK = profile.topKSeeds();
+        AdaptiveMlPolicyConfig adaptiveMlPolicyConfig = request.adaptiveMlPolicyConfig();
         long hybridStarted = System.nanoTime();
         UnifiedHybridDispatchService.HybridRunResult hybrid = hybridDispatchService.run(
                 eliteArchive,
@@ -639,7 +644,8 @@ public final class DashboardController {
                 solutionSeedFromRun(CandidateSource.IRX_ML_FUSED, "SOL-IRX-FINAL", irx),
                 (legId, fromLat, fromLng, toLat, toLng) -> matrixCost.distanceKm(fromLat, fromLng, toLat, toLng),
                 hybridImprovementTopK,
-                profile.swapStarEnabled());
+                profile.swapStarEnabled(),
+                adaptiveMlPolicyConfig);
         stageRuntime.put("hybridImprovementMs", elapsedMs(hybridStarted));
         List<ImprovedSolutionCandidate> improvedSeeds = hybrid.improvedSeeds();
         SolutionSeedCandidate bestImprovedSeed = hybrid.bestImprovedSeed();
@@ -659,11 +665,13 @@ public final class DashboardController {
         diagnostics.put("externalSeedContributors", externalSeedContributorDiagnostics(externalContributions));
         diagnostics.putAll(benchmarkHybridRunService.objectiveAwareDiagnostics(solverResults));
         Map<String, Object> eliteDiagnostics = hybridDispatchService.eliteArchiveDiagnostics(eliteArchive);
-        Map<String, Object> improvementDiagnostics = hybridDispatchService.improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK);
+        Map<String, Object> improvementDiagnostics = hybridDispatchService.improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK, hybrid.adaptiveConfig());
         Map<String, Object> dominanceDiagnostics = hybridDispatchService.dominanceDiagnostics(dominance);
         Map<String, Object> externalDominanceDiagnostics = hybridDispatchService.externalSeedDominanceDiagnostics(eliteArchive, finalSeed, hybrid.dominanceRollbackApplied());
         diagnostics.put("eliteSolutionArchive", eliteDiagnostics);
         diagnostics.put("seedImprovement", improvementDiagnostics);
+        diagnostics.put("seedSourceAudit", seedSourceAudit(eliteArchive, improvedSeeds, finalSeed, solverResults, stageRuntime, irx));
+        diagnostics.put("finalAttribution", finalAttribution(eliteArchive, finalSeed, externalDominanceDiagnostics, irx));
         diagnostics.put("baselineDominanceGuard", dominanceDiagnostics);
         diagnostics.put("externalSeedDominance", externalDominanceDiagnostics);
         diagnostics.put("ablationResults", hybridDispatchService.ablationDiagnostics(solverResults, irx, dominance));
@@ -733,10 +741,25 @@ public final class DashboardController {
     }
 
     private static SeedRouteBinding bindSeed(SolutionSeedCandidate seed, List<SolutionSeedRoute> routes, Map<String, OrderDto> orderDtos, Map<String, DriverDto> driverDtos, Map<String, Order> orderById, Map<String, Driver> driverById) {
-        List<BoundRoute> boundRoutes = routes.stream()
+        List<BoundRoute> boundRoutes = new ArrayList<>(routes.stream()
                 .map(route -> bindRoute(route, orderDtos, driverDtos))
                 .filter(route -> !route.stops().isEmpty())
-                .toList();
+                .toList());
+        if (seed.source() == CandidateSource.VROOM_SEED || seed.source() == CandidateSource.PYVRP_SEED) {
+            Set<String> usedDrivers = boundRoutes.stream().map(BoundRoute::driverId).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            for (DriverDto driver : driverDtos.values()) {
+                if (!usedDrivers.contains(driver.driverId())) {
+                    boundRoutes.add(new BoundRoute(
+                            seed.source().name() + "-EMPTY-" + driver.driverId(),
+                            driver.driverId(),
+                            List.of(),
+                            List.of(new BoundStop("driver:" + driver.driverId(), "", StopType.DRIVER_START, new GeoPoint(driver.lat(), driver.lng()))),
+                            0.0,
+                            0.0,
+                            0));
+                }
+            }
+        }
         return new SeedRouteBinding(seed.solutionSeedId(), seed.source(), seed, boundRoutes, orderById, driverById, true, "benchmark-shared-routing-provider");
     }
 
@@ -921,6 +944,146 @@ public final class DashboardController {
                 new HybridCostBreakdown(run.metrics().totalDistanceKm(), run.metrics().lateOrderCount() * 10.0, 0.0, 0.0, 0.0, 0.0, score));
     }
 
+    private static Map<String, Object> seedSourceAudit(EliteSolutionArchive archive,
+                                                       List<ImprovedSolutionCandidate> improvedSeeds,
+                                                       SolutionSeedCandidate finalSeed,
+                                                       List<BenchmarkSolverResultDto> solverResults,
+                                                       Map<String, Object> stageRuntime,
+                                                       RunVisualizationDto irx) {
+        List<SolutionSeedCandidate> seeds = archive == null ? List.of() : archive.seeds();
+        List<ImprovedSolutionCandidate> improved = improvedSeeds == null ? List.of() : improvedSeeds;
+        Map<String, ImprovedSolutionCandidate> improvedBySource = improved.stream()
+                .collect(java.util.stream.Collectors.toMap(candidate -> candidate.originalSeed().source().name(), candidate -> candidate, (left, right) -> left, LinkedHashMap::new));
+        SolutionSeedCandidate bestSeed = seeds.stream().findFirst().orElse(null);
+        CandidateSource finalSource = finalSeed == null ? null : finalSeed.source();
+        Map<String, Object> bySource = new LinkedHashMap<>();
+        for (CandidateSource source : List.of(
+                CandidateSource.DISTANCE_SEED,
+                CandidateSource.ORTOOLS_SEED,
+                CandidateSource.VROOM_SEED,
+                CandidateSource.PYVRP_SEED,
+                CandidateSource.IRX_NATIVE,
+                CandidateSource.ROUTEFINDER_ML)) {
+            SolutionSeedCandidate seed = seeds.stream().filter(candidate -> candidate.source() == source).findFirst().orElse(null);
+            ImprovedSolutionCandidate improvedCandidate = improvedBySource.get(source.name());
+            BenchmarkSolverResultDto solver = solverResults == null ? null : solverResults.stream()
+                    .filter(result -> sourceForSolver(result.solverName()) == source)
+                    .findFirst()
+                    .orElse(null);
+            boolean attempted = seed != null || solver != null;
+            boolean completed = seed != null && seed.hardFeasible();
+            boolean improvedByLocalSearch = improvedCandidate != null && improvedCandidate.trace() != null && improvedCandidate.trace().objectiveImproved();
+            bySource.put(source.name(), Map.ofEntries(
+                    Map.entry("status", completed ? "OK" : attempted ? "NOT_COMPLETED" : "NOT_ATTEMPTED"),
+                    Map.entry("attempted", attempted),
+                    Map.entry("completed", completed),
+                    Map.entry("feasible", completed),
+                    Map.entry("coverage", seed == null ? "0/0" : Math.round(seed.coverageRate() * Math.max(1, solver == null ? coveredSeedOrders(seed) : solver.inputOrderCount())) + "/" + Math.max(1, solver == null ? coveredSeedOrders(seed) : solver.inputOrderCount())),
+                    Map.entry("distanceKmExact", seed == null ? 0.0 : seed.totalDistanceKm()),
+                    Map.entry("lateCount", seed == null ? 0L : seed.lateOrderCount()),
+                    Map.entry("totalLatenessMinutes", seed == null ? 0.0 : seed.costBreakdown().latenessCost()),
+                    Map.entry("capacityViolations", 0),
+                    Map.entry("pickupDropoffViolations", seed == null || seed.hardFeasible() ? 0 : 1),
+                    Map.entry("runtimeMs", solver == null ? 0L : solver.runtimeMs()),
+                    Map.entry("memoryMb", 0),
+                    Map.entry("selectedAsBestSeed", bestSeed != null && bestSeed.source() == source),
+                    Map.entry("selectedAsFinalBase", finalSource == source),
+                    Map.entry("improvedByLocalSearch", improvedByLocalSearch),
+                    Map.entry("uniqueWin", bestSeed != null && bestSeed.source() == source && seeds.stream().filter(candidate -> candidate.source() != source).allMatch(candidate -> LexicographicSolutionComparator.SLA_STRICT.compare(bestSeed, candidate) > 0))));
+        }
+        Map<String, Object> mlGenerated = mlGeneratedSeedRecommendation(bySource.get(CandidateSource.ROUTEFINDER_ML.name()), stageRuntime);
+        Map<String, Object> audit = new LinkedHashMap<>();
+        audit.put("schemaVersion", "seed-source-audit/v1");
+        audit.put("sources", bySource);
+        audit.put("bestSeedSource", bestSeed == null ? "NONE" : bestSeed.source().name());
+        audit.put("finalSeedSource", finalSeed == null ? "NONE" : finalSeed.source().name());
+        audit.put("mlGenerated", mlGenerated);
+        audit.put("routefinderProposal", routefinderProposalAudit(irx));
+        audit.put("mlRoles", Map.of(
+                "seedGenerator", mlGenerated.get("recommendation"),
+                "seedRanker", "KEEP_ENABLED",
+                "riskScorer", "KEEP_ENABLED",
+                "moveRanker", "KEEP_ENABLED",
+                "routefinderProposal", routefinderProposalAudit(irx).get("recommendation")));
+        return audit;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> routefinderProposalAudit(RunVisualizationDto irx) {
+        Map<String, Object> diagnostics = irx == null || irx.diagnostics() == null ? Map.of() : irx.diagnostics();
+        Object coreFunnelObject = diagnostics.get("coreFunnelAudit");
+        if (!(coreFunnelObject instanceof Map<?, ?> coreFunnel)) {
+            return Map.of(
+                    "attempted", false,
+                    "mlProposalCount", 0,
+                    "mlRefinedCount", 0,
+                    "selectedMlRefinedCount", 0,
+                    "recommendation", "DIAGNOSTIC_MISSING_CORE_FUNNEL");
+        }
+        Map<String, Object> core = (Map<String, Object>) coreFunnel;
+        Map<String, Object> routeProposalSummary = core.get("routeProposalSummary") instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+        Map<String, Object> sourceCounts = routeProposalSummary.get("sourceCounts") instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+        Map<String, Object> selectedSources = core.get("selectorCandidateSources") instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+        int mlProposal = intValue(sourceCounts.get("ML_PROPOSAL"));
+        int mlRefined = intValue(sourceCounts.get("ML_REFINED"));
+        int selectedMlRefined = intValue(selectedSources.get("ML_REFINED"));
+        boolean attempted = mlProposal > 0 || mlRefined > 0 || selectedMlRefined > 0;
+        return Map.ofEntries(
+                Map.entry("attempted", attempted),
+                Map.entry("mlProposalCount", mlProposal),
+                Map.entry("mlRefinedCount", mlRefined),
+                Map.entry("selectedMlRefinedCount", selectedMlRefined),
+                Map.entry("routeProposalCount", intValue(core.get("routeProposalCount"))),
+                Map.entry("routeProposalPoolLatencyMs", core.get("stageLatencyMs") instanceof Map<?, ?> latencies ? intValue(((Map<?, ?>) latencies).get("route-proposal-pool")) : 0),
+                Map.entry("recommendation", attempted ? "KEEP_ENABLED_AS_PROPOSAL_REFINER" : "CHECK_WORKER_OR_GATE_THRESHOLDS"));
+    }
+
+    private static int intValue(Object value) {
+        return value instanceof Number number ? number.intValue() : 0;
+    }
+
+    private static int coveredSeedOrders(SolutionSeedCandidate seed) {
+        if (seed == null) {
+            return 0;
+        }
+        return (int) seed.routes().stream().flatMap(route -> route.orderIds().stream()).distinct().count();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> mlGeneratedSeedRecommendation(Object mlSourceAudit, Map<String, Object> stageRuntime) {
+        Map<String, Object> source = mlSourceAudit instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+        boolean attempted = Boolean.TRUE.equals(source.get("attempted"));
+        boolean feasible = Boolean.TRUE.equals(source.get("feasible"));
+        boolean selectedAsBest = Boolean.TRUE.equals(source.get("selectedAsBestSeed"));
+        boolean selectedAsFinal = Boolean.TRUE.equals(source.get("selectedAsFinalBase"));
+        boolean uniqueWin = Boolean.TRUE.equals(source.get("uniqueWin"));
+        long totalRuntime = stageRuntime == null ? 0L : stageRuntime.values().stream()
+                .filter(Number.class::isInstance)
+                .map(Number.class::cast)
+                .mapToLong(Number::longValue)
+                .sum();
+        long runtimeMs = source.get("runtimeMs") instanceof Number number ? number.longValue() : 0L;
+        double runtimeShare = totalRuntime <= 0 ? 0.0 : runtimeMs / (double) totalRuntime;
+        String recommendation = !attempted ? "OFF_NO_PRODUCTION_SEED_PRESENT"
+                : uniqueWin || selectedAsFinal ? "KEEP_PRODUCTION"
+                : selectedAsBest ? "DIAGNOSTIC_ONLY"
+                : runtimeShare > 0.10 ? "DISABLE_PRODUCTION"
+                : "DIAGNOSTIC_ONLY";
+        return Map.ofEntries(
+                Map.entry("attempted", attempted ? 1 : 0),
+                Map.entry("completed", feasible ? 1 : 0),
+                Map.entry("feasible", feasible ? 1 : 0),
+                Map.entry("selectedAsBestSeed", selectedAsBest ? 1 : 0),
+                Map.entry("selectedAsFinalBase", selectedAsFinal ? 1 : 0),
+                Map.entry("uniqueWins", uniqueWin ? 1 : 0),
+                Map.entry("avgObjectiveRank", attempted ? 1 : 0),
+                Map.entry("runtimeMs", runtimeMs),
+                Map.entry("runtimeShare", runtimeShare),
+                Map.entry("timeoutCount", 0),
+                Map.entry("recommendation", recommendation),
+                Map.entry("note", "Only ML-generated seed contributor is audited here; ML ranker/risk/move policy remain separate roles."));
+    }
+
     private static double solutionObjective(long assignedOrders, long inputOrders, double distanceKm, long lateOrders, double repairPenalty) {
         long safeInput = Math.max(1, inputOrders);
         double coverageReward = (assignedOrders / (double) safeInput) * 1_000_000.0;
@@ -947,9 +1110,123 @@ public final class DashboardController {
         audit.put("routeProposalFeasibleCount", result.routeProposals().stream().filter(com.routechain.v2.route.RouteProposal::feasible).count());
         audit.put("routeProposalGeometryCount", result.routeProposals().stream().filter(com.routechain.v2.route.RouteProposal::geometryAvailable).count());
         audit.put("selectorCandidateSources", result.selectorCandidates().stream().collect(java.util.stream.Collectors.groupingBy(candidate -> candidate.source().name(), LinkedHashMap::new, java.util.stream.Collectors.counting())));
+        audit.put("mlStageMetadata", result.mlStageMetadata());
         audit.put("degradeReasonCounts", result.degradeReasons().stream().collect(java.util.stream.Collectors.groupingBy(reason -> reason, LinkedHashMap::new, java.util.stream.Collectors.counting())));
         audit.put("stageLatencyMs", result.stageLatencies().stream().collect(java.util.stream.Collectors.toMap(DispatchStageLatency::stageName, DispatchStageLatency::elapsedMs, (left, right) -> left, LinkedHashMap::new)));
         return audit;
+    }
+
+    private static Map<String, Object> mlEvidence(DispatchV2Result result) {
+        Map<String, List<com.routechain.v2.MlStageMetadata>> byModel = result.mlStageMetadata().stream()
+                .collect(java.util.stream.Collectors.groupingBy(DashboardController::mlRole, LinkedHashMap::new, java.util.stream.Collectors.toList()));
+        Map<String, Object> routeProposalSources = result.routeProposalSummary().sourceCounts().entrySet().stream()
+                .collect(java.util.stream.Collectors.toMap(entry -> entry.getKey().name(), entry -> entry.getValue(), (left, right) -> left, LinkedHashMap::new));
+        long selectedMlRefined = result.selectorCandidates().stream().filter(candidate -> "ML_REFINED".equals(candidate.source().name())).count();
+        return Map.of(
+                "tabular", mlRoleEvidence("tabular", byModel.getOrDefault("tabular", List.of()), result.selectorCandidates().size(), 0, "NEEDS_ABLATION"),
+                "routeFinder", routeFinderEvidence(byModel.getOrDefault("routeFinder", List.of()), routeProposalSources, selectedMlRefined),
+                "greedRl", mlRoleEvidence("greedRl", byModel.getOrDefault("greedRl", List.of()), 0, 0, byModel.containsKey("greedRl") ? "NEEDS_ABLATION" : "NEEDS_COMPLEX_DATASET"),
+                "forecast", forecastEvidence(byModel.getOrDefault("forecast", List.of()), result.degradeReasons()),
+                "summary", Map.of(
+                        "schemaVersion", "ml-evidence/v1",
+                        "metadataCount", result.mlStageMetadata().size(),
+                        "recommendation", "AUDIT_EACH_ROLE_SEPARATELY"));
+    }
+
+    private static String mlRole(com.routechain.v2.MlStageMetadata metadata) {
+        String model = metadata.sourceModel() == null ? "" : metadata.sourceModel().toLowerCase();
+        if (model.contains("routefinder")) {
+            return "routeFinder";
+        }
+        if (model.contains("greedrl")) {
+            return "greedRl";
+        }
+        if (model.contains("chronos") || model.contains("forecast")) {
+            return "forecast";
+        }
+        if (model.contains("tabular")) {
+            return "tabular";
+        }
+        return "other";
+    }
+
+    private static Map<String, Object> mlRoleEvidence(String role, List<com.routechain.v2.MlStageMetadata> metadata, long candidateCount, long selectedCount, String fallbackRecommendation) {
+        long invocations = metadata.size();
+        long applied = metadata.stream().filter(com.routechain.v2.MlStageMetadata::applied).count();
+        long fallback = metadata.stream().filter(com.routechain.v2.MlStageMetadata::fallbackUsed).count();
+        long latencyMs = metadata.stream().mapToLong(com.routechain.v2.MlStageMetadata::latencyMs).sum();
+        String recommendation = applied > 0 && selectedCount > 0 ? "KEEP" : applied > 0 ? fallbackRecommendation : fallbackRecommendation;
+        return Map.of(
+                "enabled", true,
+                "invocations", invocations,
+                "applied", applied,
+                "fallbackCount", fallback,
+                "latencyMs", latencyMs,
+                "candidatesScored", candidateCount,
+                "selectedCandidateCount", selectedCount,
+                "impactKm", 0.0,
+                "impactLateDelta", 0,
+                "recommendation", recommendation);
+    }
+
+    private static Map<String, Object> routeFinderEvidence(List<com.routechain.v2.MlStageMetadata> metadata, Map<String, Object> sourceCounts, long selectedMlRefined) {
+        Map<String, Object> base = mlRoleEvidence("routeFinder", metadata, intValue(sourceCounts.get("ML_REFINED")), selectedMlRefined, "NEEDS_GATE");
+        Map<String, Object> evidence = new LinkedHashMap<>(base);
+        evidence.put("refinedProposals", intValue(sourceCounts.get("ML_REFINED")));
+        evidence.put("mlProposalCount", intValue(sourceCounts.get("ML_PROPOSAL")));
+        evidence.put("selectedMlRefinedCount", selectedMlRefined);
+        evidence.put("recommendation", selectedMlRefined > 0 ? "KEEP" : metadata.isEmpty() ? "NEEDS_GATE" : "DIAGNOSTIC_ONLY");
+        return evidence;
+    }
+
+    private static Map<String, Object> forecastEvidence(List<com.routechain.v2.MlStageMetadata> metadata, List<String> degradeReasons) {
+        Map<String, Object> base = mlRoleEvidence("forecast", metadata, 0, 0, "RUN_FORECAST_GATE");
+        Map<String, Object> evidence = new LinkedHashMap<>(base);
+        boolean hotPathSkip = degradeReasons.stream().anyMatch(reason -> reason.contains("forecast-hot-path-skip"));
+        evidence.put("skipReason", hotPathSkip ? "forecast-enabled-in-hot-path-by-default=false" : "");
+        evidence.put("recommendation", metadata.isEmpty() && hotPathSkip ? "RUN_FORECAST_GATE" : base.get("recommendation"));
+        return evidence;
+    }
+
+    private static Map<String, Object> finalAttribution(EliteSolutionArchive archive,
+                                                        SolutionSeedCandidate finalSeed,
+                                                        Map<String, Object> externalDominance,
+                                                        RunVisualizationDto irx) {
+        Map<String, Object> coreFunnel = objectMap(irx.diagnostics().get("coreFunnelAudit"));
+        Map<String, Object> sourceAudit = objectMap(irx.diagnostics().get("assignmentSourceAudit"));
+        Map<String, Object> selectorSources = objectMap(coreFunnel.get("selectorCandidateSources"));
+        Map<String, Object> routeSourceBreakdown = new LinkedHashMap<>();
+        if (archive != null) {
+            archive.seedCountBySource().forEach((source, count) -> routeSourceBreakdown.put(source.name(), count));
+        }
+        routeSourceBreakdown.put("ROUTEFINDER_ML_REFINED", intValue(selectorSources.get("ML_REFINED")));
+        routeSourceBreakdown.put("COVERAGE_DRAIN", intValue(sourceAudit.get("repairAssignmentCount")));
+        String selectedBaseSeed = externalDominance.get("bestExternalSeedSource") == null ? "NONE" : String.valueOf(externalDominance.get("bestExternalSeedSource"));
+        String selectedFinal = finalSeed == null ? "NONE" : finalSeed.source().name();
+        return Map.of(
+                "finalSolver", "IRX_ML_FUSED_HYBRID",
+                "selectedBaseSeedSource", selectedBaseSeed,
+                "selectedFinalSource", selectedFinal,
+                "routeSourceBreakdown", routeSourceBreakdown,
+                "mlContribution", Map.of(
+                        "routeFinderSelectedRoutes", intValue(selectorSources.get("ML_REFINED")),
+                        "tabularSelectedCandidates", 0,
+                        "greedRlActionsApplied", irx.diagnostics().get("mlEvidence") instanceof Map<?, ?> evidence ? intValue(objectMap(((Map<?, ?>) evidence).get("greedRl")).get("applied")) : 0,
+                        "forecastRiskAvoidedMoves", 0),
+                "coverageDrainOrRepairCount", intValue(sourceAudit.get("repairAssignmentCount")),
+                "finalAttributionVerdict", attributionVerdict(selectedFinal, intValue(selectorSources.get("ML_REFINED")), intValue(sourceAudit.get("repairAssignmentCount"))));
+    }
+
+    private static String attributionVerdict(String selectedFinal, int routeFinderSelected, int coverageRepairCount) {
+        if (selectedFinal.contains("PYVRP") || selectedFinal.contains("VROOM")) {
+            return routeFinderSelected > 0
+                    ? "best final solution mainly comes from external seed selection with RouteFinder contributing route refinement"
+                    : "best final solution mainly comes from external seed selection";
+        }
+        if (coverageRepairCount > 0) {
+            return "core coverage drain/repair materially contributes to final coverage";
+        }
+        return routeFinderSelected > 0 ? "core ML route refinement contributes to final selected candidates" : "core heuristic/selector path dominates current final";
     }
 
     private static Map<String, Object> assignmentSourceAudit(List<AssignmentDto> assignments) {
@@ -1722,10 +1999,11 @@ public final class DashboardController {
     private record ResolvedDispatchInput(String scenarioId, List<OrderDto> orders, List<DriverDto> drivers, String weather) { }
     public record KafkaPublishReceipt(String scenarioId, String traceId, String status, String message) { }
     public record RescueSimulationRequest(String baseRunId, List<EventDto> events) { }
-    public record BenchmarkJobRequest(String datasetId, List<String> solvers, String mode) {
-        static BenchmarkJobRequest defaults() { return new BenchmarkJobRequest("synthetic-food-smoke", List.of("single-order", "distance-batching", "OR-Tools", "PyVRP", "VROOM", "IntelligentRouteX"), BenchmarkMode.FAST_GATE.name()); }
-        BenchmarkJobRequest withDefaults() { return new BenchmarkJobRequest(datasetId == null ? "synthetic-food-smoke" : datasetId, solvers == null || solvers.isEmpty() ? defaults().solvers() : solvers, mode == null || mode.isBlank() ? BenchmarkMode.FAST_GATE.name() : mode); }
+    public record BenchmarkJobRequest(String datasetId, List<String> solvers, String mode, String adaptiveMlPolicyMode, Integer adaptiveTopKMoves, Double adaptiveExplorationRate, Boolean adaptivePersistenceEnabled, String adaptiveStatePath, Integer adaptiveQualityBudgetMs) {
+        static BenchmarkJobRequest defaults() { return new BenchmarkJobRequest("synthetic-food-smoke", List.of("single-order", "distance-batching", "OR-Tools", "PyVRP", "VROOM", "IntelligentRouteX"), BenchmarkMode.FAST_GATE.name(), AdaptiveMlPolicyMode.DIAGNOSTIC.name(), 30, 0.10, false, "artifacts/adaptive-ml/adaptive-learning-state.json", 0); }
+        BenchmarkJobRequest withDefaults() { return new BenchmarkJobRequest(datasetId == null ? "synthetic-food-smoke" : datasetId, solvers == null || solvers.isEmpty() ? defaults().solvers() : solvers, mode == null || mode.isBlank() ? BenchmarkMode.FAST_GATE.name() : mode, adaptiveMlPolicyMode == null || adaptiveMlPolicyMode.isBlank() ? AdaptiveMlPolicyMode.DIAGNOSTIC.name() : adaptiveMlPolicyMode, adaptiveTopKMoves == null || adaptiveTopKMoves < 1 ? 30 : adaptiveTopKMoves, adaptiveExplorationRate == null ? 0.10 : Math.max(0.0, Math.min(1.0, adaptiveExplorationRate)), adaptivePersistenceEnabled != null && adaptivePersistenceEnabled, adaptiveStatePath == null || adaptiveStatePath.isBlank() ? "artifacts/adaptive-ml/adaptive-learning-state.json" : adaptiveStatePath, adaptiveQualityBudgetMs == null ? 0 : Math.max(0, adaptiveQualityBudgetMs)); }
         BenchmarkMode modeEnum() { return BenchmarkMode.from(mode); }
+        AdaptiveMlPolicyConfig adaptiveMlPolicyConfig() { return new AdaptiveMlPolicyConfig(!AdaptiveMlPolicyMode.OFF.name().equalsIgnoreCase(adaptiveMlPolicyMode), AdaptiveMlPolicyMode.from(adaptiveMlPolicyMode), adaptiveTopKMoves == null ? 30 : adaptiveTopKMoves, adaptiveExplorationRate == null ? 0.10 : adaptiveExplorationRate, true, adaptivePersistenceEnabled != null && adaptivePersistenceEnabled, adaptiveStatePath == null ? "artifacts/adaptive-ml/adaptive-learning-state.json" : adaptiveStatePath, adaptiveQualityBudgetMs == null ? 0 : Math.max(0, adaptiveQualityBudgetMs)); }
     }
 
     public record DashboardRun(String runId, String kind, String createdAt, RunStatus status, RunVisualizationDto visualization) { }
@@ -1771,6 +2049,7 @@ public final class DashboardController {
         return new int[] {20, 4};
     }
 }
+
 
 
 

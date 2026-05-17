@@ -13,6 +13,14 @@ import com.routechain.v2.hybrid.LexicographicSolutionComparator;
 import com.routechain.v2.hybrid.MoveEvaluationTrace;
 import com.routechain.v2.hybrid.SeedRouteBinding;
 import com.routechain.v2.hybrid.SolutionSeedCandidate;
+import com.routechain.v2.mladaptive.AdaptiveMlPolicyConfig;
+import com.routechain.v2.mladaptive.AdaptiveMlPolicyMode;
+import com.routechain.v2.mladaptive.AdaptiveLearningStateStore;
+import com.routechain.v2.mladaptive.AdaptiveLearningState;
+import com.routechain.v2.mladaptive.AdaptiveMovePriority;
+import com.routechain.v2.mladaptive.AdaptiveOperatorPolicy;
+import com.routechain.v2.mladaptive.AdaptiveRewardCalculator;
+import com.routechain.v2.mladaptive.AdaptiveSeedPolicy;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -25,13 +33,19 @@ import java.util.Map;
 public final class UnifiedHybridDispatchService {
     private final EliteMultiStartImprover improver = new EliteMultiStartImprover();
     private final BaselineDominanceGuard dominanceGuard = new BaselineDominanceGuard();
+    private final AdaptiveLearningState adaptiveLearningState = new AdaptiveLearningState();
+    private final AdaptiveRewardCalculator adaptiveRewardCalculator = new AdaptiveRewardCalculator();
+    private final AdaptiveLearningStateStore adaptiveLearningStateStore = new AdaptiveLearningStateStore();
+    private final AdaptiveSeedPolicy adaptiveSeedPolicy = new AdaptiveSeedPolicy();
+    private final AdaptiveOperatorPolicy adaptiveOperatorPolicy = new AdaptiveOperatorPolicy();
+    private final AdaptiveMovePriority adaptiveMovePriority = new AdaptiveMovePriority();
 
     public HybridRunResult run(EliteSolutionArchive archive,
                                List<SeedRouteBinding> routeBindings,
                                SolutionSeedCandidate nativeSeed,
                                DistanceCostFunction distanceCost,
                                int topK) {
-        return run(archive, routeBindings, nativeSeed, distanceCost, topK, false);
+        return run(archive, routeBindings, nativeSeed, distanceCost, topK, false, AdaptiveMlPolicyConfig.diagnostic());
     }
 
     public HybridRunResult run(EliteSolutionArchive archive,
@@ -40,7 +54,22 @@ public final class UnifiedHybridDispatchService {
                                DistanceCostFunction distanceCost,
                                int topK,
                                boolean swapStarEnabled) {
-        List<ImprovedSolutionCandidate> improvedSeeds = improver.improve(routeBindings, topK, distanceCost, swapStarEnabled);
+        return run(archive, routeBindings, nativeSeed, distanceCost, topK, swapStarEnabled, AdaptiveMlPolicyConfig.diagnostic());
+    }
+
+    public HybridRunResult run(EliteSolutionArchive archive,
+                               List<SeedRouteBinding> routeBindings,
+                               SolutionSeedCandidate nativeSeed,
+                               DistanceCostFunction distanceCost,
+                               int topK,
+                               boolean swapStarEnabled,
+                               AdaptiveMlPolicyConfig adaptiveConfig) {
+        AdaptiveMlPolicyConfig config = adaptiveConfig == null ? AdaptiveMlPolicyConfig.diagnostic() : adaptiveConfig;
+        if (config.persistenceEnabled()) {
+            adaptiveLearningStateStore.load(adaptiveLearningState, config.statePath());
+        }
+        List<SeedRouteBinding> prioritizedBindings = prioritizeExternalBindings(routeBindings, topK);
+        List<ImprovedSolutionCandidate> improvedSeeds = improver.improve(prioritizedBindings, topK, distanceCost, swapStarEnabled, config);
         if (improvedSeeds.isEmpty()) {
             improvedSeeds = improver.improve(archive, topK);
         }
@@ -57,7 +86,7 @@ public final class UnifiedHybridDispatchService {
             rollbackApplied = finalSeed != candidateFinalSeed;
         }
         BaselineDominanceResult dominance = dominanceGuard.evaluate(finalSeed, archive);
-        return new HybridRunResult(improvedSeeds, bestImprovedSeed, finalSeed, dominance, topK, rollbackApplied, rollbackApplied ? finalSeed.source() : null);
+        return new HybridRunResult(improvedSeeds, bestImprovedSeed, finalSeed, dominance, topK, rollbackApplied, rollbackApplied ? finalSeed.source() : null, config);
     }
 
     public DashboardController.BenchmarkSolverResultDto hybridSolverResult(DashboardController.RunVisualizationDto irx,
@@ -127,6 +156,14 @@ public final class UnifiedHybridDispatchService {
                                                        SolutionSeedCandidate bestImprovedSeed,
                                                        List<SeedRouteBinding> bindings,
                                                        int configuredTopK) {
+        return improvementDiagnostics(improvedSeeds, bestImprovedSeed, bindings, configuredTopK, AdaptiveMlPolicyConfig.diagnostic());
+    }
+
+    public Map<String, Object> improvementDiagnostics(List<ImprovedSolutionCandidate> improvedSeeds,
+                                                       SolutionSeedCandidate bestImprovedSeed,
+                                                       List<SeedRouteBinding> bindings,
+                                                       int configuredTopK,
+                                                       AdaptiveMlPolicyConfig adaptiveConfig) {
         Map<String, Object> diagnostics = new LinkedHashMap<>();
         diagnostics.put("improvementMode", "FAST_GATE");
         diagnostics.put("configuredTopKSeeds", configuredTopK);
@@ -146,7 +183,105 @@ public final class UnifiedHybridDispatchService {
         diagnostics.put("bestImprovedDistanceKm", bestImprovedSeed == null ? 0.0 : bestImprovedSeed.totalDistanceKm());
         diagnostics.put("finalKm", bestImprovedSeed == null ? 0.0 : bestImprovedSeed.totalDistanceKm());
         diagnostics.put("improvementTraces", improvedSeeds.stream().map(this::improvementTraceDiagnostics).toList());
+        diagnostics.put("adaptiveMlPolicy", adaptiveMlPolicyDiagnostics(improvedSeeds, bestImprovedSeed, adaptiveConfig));
         return diagnostics;
+    }
+
+    private Map<String, Object> adaptiveMlPolicyDiagnostics(List<ImprovedSolutionCandidate> improvedSeeds,
+                                                             SolutionSeedCandidate bestImprovedSeed,
+                                                             AdaptiveMlPolicyConfig adaptiveConfig) {
+        AdaptiveMlPolicyConfig config = adaptiveConfig == null ? AdaptiveMlPolicyConfig.diagnostic() : adaptiveConfig;
+        AdaptiveMlPolicyMode requestedMode = config.effectiveMode();
+        AdaptiveMlPolicyMode effectiveMode = requestedMode;
+        List<SolutionSeedCandidate> seeds = improvedSeeds == null ? List.of() : improvedSeeds.stream()
+                .map(ImprovedSolutionCandidate::originalSeed)
+                .toList();
+        List<MoveEvaluationTrace> moves = improvedSeeds == null ? List.of() : improvedSeeds.stream()
+                .flatMap(candidate -> candidate.trace().moveTraces().stream())
+                .toList();
+        AdaptiveSeedPolicy.Selection seedSelection = adaptiveSeedPolicy.select(seeds, adaptiveLearningState);
+        AdaptiveOperatorPolicy.Decision operatorDecision = adaptiveOperatorPolicy.order(adaptiveLearningState, 0.1);
+        AdaptiveMovePriority.RankedMoves rankedMoves = adaptiveMovePriority.rank(moves, seedSelection.selectedBaseSeed(), adaptiveLearningState, 30);
+        Map<String, Double> seedRewardsBefore = adaptiveLearningState.seedRewards();
+        double distanceImprovementKm = improvedSeeds == null ? 0.0 : improvedSeeds.stream()
+                .mapToDouble(candidate -> Math.max(0.0, candidate.originalSeed().totalDistanceKm() - candidate.improvedSeed().totalDistanceKm()))
+                .sum();
+        int rejectedMoves = moves.size() - (int) moves.stream().filter(MoveEvaluationTrace::accepted).count();
+        double reward = adaptiveRewardCalculator.reward(0.0, 0, 0, 0.0, distanceImprovementKm, 0L) - rejectedMoves * 0.05;
+        if (config.updateRewards() && seedSelection.selectedBaseSeed() != null) {
+            adaptiveLearningState.updateSeed(seedSelection.selectedBaseSeed(), reward);
+        }
+        if (config.updateRewards()) {
+            for (MoveEvaluationTrace move : moves) {
+                double moveReward = adaptiveRewardCalculator.reward(0.0, 0, 0, 0.0, Math.max(0.0, move.improvementKm()), 0L);
+                if (!move.accepted()) {
+                    moveReward -= 1.0;
+                }
+                adaptiveLearningState.updateOperator(move.moveType(), moveReward);
+            }
+        }
+        Map<String, Object> diagnostics = new LinkedHashMap<>();
+        diagnostics.put("enabled", config.enabled());
+        diagnostics.put("requestedMode", config.requestedMode().name());
+        diagnostics.put("effectiveMode", effectiveMode.name());
+        diagnostics.put("mode", effectiveMode.name());
+        diagnostics.put("selectionControlApplied", config.assistedControl());
+        diagnostics.put("moveOrderingApplied", config.assistedControl());
+        diagnostics.put("topKApplied", config.assistedControl());
+        diagnostics.put("topKMoves", config.topKMoves());
+        diagnostics.put("explorationMoves", config.assistedControl() ? Math.max(1, (int) Math.round(config.topKMoves() * config.explorationRate())) : 0);
+        diagnostics.put("qualitySeekingApplied", effectiveMode == AdaptiveMlPolicyMode.QUALITY_SEEKING);
+        diagnostics.put("operatorExpansionApplied", effectiveMode == AdaptiveMlPolicyMode.QUALITY_SEEKING);
+        diagnostics.put("nextKFallbackApplied", effectiveMode == AdaptiveMlPolicyMode.QUALITY_SEEKING);
+        diagnostics.put("qualityBudgetMs", config.qualityBudgetMs());
+        diagnostics.put("controlNote", config.assistedControl() ? "adaptive route/order move ordering plus topK evaluation cap applied inside CrossRouteLocalSearch; evaluator still owns accept/reject" : "diagnostic/tie-break reward update; no objective override");
+        diagnostics.put("adaptiveSeedPolicy", Map.of(
+                "selectedBaseSeed", seedSelection.selectedBaseSeed() == null ? "NONE" : seedSelection.selectedBaseSeed().name(),
+                "seedScores", seedSelection.seedScores(),
+                "seedRewardsBefore", seedRewardsBefore,
+                "selectionReason", seedSelection.selectionReason()));
+        diagnostics.put("adaptiveOperatorPolicy", Map.of(
+                "operatorOrder", operatorDecision.operatorOrder(),
+                "explorationRate", operatorDecision.explorationRate(),
+                "operatorRewardsBefore", operatorDecision.operatorRewardsBefore()));
+        diagnostics.put("adaptiveMovePriority", Map.of(
+                "scoredMoves", rankedMoves.scoredMoves(),
+                "evaluatedTopK", rankedMoves.evaluatedTopK(),
+                "acceptedMoves", rankedMoves.acceptedMoves(),
+                "acceptedFromTopK", rankedMoves.acceptedFromTopK(),
+                "acceptedMoveRate", rankedMoves.acceptedMoveRate(),
+                "topMoveIds", rankedMoves.topMoveIds()));
+        diagnostics.put("rewardUpdate", Map.of(
+                "rewardTotal", Math.round(reward * 1000.0) / 1000.0,
+                "distanceImprovementKm", Math.round(distanceImprovementKm * 1000.0) / 1000.0,
+                "rejectedMoves", rejectedMoves,
+                "bestImprovedSource", bestImprovedSeed == null ? "NONE" : bestImprovedSeed.source().name()));
+        diagnostics.put("seedRewardsAfter", adaptiveLearningState.seedRewards());
+        diagnostics.put("operatorRewardsAfter", adaptiveLearningState.operatorRewards());
+        diagnostics.put("movePatternRewardsAfter", adaptiveLearningState.movePatternRewards());
+        diagnostics.put("persistenceEnabled", config.persistenceEnabled());
+        diagnostics.put("statePath", config.statePath());
+        if (config.persistenceEnabled()) {
+            adaptiveLearningStateStore.save(adaptiveLearningState, config.statePath());
+        }
+        return diagnostics;
+    }
+
+    private List<SeedRouteBinding> prioritizeExternalBindings(List<SeedRouteBinding> bindings, int topK) {
+        if (bindings == null || bindings.isEmpty()) {
+            return List.of();
+        }
+        Map<CandidateSource, SeedRouteBinding> selected = new LinkedHashMap<>();
+        bindings.stream()
+                .filter(binding -> binding.source() == CandidateSource.VROOM_SEED || binding.source() == CandidateSource.VROOM_SEED_IMPROVED || binding.source() == CandidateSource.PYVRP_SEED)
+                .forEach(binding -> selected.putIfAbsent(binding.source(), binding));
+        for (SeedRouteBinding binding : bindings) {
+            if (selected.size() >= Math.max(1, topK)) {
+                break;
+            }
+            selected.putIfAbsent(binding.source(), binding);
+        }
+        return selected.values().stream().toList();
     }
 
     public Map<String, Object> dominanceDiagnostics(BaselineDominanceResult dominance) {
@@ -166,13 +301,13 @@ public final class UnifiedHybridDispatchService {
                                                                  boolean rollbackApplied) {
         Map<String, Object> diagnostics = new LinkedHashMap<>();
         List<SolutionSeedCandidate> externalSeeds = archive == null ? List.of() : archive.seeds().stream()
-                .filter(seed -> seed.source() == CandidateSource.VROOM_SEED || seed.source() == CandidateSource.PYVRP_SEED)
+                .filter(seed -> seed.source() == CandidateSource.VROOM_SEED || seed.source() == CandidateSource.VROOM_SEED_IMPROVED || seed.source() == CandidateSource.PYVRP_SEED)
                 .toList();
         SolutionSeedCandidate bestExternal = externalSeeds.stream()
                 .max(LexicographicSolutionComparator.SLA_STRICT)
                 .orElse(null);
         SolutionSeedCandidate vroom = externalSeeds.stream()
-                .filter(seed -> seed.source() == CandidateSource.VROOM_SEED)
+                .filter(seed -> seed.source() == CandidateSource.VROOM_SEED || seed.source() == CandidateSource.VROOM_SEED_IMPROVED)
                 .findFirst()
                 .orElse(null);
         SolutionSeedCandidate pyvrp = externalSeeds.stream()
@@ -435,6 +570,8 @@ public final class UnifiedHybridDispatchService {
             BaselineDominanceResult dominance,
             int configuredTopK,
             boolean dominanceRollbackApplied,
-            CandidateSource dominanceRollbackSource) {
+            CandidateSource dominanceRollbackSource,
+            AdaptiveMlPolicyConfig adaptiveConfig) {
     }
 }
+

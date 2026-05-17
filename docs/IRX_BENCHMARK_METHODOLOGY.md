@@ -31,3 +31,10 @@ IRX uses separate benchmark profiles so regression checks and quality evidence a
 
 - Production-demo benchmark claims must come from `QUALITY_BENCHMARK`, not FAST synthetic regression output.
 - VROOM results are only claimable when runtime status is `OK` and a seed artifact is produced.
+
+## Adaptive ML Quality-Seeking Gate
+
+- `TOP_K_ASSISTED` measures search efficiency: adaptive move ordering plus top-K budget control.
+- `QUALITY_SEEKING` measures quality gain: adaptive ordering remains active, but budget is expanded and exact reorder depth is increased to seek strictly better distance/late outcomes.
+- Acceptance requires at least one distance/late quality gain with `lossCases = 0`, `lateRegressionCount = 0`, `dominanceFailureCount = 0`, and `coverageRegressionCount = 0`.
+- The gate compares `HEURISTIC_IMPROVER` against `ADAPTIVE_ML_POLICY_QUALITY_SEEKING`; final claims use 20-case `QUALITY_BENCHMARK` sanity evidence.

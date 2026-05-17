@@ -6,6 +6,8 @@ import com.routechain.v2.schedule.RouteScheduleEvaluator;
 import com.routechain.v2.schedule.SchedulePolicy;
 import com.routechain.v2.improvement.CrossRouteLocalSearch;
 import com.routechain.v2.improvement.MoveEvaluationResult;
+import com.routechain.v2.mladaptive.AdaptiveMlPolicyConfig;
+import com.routechain.v2.mladaptive.AdaptiveMlPolicyMode;
 
 import java.util.Comparator;
 import java.util.ArrayList;
@@ -41,12 +43,16 @@ public final class EliteMultiStartImprover {
     }
 
     public List<ImprovedSolutionCandidate> improve(List<SeedRouteBinding> bindings, int topK, DistanceCostFunction distanceCost, boolean swapStarEnabled) {
+        return improve(bindings, topK, distanceCost, swapStarEnabled, AdaptiveMlPolicyConfig.diagnostic());
+    }
+
+    public List<ImprovedSolutionCandidate> improve(List<SeedRouteBinding> bindings, int topK, DistanceCostFunction distanceCost, boolean swapStarEnabled, AdaptiveMlPolicyConfig adaptiveConfig) {
         if (bindings == null || bindings.isEmpty() || distanceCost == null) {
             return List.of();
         }
         return bindings.stream()
                 .limit(Math.max(1, topK))
-                .map(binding -> improveBinding(binding, distanceCost, swapStarEnabled))
+                .map(binding -> improveBinding(binding, distanceCost, swapStarEnabled, adaptiveConfig == null ? AdaptiveMlPolicyConfig.diagnostic() : adaptiveConfig))
                 .toList();
     }
 
@@ -66,7 +72,7 @@ public final class EliteMultiStartImprover {
         return new ImprovedSolutionCandidate(seed, seed, trace);
     }
 
-    private ImprovedSolutionCandidate improveBinding(SeedRouteBinding binding, DistanceCostFunction distanceCost, boolean swapStarEnabled) {
+    private ImprovedSolutionCandidate improveBinding(SeedRouteBinding binding, DistanceCostFunction distanceCost, boolean swapStarEnabled, AdaptiveMlPolicyConfig adaptiveConfig) {
         SolutionSeedCandidate seed = binding.seed();
         if (seed == null || binding.routes().isEmpty() || !binding.matrixBound()) {
             return improveSeed(seed == null ? emptySeed(binding) : seed);
@@ -83,7 +89,7 @@ public final class EliteMultiStartImprover {
         long totalLate = 0;
         boolean seedRequiresLateZero = seed.lateOrderCount() == 0;
         for (BoundRoute route : binding.routes()) {
-            RouteAttempt attempt = permuteRoute(route, binding, distanceCost, seedRequiresLateZero);
+            RouteAttempt attempt = permuteRoute(route, binding, distanceCost, seedRequiresLateZero, adaptiveConfig);
             moveTraces.add(attempt.moveTrace());
             if (attempt.accepted()) {
                 accepted++;
@@ -115,7 +121,7 @@ public final class EliteMultiStartImprover {
                 seed.hardInvalidReason(),
                 seed.softPenaltyReasons(),
                 new HybridCostBreakdown(totalKm, totalLate * 10.0, 0.0, 0.0, 0.0, 0.0, score));
-        MoveEvaluationResult relocate = crossRouteLocalSearch.relocateOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero);
+        MoveEvaluationResult relocate = crossRouteLocalSearch.relocateOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero, adaptiveConfig);
         if (relocate.accepted()) {
             moveTraces.addAll(relocate.traces());
             reasons.add("relocate-accepted:" + relocate.traces().getFirst().moveId() + ":-" + round(relocate.oldKm() - relocate.newKm()) + "km");
@@ -131,7 +137,7 @@ public final class EliteMultiStartImprover {
             reasons.add("relocate-rejected:" + relocate.traces().getFirst().rejectReason());
             reasons.add(cacheReason("relocate", relocate));
         }
-        MoveEvaluationResult swap = crossRouteLocalSearch.swapOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero);
+        MoveEvaluationResult swap = crossRouteLocalSearch.swapOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero, adaptiveConfig);
         if (swap.accepted()) {
             moveTraces.addAll(swap.traces());
             reasons.add("swap-accepted:" + swap.traces().getFirst().moveId() + ":-" + round(swap.oldKm() - swap.newKm()) + "km");
@@ -147,7 +153,7 @@ public final class EliteMultiStartImprover {
             reasons.add("swap-rejected:" + swap.traces().getFirst().rejectReason());
             reasons.add(cacheReason("swap", swap));
         }
-        MoveEvaluationResult crossInsert = crossRouteLocalSearch.crossInsertOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero);
+        MoveEvaluationResult crossInsert = crossRouteLocalSearch.crossInsertOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero, adaptiveConfig);
         if (crossInsert.accepted()) {
             moveTraces.addAll(crossInsert.traces());
             reasons.add("cross-insertion-accepted:" + crossInsert.traces().getFirst().moveId() + ":-" + round(crossInsert.oldKm() - crossInsert.newKm()) + "km");
@@ -164,7 +170,7 @@ public final class EliteMultiStartImprover {
             reasons.add(cacheReason("cross-insertion", crossInsert));
         }
         if (swapStarEnabled) {
-            MoveEvaluationResult swapStar = crossRouteLocalSearch.swapStarOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero);
+            MoveEvaluationResult swapStar = crossRouteLocalSearch.swapStarOnce(binding, binding.routes(), distanceCost, seedRequiresLateZero, adaptiveConfig);
             if (swapStar.accepted()) {
                 moveTraces.addAll(swapStar.traces());
                 reasons.add("swap-star-accepted:" + swapStar.traces().getFirst().moveId() + ":-" + round(swapStar.oldKm() - swapStar.newKm()) + "km");
@@ -183,13 +189,32 @@ public final class EliteMultiStartImprover {
         } else {
             reasons.add("swap-star-skipped:fast-gate-disabled");
         }
+        if (seed.source() == CandidateSource.VROOM_SEED) {
+            VroomIntensifierResult vroomSplit = vroomSplitToBestDriver(seed, binding, improved, distanceCost, seedRequiresLateZero);
+            moveTraces.add(vroomSplit.trace());
+            reasons.add(vroomSplit.reason());
+            if (LexicographicSolutionComparator.SLA_STRICT.compare(vroomSplit.candidate(), improved) > 0) {
+                improved = vroomSplit.candidate();
+                totalKm = improved.totalDistanceKm();
+                totalLate = improved.lateOrderCount();
+                accepted++;
+            } else {
+                rejected++;
+            }
+        }
         boolean objectiveImproved = LexicographicSolutionComparator.SLA_STRICT.compare(improved, seed) > 0;
         SolutionSeedCandidate selected = objectiveImproved ? improved : seed;
+        if (adaptiveConfig.assistedControl()) {
+            ImprovedSolutionCandidate fallback = improveBinding(binding, distanceCost, swapStarEnabled, AdaptiveMlPolicyConfig.diagnostic());
+            if (fallback != null && LexicographicSolutionComparator.SLA_STRICT.compare(fallback.improvedSeed(), selected) > 0) {
+                return fallback;
+            }
+        }
         if (!objectiveImproved) {
             reasons.add("rollback:no-objective-improvement");
         }
         ImprovementTrace trace = new ImprovementTrace(
-                seed.source(),
+                improvedSource(seed, selected),
                 seed.totalDistanceKm(),
                 improved.totalDistanceKm(),
                 improved.totalDistanceKm(),
@@ -200,7 +225,7 @@ public final class EliteMultiStartImprover {
                 rejected,
                 reasons,
                 moveTraces);
-        return new ImprovedSolutionCandidate(seed, selected, trace);
+        return new ImprovedSolutionCandidate(seed, withImprovedSource(seed, selected), trace);
     }
 
     private String cacheReason(String operator, MoveEvaluationResult result) {
@@ -233,7 +258,7 @@ public final class EliteMultiStartImprover {
         double score = objective(Math.round(coverage * Math.max(1, inputOrderCount)), Math.max(1, inputOrderCount), totalKm, totalLate);
         return new SolutionSeedCandidate(
                 seed.solutionSeedId() + "-" + suffix,
-                seed.source(),
+                improvedSource(seed, relocate),
                 routes,
                 coverage,
                 round(totalKm),
@@ -256,11 +281,213 @@ public final class EliteMultiStartImprover {
                 route.lateOrderCount());
     }
 
-    private RouteAttempt permuteRoute(BoundRoute route, SeedRouteBinding binding, DistanceCostFunction distanceCost, boolean seedRequiresLateZero) {
+    private VroomIntensifierResult vroomSplitToBestDriver(SolutionSeedCandidate seed,
+                                                          SeedRouteBinding binding,
+                                                          SolutionSeedCandidate incumbent,
+                                                          DistanceCostFunction distanceCost,
+                                                          boolean seedRequiresLateZero) {
+        SolutionSeedCandidate best = incumbent;
+        MoveEvaluationTrace bestTrace = null;
+        String bestReason = "vroom-split-rejected:no-improving-feasible-split";
+        VroomIntensifierResult subsetSplit = vroomSubsetSplitToEmptyDriver(seed, binding, best, distanceCost, seedRequiresLateZero);
+        if (LexicographicSolutionComparator.SLA_STRICT.compare(subsetSplit.candidate(), best) > 0) {
+            best = subsetSplit.candidate();
+            bestTrace = subsetSplit.trace();
+            bestReason = subsetSplit.reason();
+        }
+        for (BoundRoute from : binding.routes()) {
+            if (from.orderIds().isEmpty()) {
+                continue;
+            }
+            for (String orderId : from.orderIds()) {
+                BoundStop pickup = findStop(from, orderId, StopType.PICKUP);
+                BoundStop dropoff = findStop(from, orderId, StopType.DROPOFF);
+                if (pickup == null || dropoff == null) {
+                    continue;
+                }
+                List<BoundStop> fromPath = withoutDriverAndOrder(from, orderId);
+                RouteSchedule oldFrom = scheduleEvaluator.evaluate(from, null, distanceCost, binding.orderById(), schedulePolicy, "vroom-split-old-from");
+                RouteSchedule newFrom = scheduleEvaluator.evaluate(from, fromPath, distanceCost, binding.orderById(), schedulePolicy, "vroom-split-new-from");
+                for (BoundRoute to : binding.routes()) {
+                    if (from.routeId().equals(to.routeId())) {
+                        continue;
+                    }
+                    List<BoundStop> toBase = withoutDriver(to);
+                    RouteSchedule oldTo = scheduleEvaluator.evaluate(to, null, distanceCost, binding.orderById(), schedulePolicy, "vroom-split-old-to");
+                    for (int pickupIndex = 0; pickupIndex <= toBase.size(); pickupIndex++) {
+                        for (int dropoffIndex = pickupIndex + 1; dropoffIndex <= toBase.size() + 1; dropoffIndex++) {
+                            List<BoundStop> toPath = new ArrayList<>(toBase);
+                            toPath.add(pickupIndex, pickup);
+                            toPath.add(dropoffIndex, dropoff);
+                            RouteSchedule newTo = scheduleEvaluator.evaluate(to, toPath, distanceCost, binding.orderById(), schedulePolicy, "vroom-split-new-to");
+                            long newLate = binding.routes().stream()
+                                    .filter(route -> !route.routeId().equals(from.routeId()) && !route.routeId().equals(to.routeId()))
+                                    .mapToLong(BoundRoute::lateOrderCount)
+                                    .sum() + newFrom.lateOrderCount() + newTo.lateOrderCount();
+                            if (seedRequiresLateZero && newLate > 0) {
+                                continue;
+                            }
+                            double newKm = binding.routes().stream()
+                                    .filter(route -> !route.routeId().equals(from.routeId()) && !route.routeId().equals(to.routeId()))
+                                    .mapToDouble(BoundRoute::distanceKm)
+                                    .sum() + newFrom.totalKm() + newTo.totalKm();
+                            if (round(newKm) + 0.05 >= Math.min(best.totalDistanceKm(), seed.totalDistanceKm())) {
+                                continue;
+                            }
+                            BoundRoute newFromRoute = routeFromSchedule(from, fromPath, newFrom);
+                            BoundRoute newToRoute = routeFromSchedule(to, toPath, newTo);
+                            List<SolutionSeedRoute> routes = binding.routes().stream()
+                                    .map(route -> route.routeId().equals(from.routeId()) ? solutionRoute(newFromRoute)
+                                            : route.routeId().equals(to.routeId()) ? solutionRoute(newToRoute)
+                                            : solutionRoute(route))
+                                    .toList();
+                            double coverage = binding.orderById().isEmpty() ? seed.coverageRate() : coveredOrders(routes) / (double) binding.orderById().size();
+                            double score = objective(Math.round(coverage * Math.max(1, binding.orderById().size())), Math.max(1, binding.orderById().size()), round(newKm), newLate);
+                            SolutionSeedCandidate candidate = new SolutionSeedCandidate(
+                                    seed.solutionSeedId() + "-VROOM-SPLIT",
+                                    CandidateSource.VROOM_SEED_IMPROVED,
+                                    routes,
+                                    coverage,
+                                    round(newKm),
+                                    newLate,
+                                    routes.stream().map(route -> new DriverSeedLoad(route.driverId(), route.orderIds().size())).toList(),
+                                    seed.hardFeasible(),
+                                    seed.hardInvalidReason(),
+                                    seed.softPenaltyReasons(),
+                                    new HybridCostBreakdown(round(newKm), newLate * 10.0, 0.0, 0.0, 0.0, 0.0, score));
+                            if (LexicographicSolutionComparator.SLA_STRICT.compare(candidate, best) > 0) {
+                                best = candidate;
+                                double oldPairKm = oldFrom.totalKm() + oldTo.totalKm();
+                                double newPairKm = newFrom.totalKm() + newTo.totalKm();
+                                bestReason = "vroom-split-accepted:" + orderId + ":" + from.routeId() + "->" + to.routeId() + ":-" + round(seed.totalDistanceKm() - candidate.totalDistanceKm()) + "km";
+                                bestTrace = new MoveEvaluationTrace(
+                                        "VROOM-SPLIT-" + orderId + "-" + from.routeId() + "-" + to.routeId(),
+                                        from.routeId() + "->" + to.routeId(),
+                                        "VROOM_SPLIT_RELOCATE",
+                                        round(oldPairKm),
+                                        round(newPairKm),
+                                        round(oldPairKm - newPairKm),
+                                        true,
+                                        "accepted",
+                                        List.of());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (bestTrace == null) {
+            bestTrace = new MoveEvaluationTrace("VROOM-SPLIT-NONE", "vroom", "VROOM_SPLIT_RELOCATE", seed.totalDistanceKm(), best.totalDistanceKm(), round(seed.totalDistanceKm() - best.totalDistanceKm()), false, "no-improving-feasible-split", List.of());
+        }
+        return new VroomIntensifierResult(best, bestTrace, bestReason);
+    }
+
+    private VroomIntensifierResult vroomSubsetSplitToEmptyDriver(SolutionSeedCandidate seed,
+                                                                 SeedRouteBinding binding,
+                                                                 SolutionSeedCandidate incumbent,
+                                                                 DistanceCostFunction distanceCost,
+                                                                 boolean seedRequiresLateZero) {
+        SolutionSeedCandidate best = incumbent;
+        MoveEvaluationTrace bestTrace = null;
+        String bestReason = "vroom-subset-split-rejected:no-empty-driver-improvement";
+        for (BoundRoute from : binding.routes()) {
+            if (from.orderIds().size() < 2) {
+                continue;
+            }
+            for (BoundRoute to : binding.routes()) {
+                if (from.routeId().equals(to.routeId()) || !to.orderIds().isEmpty()) {
+                    continue;
+                }
+                BoundStop toStart = to.stops().stream().filter(stop -> stop.type() == StopType.DRIVER_START).findFirst().orElse(null);
+                if (toStart == null) {
+                    continue;
+                }
+                for (int size = 2; size <= Math.min(4, from.orderIds().size()); size++) {
+                    for (Set<String> movedOrders : orderSubsets(from.orderIds(), size)) {
+                        List<BoundStop> movedStops = from.stops().stream()
+                                .filter(stop -> stop.type() != StopType.DRIVER_START && movedOrders.contains(stop.orderId()))
+                                .toList();
+                        List<BoundStop> toPath = new ArrayList<>();
+                        search(toStart, movedStops, new ArrayList<>(), new LinkedHashSet<>(), new LinkedHashSet<>(), 0.0, new double[]{Double.POSITIVE_INFINITY}, toPath, distanceCost);
+                        if (toPath.isEmpty()) {
+                            continue;
+                        }
+                        List<BoundStop> fromPath = from.stops().stream()
+                                .filter(stop -> stop.type() != StopType.DRIVER_START && !movedOrders.contains(stop.orderId()))
+                                .toList();
+                        RouteSchedule oldFrom = scheduleEvaluator.evaluate(from, null, distanceCost, binding.orderById(), schedulePolicy, "vroom-subset-old-from");
+                        RouteSchedule oldTo = scheduleEvaluator.evaluate(to, null, distanceCost, binding.orderById(), schedulePolicy, "vroom-subset-old-to");
+                        RouteSchedule newFrom = scheduleEvaluator.evaluate(from, fromPath, distanceCost, binding.orderById(), schedulePolicy, "vroom-subset-new-from");
+                        RouteSchedule newTo = scheduleEvaluator.evaluate(to, toPath, distanceCost, binding.orderById(), schedulePolicy, "vroom-subset-new-to");
+                        long newLate = binding.routes().stream()
+                                .filter(route -> !route.routeId().equals(from.routeId()) && !route.routeId().equals(to.routeId()))
+                                .mapToLong(BoundRoute::lateOrderCount)
+                                .sum() + newFrom.lateOrderCount() + newTo.lateOrderCount();
+                        if (seedRequiresLateZero && newLate > 0) {
+                            continue;
+                        }
+                        double newKm = binding.routes().stream()
+                                .filter(route -> !route.routeId().equals(from.routeId()) && !route.routeId().equals(to.routeId()))
+                                .mapToDouble(BoundRoute::distanceKm)
+                                .sum() + newFrom.totalKm() + newTo.totalKm();
+                        if (round(newKm) + 0.05 >= Math.min(best.totalDistanceKm(), seed.totalDistanceKm())) {
+                            continue;
+                        }
+                        BoundRoute newFromRoute = routeFromSchedule(from, fromPath, newFrom);
+                        BoundRoute newToRoute = routeFromSchedule(to, toPath, newTo);
+                        List<SolutionSeedRoute> routes = binding.routes().stream()
+                                .map(route -> route.routeId().equals(from.routeId()) ? solutionRoute(newFromRoute)
+                                        : route.routeId().equals(to.routeId()) ? solutionRoute(newToRoute)
+                                        : solutionRoute(route))
+                                .toList();
+                        double coverage = binding.orderById().isEmpty() ? seed.coverageRate() : coveredOrders(routes) / (double) binding.orderById().size();
+                        double score = objective(Math.round(coverage * Math.max(1, binding.orderById().size())), Math.max(1, binding.orderById().size()), round(newKm), newLate);
+                        SolutionSeedCandidate candidate = new SolutionSeedCandidate(
+                                seed.solutionSeedId() + "-VROOM-SUBSET-SPLIT",
+                                CandidateSource.VROOM_SEED_IMPROVED,
+                                routes,
+                                coverage,
+                                round(newKm),
+                                newLate,
+                                routes.stream().map(route -> new DriverSeedLoad(route.driverId(), route.orderIds().size())).toList(),
+                                seed.hardFeasible(),
+                                seed.hardInvalidReason(),
+                                seed.softPenaltyReasons(),
+                                new HybridCostBreakdown(round(newKm), newLate * 10.0, 0.0, 0.0, 0.0, 0.0, score));
+                        if (LexicographicSolutionComparator.SLA_STRICT.compare(candidate, best) > 0) {
+                            best = candidate;
+                            double oldPairKm = oldFrom.totalKm() + oldTo.totalKm();
+                            double newPairKm = newFrom.totalKm() + newTo.totalKm();
+                            bestReason = "vroom-subset-split-accepted:" + String.join("+", movedOrders) + ":" + from.routeId() + "->" + to.routeId() + ":-" + round(seed.totalDistanceKm() - candidate.totalDistanceKm()) + "km";
+                            bestTrace = new MoveEvaluationTrace(
+                                    "VROOM-SUBSET-SPLIT-" + String.join("-", movedOrders) + "-" + from.routeId() + "-" + to.routeId(),
+                                    from.routeId() + "->" + to.routeId(),
+                                    "VROOM_SUBSET_SPLIT",
+                                    round(oldPairKm),
+                                    round(newPairKm),
+                                    round(oldPairKm - newPairKm),
+                                    true,
+                                    "accepted",
+                                    List.of());
+                        }
+                    }
+                }
+            }
+        }
+        if (bestTrace == null) {
+            bestTrace = new MoveEvaluationTrace("VROOM-SUBSET-SPLIT-NONE", "vroom", "VROOM_SUBSET_SPLIT", seed.totalDistanceKm(), best.totalDistanceKm(), round(seed.totalDistanceKm() - best.totalDistanceKm()), false, "no-empty-driver-improvement", List.of());
+        }
+        return new VroomIntensifierResult(best, bestTrace, bestReason);
+    }
+
+    private RouteAttempt permuteRoute(BoundRoute route, SeedRouteBinding binding, DistanceCostFunction distanceCost, boolean seedRequiresLateZero, AdaptiveMlPolicyConfig adaptiveConfig) {
         List<BoundStop> pickups = route.stops().stream().filter(stop -> stop.type() == StopType.PICKUP).toList();
         List<BoundStop> dropoffs = route.stops().stream().filter(stop -> stop.type() == StopType.DROPOFF).toList();
-        if (pickups.isEmpty() || pickups.size() != dropoffs.size() || pickups.size() > 5) {
+        if (pickups.isEmpty() || pickups.size() != dropoffs.size()) {
             return originalRoute(route, binding, distanceCost, "unsupported-route-size");
+        }
+        if (pickups.size() > maxExactReorderOrders(route, adaptiveConfig)) {
+            return greedyRoute(route, binding, distanceCost, seedRequiresLateZero);
         }
         BoundStop driverStart = route.stops().stream().filter(stop -> stop.type() == StopType.DRIVER_START).findFirst().orElse(null);
         if (driverStart == null) {
@@ -312,6 +539,40 @@ public final class EliteMultiStartImprover {
             visitedStops.remove(next.stopId());
             path.remove(path.size() - 1);
         }
+    }
+
+    private RouteAttempt greedyRoute(BoundRoute route, SeedRouteBinding binding, DistanceCostFunction distanceCost, boolean seedRequiresLateZero) {
+        BoundStop start = route.stops().stream().filter(stop -> stop.type() == StopType.DRIVER_START).findFirst().orElse(null);
+        if (start == null) {
+            return originalRoute(route, binding, distanceCost, "missing-driver-start");
+        }
+        List<BoundStop> remaining = new ArrayList<>(route.stops().stream().filter(stop -> stop.type() != StopType.DRIVER_START).toList());
+        List<BoundStop> path = new ArrayList<>();
+        Set<String> pickedOrders = new LinkedHashSet<>();
+        BoundStop current = start;
+        while (!remaining.isEmpty()) {
+            BoundStop from = current;
+            BoundStop next = remaining.stream()
+                    .filter(stop -> stop.type() == StopType.PICKUP || pickedOrders.contains(stop.orderId()))
+                    .min(Comparator.comparingDouble(stop -> distanceCost.distanceKm("hybrid-greedy-" + from.stopId() + "-" + stop.stopId(), from.location().latitude(), from.location().longitude(), stop.location().latitude(), stop.location().longitude())))
+                    .orElse(null);
+            if (next == null) {
+                return originalRoute(route, binding, distanceCost, "greedy-no-valid-next-stop");
+            }
+            path.add(next);
+            remaining.remove(next);
+            if (next.type() == StopType.PICKUP) {
+                pickedOrders.add(next.orderId());
+            }
+            current = next;
+        }
+        RouteAttempt original = originalRoute(route, binding, distanceCost, "baseline-route");
+        RouteAttempt attempt = routeAttempt(route, start, path, binding, distanceCost, "greedy-vroom-reorder-attempted");
+        MoveEvaluationTrace trace = moveTrace(route, original, attempt, route.lateOrderCount(), seedRequiresLateZero);
+        if (trace.accepted()) {
+            return new RouteAttempt(true, attempt.orderIds(), attempt.stopSequence(), attempt.distanceKm(), attempt.durationMinutes(), attempt.lateOrders(), "greedy-vroom-reorder-improved", trace);
+        }
+        return withTrace(original, trace);
     }
 
     private RouteAttempt originalRoute(BoundRoute route, SeedRouteBinding binding, DistanceCostFunction distanceCost, String reason) {
@@ -393,9 +654,97 @@ public final class EliteMultiStartImprover {
         return (int) routes.stream().flatMap(route -> route.orderIds().stream()).distinct().count();
     }
 
+    private BoundRoute routeFromSchedule(BoundRoute original, List<BoundStop> path, RouteSchedule schedule) {
+        List<String> orderIds = path.stream().filter(stop -> stop.type() == StopType.PICKUP).map(BoundStop::orderId).distinct().toList();
+        List<BoundStop> stops = new ArrayList<>();
+        original.stops().stream().filter(stop -> stop.type() == StopType.DRIVER_START).findFirst().ifPresent(stops::add);
+        stops.addAll(path);
+        return new BoundRoute(original.routeId(), original.driverId(), orderIds, stops, schedule.totalKm(), schedule.durationMinutes(), (int) schedule.lateOrderCount());
+    }
+
+    private List<BoundStop> withoutDriver(BoundRoute route) {
+        return route.stops().stream().filter(stop -> stop.type() != StopType.DRIVER_START).toList();
+    }
+
+    private List<BoundStop> withoutDriverAndOrder(BoundRoute route, String orderId) {
+        return route.stops().stream()
+                .filter(stop -> stop.type() != StopType.DRIVER_START)
+                .filter(stop -> !orderId.equals(stop.orderId()))
+                .toList();
+    }
+
+    private BoundStop findStop(BoundRoute route, String orderId, StopType type) {
+        return route.stops().stream()
+                .filter(stop -> type == stop.type() && orderId.equals(stop.orderId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private List<Set<String>> orderSubsets(List<String> orderIds, int size) {
+        List<Set<String>> subsets = new ArrayList<>();
+        collectOrderSubsets(orderIds, size, 0, new LinkedHashSet<>(), subsets);
+        return subsets;
+    }
+
+    private void collectOrderSubsets(List<String> orderIds, int size, int index, Set<String> current, List<Set<String>> subsets) {
+        if (current.size() == size) {
+            subsets.add(new LinkedHashSet<>(current));
+            return;
+        }
+        if (index >= orderIds.size() || subsets.size() >= 120) {
+            return;
+        }
+        current.add(orderIds.get(index));
+        collectOrderSubsets(orderIds, size, index + 1, current, subsets);
+        current.remove(orderIds.get(index));
+        collectOrderSubsets(orderIds, size, index + 1, current, subsets);
+    }
+
     private double objective(long assignedOrders, long inputOrders, double distanceKm, long lateOrders) {
         long safeInput = Math.max(1, inputOrders);
         return (assignedOrders / (double) safeInput) * 1_000_000.0 - Math.max(0, inputOrders - assignedOrders) * 1_000_000.0 - distanceKm * 100.0 - lateOrders * 10_000.0;
+    }
+
+    private int maxExactReorderOrders(BoundRoute route, AdaptiveMlPolicyConfig adaptiveConfig) {
+        if (adaptiveConfig != null && adaptiveConfig.qualitySeeking()) {
+            return 6;
+        }
+        return route.routeId() != null && route.routeId().startsWith("VROOM-") ? 6 : 5;
+    }
+
+    private SolutionSeedCandidate withImprovedSource(SolutionSeedCandidate original, SolutionSeedCandidate selected) {
+        if (selected == null || original == null || original.source() != CandidateSource.VROOM_SEED || selected.source() == CandidateSource.VROOM_SEED_IMPROVED) {
+            return selected;
+        }
+        if (LexicographicSolutionComparator.SLA_STRICT.compare(selected, original) <= 0) {
+            return selected;
+        }
+        return new SolutionSeedCandidate(
+                selected.solutionSeedId(),
+                CandidateSource.VROOM_SEED_IMPROVED,
+                selected.routes(),
+                selected.coverageRate(),
+                selected.totalDistanceKm(),
+                selected.lateOrderCount(),
+                selected.driverLoadSummary(),
+                selected.hardFeasible(),
+                selected.hardInvalidReason(),
+                selected.softPenaltyReasons(),
+                selected.costBreakdown());
+    }
+
+    private CandidateSource improvedSource(SolutionSeedCandidate original, SolutionSeedCandidate selected) {
+        if (original != null && selected != null && original.source() == CandidateSource.VROOM_SEED
+                && LexicographicSolutionComparator.SLA_STRICT.compare(selected, original) > 0) {
+            return CandidateSource.VROOM_SEED_IMPROVED;
+        }
+        return selected == null || selected.source() == null ? (original == null ? CandidateSource.IRX_NATIVE : original.source()) : selected.source();
+    }
+
+    private CandidateSource improvedSource(SolutionSeedCandidate original, MoveEvaluationResult move) {
+        return original != null && original.source() == CandidateSource.VROOM_SEED && move != null && move.accepted()
+                ? CandidateSource.VROOM_SEED_IMPROVED
+                : original == null ? CandidateSource.IRX_NATIVE : original.source();
     }
 
     private SolutionSeedCandidate emptySeed(SeedRouteBinding binding) {
@@ -408,4 +757,9 @@ public final class EliteMultiStartImprover {
 
     private record RouteAttempt(boolean accepted, List<String> orderIds, List<String> stopSequence, double distanceKm, double durationMinutes, long lateOrders, String reason, MoveEvaluationTrace moveTrace) {
     }
+
+    private record VroomIntensifierResult(SolutionSeedCandidate candidate, MoveEvaluationTrace trace, String reason) {
+    }
 }
+
+

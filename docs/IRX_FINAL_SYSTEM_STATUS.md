@@ -62,3 +62,11 @@ Status: production-demo closeout and full certification gates passed after goal-
 1. Start backend on a port, for example `18116`.
 2. Run `powershell.exe -ExecutionPolicy Bypass -File scripts/run-final-system-gate.ps1 -BaseUrl http://localhost:18116`.
 3. Inspect `artifacts/test-reports/final-system/final-system-summary.json`.
+
+## v0.9.9-adaptive-ml-quality-seeking
+
+- Overall: PASS candidate; summary `artifacts/test-reports/adaptive-ml-policy/v0.9.9-quality-seeking-final-summary.json`.
+- `QUALITY_SEEKING` differs from `TOP_K_ASSISTED`: it expands adaptive search budget and enables deeper exact reorder to seek solution-quality improvement, not only runtime/search efficiency.
+- 5-case gate: PASS; improved cases `1/5`; distance gain `1.1km`; loss `0`; late regression `0`; dominance failures `0`; coverage regression `0`.
+- 20-case sanity: PASS; completed `20/20`; improved cases `2/20`; distance gain `1.6km`; loss `0`; late regression `0`; dominance failures `0`; coverage regression `0`.
+- Safety model: evaluator still owns accept/reject decisions; adaptive results remain protected by heuristic fallback and dominance guard.

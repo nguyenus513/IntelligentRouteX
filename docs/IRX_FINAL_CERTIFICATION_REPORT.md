@@ -70,3 +70,11 @@ Status: certified demo gate PASS.
 - Live: `artifacts/test-reports/final-certification/live/live-stress-gate-summary.json`.
 - Rescue: `artifacts/test-reports/final-certification/rescue-rerun/rescue-gate-summary.json`.
 
+
+## v0.9.9 Adaptive ML Quality Seeking
+
+- Tag target: `v0.9.9-adaptive-ml-quality-seeking`.
+- Summary: `artifacts/test-reports/adaptive-ml-policy/v0.9.9-quality-seeking-final-summary.json`.
+- Final report: `artifacts/test-reports/adaptive-ml-policy/v0.9.9-quality-seeking-final-report.json`.
+- QUALITY_SEEKING 20-case sanity: `20/20` completed; improved cases `2`; total distance gain `1.6km`; loss cases `0`; late regression `0`; dominance failures `0`; coverage regression `0`.
+- Claim boundary: Adaptive ML is certified for quality-seeking on this evidence suite; evaluator and dominance guard remain final authority.
