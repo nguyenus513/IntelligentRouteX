@@ -661,9 +661,11 @@ public final class DashboardController {
         Map<String, Object> eliteDiagnostics = hybridDispatchService.eliteArchiveDiagnostics(eliteArchive);
         Map<String, Object> improvementDiagnostics = hybridDispatchService.improvementDiagnostics(improvedSeeds, bestImprovedSeed, routeBindings, hybridImprovementTopK);
         Map<String, Object> dominanceDiagnostics = hybridDispatchService.dominanceDiagnostics(dominance);
+        Map<String, Object> externalDominanceDiagnostics = hybridDispatchService.externalSeedDominanceDiagnostics(eliteArchive, finalSeed, hybrid.dominanceRollbackApplied());
         diagnostics.put("eliteSolutionArchive", eliteDiagnostics);
         diagnostics.put("seedImprovement", improvementDiagnostics);
         diagnostics.put("baselineDominanceGuard", dominanceDiagnostics);
+        diagnostics.put("externalSeedDominance", externalDominanceDiagnostics);
         diagnostics.put("ablationResults", hybridDispatchService.ablationDiagnostics(solverResults, irx, dominance));
         diagnostics.put("rootCauseAudit", hybridDispatchService.rootCauseAudit(irx, solverResults));
         diagnostics.put("victoryReport", benchmarkHybridRunService.victoryReportDiagnostics(profile, solverResults, eliteDiagnostics, improvementDiagnostics, dominanceDiagnostics));

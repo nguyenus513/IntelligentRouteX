@@ -14,6 +14,15 @@ Status: production-demo closeout and full certification gates passed after goal-
 - Rescue: PASS; before late `11`; after late `11`; rescued route count `6`.
 - Final solver invariant: `IRX_ML_FUSED_HYBRID`.
 
+## v0.9.3-external-dominance
+
+- Goal: IRX final must not lose against VROOM/PyVRP external seeds under the unified objective.
+- Raw-s VROOM smoke: PASS; VROOM `33.5km / late0 / 12 of 12`; IRX ML-Fused Hybrid `33.5km / late0 / 12 of 12`; `vsVroomObjective=TIE`; selected seed `VROOM_SEED`.
+- VROOM 5-case subset: PASS; `1W / 4T / 0L`; no VROOM objective losses; external dominance passed all rows.
+- Artifact: `artifacts/test-reports/v0.9.3-external-dominance/subset-5-rerun/vroom-win-gate-summary.json`.
+- New diagnostics: `externalSeedDominance` records best external seed, final seed, rollback source, and `vsVroomObjective` / `vsPyvrpObjective`.
+- Limitation: this milestone proves no-loss/absorption, not raw distance win on raw-s; VROOM raw-s remains tied at `33.5km`.
+
 ## Final Gate Evidence
 
 - Compile: `compileJava` PASS.

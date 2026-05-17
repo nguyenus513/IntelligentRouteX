@@ -13,6 +13,14 @@ Status: certified demo gate PASS.
 - Academic/static: PASS; PDPTW: PASS; live stress: PASS; rescue: PASS.
 - Final solver invariant: `IRX_ML_FUSED_HYBRID`.
 
+## v0.9.3 External Dominance Certification
+
+- External dominance guard now rolls back to the best archive seed when the candidate final is worse under `LEXICOGRAPHIC_SLA_STRICT`.
+- Raw-s VROOM smoke: IRX ML-Fused Hybrid ties VROOM at `33.5km`, late `0`, coverage `12/12`, with selected source `VROOM_SEED`.
+- VROOM subset gate: `1W / 4T / 0L` vs VROOM objective; no losses; all rows passed `externalSeedDominance`.
+- Artifact: `artifacts/test-reports/v0.9.3-external-dominance/subset-5-rerun/vroom-win-gate-summary.json`.
+- This is the no-loss milestone (`v0.9.3-external-dominance`), not the VROOM-smoke-win milestone.
+
 ## Commit and Tag
 
 - Certification commit at run time: `54bf6ad2e`.

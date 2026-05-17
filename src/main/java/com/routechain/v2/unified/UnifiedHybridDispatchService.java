@@ -48,9 +48,16 @@ public final class UnifiedHybridDispatchService {
                 .map(ImprovedSolutionCandidate::improvedSeed)
                 .max(LexicographicSolutionComparator.SLA_STRICT)
                 .orElse(nativeSeed);
-        SolutionSeedCandidate finalSeed = betterSeed(bestImprovedSeed, nativeSeed);
+        SolutionSeedCandidate candidateFinalSeed = betterSeed(bestImprovedSeed, nativeSeed);
+        BaselineDominanceResult initialDominance = dominanceGuard.evaluate(candidateFinalSeed, archive);
+        boolean rollbackApplied = false;
+        SolutionSeedCandidate finalSeed = candidateFinalSeed;
+        if (!initialDominance.passed()) {
+            finalSeed = archive == null ? candidateFinalSeed : archive.best().orElse(candidateFinalSeed);
+            rollbackApplied = finalSeed != candidateFinalSeed;
+        }
         BaselineDominanceResult dominance = dominanceGuard.evaluate(finalSeed, archive);
-        return new HybridRunResult(improvedSeeds, bestImprovedSeed, finalSeed, dominance, topK);
+        return new HybridRunResult(improvedSeeds, bestImprovedSeed, finalSeed, dominance, topK, rollbackApplied, rollbackApplied ? finalSeed.source() : null);
     }
 
     public DashboardController.BenchmarkSolverResultDto hybridSolverResult(DashboardController.RunVisualizationDto irx,
@@ -154,6 +161,43 @@ public final class UnifiedHybridDispatchService {
         return diagnostics;
     }
 
+    public Map<String, Object> externalSeedDominanceDiagnostics(EliteSolutionArchive archive,
+                                                                 SolutionSeedCandidate finalSeed,
+                                                                 boolean rollbackApplied) {
+        Map<String, Object> diagnostics = new LinkedHashMap<>();
+        List<SolutionSeedCandidate> externalSeeds = archive == null ? List.of() : archive.seeds().stream()
+                .filter(seed -> seed.source() == CandidateSource.VROOM_SEED || seed.source() == CandidateSource.PYVRP_SEED)
+                .toList();
+        SolutionSeedCandidate bestExternal = externalSeeds.stream()
+                .max(LexicographicSolutionComparator.SLA_STRICT)
+                .orElse(null);
+        SolutionSeedCandidate vroom = externalSeeds.stream()
+                .filter(seed -> seed.source() == CandidateSource.VROOM_SEED)
+                .findFirst()
+                .orElse(null);
+        SolutionSeedCandidate pyvrp = externalSeeds.stream()
+                .filter(seed -> seed.source() == CandidateSource.PYVRP_SEED)
+                .findFirst()
+                .orElse(null);
+        diagnostics.put("passed", bestExternal == null || LexicographicSolutionComparator.SLA_STRICT.compare(finalSeed, bestExternal) >= 0);
+        diagnostics.put("bestExternalSeedSource", bestExternal == null ? null : bestExternal.source());
+        diagnostics.put("bestExternalSeedKm", bestExternal == null ? 0.0 : bestExternal.totalDistanceKm());
+        diagnostics.put("bestExternalSeedLate", bestExternal == null ? 0L : bestExternal.lateOrderCount());
+        diagnostics.put("finalSeedSource", finalSeed == null ? null : finalSeed.source());
+        diagnostics.put("finalKm", finalSeed == null ? 0.0 : finalSeed.totalDistanceKm());
+        diagnostics.put("finalLate", finalSeed == null ? 0L : finalSeed.lateOrderCount());
+        diagnostics.put("rollbackApplied", rollbackApplied);
+        diagnostics.put("rollbackSource", rollbackApplied && finalSeed != null ? finalSeed.source() : null);
+        diagnostics.put("vsVroomObjective", objectiveVerdict(finalSeed, vroom));
+        diagnostics.put("vsPyvrpObjective", objectiveVerdict(finalSeed, pyvrp));
+        diagnostics.put("vroomSeedKm", vroom == null ? 0.0 : vroom.totalDistanceKm());
+        diagnostics.put("vroomSeedLate", vroom == null ? 0L : vroom.lateOrderCount());
+        diagnostics.put("pyvrpSeedKm", pyvrp == null ? 0.0 : pyvrp.totalDistanceKm());
+        diagnostics.put("pyvrpSeedLate", pyvrp == null ? 0L : pyvrp.lateOrderCount());
+        diagnostics.put("finalSolver", "IRX_ML_FUSED_HYBRID");
+        return diagnostics;
+    }
+
     public List<Map<String, Object>> ablationDiagnostics(List<DashboardController.BenchmarkSolverResultDto> solverResults,
                                                           DashboardController.RunVisualizationDto irx,
                                                           BaselineDominanceResult dominance) {
@@ -221,6 +265,20 @@ public final class UnifiedHybridDispatchService {
             return candidate;
         }
         return LexicographicSolutionComparator.SLA_STRICT.compare(candidate, fallback) >= 0 ? candidate : fallback;
+    }
+
+    private String objectiveVerdict(SolutionSeedCandidate finalSeed, SolutionSeedCandidate baseline) {
+        if (baseline == null) {
+            return "NOT_AVAILABLE";
+        }
+        int comparison = LexicographicSolutionComparator.SLA_STRICT.compare(finalSeed, baseline);
+        if (comparison > 0) {
+            return "WIN";
+        }
+        if (comparison == 0) {
+            return "TIE";
+        }
+        return "LOSS";
     }
 
     private String objectiveTradeoffReason(List<SolutionSeedCandidate> seeds, SolutionSeedCandidate bestObjective) {
@@ -375,6 +433,8 @@ public final class UnifiedHybridDispatchService {
             SolutionSeedCandidate bestImprovedSeed,
             SolutionSeedCandidate finalSeed,
             BaselineDominanceResult dominance,
-            int configuredTopK) {
+            int configuredTopK,
+            boolean dominanceRollbackApplied,
+            CandidateSource dominanceRollbackSource) {
     }
 }
