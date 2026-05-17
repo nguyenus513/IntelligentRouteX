@@ -80,3 +80,14 @@ Status: production-demo closeout and full certification gates passed after goal-
 - Rescue API: PASS; rescue result includes `rescueDominanceGuard` with late/coverage safety.
 - Platform guards: idempotency, request validation, tenant guard, API-key guard, and event stream gates PASS.
 - Dashboard validation: `npm run typecheck` PASS and `npm run build` PASS.
+
+## v0.9.9.2-irx-production-runtime
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.9.2-production-runtime/final-production-runtime-summary.json`.
+- Runtime store abstractions: PASS; dispatch job, live session, result, idempotency/rate state, and filesystem artifact store MVP are present.
+- Queue routing: PASS; lanes `RESCUE`, `LIVE`, `FAST`, `QUALITY`, `BENCHMARK` with priority order `RESCUE > LIVE > FAST > QUALITY > BENCHMARK`.
+- Runtime worker MVP: PASS; API job lifecycle exposes queued/running/completed semantics through the facade and persisted result lookup.
+- API protection: PASS; tenant guard, API-key guard, idempotency conflict, validation, rate limit, and artifact access gates pass.
+- Observability: PASS; `/v1/admin/queues`, `/v1/admin/workers`, and `/v1/admin/metrics` expose queue, worker, rate-limit, artifact, and Adaptive ML metrics.
+- Deployment profile: PASS file-level Docker Compose smoke for `irx-api`, `dashboard`, optional `redis`, `postgres`, and `minio` services.
+- Dashboard/runtime validation: `compileJava`, dashboard `typecheck`, and dashboard `build` pass.

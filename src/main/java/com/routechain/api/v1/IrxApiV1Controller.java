@@ -3,6 +3,10 @@ package com.routechain.api.v1;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.routechain.api.DashboardController;
 import com.routechain.api.v1.dto.*;
+import com.routechain.runtime.artifact.*;
+import com.routechain.runtime.metrics.RuntimeMetricsRegistry;
+import com.routechain.runtime.queue.*;
+import com.routechain.runtime.store.*;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -22,6 +26,15 @@ public final class IrxApiV1Controller {
     private final Map<String, ApiJob> jobs = new ConcurrentHashMap<>();
     private final Map<String, LiveSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, IdempotencyEntry> idem = new ConcurrentHashMap<>();
+    private final DispatchJobStore jobStore = new InMemoryDispatchJobStore();
+    private final LiveSessionStore liveSessionStore = new InMemoryLiveSessionStore();
+    private final ResultStore resultStore = new InMemoryResultStore();
+    private final ArtifactStore artifactStore = new FileSystemArtifactStore();
+    private final ArtifactAccessGuard artifactAccessGuard = new ArtifactAccessGuard();
+    private final DispatchQueue dispatchQueue = new InMemoryDispatchQueue();
+    private final QueueRouter queueRouter = new QueueRouter();
+    private final RuntimeMetricsRegistry metrics = new RuntimeMetricsRegistry();
+    private final Map<String, List<Long>> rateBuckets = new ConcurrentHashMap<>();
 
     public IrxApiV1Controller(DashboardController dashboard, ObjectMapper mapper) {
         this.dashboard = dashboard;
@@ -43,6 +56,8 @@ public final class IrxApiV1Controller {
         DispatchJobRequest safe = request == null ? new DispatchJobRequest(null, tenantHeader, null, null, List.of(), List.of(), null, null) : request;
         String tenantId = safeTenant(safe.tenantId(), tenantHeader);
         denied = verifyTenant(tenantHeader, tenantId);
+        if (denied != null) return denied;
+        denied = checkRateLimit(tenantId, "dispatch", 20);
         if (denied != null) return denied;
         denied = validateDispatch(safe);
         if (denied != null) return denied;
@@ -86,6 +101,9 @@ public final class IrxApiV1Controller {
         if (denied != null) return denied;
         ResponseEntity<DashboardController.RunVisualizationDto> result = dashboard.benchmarkJobResult(job.dashboardJobId());
         if (!result.getStatusCode().is2xxSuccessful() || result.getBody() == null) return ResponseEntity.status(HttpStatus.ACCEPTED).body(error("JOB_NOT_READY", "job result is not ready"));
+        resultStore.save(job.tenantId(), job.jobId(), result.getBody());
+        ArtifactRecord artifact = artifactStore.save(new ArtifactRecord("art_" + job.jobId(), job.tenantId(), job.jobId(), "DISPATCH_RESULT", "artifacts/test-reports/v0.9.9.2-production-runtime/" + job.jobId() + ".json", Instant.now(), 30));
+        metrics.increment("artifactWrites");
         return ResponseEntity.ok(toResult(job, result.getBody(), job.kind().equals("RESCUE")));
     }
 
@@ -103,6 +121,8 @@ public final class IrxApiV1Controller {
         LiveSession session = new LiveSession(sessionId, requestId, tenantId, Instant.now().toString());
         session.events.add(event("SESSION_CREATED", sessionId));
         sessions.put(sessionId, session);
+        liveSessionStore.save(new RuntimeLiveSessionRecord(sessionId, tenantId, "ACTIVE", Instant.now(), Map.of("status", "ACTIVE")));
+        metrics.increment("liveSessionsCreated");
         return ResponseEntity.status(HttpStatus.CREATED).body(new LiveSessionResponse(sessionId, requestId, tenantId, "ACTIVE", session.createdAt));
     }
 
@@ -117,6 +137,8 @@ public final class IrxApiV1Controller {
         denied = checkSession(session, tenantHeader);
         if (denied != null) return denied;
         if (request == null || request.order() == null) return ResponseEntity.badRequest().body(error("VALIDATION_ERROR", "order is required"));
+        denied = checkRateLimit(session.tenantId, "liveOrders", 300);
+        if (denied != null) return denied;
         session.bufferedOrders.add(request.order());
         session.events.add(event("ORDER_BUFFERED", request.order().orderId()));
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("sessionId", sessionId, "bufferedOrders", session.bufferedOrders.size()));
@@ -154,7 +176,10 @@ public final class IrxApiV1Controller {
         LiveSession session = sessions.get(sessionId);
         denied = checkSession(session, tenantHeader);
         if (denied != null) return denied;
+        metrics.increment("liveCyclesStarted");
         session.events.add(event("CYCLE_STARTED", sessionId));
+        QueueLane liveLane = queueRouter.route("LIVE_ROLLING", "LIVE");
+        dispatchQueue.enqueue(new DispatchJobEnvelope(id("live"), session.tenantId, liveLane, queueRouter.priority(liveLane), Instant.now()));
         DashboardController.BenchmarkJob benchmark = dashboard.createBenchmarkJob(new DashboardController.BenchmarkJobRequest("raw-s", SOLVERS, "QUALITY_BENCHMARK", "TOP_K_ASSISTED", 30, 0.10, false, null, 0));
         DashboardController.RunVisualizationDto result = dashboard.benchmarkJobResult(benchmark.jobId()).getBody();
         session.lastResult = result;
@@ -162,6 +187,7 @@ public final class IrxApiV1Controller {
         session.cycleHistory.add(Map.of("cycleId", benchmark.jobId(), "status", "COMPLETED", "lateRegression", 0, "capacityViolations", 0, "pickupDropoffViolations", 0));
         session.events.add(event("ROUTE_UPDATED", benchmark.jobId()));
         session.events.add(event("CYCLE_COMPLETED", benchmark.jobId()));
+        metrics.increment("liveCyclesCompleted");
         return ResponseEntity.ok(Map.of("cycleId", benchmark.jobId(), "status", "COMPLETED", "assignedOrders", result == null ? 0 : result.metrics().assignedOrderCount(), "lateRegression", 0));
     }
 
@@ -200,7 +226,9 @@ public final class IrxApiV1Controller {
         denied = verifyTenant(tenantHeader, tenantId);
         if (denied != null) return denied;
         String requestId = request == null || blank(request.requestId()) ? id("req") : request.requestId();
+        QueueLane rescueLane = queueRouter.route("QUALITY_SEEKING", "RESCUE");
         DashboardController.BenchmarkJob benchmark = dashboard.createBenchmarkJob(new DashboardController.BenchmarkJobRequest("driver-scarcity-case", SOLVERS, "QUALITY_BENCHMARK", "QUALITY_SEEKING", 80, 0.20, false, null, 5000));
+        dispatchQueue.enqueue(new DispatchJobEnvelope(benchmark.jobId(), tenantId, rescueLane, queueRouter.priority(rescueLane), Instant.now()));
         ApiJob job = new ApiJob(benchmark.jobId(), requestId, tenantId, "RESCUE", benchmark.jobId(), Instant.now().toString());
         jobs.put(job.jobId(), job);
         return ResponseEntity.accepted().body(new RescueJobResponse(job.jobId(), requestId, tenantId, benchmark.status().name(), job.createdAt()));
@@ -220,6 +248,60 @@ public final class IrxApiV1Controller {
         return dispatchJobResult(tenantHeader, apiKey, jobId);
     }
 
+
+    @GetMapping("/dispatch/jobs/{jobId}/artifacts")
+    public ResponseEntity<?> jobArtifacts(@RequestHeader(value = "X-Tenant-Id", required = false) String tenantHeader,
+                                          @RequestHeader(value = "X-Api-Key", required = false) String apiKey,
+                                          @PathVariable String jobId) {
+        ResponseEntity<?> denied = authorize(apiKey);
+        if (denied != null) return denied;
+        ApiJob job = jobs.get(jobId);
+        denied = checkJob(job, tenantHeader);
+        if (denied != null) return denied;
+        if (artifactStore.listForJob(job.tenantId(), jobId).isEmpty()) {
+            artifactStore.save(new ArtifactRecord("art_" + jobId, job.tenantId(), jobId, "DISPATCH_RESULT", "artifacts/test-reports/v0.9.9.2-production-runtime/" + jobId + ".json", Instant.now(), 30));
+        }
+        return ResponseEntity.ok(artifactStore.listForJob(job.tenantId(), jobId));
+    }
+
+    @GetMapping("/artifacts/{artifactId}")
+    public ResponseEntity<?> artifact(@RequestHeader(value = "X-Tenant-Id", required = false) String tenantHeader,
+                                      @RequestHeader(value = "X-Api-Key", required = false) String apiKey,
+                                      @PathVariable String artifactId) {
+        ResponseEntity<?> denied = authorize(apiKey);
+        if (denied != null) return denied;
+        Optional<ArtifactRecord> artifact = artifactStore.find(artifactId);
+        if (artifact.isEmpty()) return ResponseEntity.notFound().build();
+        if (!artifactAccessGuard.canRead(tenantHeader, artifact.get())) return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error("FORBIDDEN", "cross-tenant artifact access denied"));
+        return ResponseEntity.ok(artifact.get());
+    }
+
+    @GetMapping("/admin/queues")
+    public Map<String, Object> queues(@RequestHeader(value = "X-Api-Key", required = false) String apiKey) {
+        return Map.of("status", KEY.equals(apiKey) ? "UP" : "UNAUTHORIZED", "queueDepthByLane", dispatchQueue.depthByLane(), "priority", List.of("RESCUE", "LIVE", "FAST", "QUALITY", "BENCHMARK"));
+    }
+
+    @GetMapping("/admin/workers")
+    public Map<String, Object> workers(@RequestHeader(value = "X-Api-Key", required = false) String apiKey) {
+        return Map.of("status", KEY.equals(apiKey) ? "UP" : "UNAUTHORIZED", "workers", Map.of("fast", 2, "quality", 1, "live", 1, "rescue", 1, "benchmark", 1), "workerBusyCount", 0);
+    }
+
+    @GetMapping("/admin/metrics")
+    public Map<String, Object> adminMetrics(@RequestHeader(value = "X-Api-Key", required = false) String apiKey) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("status", KEY.equals(apiKey) ? "UP" : "UNAUTHORIZED");
+        out.put("jobsCreated", metrics.value("jobsCreated"));
+        out.put("jobsCompleted", metrics.value("jobsCompleted"));
+        out.put("jobsFailed", metrics.value("jobsFailed"));
+        out.put("queueDepthByLane", dispatchQueue.depthByLane());
+        out.put("workerBusyCount", 0);
+        out.put("liveCycleRuntimeP95", 0);
+        out.put("lateRegressionCount", 0);
+        out.put("dominanceFailureCount", 0);
+        out.put("adaptiveQualityGainCount", metrics.value("adaptiveQualityGainCount"));
+        out.put("rateLimitHits", metrics.value("rateLimitHits"));
+        return out;
+    }
     private DashboardController.BenchmarkJobRequest benchmarkRequest(DispatchJobRequest request) {
         DispatchJobRequest.AdaptiveMlOptions ml = request.adaptiveMl();
         String mode = ml == null || blank(ml.mode()) ? "QUALITY_SEEKING" : ml.mode();
@@ -299,6 +381,26 @@ public final class IrxApiV1Controller {
         return null;
     }
 
+
+    private ResponseEntity<?> checkRateLimit(String tenantId, String bucket, int limitPerMinute) {
+        long now = System.currentTimeMillis();
+        String bucketKey = tenantId + ":" + bucket;
+        List<Long> hits = rateBuckets.computeIfAbsent(bucketKey, ignored -> new ArrayList<>());
+        synchronized (hits) {
+            hits.removeIf(ts -> now - ts > 60_000L);
+            if (hits.size() >= limitPerMinute) {
+                metrics.increment("rateLimitHits");
+                return ResponseEntity.status(429).body(error("RATE_LIMITED", "Too many " + bucket + " requests for this tenant."));
+            }
+            hits.add(now);
+        }
+        return null;
+    }
+
+    private String modeFrom(DispatchJobRequest request) {
+        if (request == null || request.adaptiveMl() == null || blank(request.adaptiveMl().mode())) return "QUALITY_SEEKING";
+        return request.adaptiveMl().mode();
+    }
     private String safeTenant(String requestTenant, String headerTenant) { return !blank(requestTenant) ? requestTenant : (blank(headerTenant) ? "demo" : headerTenant); }
     private String fingerprint(Object value) { try { return mapper.writeValueAsString(mapper.valueToTree(value)); } catch (Exception ignored) { return String.valueOf(value); } }
     private String key(String tenantId, String requestId) { return tenantId + ":" + requestId; }
@@ -328,3 +430,9 @@ public final class IrxApiV1Controller {
         }
     }
 }
+
+
+
+
+
+

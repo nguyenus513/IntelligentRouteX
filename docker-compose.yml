@@ -1,0 +1,35 @@
+services:
+  irx-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "${IRX_API_PORT:-18116}:18116"
+    environment:
+      - VROOM_BIN=${VROOM_BIN:-tools/vroom/vroom-wsl.cmd}
+      - IRX_API_KEY=${IRX_API_KEY:-demo-key}
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    ports:
+      - "${IRX_DASHBOARD_PORT:-5173}:5173"
+    depends_on:
+      - irx-api
+  redis:
+    image: redis:7-alpine
+    profiles: ["optional-persistent"]
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["optional-persistent"]
+    environment:
+      POSTGRES_PASSWORD: irx
+      POSTGRES_USER: irx
+      POSTGRES_DB: irx
+  minio:
+    image: minio/minio:latest
+    profiles: ["optional-object-store"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: irx
+      MINIO_ROOT_PASSWORD: irx-demo-password

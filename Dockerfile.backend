@@ -1,0 +1,6 @@
+FROM eclipse-temurin:21-jdk
+WORKDIR /app
+COPY . .
+ENV GRADLE_USER_HOME=/app/.gradle-docker
+EXPOSE 18116
+CMD ["./gradlew", "bootRun", "--args=--spring.profiles.active=dispatch-v2-dashboard-demo --server.port=18116"]
