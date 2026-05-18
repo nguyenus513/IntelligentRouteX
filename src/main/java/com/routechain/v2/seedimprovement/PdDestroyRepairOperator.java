@@ -9,21 +9,27 @@ public final class PdDestroyRepairOperator {
     private final MlPdDestroyPolicy destroyPolicy;
     private final PdExactInsertionOperator exactInsertion;
     private final RegretKPickupDeliveryRepair repair;
+    private final PdCrossInsertionOperator crossInsertion;
+    private final PdSwapStarOperator swapStar;
     private final PdSeedEvaluator evaluator;
     private final PdObjectiveComparator comparator;
 
     public PdDestroyRepairOperator() {
-        this(new MlPdDestroyPolicy(), new PdExactInsertionOperator(), new RegretKPickupDeliveryRepair(), new PdSeedEvaluator(), new PdObjectiveComparator());
+        this(new MlPdDestroyPolicy(), new PdExactInsertionOperator(), new RegretKPickupDeliveryRepair(), new PdCrossInsertionOperator(), new PdSwapStarOperator(), new PdSeedEvaluator(), new PdObjectiveComparator());
     }
 
     public PdDestroyRepairOperator(MlPdDestroyPolicy destroyPolicy,
                                    PdExactInsertionOperator exactInsertion,
                                    RegretKPickupDeliveryRepair repair,
+                                   PdCrossInsertionOperator crossInsertion,
+                                   PdSwapStarOperator swapStar,
                                    PdSeedEvaluator evaluator,
                                    PdObjectiveComparator comparator) {
         this.destroyPolicy = destroyPolicy == null ? new MlPdDestroyPolicy() : destroyPolicy;
         this.exactInsertion = exactInsertion == null ? new PdExactInsertionOperator() : exactInsertion;
         this.repair = repair == null ? new RegretKPickupDeliveryRepair() : repair;
+        this.crossInsertion = crossInsertion == null ? new PdCrossInsertionOperator() : crossInsertion;
+        this.swapStar = swapStar == null ? new PdSwapStarOperator() : swapStar;
         this.evaluator = evaluator == null ? new PdSeedEvaluator() : evaluator;
         this.comparator = comparator == null ? new PdObjectiveComparator() : comparator;
     }
@@ -82,12 +88,55 @@ public final class PdDestroyRepairOperator {
                 }
             }
         }
+        if (mode == PdLnsMode.ML_HYBRID_PD_LNS) {
+            OperatorApplyResult crossFromBase = applyOperatorResult(crossInsertion.bestMove(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces);
+            OperatorApplyResult swapFromBase = applyOperatorResult(swapStar.bestSwap(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces);
+            OperatorApplyResult crossFromCurrent = applyOperatorResult(crossInsertion.bestMove(current, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces);
+            OperatorApplyResult swapFromCurrent = applyOperatorResult(swapStar.bestSwap(current, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces);
+            for (OperatorApplyResult operatorResult : List.of(crossFromBase, swapFromBase, crossFromCurrent, swapFromCurrent)) {
+                evaluatedOrders += operatorResult.evaluatedOrders();
+                evaluatedInsertions += operatorResult.evaluatedCandidates();
+                feasibleInsertions += operatorResult.feasibleCandidates();
+                if (operatorResult.accepted() && comparator.better(operatorResult.evaluation(), bestEvaluation)) {
+                    current = operatorResult.seed();
+                    currentEvaluation = operatorResult.evaluation();
+                    best = current;
+                    bestEvaluation = currentEvaluation;
+                    acceptedMutations++;
+                }
+            }
+        }
         boolean applied = evaluatedOrders > 0 && evaluatedInsertions > 0;
         return new PdLnsResult(applied, baseSeed, best, baseEvaluation, bestEvaluation, safeRounds, evaluatedOrders, evaluatedInsertions, feasibleInsertions, acceptedMutations, traces);
     }
 
+    private OperatorApplyResult applyOperatorResult(PdOperatorResult result,
+                                                    PdEvaluation currentEvaluation,
+                                                    PdEvaluation bestEvaluation,
+                                                    int round,
+                                                    List<PdLnsTrace> traces) {
+        if (result == null || result.evaluatedCandidates() <= 0) {
+            return OperatorApplyResult.empty();
+        }
+        boolean accepted = result.evaluation() != null
+                && comparator.validNoRegression(result.evaluation(), currentEvaluation)
+                && comparator.better(result.evaluation(), bestEvaluation);
+        if (accepted) {
+            traces.add(new PdLnsTrace(round, result.orderIds(), result.operator(), true, currentEvaluation.distanceKm(), result.evaluation().distanceKm(), round(currentEvaluation.distanceKm() - result.evaluation().distanceKm()), result.evaluatedCandidates(), result.feasibleCandidates(), "phase5-operator"));
+            return new OperatorApplyResult(true, result.seed(), result.evaluation(), result.orderIds().isBlank() ? 0 : result.orderIds().split(",").length, result.evaluatedCandidates(), result.feasibleCandidates());
+        }
+        traces.add(new PdLnsTrace(round, result.orderIds(), result.operator(), false, currentEvaluation.distanceKm(), result.evaluation() == null ? currentEvaluation.distanceKm() : result.evaluation().distanceKm(), 0.0, result.evaluatedCandidates(), result.feasibleCandidates(), "no-objective-improvement"));
+        return new OperatorApplyResult(false, null, null, result.orderIds().isBlank() ? 0 : result.orderIds().split(",").length, result.evaluatedCandidates(), result.feasibleCandidates());
+    }
+
+    private record OperatorApplyResult(boolean accepted, PdSeedState seed, PdEvaluation evaluation, int evaluatedOrders, int evaluatedCandidates, int feasibleCandidates) {
+        static OperatorApplyResult empty() {
+            return new OperatorApplyResult(false, null, null, 0, 0, 0);
+        }
+    }
+
     private List<Integer> destroySizes(PdSeedState seed, PdLnsMode mode) {
-        if (mode == PdLnsMode.ML_DESTROY_REPAIR_AUTO || mode == PdLnsMode.ML_DESTROY_REPAIR) {
+        if (mode == PdLnsMode.ML_DESTROY_REPAIR_AUTO || mode == PdLnsMode.ML_DESTROY_REPAIR || mode == PdLnsMode.ML_HYBRID_PD_LNS) {
             return List.of(2, 3, 4);
         }
         return List.of(Math.max(2, destroyPolicy.chooseDestroySize(seed, mode)));
