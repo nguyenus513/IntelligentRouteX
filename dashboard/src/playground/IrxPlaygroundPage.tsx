@@ -1,15 +1,19 @@
-﻿import { useMemo, useState } from 'react';
-import { Activity, Database, LifeBuoy, Play, RefreshCcw, RadioTower } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Activity, Database, LifeBuoy, Play, RadioTower } from 'lucide-react';
 import { AdaptiveMlPanel } from './AdaptiveMlPanel';
+import { ApiHealthBadge } from './ApiHealthBadge';
 import { AssignmentTable } from './AssignmentTable';
 import { BaselinePanel } from './BaselinePanel';
 import { EventArtifactPanel } from './EventArtifactPanel';
+import { PipelinePanel } from './PipelinePanel';
 import { PlaygroundTopBar } from './PlaygroundTopBar';
 import { RawJsonPanel } from './RawJsonPanel';
 import { ResultPanel } from './ResultPanel';
+import { RouteMapPanel } from './RouteMapPanel';
+import { RouteTimelinePanel } from './RouteTimelinePanel';
 import { ScenarioPanel } from './ScenarioPanel';
-import { getBatch, getBatchItems, getJob, getJobArtifacts, getJobEvents, getJobResult, getLiveEvents, getLiveState, getRescueResult, getRuntimeMetrics, runBigDataDemo, runLiveDemo, runRescueDemo, runStaticScenario } from './playgroundApi';
-import type { AdaptiveMode, PlaygroundMode, PlaygroundSnapshot } from './playgroundTypes';
+import { API_BASE, checkApiHealth, describeApiError, getBatch, getBatchItems, getJob, getJobArtifacts, getJobEvents, getJobResult, getLiveEvents, getLiveState, getRescueResult, getRuntimeMetrics, runBigDataDemo, runLiveDemo, runRescueDemo, runStaticScenario } from './playgroundApi';
+import type { AdaptiveMode, ApiHealthSnapshot, PlaygroundMode, PlaygroundSnapshot } from './playgroundTypes';
 
 const initialSnapshot = (mode: PlaygroundMode, adaptiveMode: AdaptiveMode, scenarioId: string): PlaygroundSnapshot => ({
   scenarioId,
@@ -26,6 +30,7 @@ export function IrxPlaygroundPage() {
   const [adaptiveMode, setAdaptiveMode] = useState<AdaptiveMode>('QUALITY_SEEKING');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [health, setHealth] = useState<ApiHealthSnapshot>({ state: 'checking', apiBase: API_BASE, message: 'Checking backend health...' });
   const [snapshot, setSnapshot] = useState<PlaygroundSnapshot>(() => initialSnapshot('STATIC_DISPATCH', 'QUALITY_SEEKING', 'raw-s'));
 
   const modeTone = useMemo(() => ({
@@ -34,6 +39,13 @@ export function IrxPlaygroundPage() {
     RESCUE: { icon: <LifeBuoy size={18} />, label: 'Rescue dispatch' },
     BIGDATA_LITE: { icon: <Database size={18} />, label: 'BigData-lite batch' }
   })[mode], [mode]);
+
+  async function refreshHealth() {
+    setHealth({ state: 'checking', apiBase: API_BASE, message: 'Checking backend health...' });
+    setHealth(await checkApiHealth());
+  }
+
+  useEffect(() => { void refreshHealth(); }, []);
 
   function reset() {
     setError(null);
@@ -45,6 +57,9 @@ export function IrxPlaygroundPage() {
     setError(null);
     const base = initialSnapshot(mode, adaptiveMode, scenarioId);
     try {
+      const currentHealth = await checkApiHealth();
+      setHealth(currentHealth);
+      if (currentHealth.state !== 'online') throw new Error(currentHealth.message);
       if (mode === 'STATIC_DISPATCH') {
         const job = await runStaticScenario({ scenarioId, adaptiveMode });
         const current = await getJob(job.jobId);
@@ -70,7 +85,7 @@ export function IrxPlaygroundPage() {
         setSnapshot({ ...base, batch, batchItems, events: [], artifacts: [], metrics, raw: { lastRequest: { mode }, lastResponse: started, result: batchItems } });
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Playground API flow failed');
+      setError(describeApiError(cause));
     } finally {
       setBusy(false);
     }
@@ -79,16 +94,12 @@ export function IrxPlaygroundPage() {
   return <div className="playground-shell">
     <PlaygroundTopBar scenarioId={scenarioId} mode={mode} adaptiveMode={adaptiveMode} busy={busy} onScenario={setScenarioId} onMode={setMode} onAdaptiveMode={setAdaptiveMode} onRun={run} onReset={reset} />
     {error && <div className="playground-error" role="alert">{error}</div>}
-    <div className="playground-status-strip"><span>{modeTone.icon}{modeTone.label}</span><span><Activity size={16} />Backend `/api/v1` contract locked</span><span>Metrics {snapshot.metrics?.jobsCreated ?? 0} jobs</span></div>
-    <main className="playground-grid">
-      <ScenarioPanel scenarioId={scenarioId} mode={mode} adaptiveMode={adaptiveMode} />
-      <ResultPanel snapshot={snapshot} />
-      <AdaptiveMlPanel snapshot={snapshot} />
-      <BaselinePanel snapshot={snapshot} />
-      <AssignmentTable snapshot={snapshot} />
-      <EventArtifactPanel snapshot={snapshot} />
-      <RawJsonPanel snapshot={snapshot} />
+    <div className="playground-status-strip"><span>{modeTone.icon}{modeTone.label}</span><span><Activity size={16} />Backend `/api/v1` contract locked</span><span>Metrics {snapshot.metrics?.jobsCreated ?? 0} jobs</span><ApiHealthBadge health={health} onRefresh={refreshHealth} /></div>
+    <main className="playground-grid playground-grid-v2">
+      <aside className="playground-left-rail"><ScenarioPanel scenarioId={scenarioId} mode={mode} adaptiveMode={adaptiveMode} /><PipelinePanel snapshot={snapshot} /></aside>
+      <section className="playground-map-stack"><RouteMapPanel snapshot={snapshot} /><RouteTimelinePanel snapshot={snapshot} /><AssignmentTable snapshot={snapshot} /></section>
+      <aside className="playground-right-rail"><ResultPanel snapshot={snapshot} /><AdaptiveMlPanel snapshot={snapshot} /><BaselinePanel snapshot={snapshot} /></aside>
+      <section className="playground-bottom-rail"><EventArtifactPanel snapshot={snapshot} /><RawJsonPanel snapshot={snapshot} /></section>
     </main>
   </div>;
 }
-

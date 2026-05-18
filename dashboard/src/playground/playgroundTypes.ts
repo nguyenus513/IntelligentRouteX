@@ -34,6 +34,9 @@ export interface RescueResult { mode: string; beforeLate: number; afterLate: num
 export interface BatchResponse { batchId: string; status: string; accepted?: number; rejected?: number; totalItems?: number; normalizedItems?: number; processedItems?: number; deadLetterItems?: number; queuedItems?: number; jobId?: string }
 export interface RuntimeMetrics { jobsCreated?: number; jobsCompleted?: number; jobsFailed?: number; artifactCount?: number; eventCount?: number; latestTelemetryCount?: number }
 export interface PageResult<T> { items: T[]; count?: number; total?: number; page?: number; size?: number; nextCursor?: string }
+export interface ApiHealth { status?: string; engineVersion?: string; apiVersion?: string; timestamp?: string }
+export type ApiHealthState = 'checking' | 'online' | 'offline';
+export interface ApiHealthSnapshot { state: ApiHealthState; apiBase: string; message: string; health?: ApiHealth }
 
 export interface PlaygroundSnapshot {
   scenarioId: string;
