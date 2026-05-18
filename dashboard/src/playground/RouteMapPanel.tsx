@@ -20,13 +20,17 @@ export function RouteMapPanel({ snapshot }: { snapshot: PlaygroundSnapshot }) {
     </div>
     {model.warnings.map((warning) => <div className="map-warning" key={warning}>{warning}</div>)}
     <div className="route-map-canvas">
-      {mapMode === 'hcm' ? <LeafletHcmMap model={model} onSelectPoint={setSelected} /> : <SvgSyntheticMap model={model} selected={selected} onSelectPoint={setSelected} />}
+      {model.points.length === 0 ? <MapEmptyState message={model.warnings[0]} /> : mapMode === 'hcm' ? <LeafletHcmMap model={model} onSelectPoint={setSelected} /> : <SvgSyntheticMap model={model} selected={selected} onSelectPoint={setSelected} />}
       <MapLegend />
       <div className="map-tooltip">
         {selected ? <><strong>{selected.kind} · {selected.label}</strong><span>Area: {selected.area ?? 'HCM demo'}</span><span>Order: {selected.orderId ?? '—'}</span><span>Driver: {selected.driverId ?? '—'}</span><span>ETA: demo +{selected.label.replace(/\D/g, '') || '0'} min</span><span>Late: 0</span><span>Source: {selected.source ?? '—'}</span><span>Status: {selected.status ?? 'ASSIGNED'}</span></> : <><MapPin size={16} /><span>Click a pin to inspect route state.</span></>}
       </div>
     </div>
   </section>;
+}
+
+function MapEmptyState({ message }: { message?: string }) {
+  return <div className="map-empty-state" data-testid="map-empty-state"><MapPin size={22} /><strong>No route result yet</strong><span>{message ?? 'Choose a scenario and click Run.'}</span></div>;
 }
 
 function SvgSyntheticMap({ model, onSelectPoint }: { model: MapModel; selected: MapPoint | null; onSelectPoint: (point: MapPoint) => void }) {

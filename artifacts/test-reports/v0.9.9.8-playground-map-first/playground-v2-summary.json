@@ -17,6 +17,7 @@
     "osmAttribution":  "PASS",
     "coordinateModeBadge":  "PASS",
     "syntheticFallback":  "PASS",
+    "mapEmptyState":  "PASS",
     "pinsAndRoutes":  "PASS",
     "timeline":  "PASS",
     "seedAttribution":  "PASS",

@@ -59,6 +59,7 @@ Assert ($mapSource -match "svg") "SVG fallback missing"
 Assert ($mapSource -match "map-pin") "pin render missing"
 Assert ($mapSource -match "route-arrow") "route direction marker missing"
 Assert ($mapSource -match "map-legend") "map legend missing"
+Assert ($mapSource -match "map-empty-state") "map empty state missing"
 Assert ($modelSource -match "PICKUP") "pickup model missing"
 Assert ($modelSource -match "DROPOFF") "dropoff model missing"
 Assert ($modelSource -match "DRIVER") "driver model missing"
@@ -123,6 +124,7 @@ $summary = [ordered]@{
   osmAttribution = "PASS"
   coordinateModeBadge = "PASS"
   syntheticFallback = "PASS"
+  mapEmptyState = "PASS"
   pinsAndRoutes = $results.pinsAndRoutes
   timeline = $results.timeline
   seedAttribution = "PASS"

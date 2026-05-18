@@ -41,6 +41,16 @@ export function routeColor(driverId: string): string {
 }
 
 export function toMapModel(snapshot: PlaygroundSnapshot): MapModel {
+  if (!hasRouteEvidence(snapshot)) {
+    return {
+      points: [],
+      routes: [],
+      synthetic: false,
+      coordinateMode: 'HCM_DEMO_GEO',
+      warnings: ['No route result yet. Choose a scenario and click Run.'],
+      summary: { driverCount: 0, pickupCount: 0, dropoffCount: 0, routeCount: 0, lateCount: 0 }
+    };
+  }
   const routes = extractRoutes(snapshot);
   const points = routes.flatMap((route) => route.points);
   return {
@@ -57,6 +67,10 @@ export function toMapModel(snapshot: PlaygroundSnapshot): MapModel {
       lateCount: routes.reduce((total, route) => total + (route.lateCount ?? 0), 0)
     }
   };
+}
+
+function hasRouteEvidence(snapshot: PlaygroundSnapshot) {
+  return Boolean(snapshot.staticResult || snapshot.liveState || snapshot.cycle || snapshot.rescue || snapshot.batch || snapshot.batchItems?.items.length);
 }
 
 function extractRoutes(snapshot: PlaygroundSnapshot): MapRoute[] {

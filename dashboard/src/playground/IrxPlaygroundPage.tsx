@@ -110,8 +110,12 @@ export function IrxPlaygroundPage() {
 }
 
 function demoStats(snapshot: PlaygroundSnapshot) {
+  const hasRun = Boolean(snapshot.staticResult || snapshot.liveState || snapshot.cycle || snapshot.rescue || snapshot.batch);
   const coverage = snapshot.staticResult?.coverage;
   const summary = snapshot.staticResult?.summary;
+  if (!hasRun) {
+    return ['Orders', 'Drivers', 'Routes', 'Assigned', 'Late', 'Distance', 'Runtime'].map((label) => ({ label, value: 'Not run yet' }));
+  }
   return [
     { label: 'Orders', value: String(coverage?.total ?? summary?.assignedOrders ?? snapshot.batch?.totalItems ?? '—') },
     { label: 'Drivers', value: String(snapshot.liveState?.activeDrivers ?? (snapshot.staticResult ? 2 : '—')) },
