@@ -31,6 +31,7 @@ Pass backendHealth
 
 $source = Get-Content dashboard/src/playground/IrxPlaygroundPage.tsx -Raw
 $apiSource = Get-Content dashboard/src/playground/playgroundApi.ts -Raw
+$viteConfig = Get-Content dashboard/vite.config.ts -Raw
 Assert ($source -match "RouteMapPanel") "map panel not wired"
 Assert ($source -match "RouteTimelinePanel") "timeline panel not wired"
 Assert ($source -match "ApiHealthBadge") "api health badge not wired"
@@ -38,6 +39,9 @@ Assert ($source -match "SeedAttributionPanel") "seed attribution panel not wired
 Assert ($source -match "SafetyGuardPanel") "safety guard panel not wired"
 Assert ($source -match "BigDataPipelinePanel") "BigData pipeline panel not wired"
 Assert ($apiSource -match "BACKEND_UNAVAILABLE") "backend unavailable error missing"
+Assert ($apiSource -match "DEFAULT_API_BASE = '/api/v1'") "relative API base missing"
+Assert ($viteConfig -match "localhost:18116") "Vite proxy target missing"
+Assert ($viteConfig -match "changeOrigin") "Vite proxy changeOrigin missing"
 Assert ($apiSource -match "INVALID_JSON_RESPONSE") "invalid json error missing"
 Assert ($apiSource -match "API_TIMEOUT") "timeout error missing"
 Assert (-not ($apiSource -match "Failed to fetch")) "raw Failed to fetch string still present"
@@ -108,6 +112,8 @@ $summary = [ordered]@{
   backendHealth = $results.backendHealth
   playgroundRouteExists = $true
   apiHealthBadge = $results.apiHealthBadge
+  relativeApiBase = "PASS"
+  viteProxy = "PASS"
   staticFlow = $results.staticFlow
   liveFlow = $results.liveFlow
   rescueFlow = $results.rescueFlow

@@ -1,5 +1,5 @@
 import 'leaflet/dist/leaflet.css';
-import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
+import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
 import { useEffect } from 'react';
 import L from 'leaflet';
 import { HCM_CENTER, HCM_ZOOM } from './hcmDemoCoordinates';
@@ -11,7 +11,8 @@ export function LeafletHcmMap({ model, onSelectPoint }: { model: MapModel; onSel
       <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <FitBounds points={model.points} />
       {model.routes.map((route) => <Polyline key={route.driverId} positions={route.points.map((point) => [point.lat, point.lng] as [number, number])} pathOptions={{ color: routeColor(route.driverId), weight: route.source.includes('RESCUE') ? 6 : 5, opacity: .86, dashArray: route.source.includes('LIVE') ? '10 10' : undefined }} />)}
-      {model.points.map((point) => <CircleMarker key={point.id} center={[point.lat, point.lng]} radius={point.kind === 'DRIVER' || point.kind === 'DEPOT' ? 10 : 8} pathOptions={{ color: borderColor(point), fillColor: fillColor(point), fillOpacity: .92, weight: point.kind === 'RESCUE' ? 4 : 2 }} eventHandlers={{ click: () => onSelectPoint(point) }}>
+      {model.points.map((point) => <CircleMarker key={point.id} center={[point.lat, point.lng]} radius={point.kind === 'DRIVER' || point.kind === 'DEPOT' ? 9 : 7} pathOptions={{ color: borderColor(point), fillColor: fillColor(point), fillOpacity: .9, weight: point.kind === 'RESCUE' ? 4 : 2 }} eventHandlers={{ click: () => onSelectPoint(point) }}>
+        <Tooltip direction="top" offset={[0, -8]} permanent className="irx-map-label">{point.label}</Tooltip>
         <Popup><MapPopup point={point} /></Popup>
       </CircleMarker>)}
     </MapContainer>

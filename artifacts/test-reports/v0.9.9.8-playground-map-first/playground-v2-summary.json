@@ -6,6 +6,8 @@
     "backendHealth":  "PASS",
     "playgroundRouteExists":  true,
     "apiHealthBadge":  "PASS",
+    "relativeApiBase":  "PASS",
+    "viteProxy":  "PASS",
     "staticFlow":  "PASS",
     "liveFlow":  "PASS",
     "rescueFlow":  "PASS",

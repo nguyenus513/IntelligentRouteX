@@ -1,6 +1,6 @@
 import type { ApiEnvelope, ApiHealth, ApiHealthSnapshot, ArtifactRecord, BatchResponse, CycleResponse, EventRecord, JobStatus, LiveState, PageResult, RescueResult, RuntimeMetrics, StaticResult } from './playgroundTypes';
 
-const DEFAULT_API_BASE = 'http://localhost:18116/api/v1';
+const DEFAULT_API_BASE = '/api/v1';
 const DEFAULT_TIMEOUT_MS = 15_000;
 const BIGDATA_TIMEOUT_MS = 30_000;
 
