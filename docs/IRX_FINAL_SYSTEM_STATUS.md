@@ -119,3 +119,11 @@ Status: production-demo closeout and full certification gates passed after goal-
 - Dashboard validation: `npm run typecheck` PASS and `npm run build` PASS.
 - Backend/API flows: static, live, rescue, BigData-lite, events, and artifacts PASS via locked `/api/v1` contracts.
 - UI panels: result summary, Adaptive ML diagnostics, baseline comparison, assignment preview, event/artifact list, and raw JSON are present.
+
+## v0.9.9.6-one-click-start
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.9.6-one-click-start/one-click-gate-summary.json`.
+- One-click commands certified: `scripts/irx.ps1 up`, `status`, `test -Quick`, `down`, and `package`.
+- Startup: backend health PASS at `http://localhost:18116/api/v1/health`; Playground HTTP 200 at `http://localhost:5173/playground`.
+- Test: compileJava, dashboard typecheck/build, API contract gate, Playground gate, and BigData-lite gate PASS.
+- Package: `release/irx-v1.0.zip` generated locally; release summary copied to `artifacts/test-reports/v0.9.9.6-one-click-start/release-summary.json`.

@@ -118,3 +118,10 @@ Status: certified demo gate PASS.
 - Overall: PASS; summary `artifacts/test-reports/v0.9.9.5-irx-playground/playground-summary.json`.
 - Certified scope: one-screen `/playground` demo that consumes locked `/api/v1` contracts for static dispatch, live rolling, rescue, BigData-lite batch, event/artifact fetches, runtime metrics, Adaptive ML diagnostics, baseline comparison, and raw JSON inspection.
 - Contract boundary: no solver/core changes; Playground is a frontend/API integration layer only.
+
+## v0.9.9.6 One-click Start
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.9.6-one-click-start/one-click-gate-summary.json`.
+- Certified commands: `up`, `status`, `test -Quick`, `down`, `package` through `scripts/irx.ps1`.
+- Release package evidence: `release/irx-v1.0.zip` exists locally after gate; small release summary is stored in artifacts for versioned evidence.
+- Demo boundary: one-click launcher coordinates existing API/Playground/runtime gates; it does not alter solver/core behavior.

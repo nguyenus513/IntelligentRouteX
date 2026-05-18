@@ -1,0 +1,12 @@
+{
+    "includes":  [
+                     "backend jar",
+                     "dashboard dist",
+                     "scripts",
+                     "docs",
+                     "docker profile",
+                     "sample reports"
+                 ],
+    "version":  "irx-v1.0",
+    "createdAt":  "2026-05-18T05:23:28.7599731Z"
+}

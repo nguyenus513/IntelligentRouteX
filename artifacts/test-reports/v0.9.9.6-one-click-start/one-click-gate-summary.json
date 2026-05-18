@@ -1,0 +1,14 @@
+{
+    "version":  "v0.9.9.6-one-click-start",
+    "overallPass":  true,
+    "up":  "PASS",
+    "backendHealth":  "PASS",
+    "playgroundHttp200":  "PASS",
+    "status":  "PASS",
+    "test":  "PASS",
+    "down":  "PASS",
+    "package":  "PASS",
+    "releaseZip":  "PASS",
+    "releasePath":  "release/irx-v1.0.zip",
+    "systemSummary":  "artifacts/test-reports/v0.9.9.6-one-click-start/one-click-system-summary.json"
+}
