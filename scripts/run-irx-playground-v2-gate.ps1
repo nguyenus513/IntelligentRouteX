@@ -45,14 +45,20 @@ Pass playgroundRouteExists
 Pass apiHealthBadge
 
 $mapSource = Get-Content dashboard/src/playground/RouteMapPanel.tsx -Raw
+$leafletSource = Get-Content dashboard/src/playground/LeafletHcmMap.tsx -Raw
 $modelSource = Get-Content dashboard/src/playground/playgroundMapModel.ts -Raw
-Assert ($mapSource -match "svg") "SVG map missing"
+Assert ($leafletSource -match "MapContainer") "Leaflet map container missing"
+Assert ($leafletSource -match "OpenStreetMap contributors") "OSM attribution missing"
+Assert ($mapSource -match "Synthetic fallback") "synthetic fallback switch missing"
+Assert ($mapSource -match "Coordinate mode") "coordinate mode badge missing"
+Assert ($mapSource -match "svg") "SVG fallback missing"
 Assert ($mapSource -match "map-pin") "pin render missing"
 Assert ($mapSource -match "route-arrow") "route direction marker missing"
+Assert ($mapSource -match "map-legend") "map legend missing"
 Assert ($modelSource -match "PICKUP") "pickup model missing"
 Assert ($modelSource -match "DROPOFF") "dropoff model missing"
 Assert ($modelSource -match "DRIVER") "driver model missing"
-Assert ($mapSource -match "Synthetic playground coordinates") "synthetic coordinate marker not referenced"
+Assert ($modelSource -match "HCM_DEMO_GEO") "HCM demo coordinate mode missing"
 Pass mapPanel
 Pass pinsAndRoutes
 Pass timeline
@@ -107,6 +113,10 @@ $summary = [ordered]@{
   rescueFlow = $results.rescueFlow
   bigDataFlow = $results.bigDataFlow
   mapPanel = $results.mapPanel
+  hcmLeafletMap = "PASS"
+  osmAttribution = "PASS"
+  coordinateModeBadge = "PASS"
+  syntheticFallback = "PASS"
   pinsAndRoutes = $results.pinsAndRoutes
   timeline = $results.timeline
   seedAttribution = "PASS"
