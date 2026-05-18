@@ -111,3 +111,11 @@ Status: production-demo closeout and full certification gates passed after goal-
 - Idempotency: PASS for same-key replay and same-key/different-payload conflict.
 - BigData-lite: PASS for batch ingest, invalid-row normalization, pagination, metrics, and dead-letter visibility.
 - Docs: OpenAPI marker coverage plus `docs/API_REFERENCE.md`, `docs/API_EXAMPLES.md`, and `docs/BIGDATA_LITE_API.md` present.
+
+## v0.9.9.5-irx-playground
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.9.5-irx-playground/playground-summary.json`.
+- `/playground` route exists and renders the API-first IRX Playground shell.
+- Dashboard validation: `npm run typecheck` PASS and `npm run build` PASS.
+- Backend/API flows: static, live, rescue, BigData-lite, events, and artifacts PASS via locked `/api/v1` contracts.
+- UI panels: result summary, Adaptive ML diagnostics, baseline comparison, assignment preview, event/artifact list, and raw JSON are present.

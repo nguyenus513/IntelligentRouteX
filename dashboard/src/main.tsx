@@ -5,6 +5,7 @@ import { api, defaultScenario } from './lib/api';
 import { ControlMap } from './components/ControlMap';
 import { buildRawScenario, ScenarioBuilderMap } from './components/ScenarioBuilderMap';
 import { Badge, Card, EmptyState, Kpi } from './components/Ui';
+import { IrxPlaygroundPage } from './playground/IrxPlaygroundPage';
 import type { AssignmentDto, BenchmarkJob, DriverDto, ManualScenarioDto, RouteVisualizationDto, RunVisualizationDto, ScenarioGenerateRequest } from './types/dispatch';
 import './styles.css';
 
@@ -263,7 +264,7 @@ function Overview({ run, job, setScreen, runFullDemo, busy }: { run: RunVisualiz
       <Card className="mission-card">
         <Badge tone="win">Phase 1 MVP</Badge>
         <h2>End-to-end demo, not admin CRUD.</h2>
-        <p className="muted">Generate scenario → run full Dispatch V2 → inspect bundle → rescue route → compare benchmark on map.</p>
+        <p className="muted">Generate scenario ? run full Dispatch V2 ? inspect bundle ? rescue route ? compare benchmark on map.</p>
         <div className="list">
           <div className="row"><span>Latest run</span><strong>{run?.runId ?? 'empty'}</strong></div>
           <div className="row"><span>Solver</span><strong>{run?.solverName ?? 'waiting'}</strong></div>
@@ -423,7 +424,7 @@ function RescueCenter({ before, after, rescue, busy }: { before: RunVisualizatio
         <MetricTile label="Before risk" value={beforeLate} />
         <MetricTile label="After risk" value={after ? afterLate : '—'} />
         <MetricTile label="SLA" value={`${(after?.metrics.slaSuccessRate ?? before?.metrics.slaSuccessRate ?? 0).toFixed(1)}%`} />
-        <MetricTile label="Δ Distance" value={`${distanceDelta.toFixed(1)}km`} />
+        <MetricTile label="? Distance" value={`${distanceDelta.toFixed(1)}km`} />
       </div>
       <p className="muted">Old route is dashed. New rescue route is solid. Impacted stops stay amber/red; rescued routes move green/cyan.</p>
     </div>
@@ -446,7 +447,7 @@ function BenchmarkMap({ run, benchmark, busy }: { run: RunVisualizationDto | nul
     <ControlMap orders={run.orders} drivers={run.drivers} routes={run.routes} mode="overlay" />
     <div className="floating glass-panel">
       <div className="panel-title"><h3>Comparison Mode</h3><Badge tone="win">Overlay</Badge></div>
-      <div className="mode-tabs"><button className="tab active">Single</button><button className="tab active">Split</button><button className="tab active">Overlay ≤3</button></div>
+      <div className="mode-tabs"><button className="tab active">Single</button><button className="tab active">Split</button><button className="tab active">Overlay =3</button></div>
       <p className="muted">Visible claim is metric-based: local baselines, OR-Tools assignment, UnifiedDispatchCore, evidence gaps.</p>
       <button className="btn wide" onClick={benchmark} disabled={busy}>{busy ? 'Running...' : 'Rerun benchmark'}</button>
     </div>
@@ -564,7 +565,10 @@ function formatMs(value?: number) {
   return `${value}ms`;
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
+const Root = window.location.pathname === '/playground' ? IrxPlaygroundPage : App;
+createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
+
+
 
 
 

@@ -112,3 +112,9 @@ Status: certified demo gate PASS.
 - Overall: PASS; summary `artifacts/test-reports/v0.9.9.4-api-contract-final/api-contract-summary.json`.
 - Certified groups: health, response envelope, error envelope, job lifecycle, static API, live API, rescue API, BigData-lite API, idempotency, rate-limit placeholder, artifact guard, event stream/log, observability, and OpenAPI/docs.
 - Contract boundary: API is now locked for Playground work; future UI must consume these `/api/v1` contracts instead of shaping backend responses ad hoc.
+
+## v0.9.9.5 IRX Playground
+
+- Overall: PASS; summary `artifacts/test-reports/v0.9.9.5-irx-playground/playground-summary.json`.
+- Certified scope: one-screen `/playground` demo that consumes locked `/api/v1` contracts for static dispatch, live rolling, rescue, BigData-lite batch, event/artifact fetches, runtime metrics, Adaptive ML diagnostics, baseline comparison, and raw JSON inspection.
+- Contract boundary: no solver/core changes; Playground is a frontend/API integration layer only.
