@@ -1,10 +1,11 @@
 import { MapPin } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { LeafletHcmMap } from './LeafletHcmMap';
+import type { PlaygroundViewModel } from '../lib/irxResultMapper';
 import { routeColor, toMapModel, type MapModel, type MapPoint } from './playgroundMapModel';
 import type { PlaygroundSnapshot } from './playgroundTypes';
 
-export function RouteMapPanel({ snapshot }: { snapshot: PlaygroundSnapshot }) {
+export function RouteMapPanel({ snapshot, viewModel }: { snapshot: PlaygroundSnapshot; viewModel: PlaygroundViewModel }) {
   const [selected, setSelected] = useState<MapPoint | null>(null);
   const [mapMode, setMapMode] = useState<'hcm' | 'synthetic'>('hcm');
   const model = useMemo(() => toMapModel(snapshot), [snapshot]);
@@ -15,7 +16,8 @@ export function RouteMapPanel({ snapshot }: { snapshot: PlaygroundSnapshot }) {
       <button className={mapMode === 'hcm' ? 'active' : ''} onClick={() => setMapMode('hcm')} type="button">HCM map</button>
       <button className={mapMode === 'synthetic' ? 'active' : ''} onClick={() => setMapMode('synthetic')} type="button">Synthetic fallback</button>
       <span>Coordinate mode: {mapMode === 'hcm' ? model.coordinateMode : 'SYNTHETIC'}</span>
-      <span>Coverage pins: P{model.summary.pickupCount}/G{model.summary.dropoffCount}</span>
+      <span>Coverage: {viewModel.hasResult ? `${viewModel.metrics.assigned}/${viewModel.metrics.orders}` : 'Not run yet'}</span>
+      <span>Pins: P{model.summary.pickupCount}/G{model.summary.dropoffCount}</span>
       <span>Late: {model.summary.lateCount}</span>
     </div>
     {model.warnings.map((warning) => <div className="map-warning" key={warning}>{warning}</div>)}

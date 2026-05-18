@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, Database, LifeBuoy, Play, RadioTower } from 'lucide-react';
+import { buildPlaygroundViewModel } from '../lib/irxResultMapper';
 import { AdaptiveMlPanel } from './AdaptiveMlPanel';
 import { ApiHealthBadge } from './ApiHealthBadge';
 import { AssignmentTable } from './AssignmentTable';
@@ -42,7 +43,8 @@ export function IrxPlaygroundPage() {
     RESCUE: { icon: <LifeBuoy size={18} />, label: 'Rescue dispatch' },
     BIGDATA_LITE: { icon: <Database size={18} />, label: 'BigData-lite batch' }
   })[mode], [mode]);
-  const stats = useMemo(() => demoStats(snapshot), [snapshot]);
+  const viewModel = useMemo(() => buildPlaygroundViewModel(snapshot), [snapshot]);
+  const stats = useMemo(() => demoStats(viewModel), [viewModel]);
 
   async function refreshHealth() {
     setHealth({ state: 'checking', apiBase: API_BASE, message: 'Checking backend health...' });
@@ -102,27 +104,25 @@ export function IrxPlaygroundPage() {
     <div className="playground-demo-stats">{stats.map((item) => <span key={item.label}>{item.label}<strong>{item.value}</strong></span>)}</div>
     <main className="playground-grid playground-grid-v2">
       <aside className="playground-left-rail"><ScenarioPanel scenarioId={scenarioId} mode={mode} adaptiveMode={adaptiveMode} /><PipelinePanel snapshot={snapshot} /></aside>
-      <section className="playground-map-stack"><RouteMapPanel snapshot={snapshot} /><RouteTimelinePanel snapshot={snapshot} /><AssignmentTable snapshot={snapshot} /></section>
-      <aside className="playground-right-rail"><ResultPanel snapshot={snapshot} /><BaselinePanel snapshot={snapshot} /><AdaptiveMlPanel snapshot={snapshot} /><SeedAttributionPanel snapshot={snapshot} /><SafetyGuardPanel snapshot={snapshot} /><BigDataPipelinePanel snapshot={snapshot} /></aside>
+      <section className="playground-map-stack"><RouteMapPanel snapshot={snapshot} viewModel={viewModel} /><RouteTimelinePanel snapshot={snapshot} /><AssignmentTable snapshot={snapshot} viewModel={viewModel} /></section>
+      <aside className="playground-right-rail"><ResultPanel snapshot={snapshot} viewModel={viewModel} /><BaselinePanel snapshot={snapshot} viewModel={viewModel} /><AdaptiveMlPanel snapshot={snapshot} viewModel={viewModel} /><SeedAttributionPanel snapshot={snapshot} /><SafetyGuardPanel snapshot={snapshot} /><BigDataPipelinePanel snapshot={snapshot} /></aside>
       <section className="playground-bottom-rail"><EventArtifactPanel snapshot={snapshot} /><RawJsonPanel snapshot={snapshot} /></section>
     </main>
   </div>;
 }
 
-function demoStats(snapshot: PlaygroundSnapshot) {
-  const hasRun = Boolean(snapshot.staticResult || snapshot.liveState || snapshot.cycle || snapshot.rescue || snapshot.batch);
-  const coverage = snapshot.staticResult?.coverage;
-  const summary = snapshot.staticResult?.summary;
-  if (!hasRun) {
+function demoStats(viewModel: ReturnType<typeof buildPlaygroundViewModel>) {
+  if (!viewModel.hasResult) {
     return ['Orders', 'Drivers', 'Routes', 'Assigned', 'Late', 'Distance', 'Runtime'].map((label) => ({ label, value: 'Not run yet' }));
   }
+  const { metrics } = viewModel;
   return [
-    { label: 'Orders', value: String(coverage?.total ?? summary?.assignedOrders ?? snapshot.batch?.totalItems ?? '—') },
-    { label: 'Drivers', value: String(snapshot.liveState?.activeDrivers ?? (snapshot.staticResult ? 2 : '—')) },
-    { label: 'Routes', value: String(summary?.routeCount ?? (snapshot.staticResult ? 2 : snapshot.rescue?.rescuedRouteCount ?? '—')) },
-    { label: 'Assigned', value: coverage ? `${coverage.assigned}/${coverage.total}` : String(snapshot.cycle?.assigned ?? snapshot.batch?.processedItems ?? '—') },
-    { label: 'Late', value: String(snapshot.staticResult?.metrics?.lateCount ?? summary?.lateCount ?? snapshot.rescue?.afterLate ?? 0) },
-    { label: 'Distance', value: `${snapshot.staticResult?.metrics?.distanceKm ?? summary?.totalKm ?? '—'} km` },
-    { label: 'Runtime', value: `${snapshot.staticResult?.metrics?.runtimeMs ?? '—'} ms` }
+    { label: 'Orders', value: String(metrics.orders) },
+    { label: 'Drivers', value: String(metrics.drivers) },
+    { label: 'Routes', value: String(metrics.routes) },
+    { label: 'Assigned', value: String(metrics.assigned) },
+    { label: 'Late', value: String(metrics.late) },
+    { label: 'Distance', value: `${metrics.distanceKm} km` },
+    { label: 'Runtime', value: `${metrics.runtimeMs} ms` }
   ];
 }

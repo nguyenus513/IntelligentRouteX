@@ -1,0 +1,22 @@
+{
+    "version":  "v0.9.9.7-ui-playground",
+    "overallPass":  true,
+    "compileJava":  "PASS",
+    "dashboardTypecheck":  "PASS",
+    "dashboardBuild":  "PASS",
+    "staticRun":  "PASS",
+    "metricsBinding":  "PASS",
+    "mapRender":  "PASS",
+    "assignmentPanel":  "PASS",
+    "adaptiveMlPanel":  "PASS",
+    "baselinePanel":  "PASS",
+    "livePlayground":  "PASS",
+    "orders":  12,
+    "drivers":  2,
+    "routes":  2,
+    "assigned":  12,
+    "late":  0,
+    "distanceKm":  14.0,
+    "runtimeMs":  1,
+    "dashboardUrl":  "http://localhost:5173"
+}

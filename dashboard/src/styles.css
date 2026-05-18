@@ -467,6 +467,8 @@ code { color: #67e8f9; }
 .bigdata-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
 .bigdata-step { display: grid; gap: 5px; padding: 10px; border-radius: 16px; background: rgba(15,23,42,.62); border: 1px solid rgba(125,211,252,.14); color: #8ba4bd; }
 .bigdata-step strong { color: #7dd3fc; font-size: 18px; }
+.ml-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.ml-badges span { padding: 6px 8px; border-radius: 999px; border: 1px solid rgba(52,211,153,.26); background: rgba(20,83,45,.22); color: #bbf7d0; font-size: 11px; font-weight: 800; }
 @media (max-width: 1280px) { .playground-grid-v2 { grid-template-columns: 280px minmax(0, 1fr); } .playground-right-rail { grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 920px) { .playground-grid-v2, .playground-bottom-rail, .playground-right-rail, .playground-demo-stats { grid-template-columns: 1fr; } .route-map-canvas svg { min-height: 340px; } }
 

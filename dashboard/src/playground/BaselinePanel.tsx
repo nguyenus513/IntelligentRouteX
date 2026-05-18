@@ -1,15 +1,18 @@
-﻿import type { PlaygroundSnapshot } from './playgroundTypes';
+import type { PlaygroundViewModel } from '../lib/irxResultMapper';
+import type { PlaygroundSnapshot } from './playgroundTypes';
 
-export function BaselinePanel({ snapshot }: { snapshot: PlaygroundSnapshot }) {
-  const guard = snapshot.staticResult?.diagnostics?.baselineDominanceGuard as Record<string, unknown> | undefined;
+export function BaselinePanel({ snapshot, viewModel }: { snapshot: PlaygroundSnapshot; viewModel: PlaygroundViewModel }) {
+  const best = viewModel.baselines.filter((row) => row.solver !== 'IRX Final').sort((a, b) => a.distanceKm - b.distanceKm)[0];
+  const gain = best ? Math.round((best.distanceKm - viewModel.metrics.distanceKm) * 10) / 10 : 0;
   return <section className="playground-card" aria-label="Baseline comparison">
-    <div className="playground-card-title"><span>Baseline</span><strong>{guard?.passed === false ? 'Review' : 'Dominance PASS'}</strong></div>
+    <div className="playground-card-title"><span>Baseline</span><strong>{viewModel.hasResult ? `Gain ${gain}km` : 'Waiting'}</strong></div>
     <div className="baseline-grid">
-      <span>OR-Tools<strong>31.8 km</strong></span>
-      <span>VROOM<strong>31.6 km</strong></span>
-      <span>PyVRP<strong>31.5 km</strong></span>
-      <span>IRX<strong>{snapshot.staticResult?.metrics?.distanceKm ?? snapshot.staticResult?.summary?.totalKm ?? 31.3} km</strong></span>
+      {(viewModel.baselines.length ? viewModel.baselines : [
+        { solver: 'OR-Tools', distanceKm: 0, late: 0, verdict: 'Not run' },
+        { solver: 'VROOM', distanceKm: 0, late: 0, verdict: 'Not run' },
+        { solver: 'PyVRP', distanceKm: 0, late: 0, verdict: 'Not run' },
+        { solver: 'IRX Final', distanceKm: 0, late: 0, verdict: snapshot.mode }
+      ]).map((row) => <span key={row.solver}>{row.solver}<strong>{row.distanceKm ? `${row.distanceKm} km` : row.verdict}</strong></span>)}
     </div>
   </section>;
 }
-
