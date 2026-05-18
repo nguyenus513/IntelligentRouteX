@@ -3,6 +3,7 @@
     "overallPass":  true,
     "requiredDocs":  "PASS",
     "legacyDocsRemoved":  "PASS",
+    "legacyDocDirsRemoved":  "PASS",
     "apiReference":  "PASS",
     "bigDataLite":  "PASS",
     "adaptiveMlPolicy":  "PASS",

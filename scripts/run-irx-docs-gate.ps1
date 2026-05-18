@@ -26,7 +26,9 @@ $legacy = @(
   "docs/IRX_QUALITY_BENCHMARK_REPORT.md",
   "docs/IRX_OPERATIONS_DEMO_GUIDE.md",
   "docs/IRX_REPRODUCIBILITY_GUIDE.md",
-  "docs/production/rest_dispatch_api.md"
+  "docs/production/rest_dispatch_api.md",
+  "docs/benchmark",
+  "docs/production"
 )
 $banned = @(
   "ML replaces VROOM",
@@ -75,6 +77,7 @@ $summary = [ordered]@{
   overallPass = $true
   requiredDocs = "PASS"
   legacyDocsRemoved = "PASS"
+  legacyDocDirsRemoved = "PASS"
   apiReference = "PASS"
   bigDataLite = "PASS"
   adaptiveMlPolicy = "PASS"
