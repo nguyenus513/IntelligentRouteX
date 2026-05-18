@@ -77,7 +77,7 @@ public final class UnifiedHybridDispatchService {
                 .map(ImprovedSolutionCandidate::improvedSeed)
                 .max(LexicographicSolutionComparator.SLA_STRICT)
                 .orElse(nativeSeed);
-        SolutionSeedCandidate candidateFinalSeed = betterSeed(bestImprovedSeed, nativeSeed);
+        SolutionSeedCandidate candidateFinalSeed = betterSeed(betterSeed(bestImprovedSeed, nativeSeed), archive == null ? null : archive.best().orElse(null));
         BaselineDominanceResult initialDominance = dominanceGuard.evaluate(candidateFinalSeed, archive);
         boolean rollbackApplied = false;
         SolutionSeedCandidate finalSeed = candidateFinalSeed;
@@ -273,7 +273,7 @@ public final class UnifiedHybridDispatchService {
         }
         Map<CandidateSource, SeedRouteBinding> selected = new LinkedHashMap<>();
         bindings.stream()
-                .filter(binding -> binding.source() == CandidateSource.VROOM_SEED || binding.source() == CandidateSource.VROOM_SEED_IMPROVED || binding.source() == CandidateSource.PYVRP_SEED)
+                .filter(binding -> isExternalSeedSource(binding.source()))
                 .forEach(binding -> selected.putIfAbsent(binding.source(), binding));
         for (SeedRouteBinding binding : bindings) {
             if (selected.size() >= Math.max(1, topK)) {
@@ -301,7 +301,7 @@ public final class UnifiedHybridDispatchService {
                                                                  boolean rollbackApplied) {
         Map<String, Object> diagnostics = new LinkedHashMap<>();
         List<SolutionSeedCandidate> externalSeeds = archive == null ? List.of() : archive.seeds().stream()
-                .filter(seed -> seed.source() == CandidateSource.VROOM_SEED || seed.source() == CandidateSource.VROOM_SEED_IMPROVED || seed.source() == CandidateSource.PYVRP_SEED)
+                .filter(seed -> isExternalSeedSource(seed.source()))
                 .toList();
         SolutionSeedCandidate bestExternal = externalSeeds.stream()
                 .max(LexicographicSolutionComparator.SLA_STRICT)
@@ -311,7 +311,7 @@ public final class UnifiedHybridDispatchService {
                 .findFirst()
                 .orElse(null);
         SolutionSeedCandidate pyvrp = externalSeeds.stream()
-                .filter(seed -> seed.source() == CandidateSource.PYVRP_SEED)
+                .filter(seed -> seed.source() == CandidateSource.PYVRP_SEED || seed.source() == CandidateSource.PYVRP_SEED_IMPROVED)
                 .findFirst()
                 .orElse(null);
         diagnostics.put("passed", bestExternal == null || LexicographicSolutionComparator.SLA_STRICT.compare(finalSeed, bestExternal) >= 0);
@@ -331,6 +331,16 @@ public final class UnifiedHybridDispatchService {
         diagnostics.put("pyvrpSeedLate", pyvrp == null ? 0L : pyvrp.lateOrderCount());
         diagnostics.put("finalSolver", "IRX_ML_FUSED_HYBRID");
         return diagnostics;
+    }
+
+    private boolean isExternalSeedSource(CandidateSource source) {
+        return source == CandidateSource.VROOM_SEED
+                || source == CandidateSource.VROOM_SEED_IMPROVED
+                || source == CandidateSource.PYVRP_SEED
+                || source == CandidateSource.PYVRP_SEED_IMPROVED
+                || source == CandidateSource.ORTOOLS_SEED
+                || source == CandidateSource.ORTOOLS_SEED_IMPROVED
+                || source == CandidateSource.BEST_EXTERNAL_SEED_IMPROVED;
     }
 
     public List<Map<String, Object>> ablationDiagnostics(List<DashboardController.BenchmarkSolverResultDto> solverResults,

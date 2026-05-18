@@ -1,0 +1,11 @@
+package com.routechain.v2.seedimprovement;
+
+public enum SeedImprovementVerdict {
+    ML_BEST_SEED_DISTANCE_IMPROVED,
+    ML_BEST_SEED_OBJECTIVE_IMPROVED,
+    BEST_SEED_PRESERVED,
+    TIE_WITH_BEST_SEED,
+    WIN_BY_OTHER_SEED_NOT_COUNTED,
+    ROLLBACK_TO_BEST_SEED,
+    NO_SEED_IMPROVEMENT
+}

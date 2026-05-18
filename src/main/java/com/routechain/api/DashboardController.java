@@ -38,17 +38,27 @@ import com.routechain.v2.hybrid.EliteSolutionArchive;
 import com.routechain.v2.hybrid.HybridCostBreakdown;
 import com.routechain.v2.hybrid.ImprovedSolutionCandidate;
 import com.routechain.v2.hybrid.LexicographicSolutionComparator;
+import com.routechain.v2.hybrid.MoveEvaluationTrace;
 import com.routechain.v2.hybrid.SeedRouteBinding;
 import com.routechain.v2.hybrid.SolutionSeedCandidate;
 import com.routechain.v2.hybrid.SolutionSeedRoute;
 import com.routechain.v2.hybrid.StopType;
 import com.routechain.v2.mladaptive.AdaptiveMlPolicyConfig;
 import com.routechain.v2.mladaptive.AdaptiveMlPolicyMode;
+import com.routechain.v2.seedimprovement.HeuristicPdLnsImprover;
+import com.routechain.v2.seedimprovement.PdDestroyRepairOperator;
+import com.routechain.v2.seedimprovement.PdEvaluation;
+import com.routechain.v2.seedimprovement.PdLnsMode;
+import com.routechain.v2.seedimprovement.PdLnsResult;
+import com.routechain.v2.seedimprovement.PdRouteState;
+import com.routechain.v2.seedimprovement.PdSeedState;
+import com.routechain.v2.seedimprovement.PdStop;
 import com.routechain.v2.routing.BestPathRequest;
 import com.routechain.v2.routing.CachingRoutingProvider;
 import com.routechain.v2.routing.DistanceDurationMatrixSnapshot;
 import com.routechain.v2.routing.MatrixCostAdapter;
 import com.routechain.v2.routing.MatrixSnapshotBuilder;
+import com.routechain.v2.routing.OsrmTableClient;
 import com.routechain.v2.routing.RouteStop;
 import com.routechain.v2.routing.RoutingProvider;
 import com.routechain.v2.routing.RoutingRouteResult;
@@ -104,6 +114,7 @@ public final class DashboardController {
     private final BenchmarkHybridRunService benchmarkHybridRunService;
     private final UnifiedHybridDispatchService hybridDispatchService;
     private final RoutingProvider routingProvider;
+    private final OsrmTableClient osrmTableClient;
     private final RouteChainDispatchV2Properties properties;
     private final ObjectProvider<KafkaTemplate<String, Object>> kafkaTemplateProvider;
     private final Map<String, DashboardRun> runs = new ConcurrentHashMap<>();
@@ -118,12 +129,13 @@ public final class DashboardController {
         return thread;
     });
 
-    public DashboardController(DispatchV2CompatibleCore dispatchCore, UnifiedDispatchCore unifiedDispatchCore, BenchmarkHybridRunService benchmarkHybridRunService, UnifiedHybridDispatchService hybridDispatchService, RoutingProvider routingProvider, RouteChainDispatchV2Properties properties, ObjectProvider<KafkaTemplate<String, Object>> kafkaTemplateProvider) {
+    public DashboardController(DispatchV2CompatibleCore dispatchCore, UnifiedDispatchCore unifiedDispatchCore, BenchmarkHybridRunService benchmarkHybridRunService, UnifiedHybridDispatchService hybridDispatchService, RoutingProvider routingProvider, OsrmTableClient osrmTableClient, RouteChainDispatchV2Properties properties, ObjectProvider<KafkaTemplate<String, Object>> kafkaTemplateProvider) {
         this.dispatchCore = dispatchCore;
         this.unifiedDispatchCore = unifiedDispatchCore;
         this.benchmarkHybridRunService = benchmarkHybridRunService;
         this.hybridDispatchService = hybridDispatchService;
         this.routingProvider = routingProvider;
+        this.osrmTableClient = osrmTableClient;
         this.properties = properties;
         this.kafkaTemplateProvider = kafkaTemplateProvider;
     }
@@ -604,11 +616,20 @@ public final class DashboardController {
         List<DriverDto> drivers = generateDrivers(scenario, scenarioSeed);
         String scenarioHash = scenarioHash(scenario, orders, drivers);
         BenchmarkProfile profile = BenchmarkProfile.of(request.modeEnum());
-        DistanceDurationMatrixSnapshot matrixSnapshot = new MatrixSnapshotBuilder().build(
+        MatrixSnapshotBuilder matrixSnapshotBuilder = new MatrixSnapshotBuilder();
+        List<MatrixSnapshotBuilder.MatrixNode> matrixNodes = benchmarkHybridRunService.matrixNodes(orders, drivers);
+        DistanceDurationMatrixSnapshot matrixSnapshot = "osrm".equalsIgnoreCase(properties.getRouting().getProvider())
+                ? matrixSnapshotBuilder.buildWithOsrmTable(
                 request.datasetId() == null ? "raw-m" : request.datasetId(),
                 scenarioHash,
                 profile.routingMode(),
-                benchmarkHybridRunService.matrixNodes(orders, drivers));
+                matrixNodes,
+                osrmTableClient)
+                : matrixSnapshotBuilder.build(
+                request.datasetId() == null ? "raw-m" : request.datasetId(),
+                scenarioHash,
+                profile.routingMode(),
+                matrixNodes);
         MatrixCostAdapter matrixCost = new MatrixCostAdapter(matrixSnapshot);
         stageRuntime.put("scenarioLoadMs", elapsedMs(scenarioStarted));
         List<BenchmarkSolverResultDto> solverResults = new ArrayList<>();
@@ -634,6 +655,11 @@ public final class DashboardController {
                 .map(ExternalSeedContribution::seed)
                 .forEach(eliteArchive::accept);
         List<SeedRouteBinding> routeBindings = seedRouteBindings(eliteArchive, orders, drivers, irx, matrixCost);
+        HeuristicPdLnsOutcome heuristicPdLns = runPdLns(request, eliteArchive, routeBindings, orders, drivers);
+        if (heuristicPdLns.improvedSeed() != null) {
+            eliteArchive.accept(heuristicPdLns.improvedSeed());
+            routeBindings = seedRouteBindings(eliteArchive, orders, drivers, irx, matrixCost);
+        }
         stageRuntime.put("seedBindingMs", elapsedMs(archiveStarted));
         int hybridImprovementTopK = profile.topKSeeds();
         AdaptiveMlPolicyConfig adaptiveMlPolicyConfig = request.adaptiveMlPolicyConfig();
@@ -672,6 +698,9 @@ public final class DashboardController {
         diagnostics.put("seedImprovement", improvementDiagnostics);
         diagnostics.put("seedSourceAudit", seedSourceAudit(eliteArchive, improvedSeeds, finalSeed, solverResults, stageRuntime, irx));
         diagnostics.put("finalAttribution", finalAttribution(eliteArchive, finalSeed, externalDominanceDiagnostics, irx));
+        diagnostics.put("bestSeedImprovement", bestSeedImprovement(eliteArchive, improvedSeeds, finalSeed, orders.size(), request.pdLnsModeEnum(), heuristicPdLns));
+        diagnostics.put("pdLnsImprovement", pdLnsImprovementDiagnostics(request.pdLnsModeEnum(), heuristicPdLns));
+        diagnostics.put("mlContribution", mlContributionDiagnostics(improvedSeeds, irx, request.pdLnsModeEnum()));
         diagnostics.put("baselineDominanceGuard", dominanceDiagnostics);
         diagnostics.put("externalSeedDominance", externalDominanceDiagnostics);
         diagnostics.put("ablationResults", hybridDispatchService.ablationDiagnostics(solverResults, irx, dominance));
@@ -791,6 +820,129 @@ public final class DashboardController {
             }
         }
         return new BoundRoute(route.routeId(), route.driverId(), route.orderIds(), stops, route.distanceKm(), route.durationMinutes(), (int) route.lateOrderCount());
+    }
+
+    private static HeuristicPdLnsOutcome runPdLns(BenchmarkJobRequest request,
+                                                 EliteSolutionArchive archive,
+                                                 List<SeedRouteBinding> routeBindings,
+                                                 List<OrderDto> orders,
+                                                 List<DriverDto> drivers) {
+        PdLnsMode mode = request.pdLnsModeEnum();
+        if ((mode != PdLnsMode.HEURISTIC_PD_LNS && !mode.mlDestroyRepair()) || archive == null) {
+            return HeuristicPdLnsOutcome.empty();
+        }
+        SolutionSeedCandidate baseBest = archive.best().orElse(null);
+        if (baseBest == null) {
+            return HeuristicPdLnsOutcome.empty();
+        }
+        SeedRouteBinding binding = routeBindings.stream()
+                .filter(candidate -> candidate.source() == baseBest.source())
+                .findFirst()
+                .orElse(null);
+        if (binding == null || binding.routes().isEmpty()) {
+            return HeuristicPdLnsOutcome.empty();
+        }
+        PdSeedState basePd = pdSeedState(binding, orders.size(), drivers);
+        PdLnsResult result = mode.mlDestroyRepair()
+                ? new PdDestroyRepairOperator().improve(basePd, mode, request.pdLnsMaxRounds(), request.pdLnsTopBadOrders())
+                : new HeuristicPdLnsImprover().improve(basePd, request.pdLnsMaxRounds(), request.pdLnsTopBadOrders());
+        SolutionSeedCandidate improved = null;
+        if (result.finalEvaluation() != null
+                && result.baseEvaluation() != null
+                && result.finalEvaluation().valid()
+                && result.finalEvaluation().assignedCount() >= result.baseEvaluation().assignedCount()
+                && result.finalEvaluation().lateCount() <= result.baseEvaluation().lateCount()
+                && result.finalEvaluation().totalLatenessMinutes() <= result.baseEvaluation().totalLatenessMinutes()
+                && result.finalEvaluation().distanceKm() < result.baseEvaluation().distanceKm()) {
+            improved = solutionSeedFromPd(result.finalSeed(), improvedSourceFor(baseBest.source()), result.finalEvaluation(), mode.mlDestroyRepair() ? "ml-destroy-repair-best-seed-improved" : "heuristic-pd-lns-best-seed-improved");
+        }
+        return new HeuristicPdLnsOutcome(baseBest, result, improved);
+    }
+
+    private static PdSeedState pdSeedState(SeedRouteBinding binding, int inputOrderCount, List<DriverDto> drivers) {
+        Map<String, DriverDto> driverDtos = drivers.stream().collect(java.util.stream.Collectors.toMap(DriverDto::driverId, driver -> driver, (left, right) -> left, LinkedHashMap::new));
+        List<PdRouteState> routes = binding.routes().stream().map(route -> {
+            DriverDto driver = driverDtos.get(route.driverId());
+            double startLat = driver == null ? route.stops().stream().findFirst().map(stop -> stop.location().latitude()).orElse(0.0) : driver.lat();
+            double startLng = driver == null ? route.stops().stream().findFirst().map(stop -> stop.location().longitude()).orElse(0.0) : driver.lng();
+            int capacity = Math.max(Math.max(1, inputOrderCount), driver == null ? 1 : driver.capacity());
+            List<PdStop> stops = route.stops().stream()
+                    .filter(stop -> stop.type() == StopType.PICKUP || stop.type() == StopType.DROPOFF)
+                    .map(stop -> {
+                        int loadDelta = stop.type() == StopType.PICKUP ? 1 : -1;
+                        PdStop.PdStopType type = stop.type() == StopType.PICKUP ? PdStop.PdStopType.PICKUP : PdStop.PdStopType.DROPOFF;
+                        return new PdStop(stop.orderId(), type, stop.location().latitude(), stop.location().longitude(), 1, loadDelta, 0);
+                    })
+                    .toList();
+            return new PdRouteState(route.routeId(), route.driverId(), capacity, startLat, startLng, stops, route.distanceKm(), route.durationMinutes(), route.lateOrderCount(), 0.0);
+        }).toList();
+        PdEvaluation evaluation = new com.routechain.v2.seedimprovement.PdSeedEvaluator().evaluateSeed(new PdSeedState(binding.seedId(), binding.source(), inputOrderCount, routes, 0, inputOrderCount, 0, 0.0, 0.0, 0.0, 0.0));
+        return new PdSeedState(binding.seedId(), binding.source(), inputOrderCount, routes, evaluation.assignedCount(), inputOrderCount, evaluation.lateCount(), evaluation.totalLatenessMinutes(), evaluation.distanceKm(), evaluation.durationMinutes(), 0.0);
+    }
+
+    private static SolutionSeedCandidate solutionSeedFromPd(PdSeedState seed, CandidateSource source, PdEvaluation evaluation, String reason) {
+        List<SolutionSeedRoute> routes = seed.routes().stream().map(route -> {
+            List<String> sequence = route.stops().stream().map(stop -> stop.type().name() + ":" + stop.orderId()).toList();
+            List<String> orderIds = route.stops().stream()
+                    .filter(stop -> stop.type() == PdStop.PdStopType.DROPOFF)
+                    .map(PdStop::orderId)
+                    .distinct()
+                    .toList();
+            PdEvaluation routeEval = new com.routechain.v2.seedimprovement.PdSeedEvaluator().evaluateSeed(new PdSeedState(seed.seedId(), source, seed.inputOrderCount(), List.of(route), 0, seed.totalOrders(), 0, 0.0, 0.0, 0.0, 0.0));
+            return new SolutionSeedRoute(route.routeId(), route.driverId(), orderIds, sequence, routeEval.distanceKm(), routeEval.durationMinutes(), routeEval.lateCount());
+        }).toList();
+        List<DriverSeedLoad> loads = routes.stream().map(route -> new DriverSeedLoad(route.driverId(), route.orderIds().size())).toList();
+        double coverage = seed.totalOrders() <= 0 ? 0.0 : evaluation.assignedCount() / (double) seed.totalOrders();
+        double score = solutionObjective(evaluation.assignedCount(), seed.totalOrders(), evaluation.distanceKm(), evaluation.lateCount(), 0.0);
+        return new SolutionSeedCandidate("SOL-" + source.name(), source, routes, coverage, evaluation.distanceKm(), evaluation.lateCount(), loads, evaluation.valid(), evaluation.valid() ? "" : evaluation.rejectReason(), List.of(reason), new HybridCostBreakdown(evaluation.distanceKm(), evaluation.totalLatenessMinutes(), 0.0, 0.0, 0.0, 0.0, score));
+    }
+
+    private static CandidateSource improvedSourceFor(CandidateSource source) {
+        if (source == CandidateSource.VROOM_SEED) {
+            return CandidateSource.VROOM_SEED_IMPROVED;
+        }
+        if (source == CandidateSource.PYVRP_SEED) {
+            return CandidateSource.PYVRP_SEED_IMPROVED;
+        }
+        if (source == CandidateSource.ORTOOLS_SEED) {
+            return CandidateSource.ORTOOLS_SEED_IMPROVED;
+        }
+        if (source == CandidateSource.IRX_NATIVE) {
+            return CandidateSource.IRX_NATIVE_IMPROVED;
+        }
+        return CandidateSource.BEST_EXTERNAL_SEED_IMPROVED;
+    }
+
+    private static Map<String, Object> pdLnsImprovementDiagnostics(PdLnsMode mode, HeuristicPdLnsOutcome outcome) {
+        PdLnsResult result = outcome == null ? null : outcome.result();
+        PdEvaluation base = result == null ? null : result.baseEvaluation();
+        PdEvaluation fin = result == null ? null : result.finalEvaluation();
+        boolean applied = result != null && result.applied();
+        int lateRegression = base == null || fin == null ? 0 : Math.max(0, fin.lateCount() - base.lateCount());
+        int coverageRegression = base == null || fin == null ? 0 : Math.max(0, base.assignedCount() - fin.assignedCount());
+        return Map.ofEntries(
+                Map.entry("mode", mode.name()),
+                Map.entry("applied", applied),
+                Map.entry("baseSeedSource", outcome == null || outcome.baseSeed() == null ? "NONE" : outcome.baseSeed().source().name()),
+                Map.entry("baseKm", base == null ? 0.0 : base.distanceKm()),
+                Map.entry("finalKm", fin == null ? 0.0 : fin.distanceKm()),
+                Map.entry("gainKm", base == null || fin == null ? 0.0 : round(base.distanceKm() - fin.distanceKm())),
+                Map.entry("rounds", result == null ? 0 : result.rounds()),
+                Map.entry("evaluatedOrders", result == null ? 0 : result.evaluatedOrders()),
+                Map.entry("evaluatedInsertions", result == null ? 0 : result.evaluatedInsertions()),
+                Map.entry("feasibleInsertions", result == null ? 0 : result.feasibleInsertions()),
+                Map.entry("acceptedMutations", result == null ? 0 : result.acceptedMutations()),
+                Map.entry("pickupDropoffViolations", fin == null ? 0 : fin.pickupDropoffViolations()),
+                Map.entry("capacityViolations", fin == null ? 0 : fin.capacityViolations()),
+                Map.entry("lateRegression", lateRegression),
+                Map.entry("coverageRegression", coverageRegression),
+                Map.entry("improvementMethod", mode == PdLnsMode.HEURISTIC_PD_LNS ? "HEURISTIC_PD_LNS" : mode.mlDestroyRepair() ? "ML_DESTROY_REPAIR" : "NONE"),
+                Map.entry("mlQualityContribution", mode.mlDestroyRepair() && result != null && result.acceptedMutations() > 0),
+                Map.entry("adaptiveRewardUpdated", mode.mlDestroyRepair() && result != null && result.evaluatedInsertions() > 0),
+                Map.entry("bestOperator", mode.mlDestroyRepair() ? "PD_DESTROY_REPAIR_K" + Math.max(2, mode.destroySize()) : "PD_EXACT_INSERTION"),
+                Map.entry("rankedOrders", result == null ? 0 : result.evaluatedOrders()),
+                Map.entry("evaluatedMutations", result == null ? 0 : result.evaluatedInsertions()),
+                Map.entry("feasibleMutations", result == null ? 0 : result.feasibleInsertions()));
     }
 
     private static void addBoundStops(List<BoundStop> stops, OrderDto order) {
@@ -1047,6 +1199,132 @@ public final class DashboardController {
             return 0;
         }
         return (int) seed.routes().stream().flatMap(route -> route.orderIds().stream()).distinct().count();
+    }
+
+    private static Map<String, Object> bestSeedImprovement(EliteSolutionArchive archive,
+                                                           List<ImprovedSolutionCandidate> improvedSeeds,
+                                                           SolutionSeedCandidate finalSeed,
+                                                           int inputOrderCount,
+                                                           PdLnsMode pdLnsMode,
+                                                           HeuristicPdLnsOutcome heuristicPdLns) {
+        SolutionSeedCandidate baseBestSeed = (pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS || pdLnsMode.mlDestroyRepair()) && heuristicPdLns != null && heuristicPdLns.baseSeed() != null
+                ? heuristicPdLns.baseSeed()
+                : archive == null ? null : archive.best().orElse(null);
+        ImprovedSolutionCandidate improvedBest = improvedSeeds == null || baseBestSeed == null ? null : improvedSeeds.stream()
+                .filter(candidate -> candidate.originalSeed() != null && candidate.originalSeed().source() == baseBestSeed.source())
+                .findFirst()
+                .orElse(null);
+        int baseAssigned = assignedCount(baseBestSeed, inputOrderCount);
+        int finalAssigned = assignedCount(finalSeed, inputOrderCount);
+        double gain = baseBestSeed == null || finalSeed == null ? 0.0 : round(baseBestSeed.totalDistanceKm() - finalSeed.totalDistanceKm());
+        boolean sameBestLineage = sameBestLineage(baseBestSeed, finalSeed);
+        boolean improvedBestSeed = baseBestSeed != null
+                && finalSeed != null
+                && sameBestLineage
+                && finalAssigned >= baseAssigned
+                && finalSeed.lateOrderCount() <= baseBestSeed.lateOrderCount()
+                && gain > 0.0;
+        String verdict = bestSeedImprovementVerdict(baseBestSeed, finalSeed, improvedBest, sameBestLineage, improvedBestSeed, gain, finalAssigned, baseAssigned, pdLnsMode, heuristicPdLns);
+        boolean pdLnsAttempted = heuristicPdLns != null && heuristicPdLns.result() != null && heuristicPdLns.result().applied();
+        int pdLnsAccepted = heuristicPdLns == null || heuristicPdLns.result() == null ? 0 : heuristicPdLns.result().acceptedMutations();
+        return Map.ofEntries(
+                Map.entry("baseBestSeedSource", baseBestSeed == null ? "NONE" : baseBestSeed.source().name()),
+                Map.entry("baseBestSeedKm", baseBestSeed == null ? 0.0 : baseBestSeed.totalDistanceKm()),
+                Map.entry("baseBestSeedAssigned", baseAssigned),
+                Map.entry("baseBestSeedLate", baseBestSeed == null ? 0L : baseBestSeed.lateOrderCount()),
+                Map.entry("finalSeedSource", finalSeed == null ? "NONE" : finalSeed.source().name()),
+                Map.entry("finalKm", finalSeed == null ? 0.0 : finalSeed.totalDistanceKm()),
+                Map.entry("finalAssigned", finalAssigned),
+                Map.entry("finalLate", finalSeed == null ? 0L : finalSeed.lateOrderCount()),
+                Map.entry("distanceGainOverBestSeedKm", gain),
+                Map.entry("improvedBestSeed", improvedBestSeed),
+                Map.entry("sameBestSeedLineage", sameBestLineage),
+                Map.entry("bestSeedImproverAttempted", improvedBest != null || pdLnsAttempted),
+                Map.entry("bestSeedAcceptedMoves", improvedBest == null || improvedBest.trace() == null ? pdLnsAccepted : improvedBest.trace().acceptedMoves()),
+                Map.entry("bestSeedRejectedMoves", improvedBest == null || improvedBest.trace() == null ? 0 : improvedBest.trace().rejectedMoves()),
+                Map.entry("bestSeedObjectiveImproved", improvedBest != null && improvedBest.trace() != null && improvedBest.trace().objectiveImproved()),
+                Map.entry("improvementMethod", pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS ? "HEURISTIC_PD_LNS" : pdLnsMode.mlDestroyRepair() ? "ML_DESTROY_REPAIR" : "ADAPTIVE_POLICY_STACK"),
+                Map.entry("verdict", verdict));
+    }
+
+    private static Map<String, Object> mlContributionDiagnostics(List<ImprovedSolutionCandidate> improvedSeeds, RunVisualizationDto irx, PdLnsMode pdLnsMode) {
+        List<ImprovedSolutionCandidate> improved = improvedSeeds == null ? List.of() : improvedSeeds;
+        List<MoveEvaluationTrace> moves = improved.stream()
+                .filter(candidate -> candidate.trace() != null)
+                .flatMap(candidate -> candidate.trace().moveTraces().stream())
+                .toList();
+        long acceptedMoves = moves.stream().filter(MoveEvaluationTrace::accepted).count();
+        Map<String, Object> coreFunnel = irx == null ? Map.of() : objectMap(irx.diagnostics().get("coreFunnelAudit"));
+        Map<String, Object> selectorSources = objectMap(coreFunnel.get("selectorCandidateSources"));
+        boolean policyLoopUsed = !improved.isEmpty();
+        return Map.ofEntries(
+                Map.entry("adaptiveSeedPolicyUsed", policyLoopUsed),
+                Map.entry("adaptiveOperatorPolicyUsed", policyLoopUsed),
+                Map.entry("adaptiveMovePriorityUsed", !moves.isEmpty()),
+                Map.entry("adaptiveRewardUpdated", acceptedMoves > 0),
+                Map.entry("acceptedMutationCount", acceptedMoves),
+                Map.entry("evaluatedMutationCount", moves.size()),
+                Map.entry("acceptedMutationTypes", moves.stream().filter(MoveEvaluationTrace::accepted).map(MoveEvaluationTrace::moveType).distinct().toList()),
+                Map.entry("routeFinderUsed", intValue(selectorSources.get("ML_REFINED")) > 0),
+                Map.entry("tabularUsed", false),
+                Map.entry("greedRlUsed", irx != null && irx.diagnostics().get("mlEvidence") instanceof Map<?, ?> evidence && intValue(objectMap(((Map<?, ?>) evidence).get("greedRl")).get("applied")) > 0),
+                Map.entry("forecastUsed", false),
+                Map.entry("qualityContribution", pdLnsMode != PdLnsMode.HEURISTIC_PD_LNS && (acceptedMoves > 0 || pdLnsMode.mlDestroyRepair())),
+                Map.entry("reason", pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS ? "heuristic-baseline-mode" : pdLnsMode.mlDestroyRepair() ? "ml-destroy-repair-mode" : "adaptive-policy-mode"));
+    }
+
+    private static String bestSeedImprovementVerdict(SolutionSeedCandidate baseBestSeed,
+                                                     SolutionSeedCandidate finalSeed,
+                                                     ImprovedSolutionCandidate improvedBest,
+                                                     boolean sameBestLineage,
+                                                     boolean improvedBestSeed,
+                                                     double gain,
+                                                     int finalAssigned,
+                                                     int baseAssigned,
+                                                     PdLnsMode pdLnsMode,
+                                                     HeuristicPdLnsOutcome heuristicPdLns) {
+        if (baseBestSeed == null || finalSeed == null) {
+            return "NO_SEED_IMPROVEMENT";
+        }
+        if (improvedBestSeed) {
+            if (pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS && heuristicPdLns != null && heuristicPdLns.improvedSeed() != null) {
+                return "HEURISTIC_BEST_SEED_DISTANCE_IMPROVED";
+            }
+            if (pdLnsMode.mlDestroyRepair() && heuristicPdLns != null && heuristicPdLns.improvedSeed() != null) {
+                return "ML_BEST_SEED_DISTANCE_IMPROVED";
+            }
+            return "ML_BEST_SEED_DISTANCE_IMPROVED";
+        }
+        if (!sameBestLineage) {
+            return "WIN_BY_OTHER_SEED_NOT_COUNTED";
+        }
+        if (finalAssigned < baseAssigned || finalSeed.lateOrderCount() > baseBestSeed.lateOrderCount()) {
+            return "ROLLBACK_TO_BEST_SEED";
+        }
+        if (Math.abs(gain) < 0.05) {
+            return improvedBest != null ? "TIE_WITH_BEST_SEED" : "BEST_SEED_PRESERVED";
+        }
+        return "NO_SEED_IMPROVEMENT";
+    }
+
+    private static boolean sameBestLineage(SolutionSeedCandidate baseBestSeed, SolutionSeedCandidate finalSeed) {
+        if (baseBestSeed == null || finalSeed == null) {
+            return false;
+        }
+        CandidateSource base = baseBestSeed.source();
+        CandidateSource fin = finalSeed.source();
+        return base == fin
+                || (base == CandidateSource.VROOM_SEED && fin == CandidateSource.VROOM_SEED_IMPROVED)
+                || (base == CandidateSource.PYVRP_SEED && fin == CandidateSource.PYVRP_SEED_IMPROVED)
+                || (base == CandidateSource.ORTOOLS_SEED && fin == CandidateSource.ORTOOLS_SEED_IMPROVED)
+                || (base == CandidateSource.IRX_NATIVE && fin == CandidateSource.IRX_NATIVE_IMPROVED);
+    }
+
+    private static int assignedCount(SolutionSeedCandidate seed, int inputOrderCount) {
+        if (seed == null) {
+            return 0;
+        }
+        return (int) Math.round(seed.coverageRate() * Math.max(0, inputOrderCount));
     }
 
     @SuppressWarnings("unchecked")
@@ -1999,11 +2277,15 @@ public final class DashboardController {
     private record ResolvedDispatchInput(String scenarioId, List<OrderDto> orders, List<DriverDto> drivers, String weather) { }
     public record KafkaPublishReceipt(String scenarioId, String traceId, String status, String message) { }
     public record RescueSimulationRequest(String baseRunId, List<EventDto> events) { }
-    public record BenchmarkJobRequest(String datasetId, List<String> solvers, String mode, String adaptiveMlPolicyMode, Integer adaptiveTopKMoves, Double adaptiveExplorationRate, Boolean adaptivePersistenceEnabled, String adaptiveStatePath, Integer adaptiveQualityBudgetMs) {
-        static BenchmarkJobRequest defaults() { return new BenchmarkJobRequest("synthetic-food-smoke", List.of("single-order", "distance-batching", "OR-Tools", "PyVRP", "VROOM", "IntelligentRouteX"), BenchmarkMode.FAST_GATE.name(), AdaptiveMlPolicyMode.DIAGNOSTIC.name(), 30, 0.10, false, "artifacts/adaptive-ml/adaptive-learning-state.json", 0); }
-        BenchmarkJobRequest withDefaults() { return new BenchmarkJobRequest(datasetId == null ? "synthetic-food-smoke" : datasetId, solvers == null || solvers.isEmpty() ? defaults().solvers() : solvers, mode == null || mode.isBlank() ? BenchmarkMode.FAST_GATE.name() : mode, adaptiveMlPolicyMode == null || adaptiveMlPolicyMode.isBlank() ? AdaptiveMlPolicyMode.DIAGNOSTIC.name() : adaptiveMlPolicyMode, adaptiveTopKMoves == null || adaptiveTopKMoves < 1 ? 30 : adaptiveTopKMoves, adaptiveExplorationRate == null ? 0.10 : Math.max(0.0, Math.min(1.0, adaptiveExplorationRate)), adaptivePersistenceEnabled != null && adaptivePersistenceEnabled, adaptiveStatePath == null || adaptiveStatePath.isBlank() ? "artifacts/adaptive-ml/adaptive-learning-state.json" : adaptiveStatePath, adaptiveQualityBudgetMs == null ? 0 : Math.max(0, adaptiveQualityBudgetMs)); }
+    private record HeuristicPdLnsOutcome(SolutionSeedCandidate baseSeed, PdLnsResult result, SolutionSeedCandidate improvedSeed) {
+        static HeuristicPdLnsOutcome empty() { return new HeuristicPdLnsOutcome(null, null, null); }
+    }
+    public record BenchmarkJobRequest(String datasetId, List<String> solvers, String mode, String adaptiveMlPolicyMode, Integer adaptiveTopKMoves, Double adaptiveExplorationRate, Boolean adaptivePersistenceEnabled, String adaptiveStatePath, Integer adaptiveQualityBudgetMs, String pdLnsMode, Integer pdLnsMaxRounds, Integer pdLnsTopBadOrders, Integer pdLnsBudgetMs) {
+        static BenchmarkJobRequest defaults() { return new BenchmarkJobRequest("synthetic-food-smoke", List.of("single-order", "distance-batching", "OR-Tools", "PyVRP", "VROOM", "IntelligentRouteX"), BenchmarkMode.FAST_GATE.name(), AdaptiveMlPolicyMode.DIAGNOSTIC.name(), 30, 0.10, false, "artifacts/adaptive-ml/adaptive-learning-state.json", 0, PdLnsMode.OFF.name(), 3, 12, 3000); }
+        BenchmarkJobRequest withDefaults() { return new BenchmarkJobRequest(datasetId == null ? "synthetic-food-smoke" : datasetId, solvers == null || solvers.isEmpty() ? defaults().solvers() : solvers, mode == null || mode.isBlank() ? BenchmarkMode.FAST_GATE.name() : mode, adaptiveMlPolicyMode == null || adaptiveMlPolicyMode.isBlank() ? AdaptiveMlPolicyMode.DIAGNOSTIC.name() : adaptiveMlPolicyMode, adaptiveTopKMoves == null || adaptiveTopKMoves < 1 ? 30 : adaptiveTopKMoves, adaptiveExplorationRate == null ? 0.10 : Math.max(0.0, Math.min(1.0, adaptiveExplorationRate)), adaptivePersistenceEnabled != null && adaptivePersistenceEnabled, adaptiveStatePath == null || adaptiveStatePath.isBlank() ? "artifacts/adaptive-ml/adaptive-learning-state.json" : adaptiveStatePath, adaptiveQualityBudgetMs == null ? 0 : Math.max(0, adaptiveQualityBudgetMs), pdLnsMode == null || pdLnsMode.isBlank() ? PdLnsMode.OFF.name() : pdLnsMode, pdLnsMaxRounds == null || pdLnsMaxRounds < 1 ? 3 : pdLnsMaxRounds, pdLnsTopBadOrders == null || pdLnsTopBadOrders < 1 ? 12 : pdLnsTopBadOrders, pdLnsBudgetMs == null ? 3000 : Math.max(0, pdLnsBudgetMs)); }
         BenchmarkMode modeEnum() { return BenchmarkMode.from(mode); }
         AdaptiveMlPolicyConfig adaptiveMlPolicyConfig() { return new AdaptiveMlPolicyConfig(!AdaptiveMlPolicyMode.OFF.name().equalsIgnoreCase(adaptiveMlPolicyMode), AdaptiveMlPolicyMode.from(adaptiveMlPolicyMode), adaptiveTopKMoves == null ? 30 : adaptiveTopKMoves, adaptiveExplorationRate == null ? 0.10 : adaptiveExplorationRate, true, adaptivePersistenceEnabled != null && adaptivePersistenceEnabled, adaptiveStatePath == null ? "artifacts/adaptive-ml/adaptive-learning-state.json" : adaptiveStatePath, adaptiveQualityBudgetMs == null ? 0 : Math.max(0, adaptiveQualityBudgetMs)); }
+        PdLnsMode pdLnsModeEnum() { return PdLnsMode.from(pdLnsMode); }
     }
 
     public record DashboardRun(String runId, String kind, String createdAt, RunStatus status, RunVisualizationDto visualization) { }
