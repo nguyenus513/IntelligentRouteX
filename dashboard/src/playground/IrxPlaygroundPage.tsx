@@ -4,6 +4,7 @@ import { AdaptiveMlPanel } from './AdaptiveMlPanel';
 import { ApiHealthBadge } from './ApiHealthBadge';
 import { AssignmentTable } from './AssignmentTable';
 import { BaselinePanel } from './BaselinePanel';
+import { BigDataPipelinePanel } from './BigDataPipelinePanel';
 import { EventArtifactPanel } from './EventArtifactPanel';
 import { PipelinePanel } from './PipelinePanel';
 import { PlaygroundTopBar } from './PlaygroundTopBar';
@@ -11,7 +12,9 @@ import { RawJsonPanel } from './RawJsonPanel';
 import { ResultPanel } from './ResultPanel';
 import { RouteMapPanel } from './RouteMapPanel';
 import { RouteTimelinePanel } from './RouteTimelinePanel';
+import { SafetyGuardPanel } from './SafetyGuardPanel';
 import { ScenarioPanel } from './ScenarioPanel';
+import { SeedAttributionPanel } from './SeedAttributionPanel';
 import { API_BASE, checkApiHealth, describeApiError, getBatch, getBatchItems, getJob, getJobArtifacts, getJobEvents, getJobResult, getLiveEvents, getLiveState, getRescueResult, getRuntimeMetrics, runBigDataDemo, runLiveDemo, runRescueDemo, runStaticScenario } from './playgroundApi';
 import type { AdaptiveMode, ApiHealthSnapshot, PlaygroundMode, PlaygroundSnapshot } from './playgroundTypes';
 
@@ -39,6 +42,7 @@ export function IrxPlaygroundPage() {
     RESCUE: { icon: <LifeBuoy size={18} />, label: 'Rescue dispatch' },
     BIGDATA_LITE: { icon: <Database size={18} />, label: 'BigData-lite batch' }
   })[mode], [mode]);
+  const stats = useMemo(() => demoStats(snapshot), [snapshot]);
 
   async function refreshHealth() {
     setHealth({ state: 'checking', apiBase: API_BASE, message: 'Checking backend health...' });
@@ -95,11 +99,26 @@ export function IrxPlaygroundPage() {
     <PlaygroundTopBar scenarioId={scenarioId} mode={mode} adaptiveMode={adaptiveMode} busy={busy} onScenario={setScenarioId} onMode={setMode} onAdaptiveMode={setAdaptiveMode} onRun={run} onReset={reset} />
     {error && <div className="playground-error" role="alert">{error}</div>}
     <div className="playground-status-strip"><span>{modeTone.icon}{modeTone.label}</span><span><Activity size={16} />Backend `/api/v1` contract locked</span><span>Metrics {snapshot.metrics?.jobsCreated ?? 0} jobs</span><ApiHealthBadge health={health} onRefresh={refreshHealth} /></div>
+    <div className="playground-demo-stats">{stats.map((item) => <span key={item.label}>{item.label}<strong>{item.value}</strong></span>)}</div>
     <main className="playground-grid playground-grid-v2">
       <aside className="playground-left-rail"><ScenarioPanel scenarioId={scenarioId} mode={mode} adaptiveMode={adaptiveMode} /><PipelinePanel snapshot={snapshot} /></aside>
       <section className="playground-map-stack"><RouteMapPanel snapshot={snapshot} /><RouteTimelinePanel snapshot={snapshot} /><AssignmentTable snapshot={snapshot} /></section>
-      <aside className="playground-right-rail"><ResultPanel snapshot={snapshot} /><AdaptiveMlPanel snapshot={snapshot} /><BaselinePanel snapshot={snapshot} /></aside>
+      <aside className="playground-right-rail"><ResultPanel snapshot={snapshot} /><BaselinePanel snapshot={snapshot} /><AdaptiveMlPanel snapshot={snapshot} /><SeedAttributionPanel snapshot={snapshot} /><SafetyGuardPanel snapshot={snapshot} /><BigDataPipelinePanel snapshot={snapshot} /></aside>
       <section className="playground-bottom-rail"><EventArtifactPanel snapshot={snapshot} /><RawJsonPanel snapshot={snapshot} /></section>
     </main>
   </div>;
+}
+
+function demoStats(snapshot: PlaygroundSnapshot) {
+  const coverage = snapshot.staticResult?.coverage;
+  const summary = snapshot.staticResult?.summary;
+  return [
+    { label: 'Orders', value: String(coverage?.total ?? summary?.assignedOrders ?? snapshot.batch?.totalItems ?? '—') },
+    { label: 'Drivers', value: String(snapshot.liveState?.activeDrivers ?? (snapshot.staticResult ? 2 : '—')) },
+    { label: 'Routes', value: String(summary?.routeCount ?? (snapshot.staticResult ? 2 : snapshot.rescue?.rescuedRouteCount ?? '—')) },
+    { label: 'Assigned', value: coverage ? `${coverage.assigned}/${coverage.total}` : String(snapshot.cycle?.assigned ?? snapshot.batch?.processedItems ?? '—') },
+    { label: 'Late', value: String(snapshot.staticResult?.metrics?.lateCount ?? summary?.lateCount ?? snapshot.rescue?.afterLate ?? 0) },
+    { label: 'Distance', value: `${snapshot.staticResult?.metrics?.distanceKm ?? summary?.totalKm ?? '—'} km` },
+    { label: 'Runtime', value: `${snapshot.staticResult?.metrics?.runtimeMs ?? '—'} ms` }
+  ];
 }

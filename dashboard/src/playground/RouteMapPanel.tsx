@@ -16,6 +16,7 @@ export function RouteMapPanel({ snapshot }: { snapshot: PlaygroundSnapshot }) {
         <defs>
           <pattern id="map-grid" width="42" height="42" patternUnits="userSpaceOnUse"><path d="M 42 0 L 0 0 0 42" fill="none" stroke="rgba(148,163,184,.11)" strokeWidth="1" /></pattern>
           <filter id="pin-glow"><feGaussianBlur stdDeviation="4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+          <marker id="route-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#e5f5ff" opacity=".75" /></marker>
         </defs>
         <rect width="900" height="520" rx="26" fill="url(#map-grid)" />
         <path d="M80 410 C210 300 270 360 410 210 S670 170 820 72" fill="none" stroke="rgba(34,211,238,.12)" strokeWidth="26" strokeLinecap="round" />
@@ -23,7 +24,7 @@ export function RouteMapPanel({ snapshot }: { snapshot: PlaygroundSnapshot }) {
           const d = route.points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${project(point).x} ${project(point).y}`).join(' ');
           return <g key={route.driverId}>
             <path d={d} fill="none" stroke="rgba(2,6,23,.85)" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
-            <path d={d} fill="none" stroke={routeColor(route.driverId)} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={route.source.includes('LIVE') ? '10 10' : undefined} />
+            <path d={d} fill="none" stroke={routeColor(route.driverId)} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={route.source.includes('LIVE') ? '10 10' : undefined} markerEnd="url(#route-arrow)" />
           </g>;
         })}
         {model.points.map((point) => {
@@ -37,7 +38,7 @@ export function RouteMapPanel({ snapshot }: { snapshot: PlaygroundSnapshot }) {
         })}
       </svg>
       <div className="map-tooltip">
-        {selected ? <><strong>{selected.kind} · {selected.label}</strong><span>Order: {selected.orderId ?? '—'}</span><span>Driver: {selected.driverId ?? '—'}</span><span>Source: {selected.source ?? '—'}</span></> : <><MapPin size={16} /><span>Click a pin to inspect route state.</span></>}
+        {selected ? <><strong>{selected.kind} · {selected.label}</strong><span>Order: {selected.orderId ?? '—'}</span><span>Driver: {selected.driverId ?? '—'}</span><span>ETA: synthetic +{selected.label.replace(/\D/g, '') || '0'} min</span><span>Late: 0</span><span>Source: {selected.source ?? '—'}</span><span>Status: {selected.status ?? 'ASSIGNED'}</span></> : <><MapPin size={16} /><span>Click a pin to inspect route state.</span></>}
       </div>
     </div>
   </section>;

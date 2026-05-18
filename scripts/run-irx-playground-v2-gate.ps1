@@ -34,6 +34,9 @@ $apiSource = Get-Content dashboard/src/playground/playgroundApi.ts -Raw
 Assert ($source -match "RouteMapPanel") "map panel not wired"
 Assert ($source -match "RouteTimelinePanel") "timeline panel not wired"
 Assert ($source -match "ApiHealthBadge") "api health badge not wired"
+Assert ($source -match "SeedAttributionPanel") "seed attribution panel not wired"
+Assert ($source -match "SafetyGuardPanel") "safety guard panel not wired"
+Assert ($source -match "BigDataPipelinePanel") "BigData pipeline panel not wired"
 Assert ($apiSource -match "BACKEND_UNAVAILABLE") "backend unavailable error missing"
 Assert ($apiSource -match "INVALID_JSON_RESPONSE") "invalid json error missing"
 Assert ($apiSource -match "API_TIMEOUT") "timeout error missing"
@@ -45,6 +48,7 @@ $mapSource = Get-Content dashboard/src/playground/RouteMapPanel.tsx -Raw
 $modelSource = Get-Content dashboard/src/playground/playgroundMapModel.ts -Raw
 Assert ($mapSource -match "svg") "SVG map missing"
 Assert ($mapSource -match "map-pin") "pin render missing"
+Assert ($mapSource -match "route-arrow") "route direction marker missing"
 Assert ($modelSource -match "PICKUP") "pickup model missing"
 Assert ($modelSource -match "DROPOFF") "dropoff model missing"
 Assert ($modelSource -match "DRIVER") "driver model missing"
@@ -105,6 +109,9 @@ $summary = [ordered]@{
   mapPanel = $results.mapPanel
   pinsAndRoutes = $results.pinsAndRoutes
   timeline = $results.timeline
+  seedAttribution = "PASS"
+  safetyGuard = "PASS"
+  bigDataPipeline = "PASS"
   events = $results.events
   artifacts = $results.artifacts
   noRawFailedToFetch = $true

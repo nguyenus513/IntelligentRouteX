@@ -431,6 +431,23 @@ code { color: #67e8f9; }
 .pipeline-stage.done svg { color: #34d399; }
 .pipeline-stage strong { color: #e5f5ff; }
 .pipeline-stage span { grid-column: 2; font-size: 12px; }
+.playground-demo-stats { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin: 0 0 16px; }
+.playground-demo-stats span { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid rgba(34,211,238,.16); border-radius: 16px; background: rgba(2,6,23,.52); color: #8ba4bd; font-size: 12px; }
+.playground-demo-stats strong { color: #e5f5ff; font-size: 15px; }
+.api-preview, .input-preview { margin-top: 14px; display: grid; gap: 8px; padding: 12px; border-radius: 18px; border: 1px solid rgba(148,163,184,.12); background: rgba(2,6,23,.38); color: #9fb6ca; }
+.api-preview code { color: #67e8f9; white-space: pre-wrap; }
+.input-preview strong { color: #e5f5ff; }
+.input-preview p { margin: 0; font-size: 12px; line-height: 1.45; }
+.guard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.guard-grid span { display: grid; gap: 5px; padding: 10px; border-radius: 16px; background: rgba(2,6,23,.42); border: 1px solid rgba(148,163,184,.12); color: #8ba4bd; font-size: 12px; }
+.guard-grid strong { color: #e5f5ff; }
+.guard-grid .guard-pass { border-color: rgba(52,211,153,.26); }
+.guard-grid .guard-pass strong { color: #34d399; }
+.guard-grid .guard-warn { border-color: rgba(251,191,36,.34); }
+.guard-grid .guard-warn strong { color: #fbbf24; }
+.bigdata-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.bigdata-step { display: grid; gap: 5px; padding: 10px; border-radius: 16px; background: rgba(15,23,42,.62); border: 1px solid rgba(125,211,252,.14); color: #8ba4bd; }
+.bigdata-step strong { color: #7dd3fc; font-size: 18px; }
 @media (max-width: 1280px) { .playground-grid-v2 { grid-template-columns: 280px minmax(0, 1fr); } .playground-right-rail { grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 920px) { .playground-grid-v2, .playground-bottom-rail, .playground-right-rail { grid-template-columns: 1fr; } .route-map-canvas svg { min-height: 340px; } }
+@media (max-width: 920px) { .playground-grid-v2, .playground-bottom-rail, .playground-right-rail, .playground-demo-stats { grid-template-columns: 1fr; } .route-map-canvas svg { min-height: 340px; } }
 
