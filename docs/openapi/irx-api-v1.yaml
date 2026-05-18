@@ -1,174 +1,306 @@
-openapi: 3.0.3
+﻿openapi: 3.0.3
 info:
   title: IntelligentRouteX API
   version: v1
-  description: IRX API-first dispatch platform MVP for static dispatch, live rolling dispatch, rescue, idempotency, tenant guard, and Adaptive ML diagnostics.
+  description: Locked API contract for IRX production-demo MVP.
 servers:
-  - url: http://localhost:18116
-security:
-  - ApiKeyAuth: []
+  - url: http://localhost:18116/api/v1
 paths:
-  /v1/health:
+  /health:
     get:
-      summary: API health
+      summary: Health check
       responses:
-        '200': { description: OK }
-  /v1/version:
+        '200': { description: Success envelope }
+  /jobs:
+    post:
+      summary: Create generic async job
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string }
+      responses:
+        '200': { description: Job envelope }
+  /jobs/{jobId}:
     get:
-      summary: API/platform version
-      responses:
-        '200': { description: OK }
-  /v1/dispatch/jobs:
-    post:
-      summary: Create static dispatch job
+      summary: Get job status
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/DispatchJobRequest' }
-      responses:
-        '202': { description: Accepted }
-        '400': { description: Validation error }
-        '401': { description: Missing API key }
-        '409': { description: Idempotency conflict }
-  /v1/dispatch/jobs/{jobId}:
-    get:
-      summary: Get dispatch job status
-      parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/JobId'
-      responses:
-        '200': { description: OK }
-        '403': { description: Cross-tenant access denied }
-  /v1/dispatch/jobs/{jobId}/result:
-    get:
-      summary: Get dispatch job result
-      parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/JobId'
-      responses:
-        '200': { description: Completed result with routes, metrics, diagnostics }
-  /v1/live/sessions:
-    post:
-      summary: Create live rolling session
-      parameters:
-        - $ref: '#/components/parameters/TenantId'
-      responses:
-        '201': { description: Created }
-  /v1/live/sessions/{sessionId}/orders:
-    post:
-      summary: Buffer a dynamic order
-      parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/SessionId'
-      responses:
-        '201': { description: Buffered }
-  /v1/live/sessions/{sessionId}/drivers/{driverId}/telemetry:
-    post:
-      summary: Update driver telemetry
-      parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/SessionId'
-        - name: driverId
-          in: path
+        - in: path
+          name: jobId
           required: true
           schema: { type: string }
       responses:
-        '200': { description: Updated }
-  /v1/live/sessions/{sessionId}/cycles:
+        '200': { description: Job envelope }
+        '404': { description: NOT_FOUND error envelope }
+  /jobs/{jobId}/result:
+    get:
+      summary: Get job result
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Result envelope }
+  /jobs/{jobId}/cancel:
     post:
-      summary: Run rolling dispatch cycle
+      summary: Cancel job
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/SessionId'
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
       responses:
-        '200': { description: Cycle completed }
-  /v1/live/sessions/{sessionId}/state:
+        '200': { description: Cancel envelope }
+        '409': { description: CONFLICT error envelope }
+  /jobs/{jobId}/events:
     get:
-      summary: Get live session state
+      summary: Job events
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/SessionId'
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
       responses:
-        '200': { description: State }
-  /v1/live/sessions/{sessionId}/events:
+        '200': { description: Event page envelope }
+  /jobs/{jobId}/artifacts:
     get:
-      summary: Live session SSE events
+      summary: Job artifacts
       parameters:
-        - $ref: '#/components/parameters/SessionId'
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
       responses:
-        '200': { description: text/event-stream }
-  /v1/rescue/jobs:
+        '200': { description: Artifact list envelope }
+  /static/dispatch:
+    post:
+      summary: Synchronous static dispatch
+      responses:
+        '200': { description: Static dispatch result envelope }
+  /static/dispatch/jobs:
+    post:
+      summary: Async static dispatch
+      responses:
+        '200': { description: Job envelope }
+  /static/dispatch/jobs/{jobId}:
+    get:
+      summary: Static job status
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Job envelope }
+  /static/dispatch/jobs/{jobId}/result:
+    get:
+      summary: Static job result
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Result envelope }
+  /live/start:
+    post:
+      summary: Start live rolling session
+      responses:
+        '200': { description: Live state envelope }
+  /live/stop:
+    post:
+      summary: Stop live rolling session
+      responses:
+        '200': { description: Live state envelope }
+  /live/state:
+    get:
+      summary: Live state
+      responses:
+        '200': { description: Live state envelope }
+  /live/orders:
+    post:
+      summary: Add live order
+      responses:
+        '200': { description: Accepted envelope }
+  /live/drivers/location:
+    post:
+      summary: Update driver location
+      responses:
+        '200': { description: Accepted envelope }
+  /live/cycles/run-now:
+    post:
+      summary: Run live cycle immediately
+      responses:
+        '200': { description: Cycle envelope }
+  /live/cycles/{cycleId}:
+    get:
+      summary: Cycle status
+      parameters:
+        - in: path
+          name: cycleId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Cycle envelope }
+  /live/cycles/{cycleId}/result:
+    get:
+      summary: Cycle result
+      parameters:
+        - in: path
+          name: cycleId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Cycle result envelope }
+  /live/events:
+    get:
+      summary: Live events
+      responses:
+        '200': { description: Event page envelope }
+  /rescue/jobs:
     post:
       summary: Create rescue job
-      parameters:
-        - $ref: '#/components/parameters/TenantId'
       responses:
-        '202': { description: Accepted }
-  /v1/rescue/jobs/{jobId}:
+        '200': { description: Rescue job envelope }
+  /rescue/jobs/{jobId}:
     get:
-      summary: Get rescue job status
+      summary: Rescue job status
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/JobId'
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
       responses:
-        '200': { description: OK }
-  /v1/rescue/jobs/{jobId}/result:
+        '200': { description: Job envelope }
+  /rescue/jobs/{jobId}/result:
     get:
-      summary: Get rescue result
+      summary: Rescue result
       parameters:
-        - $ref: '#/components/parameters/TenantId'
-        - $ref: '#/components/parameters/JobId'
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
       responses:
-        '200': { description: Completed rescue result }
+        '200': { description: Rescue result envelope }
+  /bigdata/batches:
+    post:
+      summary: Submit BigData-lite batch
+      responses:
+        '200': { description: Batch envelope }
+  /bigdata/batches/{batchId}:
+    get:
+      summary: Batch status
+      parameters:
+        - in: path
+          name: batchId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Batch envelope }
+  /bigdata/batches/{batchId}/items:
+    get:
+      summary: Batch items page
+      parameters:
+        - in: path
+          name: batchId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer }
+        - in: query
+          name: size
+          schema: { type: integer }
+      responses:
+        '200': { description: Page envelope }
+  /bigdata/batches/{batchId}/requeue:
+    post:
+      summary: Requeue batch
+      responses:
+        '200': { description: Requeue envelope }
+  /bigdata/dead-letter:
+    get:
+      summary: BigData dead-letter items
+      responses:
+        '200': { description: Dead-letter envelope }
+  /bigdata/dead-letter/{itemId}/requeue:
+    post:
+      summary: Requeue dead-letter item
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Requeue envelope }
+  /bigdata/metrics:
+    get:
+      summary: BigData metrics
+      responses:
+        '200': { description: Metrics envelope }
+  /artifacts:
+    get:
+      summary: Artifact list
+      responses:
+        '200': { description: Artifact list envelope }
+  /artifacts/{artifactId}:
+    get:
+      summary: Artifact metadata
+      parameters:
+        - in: path
+          name: artifactId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Artifact envelope }
+  /artifacts/{artifactId}/download:
+    get:
+      summary: Artifact download metadata
+      responses:
+        '200': { description: Artifact envelope }
+  /events:
+    get:
+      summary: Global events
+      responses:
+        '200': { description: Event page envelope }
+  /runtime/state:
+    get:
+      summary: Runtime state
+      responses:
+        '200': { description: Runtime state envelope }
+  /runtime/queues:
+    get:
+      summary: Runtime queues
+      responses:
+        '200': { description: Queue metrics envelope }
+  /runtime/workers:
+    get:
+      summary: Runtime workers
+      responses:
+        '200': { description: Worker metrics envelope }
+  /metrics:
+    get:
+      summary: Runtime metrics
+      responses:
+        '200': { description: Metrics envelope }
 components:
-  securitySchemes:
-    ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: X-Api-Key
-  parameters:
-    TenantId:
-      name: X-Tenant-Id
-      in: header
-      required: true
-      schema: { type: string }
-    JobId:
-      name: jobId
-      in: path
-      required: true
-      schema: { type: string }
-    SessionId:
-      name: sessionId
-      in: path
-      required: true
-      schema: { type: string }
   schemas:
-    DispatchJobRequest:
+    ApiMeta:
       type: object
-      required: [requestId, tenantId]
       properties:
+        version: { type: string }
+        timestamp: { type: string }
+    ApiError:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details: { type: array, items: { type: object } }
+    ApiEnvelope:
+      type: object
+      properties:
+        ok: { type: boolean }
         requestId: { type: string }
-        tenantId: { type: string }
-        profile: { type: string, enum: [FAST_GATE, QUALITY_BENCHMARK, QUALITY_SEEKING] }
-        datasetId: { type: string }
-        adaptiveMl:
-          type: object
-          properties:
-            enabled: { type: boolean }
-            mode: { type: string, enum: [OFF, DIAGNOSTIC, TOP_K_ASSISTED, QUALITY_SEEKING] }
-            topKMoves: { type: integer }
-            explorationRate: { type: number }
-            qualityBudgetMs: { type: integer }
-
-# v0.9.9.4 contract-final endpoint groups:
-# /api/v1/jobs
-# /api/v1/static/dispatch
-# /api/v1/live/start
-# /api/v1/rescue/jobs
-# /api/v1/bigdata/batches
-# /api/v1/artifacts
-# /api/v1/events
-# /api/v1/metrics
+        data: { type: object }
+        error: { $ref: '#/components/schemas/ApiError' }
+        meta: { $ref: '#/components/schemas/ApiMeta' }

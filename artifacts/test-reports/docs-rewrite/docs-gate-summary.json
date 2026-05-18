@@ -1,0 +1,16 @@
+{
+    "version":  "v0.9.9.7-production-docs-rewrite",
+    "overallPass":  true,
+    "requiredDocs":  "PASS",
+    "legacyDocsRemoved":  "PASS",
+    "apiReference":  "PASS",
+    "bigDataLite":  "PASS",
+    "adaptiveMlPolicy":  "PASS",
+    "benchmarks":  "PASS",
+    "operations":  "PASS",
+    "playground":  "PASS",
+    "release":  "PASS",
+    "thesisGuide":  "PASS",
+    "brokenLinks":  0,
+    "bannedOverclaimPhrases":  0
+}

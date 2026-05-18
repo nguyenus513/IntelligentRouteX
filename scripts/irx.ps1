@@ -57,7 +57,7 @@ function Start-Local {
   $dashCmd = "cd '$Root\dashboard'; npm run dev -- --host 127.0.0.1 --port $DashboardPort *> '$DashboardLog'"
   $dp = Start-Process powershell.exe -ArgumentList @('-NoExit','-Command',$dashCmd) -WindowStyle Minimized -PassThru
   Set-Content $DashboardPid $dp.Id
-  Wait-Http "$BackendUrl/api/v1/health" 90 "API Health" | Out-Null
+  Wait-Http "$BackendUrl/api/v1/health" 180 "API Health" | Out-Null
   Wait-Http $PlaygroundUrl 60 "Dashboard" | Out-Null
   Write-Host "IRX started successfully."
   Write-Host "Backend:    $BackendUrl"
@@ -125,7 +125,7 @@ function Package-Release {
   Push-Location "$Root\dashboard"; npm run build | Out-Host; Pop-Location
   Copy-Item "$Root\dashboard\dist" "$releaseRoot\dashboard\dist" -Recurse -Force
   Copy-Item "$Root\scripts\irx.ps1" "$releaseRoot\scripts\irx.ps1" -Force
-  foreach($d in @('API_REFERENCE.md','API_EXAMPLES.md','BIGDATA_LITE_API.md','IRX_FINAL_SYSTEM_STATUS.md','IRX_FINAL_CERTIFICATION_REPORT.md')){ if(Test-Path "$Root\docs\$d"){ Copy-Item "$Root\docs\$d" "$releaseRoot\docs\$d" -Force } }
+  foreach($d in @('README.md','SYSTEM_OVERVIEW.md','ARCHITECTURE.md','API_REFERENCE.md','API_EXAMPLES.md','BIGDATA_LITE_API.md','ADAPTIVE_ML_POLICY.md','BENCHMARKS.md','OPERATIONS.md','PLAYGROUND.md','RELEASE.md','THESIS_GUIDE.md')){ if(Test-Path "$Root\docs\$d"){ Copy-Item "$Root\docs\$d" "$releaseRoot\docs\$d" -Force } }
   foreach($f in @('docker-compose.yml','Dockerfile.backend','.env.example','README.md')){ if(Test-Path "$Root\$f"){ Copy-Item "$Root\$f" "$releaseRoot\$f" -Force } }
   Copy-Item "$Root\dashboard\Dockerfile" "$releaseRoot\dashboard\Dockerfile" -Force -ErrorAction SilentlyContinue
   if(Test-Path "$Root\artifacts\test-reports\v0.9.9.5-irx-playground\playground-summary.json"){ Copy-Item "$Root\artifacts\test-reports\v0.9.9.5-irx-playground\playground-summary.json" "$releaseRoot\artifacts\sample-reports" -Force }
@@ -137,13 +137,15 @@ function Package-Release {
 }
 
 switch($Command){
-  "up" { if($Profile -eq "docker"){ docker compose up -d --build; Wait-Http "$BackendUrl/api/v1/health" 90 "API Health" | Out-Null; Wait-Http $PlaygroundUrl 60 "Dashboard" | Out-Null } else { Start-Local } }
+  "up" { if($Profile -eq "docker"){ docker compose up -d --build; Wait-Http "$BackendUrl/api/v1/health" 180 "API Health" | Out-Null; Wait-Http $PlaygroundUrl 60 "Dashboard" | Out-Null } else { Start-Local } }
   "down" { Stop-System }
   "status" { Show-Status }
   "test" { Run-Test }
   "package" { Package-Release }
   "clean" { Stop-System; Remove-Item $RuntimeDir -Recurse -Force -ErrorAction SilentlyContinue }
 }
+
+
 
 
 

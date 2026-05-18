@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$BaseUrl = "http://localhost:8080",
   [int]$FastTimeoutSeconds = 260,
   [int]$QualityTimeoutSeconds = 520,
@@ -87,7 +87,7 @@ try {
       lateNotWorse = [int]$rescue.afterLate -le [int]$rescue.beforeLate
     }
     finalSolverInvariant = "IRX_ML_FUSED_HYBRID"
-    docsUpdated = (Test-Path "docs/IRX_FINAL_SYSTEM_STATUS.md") -and (Test-Path "docs/IRX_BENCHMARK_METHODOLOGY.md") -and (Test-Path "docs/IRX_OPERATIONS_DEMO_GUIDE.md")
+    docsUpdated = (Test-Path "docs/SYSTEM_OVERVIEW.md") -and (Test-Path "docs/BENCHMARKS.md") -and (Test-Path "docs/OPERATIONS.md")
     artifacts = @{
       fast = "fast/clean-cache-gate-summary.json"
       quality = "quality/clean-cache-gate-summary.json"
@@ -107,3 +107,4 @@ try {
 finally {
   Pop-Location
 }
+
