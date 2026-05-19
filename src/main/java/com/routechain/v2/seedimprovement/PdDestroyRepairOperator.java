@@ -58,6 +58,9 @@ public final class PdDestroyRepairOperator {
         int safeTop = Math.max(2, topBadOrders);
         for (int round = 1; round <= safeRounds; round++) {
             List<Integer> destroySizes = destroySizes(current, mode);
+            if (mode.greedRlControlled()) {
+                mlRecorder.recordGreedRlAction(destroySizes.size(), true, false);
+            }
             List<PdOrderImpact> rankedOrders = rankedOrders(current, mode, round).stream().limit(safeTop).toList();
             for (int destroySize : destroySizes) {
                 if (rankedOrders.size() < destroySize) {
@@ -83,6 +86,9 @@ public final class PdDestroyRepairOperator {
                     String operator = "PD_DESTROY_REPAIR_K" + destroySize;
                     if (mode.tabularScored()) {
                         mlRecorder.recordTabularScoring(1, accepted || candidateEvaluation != null, accepted);
+                    }
+                    if (mode.greedRlControlled()) {
+                        mlRecorder.recordGreedRlAction(1, true, accepted);
                     }
                     mlRecorder.recordDecision(
                             "DESTROY_ORDER_SELECTION",
@@ -126,6 +132,9 @@ public final class PdDestroyRepairOperator {
                     best = current;
                     bestEvaluation = currentEvaluation;
                     acceptedMutations++;
+                    if (mode.greedRlControlled()) {
+                        mlRecorder.recordGreedRlAction(1, true, true);
+                    }
                 }
             }
         }
@@ -196,6 +205,16 @@ public final class PdDestroyRepairOperator {
     }
 
     private List<Integer> destroySizes(PdSeedState seed, PdLnsMode mode) {
+        if (mode.greedRlControlled()) {
+            int assigned = seed == null ? 0 : seed.assignedCount();
+            if (assigned >= 18) {
+                return List.of(4, 3, 2);
+            }
+            if (assigned >= 10) {
+                return List.of(3, 4, 2);
+            }
+            return List.of(2, 3, 4);
+        }
         if (mode == PdLnsMode.NO_ADAPTIVE_POLICY || mode == PdLnsMode.NO_ADAPTIVE_OPERATOR_POLICY) {
             return List.of(2, 3, 4);
         }
@@ -224,6 +243,7 @@ public final class PdDestroyRepairOperator {
             case NO_ADAPTIVE_OPERATOR_POLICY -> "ADAPTIVE_MOVE_PRIORITY_NO_OPERATOR_POLICY";
             case NO_REWARD_UPDATE -> "ADAPTIVE_MOVE_PRIORITY_NO_REWARD_UPDATE";
             case NO_ML_RANDOMIZED_PD_LNS -> "NO_ML_RANDOMIZED";
+            case GREEDRL_CONTROLLER_PD_LNS -> "GREEDRL_OPERATOR_CONTROLLER";
             default -> "ADAPTIVE_MOVE_PRIORITY";
         };
     }

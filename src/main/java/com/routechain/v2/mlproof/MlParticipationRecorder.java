@@ -22,6 +22,10 @@ public final class MlParticipationRecorder {
     private int routefinderCandidateCount;
     private int routefinderAffectedDecisionCount;
     private int routefinderAcceptedCandidateCount;
+    private int greedRlInferenceCount;
+    private int greedRlActionCount;
+    private int greedRlAffectedDecisionCount;
+    private int greedRlAcceptedActionCount;
 
     public void recordTabularScoring(int candidateCount, boolean affectedDecision, boolean acceptedCandidate) {
         tabularInferenceCount++;
@@ -42,6 +46,17 @@ public final class MlParticipationRecorder {
         }
         if (acceptedCandidate) {
             routefinderAcceptedCandidateCount++;
+        }
+    }
+
+    public void recordGreedRlAction(int actionCount, boolean affectedDecision, boolean acceptedAction) {
+        greedRlInferenceCount++;
+        greedRlActionCount += Math.max(0, actionCount);
+        if (affectedDecision) {
+            greedRlAffectedDecisionCount++;
+        }
+        if (acceptedAction) {
+            greedRlAcceptedActionCount++;
         }
     }
 
@@ -89,7 +104,7 @@ public final class MlParticipationRecorder {
         Map<String, MlWorkerInvocationTrace> workers = new LinkedHashMap<>();
         workers.put("routefinder", new MlWorkerInvocationTrace("routefinder", routefinderInferenceCount > 0, routefinderInferenceCount > 0 ? "routefinder-candidate-provider-v0.9.10B" : "not-wired-static-v0.9.10A", routefinderInferenceCount, routefinderCandidateCount, routefinderAffectedDecisionCount > 0 || routefinderAcceptedCandidateCount > 0, routefinderAffectedDecisionCount, routefinderAcceptedCandidateCount, routefinderInferenceCount > 0 ? "route/sequence candidate provider hot path" : "not in PD-LNS hot path"));
         workers.put("tabular", new MlWorkerInvocationTrace("tabular", tabularInferenceCount > 0, tabularInferenceCount > 0 ? "tabular-mutation-scorer-v0.9.10B" : "not-wired-static-v0.9.10A", tabularInferenceCount, tabularCandidateCount, tabularAffectedDecisionCount > 0 || tabularAcceptedCandidateCount > 0, tabularAffectedDecisionCount, tabularAcceptedCandidateCount, tabularInferenceCount > 0 ? "mutation scorer hot path" : "not in PD-LNS hot path"));
-        workers.put("greedrl", new MlWorkerInvocationTrace("greedrl", false, "experimental", 0, 0, false, 0, 0, "not proven in static seed improvement"));
+        workers.put("greedrl", new MlWorkerInvocationTrace("greedrl", greedRlInferenceCount > 0, greedRlInferenceCount > 0 ? "greedrl-controller-v0.9.10C" : "experimental", greedRlInferenceCount, greedRlActionCount, greedRlAffectedDecisionCount > 0 || greedRlAcceptedActionCount > 0, greedRlAffectedDecisionCount, greedRlAcceptedActionCount, greedRlInferenceCount > 0 ? "operator/action controller hot path" : "not proven in static seed improvement"));
         workers.put("forecast", new MlWorkerInvocationTrace("forecast", false, "live-rescue-only", 0, 0, false, 0, 0, "live rescue only"));
         return new MlParticipationDiagnostics(decisions.size(), rankedMutationCount, acceptedMutationFromMlTopK, rewardUpdates, policy, workers, decisions);
     }

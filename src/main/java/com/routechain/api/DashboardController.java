@@ -1291,7 +1291,7 @@ public final class DashboardController {
                 Map.entry("acceptedMutationTypes", moves.stream().filter(MoveEvaluationTrace::accepted).map(MoveEvaluationTrace::moveType).distinct().toList()),
                 Map.entry("routeFinderUsed", intValue(selectorSources.get("ML_REFINED")) > 0),
                 Map.entry("tabularUsed", pdLnsMode.tabularScored()),
-                Map.entry("greedRlUsed", irx != null && irx.diagnostics().get("mlEvidence") instanceof Map<?, ?> evidence && intValue(objectMap(((Map<?, ?>) evidence).get("greedRl")).get("applied")) > 0),
+                Map.entry("greedRlUsed", pdLnsMode.greedRlControlled() || (irx != null && irx.diagnostics().get("mlEvidence") instanceof Map<?, ?> evidence && intValue(objectMap(((Map<?, ?>) evidence).get("greedRl")).get("applied")) > 0)),
                 Map.entry("forecastUsed", false),
                 Map.entry("qualityContribution", pdLnsMode != PdLnsMode.HEURISTIC_PD_LNS && (acceptedMoves > 0 || pdLnsMode.mlDestroyRepair() || pdLnsMode.hybridPdLns())),
                 Map.entry("reason", pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS ? "heuristic-baseline-mode" : (pdLnsMode.mlDestroyRepair() || pdLnsMode.hybridPdLns()) ? "ml-destroy-repair-mode" : "adaptive-policy-mode"));
