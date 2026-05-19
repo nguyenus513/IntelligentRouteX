@@ -1,15 +1,16 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, Cpu, GitBranch, Play, Plus, RadioTower, RefreshCw, ShieldCheck, Truck } from 'lucide-react';
+import { LiveDispatchMapPanel } from './LiveDispatchMapPanel';
 
-type Point = { lat: number; lng: number };
-type LiveOrderRequest = { orderId: string; pickup: Point; dropoff: Point; deadline: string; load: number; priority: 'NORMAL' | 'HIGH' };
-type LiveOrderData = { orderId: string; pickup?: Point; dropoff?: Point; pickupLat?: number; pickupLng?: number; dropoffLat?: number; dropoffLng?: number; deadline?: string; deadlineMinutes?: number; load?: number; priority?: number | string };
-type LiveOrderState = { order: LiveOrderData; status: string; reason?: string };
-type LiveDriverState = { driverId: string; lat: number; lng: number; status: string; currentStopId?: string | null };
-type LiveRouteSnapshot = { routeId: string; driverId: string; stopIds: string[]; frozenStopIds: string[]; distanceKm: number; lateCount: number };
-type LiveEvent = { type: string; subject: string; createdAt: string };
-type LiveState = { jobId: string; cycle: number; assigned: number; buffered: number; orders: LiveOrderState[]; drivers: LiveDriverState[]; routes: LiveRouteSnapshot[]; frozenStopIds: string[]; events: LiveEvent[] };
-type LiveCycleResponse = { jobId: string; cycle: number; mode: string; assigned: number; buffered: number; late: number; forecastUsed: boolean; greedRlAction: string; triModelRepairUsed: boolean; routes: LiveRouteSnapshot[]; diagnostics: Record<string, unknown>; assignedRegression: number };
+export type Point = { lat: number; lng: number };
+export type LiveOrderRequest = { orderId: string; pickup: Point; dropoff: Point; deadline: string; load: number; priority: 'NORMAL' | 'HIGH' };
+export type LiveOrderData = { orderId: string; pickup?: Point; dropoff?: Point; pickupLat?: number; pickupLng?: number; dropoffLat?: number; dropoffLng?: number; deadline?: string; deadlineMinutes?: number; load?: number; priority?: number | string };
+export type LiveOrderState = { order: LiveOrderData; status: string; reason?: string };
+export type LiveDriverState = { driverId: string; lat: number; lng: number; status: string; currentStopId?: string | null };
+export type LiveRouteSnapshot = { routeId: string; driverId: string; stopIds: string[]; frozenStopIds: string[]; distanceKm: number; lateCount: number };
+export type LiveEvent = { type: string; subject: string; createdAt: string };
+export type LiveState = { jobId: string; cycle: number; assigned: number; buffered: number; orders: LiveOrderState[]; drivers: LiveDriverState[]; routes: LiveRouteSnapshot[]; frozenStopIds: string[]; events: LiveEvent[] };
+export type LiveCycleResponse = { jobId: string; cycle: number; mode: string; assigned: number; buffered: number; late: number; forecastUsed: boolean; greedRlAction: string; triModelRepairUsed: boolean; routes: LiveRouteSnapshot[]; diagnostics: Record<string, unknown>; assignedRegression: number };
 
 const API_BASE = '/api/v1';
 const headers = { 'Content-Type': 'application/json', 'X-Api-Key': 'demo-key', 'X-Tenant-Id': 'demo' };
@@ -139,7 +140,7 @@ export function LiveDispatchDemoPage() {
     <MetricsBar state={state} lastCycle={lastCycle} safe={safe} />
     <div className="live-grid">
       <OrdersQueue orders={state.orders} disabled={!jobId || !!busy} addOrder={addOrder} addBurst={addBurst} />
-      <DriverRouteBoard drivers={state.drivers} routes={state.routes} frozenStopIds={state.frozenStopIds} moveDrivers={moveDrivers} runCycle={runCycle} disabled={!jobId || !!busy} />
+      <div className="live-map-stack"><LiveDispatchMapPanel state={state} previousState={previousState} lastCycle={lastCycle} /><DriverRouteBoard drivers={state.drivers} routes={state.routes} frozenStopIds={state.frozenStopIds} moveDrivers={moveDrivers} runCycle={runCycle} disabled={!jobId || !!busy} /></div>
       <MlDecisionPanel lastCycle={lastCycle} />
     </div>
     <div className="live-bottom-grid">

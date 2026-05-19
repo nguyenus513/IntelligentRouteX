@@ -1,0 +1,99 @@
+﻿{
+    "jobId":  "live-map-gate",
+    "cycle":  1,
+    "assigned":  1,
+    "buffered":  0,
+    "orders":  [
+                   {
+                       "order":  {
+                                     "orderId":  "MAP-ORD-1",
+                                     "pickupLat":  10.75,
+                                     "pickupLng":  106.7,
+                                     "dropoffLat":  10.82,
+                                     "dropoffLng":  106.78,
+                                     "deadlineMinutes":  90,
+                                     "priority":  10
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T19:37:38.361042400Z",
+                       "updatedAt":  "2026-05-19T19:37:38.898602300Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   }
+               ],
+    "drivers":  [
+                    {
+                        "driverId":  "D01",
+                        "lat":  10.76,
+                        "lng":  106.71,
+                        "status":  "EN_ROUTE",
+                        "currentStopId":  "PICKUP:MAP-ORD-1",
+                        "updatedAt":  "2026-05-19T19:37:38.467797900Z"
+                    }
+                ],
+    "routes":  [
+                   {
+                       "routeId":  "route-1",
+                       "driverId":  "D01",
+                       "stopIds":  [
+                                       "PICKUP:MAP-ORD-1",
+                                       "DROPOFF:MAP-ORD-1"
+                                   ],
+                       "frozenStopIds":  [
+
+                                         ],
+                       "distanceKm":  1.4,
+                       "lateCount":  0
+                   }
+               ],
+    "frozenStopIds":  [
+                          "PICKUP:MAP-ORD-1"
+                      ],
+    "events":  [
+                   {
+                       "subject":  "MAP-ORD-1",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T19:37:38.361042400Z"
+                   },
+                   {
+                       "subject":  "MAP-ORD-1",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T19:37:38.361042400Z"
+                   },
+                   {
+                       "subject":  "D01",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T19:37:38.467797900Z"
+                   },
+                   {
+                       "subject":  "MAP-ORD-1",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T19:37:38.898602300Z"
+                   },
+                   {
+                       "subject":  "cycle-c9c8eed4",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T19:37:38.898602300Z"
+                   },
+                   {
+                       "subject":  "cycle-c9c8eed4",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T19:37:38.898602300Z"
+                   },
+                   {
+                       "subject":  "cycle-c9c8eed4",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T19:37:38.898602300Z"
+                   },
+                   {
+                       "subject":  "PICKUP:MAP-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T19:37:38.898602300Z"
+                   },
+                   {
+                       "subject":  "cycle-c9c8eed4",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T19:37:38.898602300Z"
+                   }
+               ]
+}
