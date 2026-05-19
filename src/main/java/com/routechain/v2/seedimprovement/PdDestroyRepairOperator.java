@@ -90,6 +90,9 @@ public final class PdDestroyRepairOperator {
                     if (mode.greedRlControlled()) {
                         mlRecorder.recordGreedRlAction(1, true, accepted);
                     }
+                    if (mode.forecastRiskScored()) {
+                        mlRecorder.recordForecastRisk(1, candidateEvaluation != null, accepted);
+                    }
                     mlRecorder.recordDecision(
                             "DESTROY_ORDER_SELECTION",
                             operator,
@@ -194,10 +197,22 @@ public final class PdDestroyRepairOperator {
         if (!comparator.better(candidateEvaluation, bestEvaluation)) {
             return false;
         }
+        if (mode.forecastRiskScored() && forecastRiskPenalty(currentEvaluation, candidateEvaluation) > 0.0) {
+            return false;
+        }
         if (!mode.tabularScored()) {
             return true;
         }
         return tabularScorer.score(currentEvaluation, candidateEvaluation, orderIds, destroySize, operator) > 0.0;
+    }
+
+    private double forecastRiskPenalty(PdEvaluation currentEvaluation, PdEvaluation candidateEvaluation) {
+        if (currentEvaluation == null || candidateEvaluation == null) {
+            return 1.0;
+        }
+        return Math.max(0, candidateEvaluation.lateCount() - currentEvaluation.lateCount())
+                + Math.max(0.0, candidateEvaluation.totalLatenessMinutes() - currentEvaluation.totalLatenessMinutes())
+                + Math.max(0.0, candidateEvaluation.durationMinutes() - currentEvaluation.durationMinutes()) * 0.001;
     }
 
     private String operatorName(int destroySize) {
