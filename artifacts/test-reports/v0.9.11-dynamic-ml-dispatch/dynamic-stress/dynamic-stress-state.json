@@ -1,0 +1,2368 @@
+﻿{
+    "jobId":  "dynamic-stress",
+    "cycle":  22,
+    "assigned":  50,
+    "buffered":  0,
+    "orders":  [
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-1",
+                                     "pickupLat":  10.700099999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7001,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.513593300Z",
+                       "updatedAt":  "2026-05-19T18:32:43.531655600Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-2",
+                                     "pickupLat":  10.700199999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.70020000000001,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.518111900Z",
+                       "updatedAt":  "2026-05-19T18:32:43.531655600Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-3",
+                                     "pickupLat":  10.700299999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7003,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.521627400Z",
+                       "updatedAt":  "2026-05-19T18:32:43.531655600Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-4",
+                                     "pickupLat":  10.7004,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7004,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.536686500Z",
+                       "updatedAt":  "2026-05-19T18:32:43.552256400Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-5",
+                                     "pickupLat":  10.7005,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7005,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.540225700Z",
+                       "updatedAt":  "2026-05-19T18:32:43.552256400Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-6",
+                                     "pickupLat":  10.7006,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.70060000000001,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.544745800Z",
+                       "updatedAt":  "2026-05-19T18:32:43.552256400Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-7",
+                                     "pickupLat":  10.7007,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7007,
+                                     "deadlineMinutes":  90,
+                                     "priority":  10
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.555257500Z",
+                       "updatedAt":  "2026-05-19T18:32:43.568881700Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-8",
+                                     "pickupLat":  10.7008,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7008,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.558774500Z",
+                       "updatedAt":  "2026-05-19T18:32:43.568881700Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-9",
+                                     "pickupLat":  10.700899999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7009,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.561773200Z",
+                       "updatedAt":  "2026-05-19T18:32:43.568881700Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-10",
+                                     "pickupLat":  10.700999999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.70100000000001,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.571432400Z",
+                       "updatedAt":  "2026-05-19T18:32:43.584595700Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-11",
+                                     "pickupLat":  10.701099999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7011,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.574971100Z",
+                       "updatedAt":  "2026-05-19T18:32:43.584595700Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-12",
+                                     "pickupLat":  10.7012,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7012,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.577556800Z",
+                       "updatedAt":  "2026-05-19T18:32:43.584595700Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-13",
+                                     "pickupLat":  10.7013,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7013,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.589151200Z",
+                       "updatedAt":  "2026-05-19T18:32:43.601215Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-14",
+                                     "pickupLat":  10.7014,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7014,
+                                     "deadlineMinutes":  90,
+                                     "priority":  10
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.592154500Z",
+                       "updatedAt":  "2026-05-19T18:32:43.601215Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-15",
+                                     "pickupLat":  10.7015,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7015,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.595195500Z",
+                       "updatedAt":  "2026-05-19T18:32:43.601215Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-16",
+                                     "pickupLat":  10.7016,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7016,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.605749900Z",
+                       "updatedAt":  "2026-05-19T18:32:43.618851800Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-17",
+                                     "pickupLat":  10.701699999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7017,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.609267Z",
+                       "updatedAt":  "2026-05-19T18:32:43.618851800Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-18",
+                                     "pickupLat":  10.701799999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7018,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.613304400Z",
+                       "updatedAt":  "2026-05-19T18:32:43.618851800Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-19",
+                                     "pickupLat":  10.701899999999998,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.70190000000001,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.623370800Z",
+                       "updatedAt":  "2026-05-19T18:32:43.666091100Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-20",
+                                     "pickupLat":  10.702,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.702,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.627409100Z",
+                       "updatedAt":  "2026-05-19T18:32:43.666091100Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-21",
+                                     "pickupLat":  10.7021,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7021,
+                                     "deadlineMinutes":  90,
+                                     "priority":  10
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.659416400Z",
+                       "updatedAt":  "2026-05-19T18:32:43.666091100Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-22",
+                                     "pickupLat":  10.7022,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7022,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.670252400Z",
+                       "updatedAt":  "2026-05-19T18:32:43.683466800Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-23",
+                                     "pickupLat":  10.7023,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.70230000000001,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.672392800Z",
+                       "updatedAt":  "2026-05-19T18:32:43.683466800Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-24",
+                                     "pickupLat":  10.702399999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7024,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.676395600Z",
+                       "updatedAt":  "2026-05-19T18:32:43.683466800Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-25",
+                                     "pickupLat":  10.702499999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7025,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.686259200Z",
+                       "updatedAt":  "2026-05-19T18:32:43.698619900Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-26",
+                                     "pickupLat":  10.702599999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7026,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.689121900Z",
+                       "updatedAt":  "2026-05-19T18:32:43.698619900Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-27",
+                                     "pickupLat":  10.7027,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.70270000000001,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.692290400Z",
+                       "updatedAt":  "2026-05-19T18:32:43.698619900Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-28",
+                                     "pickupLat":  10.7028,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7028,
+                                     "deadlineMinutes":  90,
+                                     "priority":  10
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.702143900Z",
+                       "updatedAt":  "2026-05-19T18:32:43.713299600Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-29",
+                                     "pickupLat":  10.7029,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7029,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.706709900Z",
+                       "updatedAt":  "2026-05-19T18:32:43.713299600Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-30",
+                                     "pickupLat":  10.703,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.703,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.709253500Z",
+                       "updatedAt":  "2026-05-19T18:32:43.713299600Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-31",
+                                     "pickupLat":  10.7031,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7031,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.718262Z",
+                       "updatedAt":  "2026-05-19T18:32:43.729386600Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-32",
+                                     "pickupLat":  10.703199999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.70320000000001,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.721846500Z",
+                       "updatedAt":  "2026-05-19T18:32:43.729386600Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-33",
+                                     "pickupLat":  10.703299999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7033,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.724344900Z",
+                       "updatedAt":  "2026-05-19T18:32:43.729386600Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-34",
+                                     "pickupLat":  10.703399999999998,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7034,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.731394600Z",
+                       "updatedAt":  "2026-05-19T18:32:43.741513100Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-35",
+                                     "pickupLat":  10.7035,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7035,
+                                     "deadlineMinutes":  90,
+                                     "priority":  10
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.733399400Z",
+                       "updatedAt":  "2026-05-19T18:32:43.741513100Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-36",
+                                     "pickupLat":  10.7036,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.70360000000001,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.735927100Z",
+                       "updatedAt":  "2026-05-19T18:32:43.741513100Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-37",
+                                     "pickupLat":  10.7037,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7037,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.744511300Z",
+                       "updatedAt":  "2026-05-19T18:32:43.752550500Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-38",
+                                     "pickupLat":  10.7038,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7038,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.746515900Z",
+                       "updatedAt":  "2026-05-19T18:32:43.752550500Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-39",
+                                     "pickupLat":  10.703899999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7039,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.748512Z",
+                       "updatedAt":  "2026-05-19T18:32:43.752550500Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-40",
+                                     "pickupLat":  10.703999999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.70400000000001,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.754511200Z",
+                       "updatedAt":  "2026-05-19T18:32:43.763038500Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-41",
+                                     "pickupLat":  10.704099999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7041,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.756904700Z",
+                       "updatedAt":  "2026-05-19T18:32:43.763038500Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-42",
+                                     "pickupLat":  10.7042,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7042,
+                                     "deadlineMinutes":  90,
+                                     "priority":  10
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.759445600Z",
+                       "updatedAt":  "2026-05-19T18:32:43.763038500Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-43",
+                                     "pickupLat":  10.7043,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7043,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.765076800Z",
+                       "updatedAt":  "2026-05-19T18:32:43.773845100Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-44",
+                                     "pickupLat":  10.7044,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7044,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.767624Z",
+                       "updatedAt":  "2026-05-19T18:32:43.773845100Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-45",
+                                     "pickupLat":  10.7045,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7045,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.770212200Z",
+                       "updatedAt":  "2026-05-19T18:32:43.773845100Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-46",
+                                     "pickupLat":  10.7046,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7046,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.775845100Z",
+                       "updatedAt":  "2026-05-19T18:32:43.785324800Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-47",
+                                     "pickupLat":  10.704699999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7047,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.777844400Z",
+                       "updatedAt":  "2026-05-19T18:32:43.785324800Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-48",
+                                     "pickupLat":  10.704799999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.7048,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.780848400Z",
+                       "updatedAt":  "2026-05-19T18:32:43.785324800Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-49",
+                                     "pickupLat":  10.704899999999999,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.70490000000001,
+                                     "deadlineMinutes":  90,
+                                     "priority":  10
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.787327600Z",
+                       "updatedAt":  "2026-05-19T18:32:43.794854800Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   },
+                   {
+                       "order":  {
+                                     "orderId":  "STRESS-ORD-50",
+                                     "pickupLat":  10.705,
+                                     "pickupLng":  106.6,
+                                     "dropoffLat":  10.8,
+                                     "dropoffLng":  106.705,
+                                     "deadlineMinutes":  90,
+                                     "priority":  1
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.789840800Z",
+                       "updatedAt":  "2026-05-19T18:32:43.794854800Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   }
+               ],
+    "drivers":  [
+                    {
+                        "driverId":  "D02",
+                        "lat":  10.7216,
+                        "lng":  106.62,
+                        "status":  "EN_ROUTE",
+                        "currentStopId":  "PICKUP:STRESS-ORD-1",
+                        "updatedAt":  "2026-05-19T18:32:43.782808100Z"
+                    },
+                    {
+                        "driverId":  "D03",
+                        "lat":  10.7217,
+                        "lng":  106.62,
+                        "status":  "EN_ROUTE",
+                        "currentStopId":  "PICKUP:STRESS-ORD-1",
+                        "updatedAt":  "2026-05-19T18:32:43.792851Z"
+                    },
+                    {
+                        "driverId":  "D04",
+                        "lat":  10.7218,
+                        "lng":  106.62,
+                        "status":  "DELAYED",
+                        "currentStopId":  "PICKUP:STRESS-ORD-1",
+                        "updatedAt":  "2026-05-19T18:32:43.797007600Z"
+                    },
+                    {
+                        "driverId":  "D05",
+                        "lat":  10.7219,
+                        "lng":  106.62,
+                        "status":  "EN_ROUTE",
+                        "currentStopId":  "PICKUP:STRESS-ORD-1",
+                        "updatedAt":  "2026-05-19T18:32:43.802441300Z"
+                    },
+                    {
+                        "driverId":  "D01",
+                        "lat":  10.722000000000001,
+                        "lng":  106.62,
+                        "status":  "EN_ROUTE",
+                        "currentStopId":  "PICKUP:STRESS-ORD-1",
+                        "updatedAt":  "2026-05-19T18:32:43.807831200Z"
+                    }
+                ],
+    "routes":  [
+                   {
+                       "routeId":  "route-22",
+                       "driverId":  "D02",
+                       "stopIds":  [
+                                       "PICKUP:STRESS-ORD-1",
+                                       "DROPOFF:STRESS-ORD-1",
+                                       "PICKUP:STRESS-ORD-2",
+                                       "DROPOFF:STRESS-ORD-2",
+                                       "PICKUP:STRESS-ORD-3",
+                                       "DROPOFF:STRESS-ORD-3",
+                                       "PICKUP:STRESS-ORD-4",
+                                       "DROPOFF:STRESS-ORD-4",
+                                       "PICKUP:STRESS-ORD-5",
+                                       "DROPOFF:STRESS-ORD-5",
+                                       "PICKUP:STRESS-ORD-6",
+                                       "DROPOFF:STRESS-ORD-6",
+                                       "PICKUP:STRESS-ORD-7",
+                                       "DROPOFF:STRESS-ORD-7",
+                                       "PICKUP:STRESS-ORD-8",
+                                       "DROPOFF:STRESS-ORD-8",
+                                       "PICKUP:STRESS-ORD-9",
+                                       "DROPOFF:STRESS-ORD-9",
+                                       "PICKUP:STRESS-ORD-10",
+                                       "DROPOFF:STRESS-ORD-10",
+                                       "PICKUP:STRESS-ORD-11",
+                                       "DROPOFF:STRESS-ORD-11",
+                                       "PICKUP:STRESS-ORD-12",
+                                       "DROPOFF:STRESS-ORD-12",
+                                       "PICKUP:STRESS-ORD-13",
+                                       "DROPOFF:STRESS-ORD-13",
+                                       "PICKUP:STRESS-ORD-14",
+                                       "DROPOFF:STRESS-ORD-14",
+                                       "PICKUP:STRESS-ORD-15",
+                                       "DROPOFF:STRESS-ORD-15",
+                                       "PICKUP:STRESS-ORD-16",
+                                       "DROPOFF:STRESS-ORD-16",
+                                       "PICKUP:STRESS-ORD-17",
+                                       "DROPOFF:STRESS-ORD-17",
+                                       "PICKUP:STRESS-ORD-18",
+                                       "DROPOFF:STRESS-ORD-18",
+                                       "PICKUP:STRESS-ORD-19",
+                                       "DROPOFF:STRESS-ORD-19",
+                                       "PICKUP:STRESS-ORD-20",
+                                       "DROPOFF:STRESS-ORD-20",
+                                       "PICKUP:STRESS-ORD-21",
+                                       "DROPOFF:STRESS-ORD-21",
+                                       "PICKUP:STRESS-ORD-22",
+                                       "DROPOFF:STRESS-ORD-22",
+                                       "PICKUP:STRESS-ORD-23",
+                                       "DROPOFF:STRESS-ORD-23",
+                                       "PICKUP:STRESS-ORD-24",
+                                       "DROPOFF:STRESS-ORD-24",
+                                       "PICKUP:STRESS-ORD-25",
+                                       "DROPOFF:STRESS-ORD-25",
+                                       "PICKUP:STRESS-ORD-26",
+                                       "DROPOFF:STRESS-ORD-26",
+                                       "PICKUP:STRESS-ORD-27",
+                                       "DROPOFF:STRESS-ORD-27",
+                                       "PICKUP:STRESS-ORD-28",
+                                       "DROPOFF:STRESS-ORD-28",
+                                       "PICKUP:STRESS-ORD-29",
+                                       "DROPOFF:STRESS-ORD-29",
+                                       "PICKUP:STRESS-ORD-30",
+                                       "DROPOFF:STRESS-ORD-30",
+                                       "PICKUP:STRESS-ORD-31",
+                                       "DROPOFF:STRESS-ORD-31",
+                                       "PICKUP:STRESS-ORD-32",
+                                       "DROPOFF:STRESS-ORD-32",
+                                       "PICKUP:STRESS-ORD-33",
+                                       "DROPOFF:STRESS-ORD-33",
+                                       "PICKUP:STRESS-ORD-34",
+                                       "DROPOFF:STRESS-ORD-34",
+                                       "PICKUP:STRESS-ORD-35",
+                                       "DROPOFF:STRESS-ORD-35",
+                                       "PICKUP:STRESS-ORD-36",
+                                       "DROPOFF:STRESS-ORD-36",
+                                       "PICKUP:STRESS-ORD-37",
+                                       "DROPOFF:STRESS-ORD-37",
+                                       "PICKUP:STRESS-ORD-38",
+                                       "DROPOFF:STRESS-ORD-38",
+                                       "PICKUP:STRESS-ORD-39",
+                                       "DROPOFF:STRESS-ORD-39",
+                                       "PICKUP:STRESS-ORD-40",
+                                       "DROPOFF:STRESS-ORD-40",
+                                       "PICKUP:STRESS-ORD-41",
+                                       "DROPOFF:STRESS-ORD-41",
+                                       "PICKUP:STRESS-ORD-42",
+                                       "DROPOFF:STRESS-ORD-42",
+                                       "PICKUP:STRESS-ORD-43",
+                                       "DROPOFF:STRESS-ORD-43",
+                                       "PICKUP:STRESS-ORD-44",
+                                       "DROPOFF:STRESS-ORD-44",
+                                       "PICKUP:STRESS-ORD-45",
+                                       "DROPOFF:STRESS-ORD-45",
+                                       "PICKUP:STRESS-ORD-46",
+                                       "DROPOFF:STRESS-ORD-46",
+                                       "PICKUP:STRESS-ORD-47",
+                                       "DROPOFF:STRESS-ORD-47",
+                                       "PICKUP:STRESS-ORD-48",
+                                       "DROPOFF:STRESS-ORD-48",
+                                       "PICKUP:STRESS-ORD-49",
+                                       "DROPOFF:STRESS-ORD-49",
+                                       "PICKUP:STRESS-ORD-50",
+                                       "DROPOFF:STRESS-ORD-50"
+                                   ],
+                       "frozenStopIds":  [
+                                             "PICKUP:STRESS-ORD-1"
+                                         ],
+                       "distanceKm":  70.0,
+                       "lateCount":  0
+                   }
+               ],
+    "frozenStopIds":  [
+                          "PICKUP:STRESS-ORD-1"
+                      ],
+    "events":  [
+                   {
+                       "subject":  "STRESS-ORD-1",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.513593300Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-1",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.513593300Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-2",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.518111900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-2",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.518111900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-3",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.521627400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-3",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.521627400Z"
+                   },
+                   {
+                       "subject":  "D02",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.528136400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-1",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.531655600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-2",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.531655600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-3",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.531655600Z"
+                   },
+                   {
+                       "subject":  "cycle-af41320b",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.531655600Z"
+                   },
+                   {
+                       "subject":  "cycle-af41320b",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.531655600Z"
+                   },
+                   {
+                       "subject":  "cycle-af41320b",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.531655600Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.531655600Z"
+                   },
+                   {
+                       "subject":  "cycle-af41320b",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.531655600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-4",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.536686500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-4",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.536686500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-5",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.540225700Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-5",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.540225700Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-6",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.544745800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-6",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.544745800Z"
+                   },
+                   {
+                       "subject":  "D03",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.548257200Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-4",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.552256400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-5",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.552256400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-6",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.552256400Z"
+                   },
+                   {
+                       "subject":  "cycle-5677a73d",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.552256400Z"
+                   },
+                   {
+                       "subject":  "cycle-5677a73d",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.552256400Z"
+                   },
+                   {
+                       "subject":  "cycle-5677a73d",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.552256400Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.552256400Z"
+                   },
+                   {
+                       "subject":  "cycle-5677a73d",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.552256400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-7",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.555257500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-7",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.555257500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-8",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.558774500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-8",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.558774500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-9",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.561773200Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-9",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.561773200Z"
+                   },
+                   {
+                       "subject":  "D04",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.566327900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-7",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.568881700Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-8",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.568881700Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-9",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.568881700Z"
+                   },
+                   {
+                       "subject":  "cycle-67dffd88",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.568881700Z"
+                   },
+                   {
+                       "subject":  "cycle-67dffd88",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.568881700Z"
+                   },
+                   {
+                       "subject":  "cycle-67dffd88",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.568881700Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.568881700Z"
+                   },
+                   {
+                       "subject":  "cycle-67dffd88",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.568881700Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-10",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.571432400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-10",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.571432400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-11",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.574971100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-11",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.574971100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-12",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.577556800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-12",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.577556800Z"
+                   },
+                   {
+                       "subject":  "D05",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.581564300Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-10",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.584595700Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-11",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.584595700Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-12",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.584595700Z"
+                   },
+                   {
+                       "subject":  "cycle-ace69cf5",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.584595700Z"
+                   },
+                   {
+                       "subject":  "cycle-ace69cf5",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.584595700Z"
+                   },
+                   {
+                       "subject":  "cycle-ace69cf5",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.584595700Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.584595700Z"
+                   },
+                   {
+                       "subject":  "cycle-ace69cf5",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.584595700Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-13",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.589151200Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-13",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.589151200Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-14",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.592154500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-14",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.592154500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-15",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.595195500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-15",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.595195500Z"
+                   },
+                   {
+                       "subject":  "D01",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.598744400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-13",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.601215Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-14",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.601215Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-15",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.601215Z"
+                   },
+                   {
+                       "subject":  "cycle-4834a6dd",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.601215Z"
+                   },
+                   {
+                       "subject":  "cycle-4834a6dd",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.601215Z"
+                   },
+                   {
+                       "subject":  "cycle-4834a6dd",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.601215Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.601215Z"
+                   },
+                   {
+                       "subject":  "cycle-4834a6dd",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.601215Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-16",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.605749900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-16",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.605749900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-17",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.609267Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-17",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.609267Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-18",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.613304400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-18",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.613304400Z"
+                   },
+                   {
+                       "subject":  "D02",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.616267600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-16",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.618851800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-17",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.618851800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-18",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.618851800Z"
+                   },
+                   {
+                       "subject":  "cycle-ff94fc2a",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.618851800Z"
+                   },
+                   {
+                       "subject":  "cycle-ff94fc2a",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.618851800Z"
+                   },
+                   {
+                       "subject":  "cycle-ff94fc2a",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.618851800Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.618851800Z"
+                   },
+                   {
+                       "subject":  "cycle-ff94fc2a",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.618851800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-19",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.623370800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-19",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.623370800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-20",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.627409100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-20",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.627409100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-21",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.659416400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-21",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.659416400Z"
+                   },
+                   {
+                       "subject":  "D03",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.663001400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-19",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.666091100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-20",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.666091100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-21",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.666091100Z"
+                   },
+                   {
+                       "subject":  "cycle-416ba270",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.666091100Z"
+                   },
+                   {
+                       "subject":  "cycle-416ba270",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.666091100Z"
+                   },
+                   {
+                       "subject":  "cycle-416ba270",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.666091100Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.666091100Z"
+                   },
+                   {
+                       "subject":  "cycle-416ba270",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.666091100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-22",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.670252400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-22",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.670252400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-23",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.672392800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-23",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.672392800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-24",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.676395600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-24",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.676395600Z"
+                   },
+                   {
+                       "subject":  "D04",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.680128600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-22",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.683466800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-23",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.683466800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-24",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.683466800Z"
+                   },
+                   {
+                       "subject":  "cycle-17cdc226",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.683466800Z"
+                   },
+                   {
+                       "subject":  "cycle-17cdc226",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.683466800Z"
+                   },
+                   {
+                       "subject":  "cycle-17cdc226",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.683466800Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.683466800Z"
+                   },
+                   {
+                       "subject":  "cycle-17cdc226",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.683466800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-25",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.686259200Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-25",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.686259200Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-26",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.689121900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-26",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.689121900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-27",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.692290400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-27",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.692290400Z"
+                   },
+                   {
+                       "subject":  "D05",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.694290500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-25",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.698619900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-26",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.698619900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-27",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.698619900Z"
+                   },
+                   {
+                       "subject":  "cycle-494d087b",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.698619900Z"
+                   },
+                   {
+                       "subject":  "cycle-494d087b",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.698619900Z"
+                   },
+                   {
+                       "subject":  "cycle-494d087b",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.698619900Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.698619900Z"
+                   },
+                   {
+                       "subject":  "cycle-494d087b",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.698619900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-28",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.702143900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-28",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.702143900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-29",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.706709900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-29",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.706709900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-30",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.709253500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-30",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.709253500Z"
+                   },
+                   {
+                       "subject":  "D01",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.711300200Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-28",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.713299600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-29",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.713299600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-30",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.713299600Z"
+                   },
+                   {
+                       "subject":  "cycle-b3d33f7c",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.713299600Z"
+                   },
+                   {
+                       "subject":  "cycle-b3d33f7c",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.713299600Z"
+                   },
+                   {
+                       "subject":  "cycle-b3d33f7c",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.713299600Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.713299600Z"
+                   },
+                   {
+                       "subject":  "cycle-b3d33f7c",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.713299600Z"
+                   },
+                   {
+                       "subject":  "cycle-c33bd97f",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.715260100Z"
+                   },
+                   {
+                       "subject":  "cycle-c33bd97f",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.715260100Z"
+                   },
+                   {
+                       "subject":  "cycle-c33bd97f",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.715260100Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.715260100Z"
+                   },
+                   {
+                       "subject":  "cycle-c33bd97f",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.715260100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-31",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.718262Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-31",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.718262Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-32",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.721846500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-32",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.721846500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-33",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.724344900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-33",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.724344900Z"
+                   },
+                   {
+                       "subject":  "D02",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.727351800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-31",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.729386600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-32",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.729386600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-33",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.729386600Z"
+                   },
+                   {
+                       "subject":  "cycle-49cc4b07",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.729386600Z"
+                   },
+                   {
+                       "subject":  "cycle-49cc4b07",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.729386600Z"
+                   },
+                   {
+                       "subject":  "cycle-49cc4b07",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.729386600Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.729386600Z"
+                   },
+                   {
+                       "subject":  "cycle-49cc4b07",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.729386600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-34",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.731394600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-34",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.731394600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-35",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.733399400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-35",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.733399400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-36",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.735927100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-36",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.735927100Z"
+                   },
+                   {
+                       "subject":  "D03",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.737981300Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-34",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.741513100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-35",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.741513100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-36",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.741513100Z"
+                   },
+                   {
+                       "subject":  "cycle-96dcdb05",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.741513100Z"
+                   },
+                   {
+                       "subject":  "cycle-96dcdb05",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.741513100Z"
+                   },
+                   {
+                       "subject":  "cycle-96dcdb05",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.741513100Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.741513100Z"
+                   },
+                   {
+                       "subject":  "cycle-96dcdb05",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.741513100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-37",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.744511300Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-37",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.744511300Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-38",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.746515900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-38",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.746515900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-39",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.748512Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-39",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.748512Z"
+                   },
+                   {
+                       "subject":  "D04",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.750512200Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-37",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.752550500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-38",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.752550500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-39",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.752550500Z"
+                   },
+                   {
+                       "subject":  "cycle-9ca0a0a9",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.752550500Z"
+                   },
+                   {
+                       "subject":  "cycle-9ca0a0a9",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.752550500Z"
+                   },
+                   {
+                       "subject":  "cycle-9ca0a0a9",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.752550500Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.752550500Z"
+                   },
+                   {
+                       "subject":  "cycle-9ca0a0a9",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.752550500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-40",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.754511200Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-40",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.754511200Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-41",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.756904700Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-41",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.756904700Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-42",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.759445600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-42",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.759445600Z"
+                   },
+                   {
+                       "subject":  "D05",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.761489300Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-40",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.763038500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-41",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.763038500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-42",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.763038500Z"
+                   },
+                   {
+                       "subject":  "cycle-2cdd61a2",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.763038500Z"
+                   },
+                   {
+                       "subject":  "cycle-2cdd61a2",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.763038500Z"
+                   },
+                   {
+                       "subject":  "cycle-2cdd61a2",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.763038500Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.763038500Z"
+                   },
+                   {
+                       "subject":  "cycle-2cdd61a2",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.763038500Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-43",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.765076800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-43",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.765076800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-44",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.767624Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-44",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.767624Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-45",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.770212200Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-45",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.770212200Z"
+                   },
+                   {
+                       "subject":  "D01",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.771804900Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-43",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.773845100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-44",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.773845100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-45",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.773845100Z"
+                   },
+                   {
+                       "subject":  "cycle-6a808eff",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.773845100Z"
+                   },
+                   {
+                       "subject":  "cycle-6a808eff",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.773845100Z"
+                   },
+                   {
+                       "subject":  "cycle-6a808eff",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.773845100Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.773845100Z"
+                   },
+                   {
+                       "subject":  "cycle-6a808eff",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.773845100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-46",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.775845100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-46",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.775845100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-47",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.777844400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-47",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.777844400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-48",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.780848400Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-48",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.780848400Z"
+                   },
+                   {
+                       "subject":  "D02",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.782808100Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-46",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.785324800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-47",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.785324800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-48",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.785324800Z"
+                   },
+                   {
+                       "subject":  "cycle-ca41d382",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.785324800Z"
+                   },
+                   {
+                       "subject":  "cycle-ca41d382",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.785324800Z"
+                   },
+                   {
+                       "subject":  "cycle-ca41d382",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.785324800Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.785324800Z"
+                   },
+                   {
+                       "subject":  "cycle-ca41d382",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.785324800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-49",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.787327600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-49",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.787327600Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-50",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:32:43.789840800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-50",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:32:43.789840800Z"
+                   },
+                   {
+                       "subject":  "D03",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.792851Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-49",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.794854800Z"
+                   },
+                   {
+                       "subject":  "STRESS-ORD-50",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:32:43.794854800Z"
+                   },
+                   {
+                       "subject":  "cycle-c97e1660",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.794854800Z"
+                   },
+                   {
+                       "subject":  "cycle-c97e1660",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.794854800Z"
+                   },
+                   {
+                       "subject":  "cycle-c97e1660",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.794854800Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.794854800Z"
+                   },
+                   {
+                       "subject":  "cycle-c97e1660",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.794854800Z"
+                   },
+                   {
+                       "subject":  "D04",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.797007600Z"
+                   },
+                   {
+                       "subject":  "cycle-52ae15ca",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.800042400Z"
+                   },
+                   {
+                       "subject":  "cycle-52ae15ca",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.800042400Z"
+                   },
+                   {
+                       "subject":  "cycle-52ae15ca",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.800042400Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.800042400Z"
+                   },
+                   {
+                       "subject":  "cycle-52ae15ca",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.800042400Z"
+                   },
+                   {
+                       "subject":  "D05",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.802441300Z"
+                   },
+                   {
+                       "subject":  "cycle-f1b55254",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.804823700Z"
+                   },
+                   {
+                       "subject":  "cycle-f1b55254",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.804823700Z"
+                   },
+                   {
+                       "subject":  "cycle-f1b55254",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.804823700Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.804823700Z"
+                   },
+                   {
+                       "subject":  "cycle-f1b55254",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.804823700Z"
+                   },
+                   {
+                       "subject":  "D01",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.807831200Z"
+                   },
+                   {
+                       "subject":  "cycle-07fa7edd",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.810867Z"
+                   },
+                   {
+                       "subject":  "cycle-07fa7edd",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.810867Z"
+                   },
+                   {
+                       "subject":  "cycle-07fa7edd",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.810867Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.810867Z"
+                   },
+                   {
+                       "subject":  "cycle-07fa7edd",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.810867Z"
+                   },
+                   {
+                       "subject":  "cycle-b2c6c39d",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:32:43.812868400Z"
+                   },
+                   {
+                       "subject":  "cycle-b2c6c39d",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:32:43.812868400Z"
+                   },
+                   {
+                       "subject":  "cycle-b2c6c39d",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:32:43.812868400Z"
+                   },
+                   {
+                       "subject":  "PICKUP:STRESS-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:32:43.812868400Z"
+                   },
+                   {
+                       "subject":  "cycle-b2c6c39d",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:32:43.812868400Z"
+                   }
+               ]
+}

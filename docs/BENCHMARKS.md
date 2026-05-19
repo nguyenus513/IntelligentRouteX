@@ -126,3 +126,22 @@ Correct claim: Static PD-LNS safely fuses Tabular, RouteFinder, and GreedRL with
 - FAST timing varies by machine and should be used as regression evidence.
 - BigData-lite is not distributed big-data infrastructure.
 - Adaptive ML claims are limited to committed gate datasets.
+
+## v0.9.11 Dynamic ML Dispatch Gates
+
+Artifacts: `artifacts/test-reports/v0.9.11-dynamic-ml-dispatch/`.
+
+Planned final wrapper: `scripts/run-v0.9.11-dynamic-ml-dispatch-gate.ps1`.
+
+Sub-gates:
+
+- live state engine
+- dynamic ML dispatch
+- live API contract
+- live event stream
+- dynamic 6-case benchmark
+- dynamic stress
+- security/idempotency
+- artifact evidence
+
+Backend release excludes dashboard playground by scope.

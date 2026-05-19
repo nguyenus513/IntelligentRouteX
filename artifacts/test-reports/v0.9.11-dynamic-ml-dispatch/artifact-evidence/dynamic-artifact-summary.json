@@ -1,0 +1,16 @@
+﻿{
+    "version":  "v0.9.11-dynamic-ml-dispatch",
+    "gate":  "dynamic-artifact-evidence",
+    "generatedAt":  "2026-05-19T18:32:44.0914556Z",
+    "compileJava":  "SKIPPED",
+    "artifactCount":  8,
+    "liveStateArtifactPresent":  true,
+    "cycleResultArtifactPresent":  true,
+    "mlTraceArtifactPresent":  true,
+    "forecastRiskArtifactPresent":  true,
+    "greedRlActionArtifactPresent":  true,
+    "eventArtifactPresent":  true,
+    "summaryArtifactPresent":  true,
+    "artifactReadable":  true,
+    "overallPass":  true
+}

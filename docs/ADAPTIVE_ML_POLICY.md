@@ -104,3 +104,7 @@ Module decision: Adaptive Policy `KEEP_CORE`, Tabular `KEEP_MODEL_STATIC`, Route
 ## Limitations
 
 This is online adaptive policy evidence, not a deep learning model claim. It is certified only on committed gate suites and should be described as adaptive policy/search learning.
+
+## v0.9.11 Dynamic ML Dispatch Role
+
+In dynamic dispatch, adaptive ML remains the backend decision controller. Forecast participates in live/rescue risk diagnostics, GreedRL selects live actions, and the tri-model repair path records Tabular scoring plus RouteFinder candidate contribution. The evaluator and freeze policy remain safety guards.

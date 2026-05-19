@@ -1,0 +1,18 @@
+param([string]$BaseUrl="http://localhost:18116",[Alias("OutputDir")][string]$OutDir="artifacts/test-reports/v0.9.11-dynamic-ml-dispatch/security-idempotency",[switch]$SkipCompile)
+$ErrorActionPreference="Stop";$root=(Resolve-Path (Join-Path $PSScriptRoot "..")).Path;$out=Join-Path $root $OutDir;New-Item -ItemType Directory -Force -Path $out|Out-Null
+if(-not $SkipCompile){Push-Location $root;try{.\gradlew.bat compileJava --no-daemon --console=plain *> (Join-Path $out "compileJava.log")}finally{Pop-Location}}
+function TryPost($u,$b,$h){try{Invoke-RestMethod -Method Post -Uri $u -Headers $h -ContentType "application/json" -Body ($b|ConvertTo-Json -Depth 30) -TimeoutSec 60;return 200}catch{return [int]$_.Exception.Response.StatusCode}}
+function TryGet($u,$h){try{Invoke-RestMethod -Method Get -Uri $u -Headers $h -TimeoutSec 60;return 200}catch{return [int]$_.Exception.Response.StatusCode}}
+$ok=@{"X-Api-Key"="demo-key";"X-Tenant-Id"="sec-a"};$badTenant=@{"X-Api-Key"="demo-key";"X-Tenant-Id"="sec-b"}
+$unauth=TryPost "$BaseUrl/api/v1/live/jobs" @{jobId="sec-unauth"} @{}
+$job=Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/live/jobs" -Headers ($ok+@{"Idempotency-Key"="job-1"}) -ContentType "application/json" -Body (@{jobId="sec-job";tenantId="sec-a"}|ConvertTo-Json) -TimeoutSec 60
+$job2=Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/live/jobs" -Headers ($ok+@{"Idempotency-Key"="job-1"}) -ContentType "application/json" -Body (@{jobId="sec-job-other";tenantId="sec-a"}|ConvertTo-Json) -TimeoutSec 60
+$cross=TryGet "$BaseUrl/api/v1/live/jobs/$($job.jobId)/state" $badTenant
+$invalidOrder=TryPost "$BaseUrl/api/v1/live/jobs/$($job.jobId)/orders" @{orders=@(@{orderId="BAD";pickup=@{lat=999;lng=106};dropoff=@{lat=10;lng=106};deadline="x";load=0;priority="HIGH"})} $ok
+$invalidTelemetry=TryPost "$BaseUrl/api/v1/live/jobs/$($job.jobId)/drivers/D01/telemetry" @{driverId="D01";lat=999;lng=106;status="EN_ROUTE";currentStopId=$null} $ok
+$invalidRescue=TryPost "$BaseUrl/api/v1/live/jobs/no-such/rescue" @{} $ok
+$h=$ok+@{"Idempotency-Key"="order-1"};$o1=Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/live/jobs/$($job.jobId)/orders" -Headers $h -ContentType "application/json" -Body (@{orders=@(@{orderId="SEC-ORD-1";pickup=@{lat=10.1;lng=106.1};dropoff=@{lat=10.2;lng=106.2};deadline="2026-05-20T10:30:00Z";load=1;priority="HIGH"})}|ConvertTo-Json -Depth 10) -TimeoutSec 60
+$o2=Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/live/jobs/$($job.jobId)/orders" -Headers $h -ContentType "application/json" -Body (@{orders=@(@{orderId="SEC-ORD-2";pickup=@{lat=10.1;lng=106.1};dropoff=@{lat=10.2;lng=106.2};deadline="2026-05-20T10:30:00Z";load=1;priority="HIGH"})}|ConvertTo-Json -Depth 10) -TimeoutSec 60
+$s=[pscustomobject]@{version="v0.9.11-dynamic-ml-dispatch";gate="dynamic-security-idempotency";generatedAt=(Get-Date).ToUniversalTime().ToString("o");compileJava=if($SkipCompile){"SKIPPED"}else{"PASS"};unauthorizedRejected=($unauth -eq 401);crossTenantRejected=($cross -eq 403);idempotencyDuplicatePrevented=($job.jobId -eq $job2.jobId -and [int]$o1.ordersAdded -eq [int]$o2.ordersAdded);invalidOrderRejected=($invalidOrder -eq 400);invalidTelemetryRejected=($invalidTelemetry -eq 400);invalidRescueRejected=($invalidRescue -eq 404);invalidPayloadRejected=($invalidOrder -eq 400 -and $invalidTelemetry -eq 400);overallPass=$false}
+$s.overallPass=$s.unauthorizedRejected -and $s.crossTenantRejected -and $s.idempotencyDuplicatePrevented -and $s.invalidPayloadRejected -and $s.invalidRescueRejected
+$s|ConvertTo-Json -Depth 100|Set-Content -Encoding UTF8 (Join-Path $out "security-idempotency-summary.json");if(-not $s.overallPass){throw "security/idempotency FAIL"};Write-Host "[DYNAMIC-SECURITY] PASS"

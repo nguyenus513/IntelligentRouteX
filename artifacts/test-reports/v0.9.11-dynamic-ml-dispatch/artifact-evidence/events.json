@@ -1,0 +1,47 @@
+﻿[
+    {
+        "subject":  "ART-ORD-1",
+        "type":  "ORDER_RECEIVED",
+        "createdAt":  "2026-05-19T18:32:44.060204Z"
+    },
+    {
+        "subject":  "ART-ORD-1",
+        "type":  "ORDER_BUFFERED",
+        "createdAt":  "2026-05-19T18:32:44.060204Z"
+    },
+    {
+        "subject":  "D01",
+        "type":  "DRIVER_TELEMETRY_UPDATED",
+        "createdAt":  "2026-05-19T18:32:44.062199500Z"
+    },
+    {
+        "subject":  "ART-ORD-1",
+        "type":  "ORDER_ASSIGNED",
+        "createdAt":  "2026-05-19T18:32:44.064258700Z"
+    },
+    {
+        "subject":  "cycle-14e6722e",
+        "type":  "FORECAST_RISK_UPDATED",
+        "createdAt":  "2026-05-19T18:32:44.064258700Z"
+    },
+    {
+        "subject":  "cycle-14e6722e",
+        "type":  "GREEDRL_ACTION_SELECTED",
+        "createdAt":  "2026-05-19T18:32:44.064258700Z"
+    },
+    {
+        "subject":  "cycle-14e6722e",
+        "type":  "ROUTE_REOPTIMIZED",
+        "createdAt":  "2026-05-19T18:32:44.064258700Z"
+    },
+    {
+        "subject":  "PICKUP:ART-ORD-1",
+        "type":  "STOP_FROZEN",
+        "createdAt":  "2026-05-19T18:32:44.064258700Z"
+    },
+    {
+        "subject":  "cycle-14e6722e",
+        "type":  "DISPATCH_COMPLETED",
+        "createdAt":  "2026-05-19T18:32:44.064258700Z"
+    }
+]

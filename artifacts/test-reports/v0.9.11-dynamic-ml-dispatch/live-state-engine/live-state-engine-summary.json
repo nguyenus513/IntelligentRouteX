@@ -1,7 +1,7 @@
 ﻿{
     "version":  "v0.9.11-dynamic-ml-dispatch",
     "gate":  "live-state-engine",
-    "generatedAt":  "2026-05-19T18:15:38.8895327Z",
+    "generatedAt":  "2026-05-19T18:32:42.8641116Z",
     "compileJava":  "SKIPPED",
     "stateCycles":  4,
     "newOrdersInjected":  4,

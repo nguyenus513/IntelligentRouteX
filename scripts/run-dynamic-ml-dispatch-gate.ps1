@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$BaseUrl = "http://localhost:18116",
   [Alias("OutputDir")]
   [string]$OutDir = "artifacts/test-reports/v0.9.11-dynamic-ml-dispatch/dynamic-ml-dispatch",
@@ -9,8 +9,9 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $out = Join-Path $root $OutDir
 New-Item -ItemType Directory -Force -Path $out | Out-Null
-function Post-Json($uri, $body) { Invoke-RestMethod -Method Post -Uri $uri -ContentType "application/json" -Body ($body | ConvertTo-Json -Depth 30) -TimeoutSec 120 }
-function Get-Json($uri) { Invoke-RestMethod -Method Get -Uri $uri -TimeoutSec 120 }
+$headers = @{ "X-Api-Key" = "demo-key"; "X-Tenant-Id" = "demo" }
+function Post-Json($uri, $body) { Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Body ($body | ConvertTo-Json -Depth 30) -TimeoutSec 120 }
+function Get-Json($uri) { Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -TimeoutSec 120 }
 
 if(-not $SkipCompile) { Push-Location $root; try { .\gradlew.bat compileJava --no-daemon --console=plain *> (Join-Path $out "compileJava.log") } finally { Pop-Location } }
 
@@ -52,3 +53,4 @@ $summary.overallPass = $summary.completedCycles -ge 4 -and $summary.assignedRegr
 $summary | ConvertTo-Json -Depth 100 | Set-Content -Encoding UTF8 (Join-Path $out "dynamic-ml-dispatch-summary.json")
 if(-not $summary.overallPass) { throw "Dynamic ML dispatch gate FAIL" }
 Write-Host "[DYNAMIC-ML] PASS summary=$(Join-Path $out 'dynamic-ml-dispatch-summary.json')"
+

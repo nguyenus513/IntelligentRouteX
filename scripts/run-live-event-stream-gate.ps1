@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$BaseUrl = "http://localhost:18116",
   [Alias("OutputDir")]
   [string]$OutDir = "artifacts/test-reports/v0.9.11-dynamic-ml-dispatch/live-event-stream",
@@ -9,8 +9,9 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $out = Join-Path $root $OutDir
 New-Item -ItemType Directory -Force -Path $out | Out-Null
-function Post-Json($uri, $body) { Invoke-RestMethod -Method Post -Uri $uri -ContentType "application/json" -Body ($body | ConvertTo-Json -Depth 30) -TimeoutSec 120 }
-function Get-Json($uri) { Invoke-RestMethod -Method Get -Uri $uri -TimeoutSec 120 }
+$headers = @{ "X-Api-Key" = "demo-key"; "X-Tenant-Id" = "demo" }
+function Post-Json($uri, $body) { Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Body ($body | ConvertTo-Json -Depth 30) -TimeoutSec 120 }
+function Get-Json($uri) { Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -TimeoutSec 120 }
 if(-not $SkipCompile) { Push-Location $root; try { .\gradlew.bat compileJava --no-daemon --console=plain *> (Join-Path $out "compileJava.log") } finally { Pop-Location } }
 
 $job = Post-Json "$BaseUrl/api/v1/live/jobs" @{ jobId="live-event-gate" }
@@ -18,7 +19,7 @@ Post-Json "$BaseUrl/api/v1/live/jobs/$($job.jobId)/orders" @{ orders=@(@{ orderI
 Post-Json "$BaseUrl/api/v1/live/jobs/$($job.jobId)/drivers/D01/telemetry" @{ driverId="D01"; lat=10.12; lng=106.12; status="EN_ROUTE"; currentStopId="PICKUP:ORD-EVENT-1" } | Out-Null
 Post-Json "$BaseUrl/api/v1/live/jobs/$($job.jobId)/cycle" @{ returnDiagnostics=$true } | Out-Null
 $state = Get-Json "$BaseUrl/api/v1/live/jobs/$($job.jobId)/state"
-$sse = & curl.exe --max-time 5 -s "$BaseUrl/api/v1/live/jobs/$($job.jobId)/events"
+$sse = & curl.exe --max-time 5 -s -H "X-Api-Key: demo-key" -H "X-Tenant-Id: demo" "$BaseUrl/api/v1/live/jobs/$($job.jobId)/events"
 $sse | Set-Content -Encoding UTF8 (Join-Path $out "live-events.sse")
 $state | ConvertTo-Json -Depth 100 | Set-Content -Encoding UTF8 (Join-Path $out "live-event-state.json")
 
@@ -37,3 +38,4 @@ $summary.overallPass = $summary.eventsEmitted -gt 0 -and $summary.sseEventLines 
 $summary | ConvertTo-Json -Depth 100 | Set-Content -Encoding UTF8 (Join-Path $out "live-event-stream-summary.json")
 if(-not $summary.overallPass) { throw "Live event stream gate FAIL" }
 Write-Host "[LIVE-EVENTS] PASS summary=$(Join-Path $out 'live-event-stream-summary.json')"
+

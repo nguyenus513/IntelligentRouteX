@@ -1,0 +1,20 @@
+﻿{
+    "version":  "v0.9.11-dynamic-ml-dispatch",
+    "gate":  "dynamic-stress",
+    "generatedAt":  "2026-05-19T18:32:43.8664085Z",
+    "compileJava":  "SKIPPED",
+    "cyclesCompleted":  22,
+    "ordersInjected":  50,
+    "driverTelemetryUpdates":  20,
+    "forecastOutputUsed":  22,
+    "greedRlActionUsed":  17,
+    "triModelRepairUsed":  22,
+    "apiErrors":  0,
+    "duplicateAssignmentViolations":  0,
+    "missingOrderViolations":  0,
+    "staleBufferedOrders":  0,
+    "frozenStopViolations":  0,
+    "pickupDropoffViolations":  0,
+    "capacityViolations":  0,
+    "overallPass":  true
+}

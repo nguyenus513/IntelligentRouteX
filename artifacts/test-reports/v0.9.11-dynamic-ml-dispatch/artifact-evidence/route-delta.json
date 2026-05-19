@@ -1,0 +1,20 @@
+﻿{
+    "frozenStopIds":  [
+                          "PICKUP:ART-ORD-1"
+                      ],
+    "routes":  [
+                   {
+                       "routeId":  "route-1",
+                       "driverId":  "D01",
+                       "stopIds":  [
+                                       "PICKUP:ART-ORD-1",
+                                       "DROPOFF:ART-ORD-1"
+                                   ],
+                       "frozenStopIds":  [
+
+                                         ],
+                       "distanceKm":  1.4,
+                       "lateCount":  0
+                   }
+               ]
+}

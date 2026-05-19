@@ -72,3 +72,26 @@ Module decisions:
 Claim boundary:
 
 Static PD-LNS fuses three ML contributors: Tabular, RouteFinder, and GreedRL. Forecast is intentionally disabled for static seed improvement because static quality/risk gain was not proven.
+
+## v0.9.11 Dynamic ML Dispatch
+
+Status: backend certification target `v0.9.11-dynamic-ml-dispatch-final`.
+
+Evidence path: `artifacts/test-reports/v0.9.11-dynamic-ml-dispatch/`.
+
+Backend scope:
+
+- live order intake
+- driver telemetry updates
+- freeze policy for active stops
+- Forecast live risk diagnostics
+- GreedRL live action selection
+- tri-model repair diagnostics using Tabular, RouteFinder, and adaptive policy evidence
+- live API contract
+- event stream
+- dynamic 6-case benchmark
+- stress gate
+- security/idempotency gate
+- artifact evidence
+
+Dashboard playground is intentionally deferred from this backend certification.

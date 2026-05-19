@@ -1,0 +1,14 @@
+﻿{
+    "version":  "v0.9.11-dynamic-ml-dispatch",
+    "gate":  "dynamic-security-idempotency",
+    "generatedAt":  "2026-05-19T18:32:44.0157607Z",
+    "compileJava":  "SKIPPED",
+    "unauthorizedRejected":  true,
+    "crossTenantRejected":  true,
+    "idempotencyDuplicatePrevented":  true,
+    "invalidOrderRejected":  true,
+    "invalidTelemetryRejected":  true,
+    "invalidRescueRejected":  true,
+    "invalidPayloadRejected":  true,
+    "overallPass":  true
+}
