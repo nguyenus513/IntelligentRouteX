@@ -1,0 +1,18 @@
+﻿{
+    "version":  "v0.9.12-live-dashboard-demo",
+    "gate":  "live-dashboard-realtime",
+    "generatedAt":  "2026-05-19T19:26:16.5307664Z",
+    "dashboardBuild":  "PASS",
+    "pageExists":  true,
+    "backendHealth":  true,
+    "createLiveJob":  true,
+    "addRandomOrder":  true,
+    "runCycle":  true,
+    "stateUpdated":  true,
+    "eventsUpdated":  true,
+    "mlDiagnosticsVisible":  true,
+    "safetyGuardVisible":  true,
+    "beforeAfterVisible":  true,
+    "eventStreamVisible":  true,
+    "overallPass":  true
+}

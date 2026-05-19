@@ -6,15 +6,17 @@ import { ControlMap } from './components/ControlMap';
 import { buildRawScenario, ScenarioBuilderMap } from './components/ScenarioBuilderMap';
 import { Badge, Card, EmptyState, Kpi } from './components/Ui';
 import { IrxPlaygroundPage } from './playground/IrxPlaygroundPage';
+import { LiveDispatchDemoPage } from './live/LiveDispatchDemoPage';
 import type { AssignmentDto, BenchmarkJob, DriverDto, ManualScenarioDto, RouteVisualizationDto, RunVisualizationDto, ScenarioGenerateRequest } from './types/dispatch';
 import './styles.css';
 
-type Screen = 'Overview' | 'Scenario Generator' | 'Dispatch War Room' | 'Bundle Inspector' | 'Route Detail' | 'Chaos Event Panel' | 'Route Rescue Center' | 'Decision Movie' | 'Benchmark Arena' | 'Benchmark Comparison Map';
+type Screen = 'Overview' | 'Scenario Generator' | 'Live Dispatch Demo' | 'Dispatch War Room' | 'Bundle Inspector' | 'Route Detail' | 'Chaos Event Panel' | 'Route Rescue Center' | 'Decision Movie' | 'Benchmark Arena' | 'Benchmark Comparison Map';
 type FlowStep = 'Generate' | 'Dispatch' | 'Inspect' | 'Rescue' | 'Benchmark';
 
 const screens: { name: Screen; icon: ReactNode; priority?: boolean }[] = [
   { name: 'Overview', icon: <Activity size={18} /> },
   { name: 'Scenario Generator', icon: <SlidersHorizontal size={18} /> },
+  { name: 'Live Dispatch Demo', icon: <Radar size={18} />, priority: true },
   { name: 'Dispatch War Room', icon: <Map size={18} />, priority: true },
   { name: 'Bundle Inspector', icon: <Boxes size={18} />, priority: true },
   { name: 'Route Detail', icon: <Route size={18} /> },
@@ -207,6 +209,7 @@ function App() {
         {error ? <div className="error-strip"><WifiOff size={16} />{error}</div> : null}
         {screen === 'Overview' && <Overview run={active} job={job} setScreen={setScreen} runFullDemo={runFullDemo} busy={busy} />}
         {screen === 'Scenario Generator' && <ScenarioGenerator scenario={scenario} setScenario={setScenario} generate={generate} baseRun={baseRun} busy={busy === 'Generate'} manualScenario={manualScenario} setManualScenario={setManualScenario} saveManualScenario={saveManualScenario} dispatchManualScenario={dispatchManualScenario} dispatching={busy === 'Dispatch'} transport={transport} setTransport={setTransport} kafkaReceipt={kafkaReceipt} />}
+        {screen === 'Live Dispatch Demo' && <LiveDispatchDemoPage />}
         {screen === 'Dispatch War Room' && <WarRoom run={dispatchRun ?? baseRun} selectedRouteId={selectedRouteId} setSelectedRouteId={setSelectedRouteId} dispatch={dispatch} openInspector={() => setScreen('Bundle Inspector')} busy={busy === 'Dispatch'} />}
         {screen === 'Bundle Inspector' && <BundleInspector run={active} assignment={selectedAssignment} route={selectedRoute} openRescue={() => setScreen('Chaos Event Panel')} />}
         {screen === 'Route Detail' && <RouteDetail route={selectedRoute} />}
@@ -565,7 +568,7 @@ function formatMs(value?: number) {
   return `${value}ms`;
 }
 
-const Root = window.location.pathname === '/playground' ? IrxPlaygroundPage : App;
+const Root = window.location.pathname === '/playground' ? IrxPlaygroundPage : window.location.pathname === '/live-dispatch-demo' ? LiveDispatchDemoPage : App;
 createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
 
 

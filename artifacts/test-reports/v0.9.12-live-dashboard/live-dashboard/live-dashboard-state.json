@@ -1,0 +1,99 @@
+﻿{
+    "jobId":  "live-dashboard-gate",
+    "cycle":  1,
+    "assigned":  1,
+    "buffered":  0,
+    "orders":  [
+                   {
+                       "order":  {
+                                     "orderId":  "DASH-ORD-1",
+                                     "pickupLat":  10.75,
+                                     "pickupLng":  106.7,
+                                     "dropoffLat":  10.82,
+                                     "dropoffLng":  106.78,
+                                     "deadlineMinutes":  90,
+                                     "priority":  10
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T19:26:15.845731500Z",
+                       "updatedAt":  "2026-05-19T19:26:16.137201700Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   }
+               ],
+    "drivers":  [
+                    {
+                        "driverId":  "D01",
+                        "lat":  10.76,
+                        "lng":  106.71,
+                        "status":  "EN_ROUTE",
+                        "currentStopId":  "PICKUP:DASH-ORD-1",
+                        "updatedAt":  "2026-05-19T19:26:15.910285500Z"
+                    }
+                ],
+    "routes":  [
+                   {
+                       "routeId":  "route-1",
+                       "driverId":  "D01",
+                       "stopIds":  [
+                                       "PICKUP:DASH-ORD-1",
+                                       "DROPOFF:DASH-ORD-1"
+                                   ],
+                       "frozenStopIds":  [
+
+                                         ],
+                       "distanceKm":  1.4,
+                       "lateCount":  0
+                   }
+               ],
+    "frozenStopIds":  [
+                          "PICKUP:DASH-ORD-1"
+                      ],
+    "events":  [
+                   {
+                       "subject":  "DASH-ORD-1",
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T19:26:15.845731500Z"
+                   },
+                   {
+                       "subject":  "DASH-ORD-1",
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T19:26:15.845731500Z"
+                   },
+                   {
+                       "subject":  "D01",
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T19:26:15.910285500Z"
+                   },
+                   {
+                       "subject":  "DASH-ORD-1",
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T19:26:16.137201700Z"
+                   },
+                   {
+                       "subject":  "cycle-f5574882",
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T19:26:16.137201700Z"
+                   },
+                   {
+                       "subject":  "cycle-f5574882",
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T19:26:16.137201700Z"
+                   },
+                   {
+                       "subject":  "cycle-f5574882",
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T19:26:16.137201700Z"
+                   },
+                   {
+                       "subject":  "PICKUP:DASH-ORD-1",
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T19:26:16.137201700Z"
+                   },
+                   {
+                       "subject":  "cycle-f5574882",
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T19:26:16.137201700Z"
+                   }
+               ]
+}

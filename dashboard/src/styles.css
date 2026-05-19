@@ -117,6 +117,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 }
 .btn:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(103, 232, 249, .72); }
 .btn.secondary { background: rgba(30, 41, 59, .72); color: #b8c7d9; border-color: rgba(148, 163, 184, .18); }
+.btn.danger { background: linear-gradient(135deg, rgba(251, 113, 133, .26), rgba(245, 158, 11, .14)); border-color: rgba(251, 113, 133, .38); }
 .btn.wide { width: 100%; }
 
 .statusbar, .flowbar {
@@ -472,3 +473,52 @@ code { color: #67e8f9; }
 @media (max-width: 1280px) { .playground-grid-v2 { grid-template-columns: 280px minmax(0, 1fr); } .playground-right-rail { grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 920px) { .playground-grid-v2, .playground-bottom-rail, .playground-right-rail, .playground-demo-stats { grid-template-columns: 1fr; } .route-map-canvas svg { min-height: 340px; } }
 
+
+.live-control-center { display: grid; gap: 14px; }
+.live-hero { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 20px; border: 1px solid var(--line); border-radius: 28px; background: linear-gradient(135deg, rgba(34,211,238,.12), rgba(15,23,42,.76)); box-shadow: 0 24px 70px rgba(0,0,0,.28); }
+.live-hero h2 { margin: 4px 0; font-size: 34px; letter-spacing: -.06em; }
+.live-hero p { margin: 0; max-width: 760px; color: #9fb4c9; }
+.live-actions, .live-button-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.live-metrics { display: grid; grid-template-columns: repeat(10, minmax(108px, 1fr)); gap: 10px; }
+.live-kpi { min-height: 78px; padding: 13px; border: 1px solid var(--line); border-radius: 20px; background: rgba(2,6,23,.62); display: grid; align-content: center; gap: 4px; }
+.live-kpi span, .ml-row span, .guard-row span, .before-after span { color: #7d93ab; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; }
+.live-kpi strong { color: #e5f5ff; font-size: 18px; }
+.live-kpi.safe strong { color: var(--lime); }
+.live-grid { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(520px, 1.45fr) minmax(310px, .85fr); gap: 12px; align-items: start; }
+.live-bottom-grid { display: grid; grid-template-columns: 1fr 1fr 1.25fr; gap: 12px; }
+.live-panel { border: 1px solid var(--line); border-radius: 24px; background: rgba(2,6,23,.68); padding: 14px; box-shadow: inset 0 1px rgba(255,255,255,.04); }
+.live-panel .panel-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.live-panel .panel-title h3 { display: flex; gap: 8px; align-items: center; margin: 0; font-size: 15px; }
+.mini-badge { border: 1px solid rgba(34,211,238,.25); border-radius: 999px; padding: 5px 9px; color: #9defff; background: rgba(34,211,238,.08); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.order-list, .event-list { display: grid; gap: 8px; max-height: 540px; overflow: auto; padding-right: 2px; }
+.order-card { padding: 12px; border: 1px solid rgba(148,163,184,.14); border-radius: 16px; background: rgba(15,23,42,.58); }
+.order-card.assigned { border-color: rgba(52,211,153,.34); background: rgba(16,185,129,.08); }
+.order-card.buffered { border-color: rgba(245,158,11,.30); background: rgba(245,158,11,.06); }
+.order-card div { display: flex; justify-content: space-between; gap: 8px; }
+.order-card p { margin: 8px 0; color: #9fb4c9; font-size: 12px; }
+.order-card small, .driver-column small, .ml-row small, .event-list small, .before-after small { color: #7d93ab; }
+.driver-columns { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.driver-column { border: 1px solid rgba(148,163,184,.14); border-radius: 18px; padding: 12px; background: rgba(15,23,42,.5); }
+.driver-column h4 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 10px; }
+.driver-column h4 span { color: #67e8f9; font-size: 11px; }
+.driver-column ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 7px; }
+.driver-column li { display: grid; grid-template-columns: 28px 1fr; gap: 2px 8px; padding: 9px; border-radius: 14px; background: rgba(2,6,23,.58); border: 1px solid rgba(148,163,184,.12); }
+.driver-column li > span { grid-row: span 2; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; background: rgba(59,130,246,.2); color: #bfdbfe; }
+.driver-column li.dropoff > span { background: rgba(52,211,153,.18); color: #bbf7d0; }
+.driver-column li.frozen { opacity: .78; border-color: rgba(148,163,184,.36); }
+.driver-column li.frozen > span:after { content: '🔒'; font-size: 10px; position: absolute; }
+.ml-row, .guard-row { display: grid; grid-template-columns: 110px 1fr; gap: 3px 10px; padding: 10px 0; border-bottom: 1px solid rgba(148,163,184,.10); }
+.ml-row strong, .guard-row strong { color: #e5f5ff; }
+.ml-row small { grid-column: 2; }
+.guard-row strong { justify-self: end; color: var(--lime); }
+.before-after { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.before-after > div { border: 1px solid rgba(148,163,184,.14); border-radius: 16px; padding: 12px; background: rgba(15,23,42,.50); display: grid; gap: 5px; }
+.accepted-line { display: flex; align-items: center; gap: 8px; color: var(--lime); margin: 12px 0 0; }
+.event-list > div { display: grid; grid-template-columns: 82px 1fr auto; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 14px; background: rgba(15,23,42,.46); border: 1px solid rgba(148,163,184,.10); }
+.event-list span { color: #67e8f9; font-size: 12px; }
+.event-list strong { font-size: 12px; }
+.raw-json { border: 1px solid var(--line); border-radius: 20px; padding: 12px 14px; background: rgba(2,6,23,.64); }
+.raw-json summary { cursor: pointer; color: #67e8f9; }
+.raw-json pre { overflow: auto; max-height: 360px; color: #cbd5e1; }
+.empty-live { min-height: 130px; display: grid; place-items: center; gap: 8px; color: #7d93ab; border: 1px dashed rgba(148,163,184,.20); border-radius: 18px; }
+@media (max-width: 1280px) { .live-metrics { grid-template-columns: repeat(5, 1fr); } .live-grid, .live-bottom-grid { grid-template-columns: 1fr; } }
