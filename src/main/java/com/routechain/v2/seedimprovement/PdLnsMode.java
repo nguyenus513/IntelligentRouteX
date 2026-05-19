@@ -16,6 +16,10 @@ public enum PdLnsMode {
     ML_CORE_PD_LNS,
     NO_ML_RANDOMIZED_PD_LNS,
     TABULAR_SCORED_PD_LNS,
+    TABULAR_WEIGHT_025,
+    TABULAR_WEIGHT_050,
+    TABULAR_WEIGHT_075,
+    TABULAR_ONLY_SCORER,
     NO_TABULAR_PD_LNS,
     NO_ADAPTIVE_POLICY,
     NO_ADAPTIVE_MOVE_PRIORITY,
@@ -45,6 +49,10 @@ public enum PdLnsMode {
                 || this == ML_CORE_PD_LNS
                 || this == NO_ML_RANDOMIZED_PD_LNS
                 || this == TABULAR_SCORED_PD_LNS
+                || this == TABULAR_WEIGHT_025
+                || this == TABULAR_WEIGHT_050
+                || this == TABULAR_WEIGHT_075
+                || this == TABULAR_ONLY_SCORER
                 || this == NO_TABULAR_PD_LNS
                 || this == NO_ADAPTIVE_POLICY
                 || this == NO_ADAPTIVE_MOVE_PRIORITY
@@ -59,12 +67,32 @@ public enum PdLnsMode {
                 || this == MODEL_ASSISTED_PD_LNS
                 || this == ML_CORE_PD_LNS
                 || this == TABULAR_SCORED_PD_LNS
+                || this == TABULAR_WEIGHT_025
+                || this == TABULAR_WEIGHT_050
+                || this == TABULAR_WEIGHT_075
+                || this == TABULAR_ONLY_SCORER
                 || this == NO_TABULAR_PD_LNS
                 || this == NO_REWARD_UPDATE;
     }
 
     public boolean tabularScored() {
-        return this == MODEL_ASSISTED_PD_LNS || this == ML_CORE_PD_LNS || this == TABULAR_SCORED_PD_LNS;
+        return this == MODEL_ASSISTED_PD_LNS
+                || this == ML_CORE_PD_LNS
+                || this == TABULAR_SCORED_PD_LNS
+                || this == TABULAR_WEIGHT_025
+                || this == TABULAR_WEIGHT_050
+                || this == TABULAR_WEIGHT_075
+                || this == TABULAR_ONLY_SCORER;
+    }
+
+    public double tabularWeight() {
+        return switch (this) {
+            case TABULAR_WEIGHT_025 -> 0.25;
+            case TABULAR_WEIGHT_050, TABULAR_SCORED_PD_LNS, MODEL_ASSISTED_PD_LNS, ML_CORE_PD_LNS -> 0.50;
+            case TABULAR_WEIGHT_075 -> 0.75;
+            case TABULAR_ONLY_SCORER -> 1.00;
+            default -> 0.0;
+        };
     }
 
     public boolean policyAblation() {
@@ -79,7 +107,7 @@ public enum PdLnsMode {
             case ML_DESTROY_REPAIR_K2 -> 2;
             case ML_DESTROY_REPAIR_K3 -> 3;
             case ML_DESTROY_REPAIR_K4 -> 4;
-            case ML_DESTROY_REPAIR_AUTO, ML_DESTROY_REPAIR, FULL_ML_PD_LNS, POLICY_ONLY_PD_LNS, MODEL_ASSISTED_PD_LNS, ML_CORE_PD_LNS, NO_ML_RANDOMIZED_PD_LNS, TABULAR_SCORED_PD_LNS, NO_TABULAR_PD_LNS, NO_ADAPTIVE_POLICY, NO_ADAPTIVE_MOVE_PRIORITY, NO_ADAPTIVE_OPERATOR_POLICY, NO_REWARD_UPDATE -> 0;
+            case ML_DESTROY_REPAIR_AUTO, ML_DESTROY_REPAIR, FULL_ML_PD_LNS, POLICY_ONLY_PD_LNS, MODEL_ASSISTED_PD_LNS, ML_CORE_PD_LNS, NO_ML_RANDOMIZED_PD_LNS, TABULAR_SCORED_PD_LNS, TABULAR_WEIGHT_025, TABULAR_WEIGHT_050, TABULAR_WEIGHT_075, TABULAR_ONLY_SCORER, NO_TABULAR_PD_LNS, NO_ADAPTIVE_POLICY, NO_ADAPTIVE_MOVE_PRIORITY, NO_ADAPTIVE_OPERATOR_POLICY, NO_REWARD_UPDATE -> 0;
             default -> 1;
         };
     }

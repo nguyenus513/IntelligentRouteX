@@ -247,7 +247,29 @@ public final class PdDestroyRepairOperator {
             }
             addSet(sets, diverse, destroySize);
         }
+        if (mode.tabularScored()) {
+            addTabularExplorationSets(sets, rankedOrders, destroySize, mode);
+        }
         return sets;
+    }
+
+    private void addTabularExplorationSets(List<List<String>> sets, List<PdOrderImpact> rankedOrders, int destroySize, PdLnsMode mode) {
+        int limit = Math.min(rankedOrders.size(), mode == PdLnsMode.TABULAR_ONLY_SCORER ? 10 : mode == PdLnsMode.TABULAR_WEIGHT_075 ? 8 : mode == PdLnsMode.TABULAR_WEIGHT_050 ? 6 : 4);
+        int maxSets = mode == PdLnsMode.TABULAR_ONLY_SCORER ? 160 : mode == PdLnsMode.TABULAR_WEIGHT_075 ? 128 : mode == PdLnsMode.TABULAR_WEIGHT_050 ? 96 : 64;
+        for (int left = 0; left < limit; left++) {
+            for (int right = rankedOrders.size() - 1; right >= Math.max(0, rankedOrders.size() - limit) && right > left; right--) {
+                List<String> candidate = new ArrayList<>();
+                candidate.add(rankedOrders.get(left).orderId());
+                candidate.add(rankedOrders.get(right).orderId());
+                for (int mid = limit / 2; mid < rankedOrders.size() && candidate.size() < destroySize; mid += Math.max(1, limit / Math.max(1, destroySize))) {
+                    candidate.add(rankedOrders.get(mid).orderId());
+                }
+                addSet(sets, candidate, destroySize);
+                if (sets.size() >= maxSets) {
+                    return;
+                }
+            }
+        }
     }
 
     private void addSet(List<List<String>> sets, List<String> orderIds, int destroySize) {
