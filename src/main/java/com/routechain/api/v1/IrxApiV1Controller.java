@@ -170,7 +170,7 @@ public final class IrxApiV1Controller {
     public ResponseEntity<?> runLiveCycle(@RequestHeader(value = "X-Tenant-Id", required = false) String tenantHeader,
                                           @RequestHeader(value = "X-Api-Key", required = false) String apiKey,
                                           @PathVariable String sessionId,
-                                          @RequestBody(required = false) Object request) {
+                                          @RequestBody(required = false) RollingCycleRequest request) {
         ResponseEntity<?> denied = authorize(apiKey);
         if (denied != null) return denied;
         LiveSession session = sessions.get(sessionId);
@@ -180,15 +180,16 @@ public final class IrxApiV1Controller {
         session.events.add(event("CYCLE_STARTED", sessionId));
         QueueLane liveLane = queueRouter.route("LIVE_ROLLING", "LIVE");
         dispatchQueue.enqueue(new DispatchJobEnvelope(id("live"), session.tenantId, liveLane, queueRouter.priority(liveLane), Instant.now()));
-        DashboardController.BenchmarkJob benchmark = dashboard.createBenchmarkJob(new DashboardController.BenchmarkJobRequest("raw-s", SOLVERS, "QUALITY_BENCHMARK", "TOP_K_ASSISTED", 30, 0.10, false, null, 0, "OFF", 3, 12, 3000));
+        String pdLnsMode = request == null || blank(request.pdLnsMode()) ? "OFF" : request.pdLnsMode();
+        DashboardController.BenchmarkJob benchmark = dashboard.createBenchmarkJob(new DashboardController.BenchmarkJobRequest("raw-s", SOLVERS, "QUALITY_BENCHMARK", "TOP_K_ASSISTED", 30, 0.10, false, null, 0, pdLnsMode, 3, 12, 3000));
         DashboardController.RunVisualizationDto result = dashboard.benchmarkJobResult(benchmark.jobId()).getBody();
         session.lastResult = result;
         session.bufferedOrders.clear();
-        session.cycleHistory.add(Map.of("cycleId", benchmark.jobId(), "status", "COMPLETED", "lateRegression", 0, "capacityViolations", 0, "pickupDropoffViolations", 0));
+        session.cycleHistory.add(Map.of("cycleId", benchmark.jobId(), "status", "COMPLETED", "pdLnsMode", pdLnsMode, "lateRegression", 0, "capacityViolations", 0, "pickupDropoffViolations", 0));
         session.events.add(event("ROUTE_UPDATED", benchmark.jobId()));
         session.events.add(event("CYCLE_COMPLETED", benchmark.jobId()));
         metrics.increment("liveCyclesCompleted");
-        return ResponseEntity.ok(Map.of("cycleId", benchmark.jobId(), "status", "COMPLETED", "assignedOrders", result == null ? 0 : result.metrics().assignedOrderCount(), "lateRegression", 0));
+        return ResponseEntity.ok(Map.of("cycleId", benchmark.jobId(), "status", "COMPLETED", "pdLnsMode", pdLnsMode, "assignedOrders", result == null ? 0 : result.metrics().assignedOrderCount(), "lateRegression", 0));
     }
 
     @GetMapping("/live/sessions/{sessionId}/state")
@@ -227,7 +228,8 @@ public final class IrxApiV1Controller {
         if (denied != null) return denied;
         String requestId = request == null || blank(request.requestId()) ? id("req") : request.requestId();
         QueueLane rescueLane = queueRouter.route("QUALITY_SEEKING", "RESCUE");
-        DashboardController.BenchmarkJob benchmark = dashboard.createBenchmarkJob(new DashboardController.BenchmarkJobRequest("driver-scarcity-case", SOLVERS, "QUALITY_BENCHMARK", "QUALITY_SEEKING", 80, 0.20, false, null, 5000, "OFF", 3, 12, 3000));
+        String pdLnsMode = request == null || request.options() == null || blank(request.options().pdLnsMode()) ? "OFF" : request.options().pdLnsMode();
+        DashboardController.BenchmarkJob benchmark = dashboard.createBenchmarkJob(new DashboardController.BenchmarkJobRequest("driver-scarcity-case", SOLVERS, "QUALITY_BENCHMARK", "QUALITY_SEEKING", 80, 0.20, false, null, 5000, pdLnsMode, 3, 12, 3000));
         dispatchQueue.enqueue(new DispatchJobEnvelope(benchmark.jobId(), tenantId, rescueLane, queueRouter.priority(rescueLane), Instant.now()));
         ApiJob job = new ApiJob(benchmark.jobId(), requestId, tenantId, "RESCUE", benchmark.jobId(), Instant.now().toString());
         jobs.put(job.jobId(), job);
