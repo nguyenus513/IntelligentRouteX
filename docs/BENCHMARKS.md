@@ -84,6 +84,35 @@ Correct claim: ML-guided Hybrid PD-LNS improves the best available seed at picku
 
 Caveat: total hybrid gain (`404.5 km`) does not exceed total heuristic gain (`429.7 km`) on this suite, so the evidence does not support a claim that HYBRID always or generally beats heuristic PD-LNS on aggregate distance gain.
 
+## v0.9.10-C tri-model fusion gates
+
+Sources:
+
+- `artifacts/test-reports/v0.9.10-C-tri-model-fusion/fusion-5case/tri-model-fusion-summary.json`
+- `artifacts/test-reports/v0.9.10-C-tri-model-fusion/ablation-5case/tri-model-causal-ablation-summary.json`
+- `artifacts/test-reports/v0.9.10-C-tri-model-fusion/tri-model-decision-report.json`
+
+Fusion gate:
+
+- Completed: `5/5`
+- Forecast static calls: `0`
+- Tabular / RouteFinder / GreedRL calls: `5/5` each
+- Fusion worse than best single model: `0`
+- Fusion better than best single model: `1/5`
+- Total fusion gain: `98.3 km`
+- Total best single-model gain: `96.5 km`
+- Pickup/dropoff, capacity, late, coverage, dominance failures: `0`
+
+Causal ablation:
+
+- Verdict: `TRI_MODEL_CAUSAL_ABLATION_PROVEN`
+- Model workers with contribution: `3`
+- Tabular ablation loss cases: `2`
+- RouteFinder ablation loss cases: `1`
+- GreedRL ablation loss cases: `2`
+
+Correct claim: Static PD-LNS safely fuses Tabular, RouteFinder, and GreedRL without Forecast. The no-regress selector prevents underperforming the best single-model candidate on the 5-case gate and proves selected fusion gain.
+
 ## API/runtime/Playground evidence
 
 - API contract: `artifacts/test-reports/v0.9.9.4-api-contract-final/api-contract-summary.json`

@@ -60,6 +60,40 @@ Final evidence: `artifacts/test-reports/v0.9.10-ml-guided-pd-lns/final-20case/ml
 
 Claim boundary: v0.9.10 proves ML-guided Hybrid PD-LNS can improve the best available seed and beats heuristic PD-LNS on 6/20 final-gate cases. It must not be described as always better than heuristic PD-LNS, because total hybrid gain (`404.5 km`) is below total heuristic gain (`429.7 km`) on the same 20-case suite.
 
+## v0.9.10-C tri-model static PD-LNS fusion
+
+v0.9.10-C keeps Forecast out of static seed improvement and fuses the three static contributors that have evidence: Tabular scores mutation/insertion candidates, RouteFinder provides route/edge/sequence candidates, and GreedRL controls selected operator/action choices. Adaptive Policy remains the core controller and the PD evaluator/no-regress selector remains authoritative.
+
+Evidence:
+
+- Fusion gate: `artifacts/test-reports/v0.9.10-C-tri-model-fusion/fusion-5case/tri-model-fusion-summary.json`
+- Ablation gate: `artifacts/test-reports/v0.9.10-C-tri-model-fusion/ablation-5case/tri-model-causal-ablation-summary.json`
+- Decision report: `artifacts/test-reports/v0.9.10-C-tri-model-fusion/tri-model-decision-report.json`
+
+Fusion evidence:
+
+- `overallPass=true`
+- `forecastCalledCases=0`
+- `tabularCalledCases=5/5`
+- `routefinderCalledCases=5/5`
+- `greedRlCalledCases=5/5`
+- `fusionWorseThanBestSingleModelCases=0`
+- `fusionBetterThanBestSingleModelCases=1/5`
+- `totalFusionGainKm=98.3`
+- `totalBestSingleModelGainKm=96.5`
+- hard constraint and dominance regressions: `0`
+
+Ablation evidence:
+
+- `verdict=TRI_MODEL_CAUSAL_ABLATION_PROVEN`
+- `modelWorkersWithContribution=3`
+- `tabularAblationLossCases=2`
+- `routefinderAblationLossCases=1`
+- `greedRlAblationLossCases=2`
+- `forecastCalledCases=0`
+
+Module decision: Adaptive Policy `KEEP_CORE`, Tabular `KEEP_MODEL_STATIC`, RouteFinder `KEEP_OPTIONAL_PROVIDER`, GreedRL `KEEP_CONTROLLER_SELECTED`, Forecast `OFF_STATIC_LIVE_RESCUE_ONLY`.
+
 ## Safety model
 
 - Evaluator owns accept/reject.
