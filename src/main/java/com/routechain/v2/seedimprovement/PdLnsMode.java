@@ -27,6 +27,11 @@ public enum PdLnsMode {
     NO_GREEDRL,
     FORECAST_RISK_PD_LNS,
     NO_FORECAST,
+    TRI_MODEL_FUSION_PD_LNS,
+    TRI_MODEL_FUSION_NO_TABULAR,
+    TRI_MODEL_FUSION_NO_ROUTEFINDER,
+    TRI_MODEL_FUSION_NO_GREEDRL,
+    FORECAST_STATIC_DISABLED,
     NO_ROUTEFINDER_PD_LNS,
     NO_TABULAR_PD_LNS,
     NO_ADAPTIVE_POLICY,
@@ -68,6 +73,11 @@ public enum PdLnsMode {
                 || this == NO_GREEDRL
                 || this == FORECAST_RISK_PD_LNS
                 || this == NO_FORECAST
+                || this == TRI_MODEL_FUSION_PD_LNS
+                || this == TRI_MODEL_FUSION_NO_TABULAR
+                || this == TRI_MODEL_FUSION_NO_ROUTEFINDER
+                || this == TRI_MODEL_FUSION_NO_GREEDRL
+                || this == FORECAST_STATIC_DISABLED
                 || this == NO_ROUTEFINDER_PD_LNS
                 || this == NO_TABULAR_PD_LNS
                 || this == NO_ADAPTIVE_POLICY
@@ -94,6 +104,11 @@ public enum PdLnsMode {
                 || this == NO_GREEDRL
                 || this == FORECAST_RISK_PD_LNS
                 || this == NO_FORECAST
+                || this == TRI_MODEL_FUSION_PD_LNS
+                || this == TRI_MODEL_FUSION_NO_TABULAR
+                || this == TRI_MODEL_FUSION_NO_ROUTEFINDER
+                || this == TRI_MODEL_FUSION_NO_GREEDRL
+                || this == FORECAST_STATIC_DISABLED
                 || this == NO_ROUTEFINDER_PD_LNS
                 || this == NO_TABULAR_PD_LNS
                 || this == NO_REWARD_UPDATE;
@@ -112,7 +127,10 @@ public enum PdLnsMode {
                 || this == GREEDRL_CONTROLLER_PD_LNS
                 || this == NO_GREEDRL
                 || this == FORECAST_RISK_PD_LNS
-                || this == NO_FORECAST;
+                || this == NO_FORECAST
+                || this == TRI_MODEL_FUSION_PD_LNS
+                || this == TRI_MODEL_FUSION_NO_ROUTEFINDER
+                || this == TRI_MODEL_FUSION_NO_GREEDRL;
     }
 
     public boolean routefinderAssisted() {
@@ -122,22 +140,36 @@ public enum PdLnsMode {
                 || this == GREEDRL_CONTROLLER_PD_LNS
                 || this == NO_GREEDRL
                 || this == FORECAST_RISK_PD_LNS
-                || this == NO_FORECAST;
+                || this == NO_FORECAST
+                || this == TRI_MODEL_FUSION_PD_LNS
+                || this == TRI_MODEL_FUSION_NO_TABULAR
+                || this == TRI_MODEL_FUSION_NO_GREEDRL;
     }
 
     public boolean forecastRiskScored() {
         return this == FORECAST_RISK_PD_LNS;
     }
 
+    public boolean forecastStaticDisabled() {
+        return this == FORECAST_STATIC_DISABLED
+                || this == TRI_MODEL_FUSION_PD_LNS
+                || this == TRI_MODEL_FUSION_NO_TABULAR
+                || this == TRI_MODEL_FUSION_NO_ROUTEFINDER
+                || this == TRI_MODEL_FUSION_NO_GREEDRL;
+    }
+
     public boolean greedRlControlled() {
-        return this == GREEDRL_CONTROLLER_PD_LNS;
+        return this == GREEDRL_CONTROLLER_PD_LNS
+                || this == TRI_MODEL_FUSION_PD_LNS
+                || this == TRI_MODEL_FUSION_NO_TABULAR
+                || this == TRI_MODEL_FUSION_NO_ROUTEFINDER;
     }
 
     public double tabularWeight() {
         return switch (this) {
             case TABULAR_WEIGHT_025 -> 0.25;
             case TABULAR_WEIGHT_050, TABULAR_SCORED_PD_LNS, MODEL_ASSISTED_PD_LNS, ML_CORE_PD_LNS -> 0.50;
-            case TABULAR_WEIGHT_075, TABULAR_ROUTEFINDER_PD_LNS, TABULAR_ROUTEFINDER_BASELINE, GREEDRL_CONTROLLER_PD_LNS, NO_GREEDRL, FORECAST_RISK_PD_LNS, NO_FORECAST -> 0.75;
+            case TABULAR_WEIGHT_075, TABULAR_ROUTEFINDER_PD_LNS, TABULAR_ROUTEFINDER_BASELINE, GREEDRL_CONTROLLER_PD_LNS, NO_GREEDRL, FORECAST_RISK_PD_LNS, NO_FORECAST, TRI_MODEL_FUSION_PD_LNS, TRI_MODEL_FUSION_NO_ROUTEFINDER, TRI_MODEL_FUSION_NO_GREEDRL -> 0.75;
             case TABULAR_ONLY_SCORER -> 1.00;
             default -> 0.0;
         };
@@ -155,7 +187,7 @@ public enum PdLnsMode {
             case ML_DESTROY_REPAIR_K2 -> 2;
             case ML_DESTROY_REPAIR_K3 -> 3;
             case ML_DESTROY_REPAIR_K4 -> 4;
-            case ML_DESTROY_REPAIR_AUTO, ML_DESTROY_REPAIR, FULL_ML_PD_LNS, POLICY_ONLY_PD_LNS, MODEL_ASSISTED_PD_LNS, ML_CORE_PD_LNS, NO_ML_RANDOMIZED_PD_LNS, TABULAR_SCORED_PD_LNS, TABULAR_WEIGHT_025, TABULAR_WEIGHT_050, TABULAR_WEIGHT_075, TABULAR_ONLY_SCORER, ROUTEFINDER_ASSISTED_PD_LNS, TABULAR_ROUTEFINDER_PD_LNS, TABULAR_ROUTEFINDER_BASELINE, GREEDRL_CONTROLLER_PD_LNS, NO_GREEDRL, FORECAST_RISK_PD_LNS, NO_FORECAST, NO_ROUTEFINDER_PD_LNS, NO_TABULAR_PD_LNS, NO_ADAPTIVE_POLICY, NO_ADAPTIVE_MOVE_PRIORITY, NO_ADAPTIVE_OPERATOR_POLICY, NO_REWARD_UPDATE -> 0;
+            case ML_DESTROY_REPAIR_AUTO, ML_DESTROY_REPAIR, FULL_ML_PD_LNS, POLICY_ONLY_PD_LNS, MODEL_ASSISTED_PD_LNS, ML_CORE_PD_LNS, NO_ML_RANDOMIZED_PD_LNS, TABULAR_SCORED_PD_LNS, TABULAR_WEIGHT_025, TABULAR_WEIGHT_050, TABULAR_WEIGHT_075, TABULAR_ONLY_SCORER, ROUTEFINDER_ASSISTED_PD_LNS, TABULAR_ROUTEFINDER_PD_LNS, TABULAR_ROUTEFINDER_BASELINE, GREEDRL_CONTROLLER_PD_LNS, NO_GREEDRL, FORECAST_RISK_PD_LNS, NO_FORECAST, TRI_MODEL_FUSION_PD_LNS, TRI_MODEL_FUSION_NO_TABULAR, TRI_MODEL_FUSION_NO_ROUTEFINDER, TRI_MODEL_FUSION_NO_GREEDRL, FORECAST_STATIC_DISABLED, NO_ROUTEFINDER_PD_LNS, NO_TABULAR_PD_LNS, NO_ADAPTIVE_POLICY, NO_ADAPTIVE_MOVE_PRIORITY, NO_ADAPTIVE_OPERATOR_POLICY, NO_REWARD_UPDATE -> 0;
             default -> 1;
         };
     }

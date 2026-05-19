@@ -53,6 +53,7 @@ import com.routechain.v2.seedimprovement.PdLnsResult;
 import com.routechain.v2.seedimprovement.PdRouteState;
 import com.routechain.v2.seedimprovement.PdSeedState;
 import com.routechain.v2.seedimprovement.PdStop;
+import com.routechain.v2.seedimprovement.TriModelFusionPdLnsRunner;
 import com.routechain.v2.routing.BestPathRequest;
 import com.routechain.v2.routing.CachingRoutingProvider;
 import com.routechain.v2.routing.DistanceDurationMatrixSnapshot;
@@ -843,7 +844,12 @@ public final class DashboardController {
             return HeuristicPdLnsOutcome.empty();
         }
         PdSeedState basePd = pdSeedState(binding, orders.size(), drivers);
-        PdLnsResult result = mode.mlDestroyRepair() || mode.hybridPdLns()
+        PdLnsResult result = mode == PdLnsMode.TRI_MODEL_FUSION_PD_LNS
+                || mode == PdLnsMode.TRI_MODEL_FUSION_NO_TABULAR
+                || mode == PdLnsMode.TRI_MODEL_FUSION_NO_ROUTEFINDER
+                || mode == PdLnsMode.TRI_MODEL_FUSION_NO_GREEDRL
+                ? new TriModelFusionPdLnsRunner().run(basePd, mode, request.pdLnsMaxRounds(), request.pdLnsTopBadOrders())
+                : mode.mlDestroyRepair() || mode.hybridPdLns()
                 ? new PdDestroyRepairOperator().improve(basePd, mode, request.pdLnsMaxRounds(), request.pdLnsTopBadOrders())
                 : new HeuristicPdLnsImprover().improve(basePd, request.pdLnsMaxRounds(), request.pdLnsTopBadOrders());
         SolutionSeedCandidate improved = null;
@@ -1292,7 +1298,7 @@ public final class DashboardController {
                 Map.entry("routeFinderUsed", intValue(selectorSources.get("ML_REFINED")) > 0),
                 Map.entry("tabularUsed", pdLnsMode.tabularScored()),
                 Map.entry("greedRlUsed", pdLnsMode.greedRlControlled() || (irx != null && irx.diagnostics().get("mlEvidence") instanceof Map<?, ?> evidence && intValue(objectMap(((Map<?, ?>) evidence).get("greedRl")).get("applied")) > 0)),
-                Map.entry("forecastUsed", pdLnsMode.forecastRiskScored()),
+                Map.entry("forecastUsed", pdLnsMode.forecastRiskScored() && !pdLnsMode.forecastStaticDisabled()),
                 Map.entry("qualityContribution", pdLnsMode != PdLnsMode.HEURISTIC_PD_LNS && (acceptedMoves > 0 || pdLnsMode.mlDestroyRepair() || pdLnsMode.hybridPdLns())),
                 Map.entry("reason", pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS ? "heuristic-baseline-mode" : (pdLnsMode.mlDestroyRepair() || pdLnsMode.hybridPdLns()) ? "ml-destroy-repair-mode" : "adaptive-policy-mode"));
     }
