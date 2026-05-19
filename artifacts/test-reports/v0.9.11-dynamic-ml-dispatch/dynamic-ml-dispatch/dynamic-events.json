@@ -1,0 +1,182 @@
+﻿[
+    {
+        "type":  "ORDER_RECEIVED",
+        "createdAt":  "2026-05-19T18:11:48.294006500Z",
+        "subject":  "ORD-DYN-1"
+    },
+    {
+        "type":  "ORDER_BUFFERED",
+        "createdAt":  "2026-05-19T18:11:48.294006500Z",
+        "subject":  "ORD-DYN-1"
+    },
+    {
+        "type":  "DRIVER_TELEMETRY_UPDATED",
+        "createdAt":  "2026-05-19T18:11:48.299598500Z",
+        "subject":  "D01"
+    },
+    {
+        "type":  "ORDER_ASSIGNED",
+        "createdAt":  "2026-05-19T18:11:48.301605700Z",
+        "subject":  "ORD-DYN-1"
+    },
+    {
+        "type":  "FORECAST_RISK_UPDATED",
+        "createdAt":  "2026-05-19T18:11:48.301605700Z",
+        "subject":  "cycle-efc1c0a6"
+    },
+    {
+        "type":  "GREEDRL_ACTION_SELECTED",
+        "createdAt":  "2026-05-19T18:11:48.301605700Z",
+        "subject":  "cycle-efc1c0a6"
+    },
+    {
+        "type":  "ROUTE_REOPTIMIZED",
+        "createdAt":  "2026-05-19T18:11:48.301605700Z",
+        "subject":  "cycle-efc1c0a6"
+    },
+    {
+        "type":  "STOP_FROZEN",
+        "createdAt":  "2026-05-19T18:11:48.301605700Z",
+        "subject":  "PICKUP:ORD-DYN-1"
+    },
+    {
+        "type":  "DISPATCH_COMPLETED",
+        "createdAt":  "2026-05-19T18:11:48.301605700Z",
+        "subject":  "cycle-efc1c0a6"
+    },
+    {
+        "type":  "ORDER_RECEIVED",
+        "createdAt":  "2026-05-19T18:11:48.313329300Z",
+        "subject":  "ORD-DYN-2"
+    },
+    {
+        "type":  "ORDER_BUFFERED",
+        "createdAt":  "2026-05-19T18:11:48.313329300Z",
+        "subject":  "ORD-DYN-2"
+    },
+    {
+        "type":  "DRIVER_TELEMETRY_UPDATED",
+        "createdAt":  "2026-05-19T18:11:48.316364200Z",
+        "subject":  "D01"
+    },
+    {
+        "type":  "ORDER_ASSIGNED",
+        "createdAt":  "2026-05-19T18:11:48.319400Z",
+        "subject":  "ORD-DYN-2"
+    },
+    {
+        "type":  "FORECAST_RISK_UPDATED",
+        "createdAt":  "2026-05-19T18:11:48.319400Z",
+        "subject":  "cycle-6dd08040"
+    },
+    {
+        "type":  "GREEDRL_ACTION_SELECTED",
+        "createdAt":  "2026-05-19T18:11:48.319400Z",
+        "subject":  "cycle-6dd08040"
+    },
+    {
+        "type":  "ROUTE_REOPTIMIZED",
+        "createdAt":  "2026-05-19T18:11:48.319400Z",
+        "subject":  "cycle-6dd08040"
+    },
+    {
+        "type":  "STOP_FROZEN",
+        "createdAt":  "2026-05-19T18:11:48.319400Z",
+        "subject":  "PICKUP:ORD-DYN-1"
+    },
+    {
+        "type":  "DISPATCH_COMPLETED",
+        "createdAt":  "2026-05-19T18:11:48.319400Z",
+        "subject":  "cycle-6dd08040"
+    },
+    {
+        "type":  "ORDER_RECEIVED",
+        "createdAt":  "2026-05-19T18:11:48.321953500Z",
+        "subject":  "ORD-DYN-3"
+    },
+    {
+        "type":  "ORDER_BUFFERED",
+        "createdAt":  "2026-05-19T18:11:48.321953500Z",
+        "subject":  "ORD-DYN-3"
+    },
+    {
+        "type":  "DRIVER_TELEMETRY_UPDATED",
+        "createdAt":  "2026-05-19T18:11:48.324951800Z",
+        "subject":  "D01"
+    },
+    {
+        "type":  "ORDER_ASSIGNED",
+        "createdAt":  "2026-05-19T18:11:48.326955Z",
+        "subject":  "ORD-DYN-3"
+    },
+    {
+        "type":  "FORECAST_RISK_UPDATED",
+        "createdAt":  "2026-05-19T18:11:48.326955Z",
+        "subject":  "cycle-2eb3b0d1"
+    },
+    {
+        "type":  "GREEDRL_ACTION_SELECTED",
+        "createdAt":  "2026-05-19T18:11:48.326955Z",
+        "subject":  "cycle-2eb3b0d1"
+    },
+    {
+        "type":  "ROUTE_REOPTIMIZED",
+        "createdAt":  "2026-05-19T18:11:48.326955Z",
+        "subject":  "cycle-2eb3b0d1"
+    },
+    {
+        "type":  "STOP_FROZEN",
+        "createdAt":  "2026-05-19T18:11:48.326955Z",
+        "subject":  "PICKUP:ORD-DYN-1"
+    },
+    {
+        "type":  "DISPATCH_COMPLETED",
+        "createdAt":  "2026-05-19T18:11:48.326955Z",
+        "subject":  "cycle-2eb3b0d1"
+    },
+    {
+        "type":  "ORDER_RECEIVED",
+        "createdAt":  "2026-05-19T18:11:48.329952200Z",
+        "subject":  "ORD-DYN-4"
+    },
+    {
+        "type":  "ORDER_BUFFERED",
+        "createdAt":  "2026-05-19T18:11:48.329952200Z",
+        "subject":  "ORD-DYN-4"
+    },
+    {
+        "type":  "DRIVER_TELEMETRY_UPDATED",
+        "createdAt":  "2026-05-19T18:11:48.332915800Z",
+        "subject":  "D01"
+    },
+    {
+        "type":  "ORDER_ASSIGNED",
+        "createdAt":  "2026-05-19T18:11:48.335430500Z",
+        "subject":  "ORD-DYN-4"
+    },
+    {
+        "type":  "FORECAST_RISK_UPDATED",
+        "createdAt":  "2026-05-19T18:11:48.335430500Z",
+        "subject":  "cycle-05ccf57d"
+    },
+    {
+        "type":  "GREEDRL_ACTION_SELECTED",
+        "createdAt":  "2026-05-19T18:11:48.335430500Z",
+        "subject":  "cycle-05ccf57d"
+    },
+    {
+        "type":  "ROUTE_REOPTIMIZED",
+        "createdAt":  "2026-05-19T18:11:48.335430500Z",
+        "subject":  "cycle-05ccf57d"
+    },
+    {
+        "type":  "STOP_FROZEN",
+        "createdAt":  "2026-05-19T18:11:48.335430500Z",
+        "subject":  "PICKUP:ORD-DYN-1"
+    },
+    {
+        "type":  "DISPATCH_COMPLETED",
+        "createdAt":  "2026-05-19T18:11:48.335430500Z",
+        "subject":  "cycle-05ccf57d"
+    }
+]

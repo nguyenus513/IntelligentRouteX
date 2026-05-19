@@ -1,0 +1,99 @@
+﻿{
+    "jobId":  "live-api-contract",
+    "cycle":  1,
+    "assigned":  1,
+    "buffered":  0,
+    "orders":  [
+                   {
+                       "order":  {
+                                     "orderId":  "ORD-API-1",
+                                     "pickupLat":  10.1,
+                                     "pickupLng":  106.1,
+                                     "dropoffLat":  10.2,
+                                     "dropoffLng":  106.2,
+                                     "deadlineMinutes":  90,
+                                     "priority":  10
+                                 },
+                       "status":  "ASSIGNED",
+                       "createdAt":  "2026-05-19T18:12:19.714236900Z",
+                       "updatedAt":  "2026-05-19T18:12:19.723426200Z",
+                       "deferCount":  0,
+                       "reason":  "dynamic-ml-dispatch"
+                   }
+               ],
+    "drivers":  [
+                    {
+                        "driverId":  "D01",
+                        "lat":  10.12,
+                        "lng":  106.12,
+                        "status":  "EN_ROUTE",
+                        "currentStopId":  "PICKUP:ORD-API-1",
+                        "updatedAt":  "2026-05-19T18:12:19.718832300Z"
+                    }
+                ],
+    "routes":  [
+                   {
+                       "routeId":  "route-1",
+                       "driverId":  "D01",
+                       "stopIds":  [
+                                       "PICKUP:ORD-API-1",
+                                       "DROPOFF:ORD-API-1"
+                                   ],
+                       "frozenStopIds":  [
+
+                                         ],
+                       "distanceKm":  1.4,
+                       "lateCount":  0
+                   }
+               ],
+    "frozenStopIds":  [
+                          "PICKUP:ORD-API-1"
+                      ],
+    "events":  [
+                   {
+                       "type":  "ORDER_RECEIVED",
+                       "createdAt":  "2026-05-19T18:12:19.714236900Z",
+                       "subject":  "ORD-API-1"
+                   },
+                   {
+                       "type":  "ORDER_BUFFERED",
+                       "createdAt":  "2026-05-19T18:12:19.714236900Z",
+                       "subject":  "ORD-API-1"
+                   },
+                   {
+                       "type":  "DRIVER_TELEMETRY_UPDATED",
+                       "createdAt":  "2026-05-19T18:12:19.718832300Z",
+                       "subject":  "D01"
+                   },
+                   {
+                       "type":  "ORDER_ASSIGNED",
+                       "createdAt":  "2026-05-19T18:12:19.723426200Z",
+                       "subject":  "ORD-API-1"
+                   },
+                   {
+                       "type":  "FORECAST_RISK_UPDATED",
+                       "createdAt":  "2026-05-19T18:12:19.723426200Z",
+                       "subject":  "cycle-ad3c8dcc"
+                   },
+                   {
+                       "type":  "GREEDRL_ACTION_SELECTED",
+                       "createdAt":  "2026-05-19T18:12:19.723426200Z",
+                       "subject":  "cycle-ad3c8dcc"
+                   },
+                   {
+                       "type":  "ROUTE_REOPTIMIZED",
+                       "createdAt":  "2026-05-19T18:12:19.723426200Z",
+                       "subject":  "cycle-ad3c8dcc"
+                   },
+                   {
+                       "type":  "STOP_FROZEN",
+                       "createdAt":  "2026-05-19T18:12:19.723426200Z",
+                       "subject":  "PICKUP:ORD-API-1"
+                   },
+                   {
+                       "type":  "DISPATCH_COMPLETED",
+                       "createdAt":  "2026-05-19T18:12:19.723426200Z",
+                       "subject":  "cycle-ad3c8dcc"
+                   }
+               ]
+}
