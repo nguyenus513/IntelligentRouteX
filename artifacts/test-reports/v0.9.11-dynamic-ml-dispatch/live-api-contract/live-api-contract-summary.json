@@ -1,7 +1,7 @@
 ﻿{
     "version":  "v0.9.11-dynamic-ml-dispatch",
     "gate":  "live-api-contract",
-    "generatedAt":  "2026-05-19T18:12:19.7399363Z",
+    "generatedAt":  "2026-05-19T18:15:39.1014879Z",
     "compileJava":  "SKIPPED",
     "createJobPass":  true,
     "addOrderPass":  true,

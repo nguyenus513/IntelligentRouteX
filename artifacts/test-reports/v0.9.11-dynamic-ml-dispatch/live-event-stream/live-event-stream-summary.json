@@ -1,0 +1,12 @@
+﻿{
+    "version":  "v0.9.11-dynamic-ml-dispatch",
+    "gate":  "live-event-stream",
+    "generatedAt":  "2026-05-19T18:15:39.2321533Z",
+    "compileJava":  "SKIPPED",
+    "eventsEmitted":  9,
+    "sseEventLines":  9,
+    "eventOrderValid":  true,
+    "missingCriticalEvents":  0,
+    "dashboardCanReadEvents":  true,
+    "overallPass":  true
+}

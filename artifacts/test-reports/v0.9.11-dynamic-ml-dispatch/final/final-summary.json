@@ -1,0 +1,28 @@
+﻿{
+    "version":  "v0.9.11-dynamic-ml-dispatch",
+    "gate":  "v0.9.11-final",
+    "generatedAt":  "2026-05-19T18:15:39.2748886Z",
+    "compileJava":  "SKIPPED",
+    "certificationScope":  "CORE_LIVE_API_DISPATCH",
+    "liveStatePass":  true,
+    "dynamicDispatchPass":  true,
+    "forecastLivePass":  true,
+    "greedRlLivePass":  true,
+    "triModelRepairPass":  true,
+    "apiContractPass":  true,
+    "eventStreamPass":  true,
+    "dashboardPlaygroundPass":  false,
+    "dynamicBenchmarkPass":  false,
+    "fullReleaseReady":  false,
+    "pendingGates":  [
+                         "dashboard-live-playground",
+                         "dynamic-6case-benchmark"
+                     ],
+    "staleBufferedOrders":  0,
+    "frozenStopViolations":  0,
+    "pickupDropoffViolations":  0,
+    "capacityViolations":  0,
+    "lateRegression":  0,
+    "dominanceFailures":  0,
+    "overallPass":  true
+}
