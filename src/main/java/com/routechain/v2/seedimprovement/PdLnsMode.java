@@ -9,7 +9,12 @@ public enum PdLnsMode {
     ML_DESTROY_REPAIR_K3,
     ML_DESTROY_REPAIR_K4,
     ML_DESTROY_REPAIR_AUTO,
-    ML_HYBRID_PD_LNS;
+    ML_HYBRID_PD_LNS,
+    FULL_ML_PD_LNS,
+    NO_ADAPTIVE_POLICY,
+    NO_ADAPTIVE_MOVE_PRIORITY,
+    NO_ADAPTIVE_OPERATOR_POLICY,
+    NO_REWARD_UPDATE;
 
     public static PdLnsMode from(String value) {
         if (value == null || value.isBlank()) {
@@ -27,7 +32,23 @@ public enum PdLnsMode {
                 || this == ML_DESTROY_REPAIR_K2
                 || this == ML_DESTROY_REPAIR_K3
                 || this == ML_DESTROY_REPAIR_K4
-                || this == ML_DESTROY_REPAIR_AUTO;
+                || this == ML_DESTROY_REPAIR_AUTO
+                || this == FULL_ML_PD_LNS
+                || this == NO_ADAPTIVE_POLICY
+                || this == NO_ADAPTIVE_MOVE_PRIORITY
+                || this == NO_ADAPTIVE_OPERATOR_POLICY
+                || this == NO_REWARD_UPDATE;
+    }
+
+    public boolean hybridPdLns() {
+        return this == ML_HYBRID_PD_LNS || this == FULL_ML_PD_LNS || this == NO_REWARD_UPDATE;
+    }
+
+    public boolean policyAblation() {
+        return this == NO_ADAPTIVE_POLICY
+                || this == NO_ADAPTIVE_MOVE_PRIORITY
+                || this == NO_ADAPTIVE_OPERATOR_POLICY
+                || this == NO_REWARD_UPDATE;
     }
 
     public int destroySize() {
@@ -35,7 +56,7 @@ public enum PdLnsMode {
             case ML_DESTROY_REPAIR_K2 -> 2;
             case ML_DESTROY_REPAIR_K3 -> 3;
             case ML_DESTROY_REPAIR_K4 -> 4;
-            case ML_DESTROY_REPAIR_AUTO, ML_DESTROY_REPAIR -> 0;
+            case ML_DESTROY_REPAIR_AUTO, ML_DESTROY_REPAIR, FULL_ML_PD_LNS, NO_ADAPTIVE_POLICY, NO_ADAPTIVE_MOVE_PRIORITY, NO_ADAPTIVE_OPERATOR_POLICY, NO_REWARD_UPDATE -> 0;
             default -> 1;
         };
     }

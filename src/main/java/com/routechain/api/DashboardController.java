@@ -828,7 +828,7 @@ public final class DashboardController {
                                                  List<OrderDto> orders,
                                                  List<DriverDto> drivers) {
         PdLnsMode mode = request.pdLnsModeEnum();
-        if ((mode != PdLnsMode.HEURISTIC_PD_LNS && !mode.mlDestroyRepair() && mode != PdLnsMode.ML_HYBRID_PD_LNS) || archive == null) {
+        if ((mode != PdLnsMode.HEURISTIC_PD_LNS && !mode.mlDestroyRepair() && !mode.hybridPdLns()) || archive == null) {
             return HeuristicPdLnsOutcome.empty();
         }
         SolutionSeedCandidate baseBest = archive.best().orElse(null);
@@ -843,7 +843,7 @@ public final class DashboardController {
             return HeuristicPdLnsOutcome.empty();
         }
         PdSeedState basePd = pdSeedState(binding, orders.size(), drivers);
-        PdLnsResult result = mode.mlDestroyRepair() || mode == PdLnsMode.ML_HYBRID_PD_LNS
+        PdLnsResult result = mode.mlDestroyRepair() || mode.hybridPdLns()
                 ? new PdDestroyRepairOperator().improve(basePd, mode, request.pdLnsMaxRounds(), request.pdLnsTopBadOrders())
                 : new HeuristicPdLnsImprover().improve(basePd, request.pdLnsMaxRounds(), request.pdLnsTopBadOrders());
         SolutionSeedCandidate improved = null;
@@ -854,7 +854,7 @@ public final class DashboardController {
                 && result.finalEvaluation().lateCount() <= result.baseEvaluation().lateCount()
                 && result.finalEvaluation().totalLatenessMinutes() <= result.baseEvaluation().totalLatenessMinutes()
                 && result.finalEvaluation().distanceKm() < result.baseEvaluation().distanceKm()) {
-            improved = solutionSeedFromPd(result.finalSeed(), improvedSourceFor(baseBest.source()), result.finalEvaluation(), (mode.mlDestroyRepair() || mode == PdLnsMode.ML_HYBRID_PD_LNS) ? "ml-pd-lns-best-seed-improved" : "heuristic-pd-lns-best-seed-improved");
+            improved = solutionSeedFromPd(result.finalSeed(), improvedSourceFor(baseBest.source()), result.finalEvaluation(), (mode.mlDestroyRepair() || mode.hybridPdLns()) ? "ml-pd-lns-best-seed-improved" : "heuristic-pd-lns-best-seed-improved");
         }
         return new HeuristicPdLnsOutcome(baseBest, result, improved);
     }
@@ -936,10 +936,10 @@ public final class DashboardController {
                 Map.entry("capacityViolations", fin == null ? 0 : fin.capacityViolations()),
                 Map.entry("lateRegression", lateRegression),
                 Map.entry("coverageRegression", coverageRegression),
-                Map.entry("improvementMethod", mode == PdLnsMode.HEURISTIC_PD_LNS ? "HEURISTIC_PD_LNS" : mode == PdLnsMode.ML_HYBRID_PD_LNS ? "ML_HYBRID_PD_LNS" : mode.mlDestroyRepair() ? "ML_DESTROY_REPAIR" : "NONE"),
-                Map.entry("mlQualityContribution", (mode.mlDestroyRepair() || mode == PdLnsMode.ML_HYBRID_PD_LNS) && result != null && result.acceptedMutations() > 0),
-                Map.entry("adaptiveRewardUpdated", (mode.mlDestroyRepair() || mode == PdLnsMode.ML_HYBRID_PD_LNS) && result != null && result.evaluatedInsertions() > 0),
-                Map.entry("bestOperator", mode == PdLnsMode.ML_HYBRID_PD_LNS ? "PD_HYBRID_CROSS_SWAPSTAR" : mode.mlDestroyRepair() ? "PD_DESTROY_REPAIR_K" + Math.max(2, mode.destroySize()) : "PD_EXACT_INSERTION"),
+                Map.entry("improvementMethod", mode == PdLnsMode.HEURISTIC_PD_LNS ? "HEURISTIC_PD_LNS" : mode.hybridPdLns() ? "ML_HYBRID_PD_LNS" : mode.mlDestroyRepair() ? "ML_DESTROY_REPAIR" : "NONE"),
+                Map.entry("mlQualityContribution", (mode.mlDestroyRepair() || mode.hybridPdLns()) && result != null && result.acceptedMutations() > 0),
+                Map.entry("adaptiveRewardUpdated", (mode.mlDestroyRepair() || mode.hybridPdLns()) && mode != PdLnsMode.NO_REWARD_UPDATE && result != null && result.evaluatedInsertions() > 0),
+                Map.entry("bestOperator", mode.hybridPdLns() ? "PD_HYBRID_CROSS_SWAPSTAR" : mode.mlDestroyRepair() ? "PD_DESTROY_REPAIR_K" + Math.max(2, mode.destroySize()) : "PD_EXACT_INSERTION"),
                 Map.entry("rankedOrders", result == null ? 0 : result.evaluatedOrders()),
                 Map.entry("evaluatedMutations", result == null ? 0 : result.evaluatedInsertions()),
                 Map.entry("feasibleMutations", result == null ? 0 : result.feasibleInsertions()),
@@ -1231,7 +1231,7 @@ public final class DashboardController {
                                                            int inputOrderCount,
                                                            PdLnsMode pdLnsMode,
                                                            HeuristicPdLnsOutcome heuristicPdLns) {
-        SolutionSeedCandidate baseBestSeed = (pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS || pdLnsMode.mlDestroyRepair() || pdLnsMode == PdLnsMode.ML_HYBRID_PD_LNS) && heuristicPdLns != null && heuristicPdLns.baseSeed() != null
+        SolutionSeedCandidate baseBestSeed = (pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS || pdLnsMode.mlDestroyRepair() || pdLnsMode.hybridPdLns()) && heuristicPdLns != null && heuristicPdLns.baseSeed() != null
                 ? heuristicPdLns.baseSeed()
                 : archive == null ? null : archive.best().orElse(null);
         ImprovedSolutionCandidate improvedBest = improvedSeeds == null || baseBestSeed == null ? null : improvedSeeds.stream()
@@ -1267,7 +1267,7 @@ public final class DashboardController {
                 Map.entry("bestSeedAcceptedMoves", improvedBest == null || improvedBest.trace() == null ? pdLnsAccepted : improvedBest.trace().acceptedMoves()),
                 Map.entry("bestSeedRejectedMoves", improvedBest == null || improvedBest.trace() == null ? 0 : improvedBest.trace().rejectedMoves()),
                 Map.entry("bestSeedObjectiveImproved", improvedBest != null && improvedBest.trace() != null && improvedBest.trace().objectiveImproved()),
-                Map.entry("improvementMethod", pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS ? "HEURISTIC_PD_LNS" : pdLnsMode == PdLnsMode.ML_HYBRID_PD_LNS ? "ML_HYBRID_PD_LNS" : pdLnsMode.mlDestroyRepair() ? "ML_DESTROY_REPAIR" : "ADAPTIVE_POLICY_STACK"),
+                Map.entry("improvementMethod", pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS ? "HEURISTIC_PD_LNS" : pdLnsMode.hybridPdLns() ? "ML_HYBRID_PD_LNS" : pdLnsMode.mlDestroyRepair() ? "ML_DESTROY_REPAIR" : "ADAPTIVE_POLICY_STACK"),
                 Map.entry("verdict", verdict));
     }
 
@@ -1293,8 +1293,8 @@ public final class DashboardController {
                 Map.entry("tabularUsed", false),
                 Map.entry("greedRlUsed", irx != null && irx.diagnostics().get("mlEvidence") instanceof Map<?, ?> evidence && intValue(objectMap(((Map<?, ?>) evidence).get("greedRl")).get("applied")) > 0),
                 Map.entry("forecastUsed", false),
-                Map.entry("qualityContribution", pdLnsMode != PdLnsMode.HEURISTIC_PD_LNS && (acceptedMoves > 0 || pdLnsMode.mlDestroyRepair())),
-                Map.entry("reason", pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS ? "heuristic-baseline-mode" : pdLnsMode.mlDestroyRepair() ? "ml-destroy-repair-mode" : "adaptive-policy-mode"));
+                Map.entry("qualityContribution", pdLnsMode != PdLnsMode.HEURISTIC_PD_LNS && (acceptedMoves > 0 || pdLnsMode.mlDestroyRepair() || pdLnsMode.hybridPdLns())),
+                Map.entry("reason", pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS ? "heuristic-baseline-mode" : (pdLnsMode.mlDestroyRepair() || pdLnsMode.hybridPdLns()) ? "ml-destroy-repair-mode" : "adaptive-policy-mode"));
     }
 
     private static String bestSeedImprovementVerdict(SolutionSeedCandidate baseBestSeed,
@@ -1314,7 +1314,7 @@ public final class DashboardController {
             if (pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS && heuristicPdLns != null && heuristicPdLns.improvedSeed() != null) {
                 return "HEURISTIC_BEST_SEED_DISTANCE_IMPROVED";
             }
-            if (pdLnsMode.mlDestroyRepair() && heuristicPdLns != null && heuristicPdLns.improvedSeed() != null) {
+            if ((pdLnsMode.mlDestroyRepair() || pdLnsMode.hybridPdLns()) && heuristicPdLns != null && heuristicPdLns.improvedSeed() != null) {
                 return "ML_BEST_SEED_DISTANCE_IMPROVED";
             }
             return "ML_BEST_SEED_DISTANCE_IMPROVED";

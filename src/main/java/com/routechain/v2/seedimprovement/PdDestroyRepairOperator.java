@@ -55,12 +55,12 @@ public final class PdDestroyRepairOperator {
         int safeTop = Math.max(2, topBadOrders);
         for (int round = 1; round <= safeRounds; round++) {
             List<Integer> destroySizes = destroySizes(current, mode);
-            List<PdOrderImpact> rankedOrders = destroyPolicy.rankOrders(current, round).stream().limit(safeTop).toList();
+            List<PdOrderImpact> rankedOrders = rankedOrders(current, mode, round).stream().limit(safeTop).toList();
             for (int destroySize : destroySizes) {
                 if (rankedOrders.size() < destroySize) {
                     continue;
                 }
-                for (List<String> destroyOrders : destroySets(rankedOrders, destroySize)) {
+                for (List<String> destroyOrders : destroySets(rankedOrders, destroySize, mode)) {
                     if (destroyOrders.size() < destroySize) {
                         continue;
                     }
@@ -74,7 +74,9 @@ public final class PdDestroyRepairOperator {
                             && comparator.validNoRegression(candidateEvaluation, currentEvaluation)
                             && comparator.better(candidateEvaluation, bestEvaluation);
                     double reward = reward(currentEvaluation, candidateEvaluation, accepted);
-                    destroyPolicy.updateReward(destroyOrders, reward);
+                    if (mode != PdLnsMode.NO_REWARD_UPDATE && mode != PdLnsMode.NO_ADAPTIVE_POLICY) {
+                        destroyPolicy.updateReward(destroyOrders, reward);
+                    }
                     String operator = "PD_DESTROY_REPAIR_K" + destroySize;
                     mlRecorder.recordDecision(
                             "DESTROY_ORDER_SELECTION",
@@ -82,7 +84,7 @@ public final class PdDestroyRepairOperator {
                             rankedOrders.size(),
                             destroyOrders.size(),
                             destroyOrders,
-                            "ADAPTIVE_MOVE_PRIORITY",
+                            selectionSource(mode),
                             1,
                             Math.max(1, rankedOrders.size()),
                             accepted,
@@ -103,7 +105,7 @@ public final class PdDestroyRepairOperator {
                 }
             }
         }
-        if (mode == PdLnsMode.ML_HYBRID_PD_LNS) {
+        if (mode.hybridPdLns() && mode != PdLnsMode.NO_ADAPTIVE_OPERATOR_POLICY) {
             OperatorApplyResult crossFromBase = applyOperatorResult(crossInsertion.bestMove(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder);
             OperatorApplyResult swapFromBase = applyOperatorResult(swapStar.bestSwap(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder);
             OperatorApplyResult crossFromCurrent = applyOperatorResult(crossInsertion.bestMove(current, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder);
@@ -164,13 +166,40 @@ public final class PdDestroyRepairOperator {
     }
 
     private List<Integer> destroySizes(PdSeedState seed, PdLnsMode mode) {
-        if (mode == PdLnsMode.ML_DESTROY_REPAIR_AUTO || mode == PdLnsMode.ML_DESTROY_REPAIR || mode == PdLnsMode.ML_HYBRID_PD_LNS) {
+        if (mode == PdLnsMode.NO_ADAPTIVE_POLICY || mode == PdLnsMode.NO_ADAPTIVE_OPERATOR_POLICY) {
+            return List.of(2, 3, 4);
+        }
+        if (mode == PdLnsMode.ML_DESTROY_REPAIR_AUTO || mode == PdLnsMode.ML_DESTROY_REPAIR || mode.hybridPdLns()) {
             return List.of(2, 3, 4);
         }
         return List.of(Math.max(2, destroyPolicy.chooseDestroySize(seed, mode)));
     }
 
-    private List<List<String>> destroySets(List<PdOrderImpact> rankedOrders, int destroySize) {
+    private List<PdOrderImpact> rankedOrders(PdSeedState seed, PdLnsMode mode, int round) {
+        if (mode == PdLnsMode.NO_ADAPTIVE_POLICY || mode == PdLnsMode.NO_ADAPTIVE_MOVE_PRIORITY) {
+            return new PdOrderImpactAnalyzer().rankBadOrders(seed);
+        }
+        return destroyPolicy.rankOrders(seed, round);
+    }
+
+    private String selectionSource(PdLnsMode mode) {
+        return switch (mode) {
+            case NO_ADAPTIVE_POLICY -> "HEURISTIC_ABLATION_NO_ADAPTIVE_POLICY";
+            case NO_ADAPTIVE_MOVE_PRIORITY -> "HEURISTIC_ABLATION_NO_MOVE_PRIORITY";
+            case NO_ADAPTIVE_OPERATOR_POLICY -> "ADAPTIVE_MOVE_PRIORITY_NO_OPERATOR_POLICY";
+            case NO_REWARD_UPDATE -> "ADAPTIVE_MOVE_PRIORITY_NO_REWARD_UPDATE";
+            default -> "ADAPTIVE_MOVE_PRIORITY";
+        };
+    }
+
+    private List<List<String>> destroySets(List<PdOrderImpact> rankedOrders, int destroySize, PdLnsMode mode) {
+        if (mode == PdLnsMode.NO_ADAPTIVE_POLICY || mode == PdLnsMode.NO_ADAPTIVE_MOVE_PRIORITY) {
+            List<List<String>> heuristicSets = new ArrayList<>();
+            if (rankedOrders.size() >= destroySize) {
+                addSet(heuristicSets, rankedOrders.subList(0, destroySize).stream().map(PdOrderImpact::orderId).toList(), destroySize);
+            }
+            return heuristicSets;
+        }
         List<List<String>> sets = new ArrayList<>();
         for (int offset = 0; offset + destroySize <= rankedOrders.size(); offset++) {
             addSet(sets, rankedOrders.subList(offset, offset + destroySize).stream().map(PdOrderImpact::orderId).toList(), destroySize);
