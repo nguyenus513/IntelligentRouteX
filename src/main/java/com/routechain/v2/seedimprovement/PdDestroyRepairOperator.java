@@ -112,10 +112,10 @@ public final class PdDestroyRepairOperator {
             }
         }
         if (mode.hybridPdLns() && mode != PdLnsMode.NO_ADAPTIVE_OPERATOR_POLICY) {
-            OperatorApplyResult crossFromBase = applyOperatorResult(crossInsertion.bestMove(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder);
-            OperatorApplyResult swapFromBase = applyOperatorResult(swapStar.bestSwap(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder);
-            OperatorApplyResult crossFromCurrent = applyOperatorResult(crossInsertion.bestMove(current, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder);
-            OperatorApplyResult swapFromCurrent = applyOperatorResult(swapStar.bestSwap(current, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder);
+            OperatorApplyResult crossFromBase = applyOperatorResult(crossInsertion.bestMove(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder, mode);
+            OperatorApplyResult swapFromBase = applyOperatorResult(swapStar.bestSwap(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder, mode);
+            OperatorApplyResult crossFromCurrent = applyOperatorResult(crossInsertion.bestMove(current, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder, mode);
+            OperatorApplyResult swapFromCurrent = applyOperatorResult(swapStar.bestSwap(current, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder, mode);
             for (OperatorApplyResult operatorResult : List.of(crossFromBase, swapFromBase, crossFromCurrent, swapFromCurrent)) {
                 evaluatedOrders += operatorResult.evaluatedOrders();
                 evaluatedInsertions += operatorResult.evaluatedCandidates();
@@ -138,13 +138,17 @@ public final class PdDestroyRepairOperator {
                                                     PdEvaluation bestEvaluation,
                                                     int round,
                                                     List<PdLnsTrace> traces,
-                                                    MlParticipationRecorder mlRecorder) {
+                                                    MlParticipationRecorder mlRecorder,
+                                                    PdLnsMode mode) {
         if (result == null || result.evaluatedCandidates() <= 0) {
             return OperatorApplyResult.empty();
         }
         boolean accepted = result.evaluation() != null
                 && comparator.validNoRegression(result.evaluation(), currentEvaluation)
                 && comparator.better(result.evaluation(), bestEvaluation);
+        if (mode.routefinderAssisted()) {
+            mlRecorder.recordRoutefinderCandidates(result.evaluatedCandidates(), true, accepted);
+        }
         mlRecorder.recordDecision(
                 "OPTIONAL_NEIGHBORHOOD_SELECTION",
                 result.operator(),
@@ -250,7 +254,32 @@ public final class PdDestroyRepairOperator {
         if (mode.tabularScored()) {
             addTabularExplorationSets(sets, rankedOrders, destroySize, mode);
         }
+        if (mode.routefinderAssisted()) {
+            addRoutefinderProviderSets(sets, rankedOrders, destroySize);
+        }
         return sets;
+    }
+
+    private void addRoutefinderProviderSets(List<List<String>> sets, List<PdOrderImpact> rankedOrders, int destroySize) {
+        int limit = Math.min(rankedOrders.size(), 12);
+        for (int anchor = 0; anchor < limit; anchor++) {
+            List<String> routeDiverse = new ArrayList<>();
+            routeDiverse.add(rankedOrders.get(anchor).orderId());
+            String anchorRoute = rankedOrders.get(anchor).routeId();
+            for (int index = 0; index < rankedOrders.size() && routeDiverse.size() < destroySize; index++) {
+                PdOrderImpact candidate = rankedOrders.get(index);
+                if (!candidate.routeId().equals(anchorRoute)) {
+                    routeDiverse.add(candidate.orderId());
+                }
+            }
+            for (int index = rankedOrders.size() - 1; index >= 0 && routeDiverse.size() < destroySize; index--) {
+                routeDiverse.add(rankedOrders.get(index).orderId());
+            }
+            addSet(sets, routeDiverse, destroySize);
+            if (sets.size() >= 192) {
+                return;
+            }
+        }
     }
 
     private void addTabularExplorationSets(List<List<String>> sets, List<PdOrderImpact> rankedOrders, int destroySize, PdLnsMode mode) {
