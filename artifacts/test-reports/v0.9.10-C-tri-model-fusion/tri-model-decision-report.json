@@ -1,0 +1,42 @@
+﻿{
+    "version":  "v0.9.10-C-tri-model-fusion",
+    "generatedAt":  "2026-05-19T14:58:02.3228060Z",
+    "staticDefault":  "TRI_MODEL_FUSION_PD_LNS",
+    "noRegressSelector":  true,
+    "fusionEvidence":  {
+                           "fusionBetterThanBestSingleModelCases":  1,
+                           "fusionWorseThanBestSingleModelCases":  0,
+                           "totalFusionGainKm":  98.3,
+                           "totalBestSingleModelGainKm":  96.5,
+                           "overallPass":  true
+                       },
+    "ablationEvidence":  {
+                             "verdict":  "TRI_MODEL_CAUSAL_ABLATION_PROVEN",
+                             "modelWorkersWithContribution":  3,
+                             "overallPass":  true
+                         },
+    "adaptivePolicy":  {
+                           "decision":  "KEEP_CORE",
+                           "role":  "core decision controller"
+                       },
+    "tabular":  {
+                    "evidence":  "causal quality gain proven",
+                    "role":  "mutation/insertion scorer",
+                    "decision":  "KEEP_MODEL_STATIC"
+                },
+    "routefinder":  {
+                        "evidence":  "selected-case contribution",
+                        "role":  "route/edge/sequence candidate provider",
+                        "decision":  "KEEP_OPTIONAL_PROVIDER"
+                    },
+    "greedrl":  {
+                    "evidence":  "selected-case causal gain",
+                    "role":  "operator/action controller",
+                    "decision":  "KEEP_CONTROLLER_SELECTED"
+                },
+    "forecast":  {
+                     "evidence":  "static quality/risk gain not proven",
+                     "role":  "ETA/SLA/risk scorer",
+                     "decision":  "OFF_STATIC_LIVE_RESCUE_ONLY"
+                 }
+}
