@@ -943,7 +943,30 @@ public final class DashboardController {
                 Map.entry("rankedOrders", result == null ? 0 : result.evaluatedOrders()),
                 Map.entry("evaluatedMutations", result == null ? 0 : result.evaluatedInsertions()),
                 Map.entry("feasibleMutations", result == null ? 0 : result.feasibleInsertions()),
-                Map.entry("mlParticipationProof", result == null ? com.routechain.v2.mlproof.MlParticipationDiagnostics.empty() : result.mlParticipationDiagnostics()));
+                Map.entry("mlParticipationProof", result == null ? com.routechain.v2.mlproof.MlParticipationDiagnostics.empty() : result.mlParticipationDiagnostics()),
+                Map.entry("mlWorkerProof", mlWorkerProofDiagnostics(result)));
+    }
+
+    private static Map<String, Object> mlWorkerProofDiagnostics(PdLnsResult result) {
+        com.routechain.v2.mlproof.MlParticipationDiagnostics diagnostics = result == null
+                ? com.routechain.v2.mlproof.MlParticipationDiagnostics.empty()
+                : result.mlParticipationDiagnostics();
+        Map<String, com.routechain.v2.mlproof.MlWorkerInvocationTrace> workers = diagnostics.workerInvocations();
+        boolean anyCalled = workers.values().stream().anyMatch(com.routechain.v2.mlproof.MlWorkerInvocationTrace::called);
+        boolean contributionProven = workers.values().stream().anyMatch(worker -> worker.called()
+                && worker.inferenceCount() > 0
+                && worker.outputUsed()
+                && worker.affectedDecisionCount() > 0
+                && worker.acceptedCandidateCount() > 0);
+        String verdict = contributionProven
+                ? "WORKER_CONTRIBUTION_PROVEN"
+                : anyCalled ? "WORKER_INVOCATION_ONLY" : "POLICY_ONLY_NO_WORKER_MODEL";
+        return Map.ofEntries(
+                Map.entry("blockPresent", true),
+                Map.entry("anyWorkerCalled", anyCalled),
+                Map.entry("workerContributionProven", contributionProven),
+                Map.entry("verdict", verdict),
+                Map.entry("workers", workers));
     }
 
     private static void addBoundStops(List<BoundStop> stops, OrderDto order) {

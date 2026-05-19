@@ -1,0 +1,73 @@
+﻿{
+    "version":  "v0.9.10-A-ml-participation-proof",
+    "gate":  "ml-worker-proof",
+    "generatedAt":  "2026-05-19T06:06:20.0799152Z",
+    "compileJava":  "SKIPPED",
+    "health":  {
+                   "requestId":  "REQ-2",
+                   "data":  {
+                                "status":  "UP",
+                                "version":  "v1",
+                                "engineVersion":  "v0.9.9-adaptive-ml-quality-seeking"
+                            },
+                   "ok":  true,
+                   "meta":  {
+                                "version":  "v1",
+                                "timestamp":  "2026-05-19T06:05:54.482589800Z"
+                            }
+               },
+    "datasetId":  "raw-s",
+    "jobId":  "BMJ-A568C145",
+    "blockPresent":  true,
+    "anyWorkerCalled":  false,
+    "workerContributionProven":  false,
+    "verdict":  "POLICY_ONLY_NO_WORKER_MODEL",
+    "calledWorkerCount":  0,
+    "disabledWorkerReasonCount":  4,
+    "routefinder":  {
+                        "workerName":  "routefinder",
+                        "called":  false,
+                        "modelVersion":  "not-wired-static-v0.9.10A",
+                        "inferenceCount":  0,
+                        "candidateCount":  0,
+                        "outputUsed":  false,
+                        "affectedDecisionCount":  0,
+                        "acceptedCandidateCount":  0,
+                        "reason":  "not in PD-LNS hot path"
+                    },
+    "tabular":  {
+                    "workerName":  "tabular",
+                    "called":  false,
+                    "modelVersion":  "not-wired-static-v0.9.10A",
+                    "inferenceCount":  0,
+                    "candidateCount":  0,
+                    "outputUsed":  false,
+                    "affectedDecisionCount":  0,
+                    "acceptedCandidateCount":  0,
+                    "reason":  "not in PD-LNS hot path"
+                },
+    "greedrl":  {
+                    "workerName":  "greedrl",
+                    "called":  false,
+                    "modelVersion":  "experimental",
+                    "inferenceCount":  0,
+                    "candidateCount":  0,
+                    "outputUsed":  false,
+                    "affectedDecisionCount":  0,
+                    "acceptedCandidateCount":  0,
+                    "reason":  "not proven in static seed improvement"
+                },
+    "forecast":  {
+                     "workerName":  "forecast",
+                     "called":  false,
+                     "modelVersion":  "live-rescue-only",
+                     "inferenceCount":  0,
+                     "candidateCount":  0,
+                     "outputUsed":  false,
+                     "affectedDecisionCount":  0,
+                     "acceptedCandidateCount":  0,
+                     "reason":  "live rescue only"
+                 },
+    "diagnosticPass":  true,
+    "contributionPass":  false
+}
