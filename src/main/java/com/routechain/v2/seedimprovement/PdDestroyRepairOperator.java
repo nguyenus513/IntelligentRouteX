@@ -1,5 +1,7 @@
 package com.routechain.v2.seedimprovement;
 
+import com.routechain.v2.mlproof.MlParticipationRecorder;
+
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -44,6 +46,7 @@ public final class PdDestroyRepairOperator {
         PdSeedState best = baseSeed;
         PdEvaluation bestEvaluation = baseEvaluation;
         List<PdLnsTrace> traces = new ArrayList<>();
+        MlParticipationRecorder mlRecorder = new MlParticipationRecorder();
         int evaluatedOrders = 0;
         int evaluatedInsertions = 0;
         int feasibleInsertions = 0;
@@ -73,6 +76,18 @@ public final class PdDestroyRepairOperator {
                     double reward = reward(currentEvaluation, candidateEvaluation, accepted);
                     destroyPolicy.updateReward(destroyOrders, reward);
                     String operator = "PD_DESTROY_REPAIR_K" + destroySize;
+                    mlRecorder.recordDecision(
+                            "DESTROY_ORDER_SELECTION",
+                            operator,
+                            rankedOrders.size(),
+                            destroyOrders.size(),
+                            destroyOrders,
+                            "ADAPTIVE_MOVE_PRIORITY",
+                            1,
+                            Math.max(1, rankedOrders.size()),
+                            accepted,
+                            candidateEvaluation == null ? 0.0 : currentEvaluation.distanceKm() - candidateEvaluation.distanceKm(),
+                            reward);
                     if (accepted) {
                         double oldKm = currentEvaluation.distanceKm();
                         current = repaired.seed();
@@ -89,10 +104,10 @@ public final class PdDestroyRepairOperator {
             }
         }
         if (mode == PdLnsMode.ML_HYBRID_PD_LNS) {
-            OperatorApplyResult crossFromBase = applyOperatorResult(crossInsertion.bestMove(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces);
-            OperatorApplyResult swapFromBase = applyOperatorResult(swapStar.bestSwap(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces);
-            OperatorApplyResult crossFromCurrent = applyOperatorResult(crossInsertion.bestMove(current, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces);
-            OperatorApplyResult swapFromCurrent = applyOperatorResult(swapStar.bestSwap(current, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces);
+            OperatorApplyResult crossFromBase = applyOperatorResult(crossInsertion.bestMove(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder);
+            OperatorApplyResult swapFromBase = applyOperatorResult(swapStar.bestSwap(baseSeed, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder);
+            OperatorApplyResult crossFromCurrent = applyOperatorResult(crossInsertion.bestMove(current, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder);
+            OperatorApplyResult swapFromCurrent = applyOperatorResult(swapStar.bestSwap(current, safeTop), currentEvaluation, bestEvaluation, safeRounds + 1, traces, mlRecorder);
             for (OperatorApplyResult operatorResult : List.of(crossFromBase, swapFromBase, crossFromCurrent, swapFromCurrent)) {
                 evaluatedOrders += operatorResult.evaluatedOrders();
                 evaluatedInsertions += operatorResult.evaluatedCandidates();
@@ -107,20 +122,33 @@ public final class PdDestroyRepairOperator {
             }
         }
         boolean applied = evaluatedOrders > 0 && evaluatedInsertions > 0;
-        return new PdLnsResult(applied, baseSeed, best, baseEvaluation, bestEvaluation, safeRounds, evaluatedOrders, evaluatedInsertions, feasibleInsertions, acceptedMutations, traces);
+        return new PdLnsResult(applied, baseSeed, best, baseEvaluation, bestEvaluation, safeRounds, evaluatedOrders, evaluatedInsertions, feasibleInsertions, acceptedMutations, traces, mlRecorder.diagnostics());
     }
 
     private OperatorApplyResult applyOperatorResult(PdOperatorResult result,
                                                     PdEvaluation currentEvaluation,
                                                     PdEvaluation bestEvaluation,
                                                     int round,
-                                                    List<PdLnsTrace> traces) {
+                                                    List<PdLnsTrace> traces,
+                                                    MlParticipationRecorder mlRecorder) {
         if (result == null || result.evaluatedCandidates() <= 0) {
             return OperatorApplyResult.empty();
         }
         boolean accepted = result.evaluation() != null
                 && comparator.validNoRegression(result.evaluation(), currentEvaluation)
                 && comparator.better(result.evaluation(), bestEvaluation);
+        mlRecorder.recordDecision(
+                "OPTIONAL_NEIGHBORHOOD_SELECTION",
+                result.operator(),
+                result.evaluatedCandidates(),
+                result.feasibleCandidates(),
+                result.orderIds().isBlank() ? List.of() : List.of(result.orderIds().split(",")),
+                "ADAPTIVE_OPERATOR_POLICY",
+                1,
+                1,
+                accepted,
+                result.evaluation() == null ? 0.0 : currentEvaluation.distanceKm() - result.evaluation().distanceKm(),
+                accepted ? 1.0 : -1.0);
         if (accepted) {
             traces.add(new PdLnsTrace(round, result.orderIds(), result.operator(), true, currentEvaluation.distanceKm(), result.evaluation().distanceKm(), round(currentEvaluation.distanceKm() - result.evaluation().distanceKm()), result.evaluatedCandidates(), result.feasibleCandidates(), "phase5-operator"));
             return new OperatorApplyResult(true, result.seed(), result.evaluation(), result.orderIds().isBlank() ? 0 : result.orderIds().split(",").length, result.evaluatedCandidates(), result.feasibleCandidates());

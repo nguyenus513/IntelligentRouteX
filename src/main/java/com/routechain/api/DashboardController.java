@@ -828,7 +828,7 @@ public final class DashboardController {
                                                  List<OrderDto> orders,
                                                  List<DriverDto> drivers) {
         PdLnsMode mode = request.pdLnsModeEnum();
-        if ((mode != PdLnsMode.HEURISTIC_PD_LNS && !mode.mlDestroyRepair()) || archive == null) {
+        if ((mode != PdLnsMode.HEURISTIC_PD_LNS && !mode.mlDestroyRepair() && mode != PdLnsMode.ML_HYBRID_PD_LNS) || archive == null) {
             return HeuristicPdLnsOutcome.empty();
         }
         SolutionSeedCandidate baseBest = archive.best().orElse(null);
@@ -843,7 +843,7 @@ public final class DashboardController {
             return HeuristicPdLnsOutcome.empty();
         }
         PdSeedState basePd = pdSeedState(binding, orders.size(), drivers);
-        PdLnsResult result = mode.mlDestroyRepair()
+        PdLnsResult result = mode.mlDestroyRepair() || mode == PdLnsMode.ML_HYBRID_PD_LNS
                 ? new PdDestroyRepairOperator().improve(basePd, mode, request.pdLnsMaxRounds(), request.pdLnsTopBadOrders())
                 : new HeuristicPdLnsImprover().improve(basePd, request.pdLnsMaxRounds(), request.pdLnsTopBadOrders());
         SolutionSeedCandidate improved = null;
@@ -854,7 +854,7 @@ public final class DashboardController {
                 && result.finalEvaluation().lateCount() <= result.baseEvaluation().lateCount()
                 && result.finalEvaluation().totalLatenessMinutes() <= result.baseEvaluation().totalLatenessMinutes()
                 && result.finalEvaluation().distanceKm() < result.baseEvaluation().distanceKm()) {
-            improved = solutionSeedFromPd(result.finalSeed(), improvedSourceFor(baseBest.source()), result.finalEvaluation(), mode.mlDestroyRepair() ? "ml-destroy-repair-best-seed-improved" : "heuristic-pd-lns-best-seed-improved");
+            improved = solutionSeedFromPd(result.finalSeed(), improvedSourceFor(baseBest.source()), result.finalEvaluation(), (mode.mlDestroyRepair() || mode == PdLnsMode.ML_HYBRID_PD_LNS) ? "ml-pd-lns-best-seed-improved" : "heuristic-pd-lns-best-seed-improved");
         }
         return new HeuristicPdLnsOutcome(baseBest, result, improved);
     }
@@ -936,13 +936,14 @@ public final class DashboardController {
                 Map.entry("capacityViolations", fin == null ? 0 : fin.capacityViolations()),
                 Map.entry("lateRegression", lateRegression),
                 Map.entry("coverageRegression", coverageRegression),
-                Map.entry("improvementMethod", mode == PdLnsMode.HEURISTIC_PD_LNS ? "HEURISTIC_PD_LNS" : mode.mlDestroyRepair() ? "ML_DESTROY_REPAIR" : "NONE"),
-                Map.entry("mlQualityContribution", mode.mlDestroyRepair() && result != null && result.acceptedMutations() > 0),
-                Map.entry("adaptiveRewardUpdated", mode.mlDestroyRepair() && result != null && result.evaluatedInsertions() > 0),
-                Map.entry("bestOperator", mode.mlDestroyRepair() ? "PD_DESTROY_REPAIR_K" + Math.max(2, mode.destroySize()) : "PD_EXACT_INSERTION"),
+                Map.entry("improvementMethod", mode == PdLnsMode.HEURISTIC_PD_LNS ? "HEURISTIC_PD_LNS" : mode == PdLnsMode.ML_HYBRID_PD_LNS ? "ML_HYBRID_PD_LNS" : mode.mlDestroyRepair() ? "ML_DESTROY_REPAIR" : "NONE"),
+                Map.entry("mlQualityContribution", (mode.mlDestroyRepair() || mode == PdLnsMode.ML_HYBRID_PD_LNS) && result != null && result.acceptedMutations() > 0),
+                Map.entry("adaptiveRewardUpdated", (mode.mlDestroyRepair() || mode == PdLnsMode.ML_HYBRID_PD_LNS) && result != null && result.evaluatedInsertions() > 0),
+                Map.entry("bestOperator", mode == PdLnsMode.ML_HYBRID_PD_LNS ? "PD_HYBRID_CROSS_SWAPSTAR" : mode.mlDestroyRepair() ? "PD_DESTROY_REPAIR_K" + Math.max(2, mode.destroySize()) : "PD_EXACT_INSERTION"),
                 Map.entry("rankedOrders", result == null ? 0 : result.evaluatedOrders()),
                 Map.entry("evaluatedMutations", result == null ? 0 : result.evaluatedInsertions()),
-                Map.entry("feasibleMutations", result == null ? 0 : result.feasibleInsertions()));
+                Map.entry("feasibleMutations", result == null ? 0 : result.feasibleInsertions()),
+                Map.entry("mlParticipationProof", result == null ? com.routechain.v2.mlproof.MlParticipationDiagnostics.empty() : result.mlParticipationDiagnostics()));
     }
 
     private static void addBoundStops(List<BoundStop> stops, OrderDto order) {
@@ -1207,7 +1208,7 @@ public final class DashboardController {
                                                            int inputOrderCount,
                                                            PdLnsMode pdLnsMode,
                                                            HeuristicPdLnsOutcome heuristicPdLns) {
-        SolutionSeedCandidate baseBestSeed = (pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS || pdLnsMode.mlDestroyRepair()) && heuristicPdLns != null && heuristicPdLns.baseSeed() != null
+        SolutionSeedCandidate baseBestSeed = (pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS || pdLnsMode.mlDestroyRepair() || pdLnsMode == PdLnsMode.ML_HYBRID_PD_LNS) && heuristicPdLns != null && heuristicPdLns.baseSeed() != null
                 ? heuristicPdLns.baseSeed()
                 : archive == null ? null : archive.best().orElse(null);
         ImprovedSolutionCandidate improvedBest = improvedSeeds == null || baseBestSeed == null ? null : improvedSeeds.stream()
@@ -1243,7 +1244,7 @@ public final class DashboardController {
                 Map.entry("bestSeedAcceptedMoves", improvedBest == null || improvedBest.trace() == null ? pdLnsAccepted : improvedBest.trace().acceptedMoves()),
                 Map.entry("bestSeedRejectedMoves", improvedBest == null || improvedBest.trace() == null ? 0 : improvedBest.trace().rejectedMoves()),
                 Map.entry("bestSeedObjectiveImproved", improvedBest != null && improvedBest.trace() != null && improvedBest.trace().objectiveImproved()),
-                Map.entry("improvementMethod", pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS ? "HEURISTIC_PD_LNS" : pdLnsMode.mlDestroyRepair() ? "ML_DESTROY_REPAIR" : "ADAPTIVE_POLICY_STACK"),
+                Map.entry("improvementMethod", pdLnsMode == PdLnsMode.HEURISTIC_PD_LNS ? "HEURISTIC_PD_LNS" : pdLnsMode == PdLnsMode.ML_HYBRID_PD_LNS ? "ML_HYBRID_PD_LNS" : pdLnsMode.mlDestroyRepair() ? "ML_DESTROY_REPAIR" : "ADAPTIVE_POLICY_STACK"),
                 Map.entry("verdict", verdict));
     }
 
