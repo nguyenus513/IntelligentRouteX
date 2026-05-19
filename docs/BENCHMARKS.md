@@ -64,6 +64,26 @@ Source: `artifacts/test-reports/adaptive-ml-policy/v0.9.9-quality-seeking-final-
 - Dominance failures: `0`
 - Coverage regressions: `0`
 
+## v0.9.10 ML-guided PD-LNS final gate
+
+Source: `artifacts/test-reports/v0.9.10-ml-guided-pd-lns/final-20case/ml-hybrid-pd-lns-final-summary.json`.
+
+- Completed: `20/20`
+- Overall pass: `true`
+- Best seed improved: `19/20`
+- ML-guided better than heuristic: `6/20`
+- Hybrid worse than AUTO: `0`
+- Total distance gain over best seed: `620.4 km`
+- Late regressions: `0`
+- Coverage regressions: `0`
+- Pickup/dropoff violations: `0`
+- Capacity violations: `0`
+- Dominance failures: `0`
+
+Correct claim: ML-guided Hybrid PD-LNS improves the best available seed at pickup/dropoff sequence level in 19/20 final-gate cases, beats heuristic PD-LNS in 6/20 cases, and does not regress AUTO or hard constraints.
+
+Caveat: total hybrid gain (`404.5 km`) does not exceed total heuristic gain (`429.7 km`) on this suite, so the evidence does not support a claim that HYBRID always or generally beats heuristic PD-LNS on aggregate distance gain.
+
 ## API/runtime/Playground evidence
 
 - API contract: `artifacts/test-reports/v0.9.9.4-api-contract-final/api-contract-summary.json`

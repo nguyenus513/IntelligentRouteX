@@ -40,6 +40,26 @@ Improved datasets in the evidence file:
 
 v0.9.8 evidence certified reward state persistence across rounds for runtime/search efficiency. That does not by itself claim route-quality improvement; v0.9.9 quality-seeking evidence is the route-quality claim boundary.
 
+## v0.9.10 ML-guided PD-LNS seed improver
+
+v0.9.10 adds ML-guided Hybrid Pickup/Delivery LNS as a best-seed improver. External/internal solvers provide seed candidates; the ML policy guides destroy/repair, mutation ordering, and optional cross/swap-star neighborhoods at pickup/dropoff stop-sequence level. The evaluator and dominance guard remain authoritative.
+
+Final evidence: `artifacts/test-reports/v0.9.10-ml-guided-pd-lns/final-20case/ml-hybrid-pd-lns-final-summary.json`.
+
+- `overallPass=true`
+- `completed=20/20`
+- `mlBestSeedImprovedCases=19/20`
+- `mlGuidedBetterThanHeuristicCases=6/20`
+- `hybridWorseThanAutoCases=0`
+- `totalDistanceGainOverBestSeedKm=620.4`
+- `lateRegression=0`
+- `coverageRegression=0`
+- `pickupDropoffViolations=0`
+- `capacityViolations=0`
+- `dominanceFailures=0`
+
+Claim boundary: v0.9.10 proves ML-guided Hybrid PD-LNS can improve the best available seed and beats heuristic PD-LNS on 6/20 final-gate cases. It must not be described as always better than heuristic PD-LNS, because total hybrid gain (`404.5 km`) is below total heuristic gain (`429.7 km`) on the same 20-case suite.
+
 ## Safety model
 
 - Evaluator owns accept/reject.
