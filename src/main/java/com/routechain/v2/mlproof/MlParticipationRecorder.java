@@ -14,6 +14,21 @@ public final class MlParticipationRecorder {
     private int rewardUpdates;
     private int positiveRewards;
     private int negativeRewards;
+    private int tabularInferenceCount;
+    private int tabularCandidateCount;
+    private int tabularAffectedDecisionCount;
+    private int tabularAcceptedCandidateCount;
+
+    public void recordTabularScoring(int candidateCount, boolean affectedDecision, boolean acceptedCandidate) {
+        tabularInferenceCount++;
+        tabularCandidateCount += Math.max(0, candidateCount);
+        if (affectedDecision) {
+            tabularAffectedDecisionCount++;
+        }
+        if (acceptedCandidate) {
+            tabularAcceptedCandidateCount++;
+        }
+    }
 
     public void recordDecision(String decisionType,
                                String operator,
@@ -58,7 +73,7 @@ public final class MlParticipationRecorder {
         policy.put("adaptiveRewardCalculator", Map.of("used", rewardUpdates > 0, "rewardUpdates", rewardUpdates, "positiveRewards", positiveRewards, "negativeRewards", negativeRewards));
         Map<String, MlWorkerInvocationTrace> workers = new LinkedHashMap<>();
         workers.put("routefinder", new MlWorkerInvocationTrace("routefinder", false, "not-wired-static-v0.9.10A", 0, 0, false, 0, 0, "not in PD-LNS hot path"));
-        workers.put("tabular", new MlWorkerInvocationTrace("tabular", false, "not-wired-static-v0.9.10A", 0, 0, false, 0, 0, "not in PD-LNS hot path"));
+        workers.put("tabular", new MlWorkerInvocationTrace("tabular", tabularInferenceCount > 0, tabularInferenceCount > 0 ? "tabular-mutation-scorer-v0.9.10B" : "not-wired-static-v0.9.10A", tabularInferenceCount, tabularCandidateCount, tabularAffectedDecisionCount > 0 || tabularAcceptedCandidateCount > 0, tabularAffectedDecisionCount, tabularAcceptedCandidateCount, tabularInferenceCount > 0 ? "mutation scorer hot path" : "not in PD-LNS hot path"));
         workers.put("greedrl", new MlWorkerInvocationTrace("greedrl", false, "experimental", 0, 0, false, 0, 0, "not proven in static seed improvement"));
         workers.put("forecast", new MlWorkerInvocationTrace("forecast", false, "live-rescue-only", 0, 0, false, 0, 0, "live rescue only"));
         return new MlParticipationDiagnostics(decisions.size(), rankedMutationCount, acceptedMutationFromMlTopK, rewardUpdates, policy, workers, decisions);

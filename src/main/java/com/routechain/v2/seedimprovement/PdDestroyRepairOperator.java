@@ -13,11 +13,12 @@ public final class PdDestroyRepairOperator {
     private final RegretKPickupDeliveryRepair repair;
     private final PdCrossInsertionOperator crossInsertion;
     private final PdSwapStarOperator swapStar;
+    private final TabularMutationScorer tabularScorer;
     private final PdSeedEvaluator evaluator;
     private final PdObjectiveComparator comparator;
 
     public PdDestroyRepairOperator() {
-        this(new MlPdDestroyPolicy(), new PdExactInsertionOperator(), new RegretKPickupDeliveryRepair(), new PdCrossInsertionOperator(), new PdSwapStarOperator(), new PdSeedEvaluator(), new PdObjectiveComparator());
+        this(new MlPdDestroyPolicy(), new PdExactInsertionOperator(), new RegretKPickupDeliveryRepair(), new PdCrossInsertionOperator(), new PdSwapStarOperator(), new TabularMutationScorer(), new PdSeedEvaluator(), new PdObjectiveComparator());
     }
 
     public PdDestroyRepairOperator(MlPdDestroyPolicy destroyPolicy,
@@ -25,6 +26,7 @@ public final class PdDestroyRepairOperator {
                                    RegretKPickupDeliveryRepair repair,
                                    PdCrossInsertionOperator crossInsertion,
                                    PdSwapStarOperator swapStar,
+                                   TabularMutationScorer tabularScorer,
                                    PdSeedEvaluator evaluator,
                                    PdObjectiveComparator comparator) {
         this.destroyPolicy = destroyPolicy == null ? new MlPdDestroyPolicy() : destroyPolicy;
@@ -32,6 +34,7 @@ public final class PdDestroyRepairOperator {
         this.repair = repair == null ? new RegretKPickupDeliveryRepair() : repair;
         this.crossInsertion = crossInsertion == null ? new PdCrossInsertionOperator() : crossInsertion;
         this.swapStar = swapStar == null ? new PdSwapStarOperator() : swapStar;
+        this.tabularScorer = tabularScorer == null ? new TabularMutationScorer() : tabularScorer;
         this.evaluator = evaluator == null ? new PdSeedEvaluator() : evaluator;
         this.comparator = comparator == null ? new PdObjectiveComparator() : comparator;
     }
@@ -72,12 +75,15 @@ public final class PdDestroyRepairOperator {
                     PdEvaluation candidateEvaluation = repaired.evaluation();
                     boolean accepted = candidateEvaluation != null
                             && comparator.validNoRegression(candidateEvaluation, currentEvaluation)
-                            && comparator.better(candidateEvaluation, bestEvaluation);
+                            && betterByMode(mode, currentEvaluation, candidateEvaluation, bestEvaluation, destroyOrders, destroySize, operatorName(destroySize));
                     double reward = reward(currentEvaluation, candidateEvaluation, accepted);
                     if (mode != PdLnsMode.NO_REWARD_UPDATE && mode != PdLnsMode.NO_ADAPTIVE_POLICY) {
                         destroyPolicy.updateReward(destroyOrders, reward);
                     }
                     String operator = "PD_DESTROY_REPAIR_K" + destroySize;
+                    if (mode.tabularScored()) {
+                        mlRecorder.recordTabularScoring(1, accepted || candidateEvaluation != null, accepted);
+                    }
                     mlRecorder.recordDecision(
                             "DESTROY_ORDER_SELECTION",
                             operator,
@@ -165,6 +171,26 @@ public final class PdDestroyRepairOperator {
         }
     }
 
+    private boolean betterByMode(PdLnsMode mode,
+                                 PdEvaluation currentEvaluation,
+                                 PdEvaluation candidateEvaluation,
+                                 PdEvaluation bestEvaluation,
+                                 List<String> orderIds,
+                                 int destroySize,
+                                 String operator) {
+        if (!comparator.better(candidateEvaluation, bestEvaluation)) {
+            return false;
+        }
+        if (!mode.tabularScored()) {
+            return true;
+        }
+        return tabularScorer.score(currentEvaluation, candidateEvaluation, orderIds, destroySize, operator) > 0.0;
+    }
+
+    private String operatorName(int destroySize) {
+        return "PD_DESTROY_REPAIR_K" + destroySize;
+    }
+
     private List<Integer> destroySizes(PdSeedState seed, PdLnsMode mode) {
         if (mode == PdLnsMode.NO_ADAPTIVE_POLICY || mode == PdLnsMode.NO_ADAPTIVE_OPERATOR_POLICY) {
             return List.of(2, 3, 4);
@@ -179,6 +205,11 @@ public final class PdDestroyRepairOperator {
         if (mode == PdLnsMode.NO_ADAPTIVE_POLICY || mode == PdLnsMode.NO_ADAPTIVE_MOVE_PRIORITY) {
             return new PdOrderImpactAnalyzer().rankBadOrders(seed);
         }
+        if (mode == PdLnsMode.NO_ML_RANDOMIZED_PD_LNS) {
+            return new PdOrderImpactAnalyzer().rankBadOrders(seed).stream()
+                    .sorted((left, right) -> Integer.compare(Math.abs(right.orderId().hashCode() % 997), Math.abs(left.orderId().hashCode() % 997)))
+                    .toList();
+        }
         return destroyPolicy.rankOrders(seed, round);
     }
 
@@ -188,12 +219,13 @@ public final class PdDestroyRepairOperator {
             case NO_ADAPTIVE_MOVE_PRIORITY -> "HEURISTIC_ABLATION_NO_MOVE_PRIORITY";
             case NO_ADAPTIVE_OPERATOR_POLICY -> "ADAPTIVE_MOVE_PRIORITY_NO_OPERATOR_POLICY";
             case NO_REWARD_UPDATE -> "ADAPTIVE_MOVE_PRIORITY_NO_REWARD_UPDATE";
+            case NO_ML_RANDOMIZED_PD_LNS -> "NO_ML_RANDOMIZED";
             default -> "ADAPTIVE_MOVE_PRIORITY";
         };
     }
 
     private List<List<String>> destroySets(List<PdOrderImpact> rankedOrders, int destroySize, PdLnsMode mode) {
-        if (mode == PdLnsMode.NO_ADAPTIVE_POLICY || mode == PdLnsMode.NO_ADAPTIVE_MOVE_PRIORITY) {
+        if (mode == PdLnsMode.NO_ADAPTIVE_POLICY || mode == PdLnsMode.NO_ADAPTIVE_MOVE_PRIORITY || mode == PdLnsMode.NO_ML_RANDOMIZED_PD_LNS) {
             List<List<String>> heuristicSets = new ArrayList<>();
             if (rankedOrders.size() >= destroySize) {
                 addSet(heuristicSets, rankedOrders.subList(0, destroySize).stream().map(PdOrderImpact::orderId).toList(), destroySize);

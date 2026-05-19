@@ -1290,7 +1290,7 @@ public final class DashboardController {
                 Map.entry("evaluatedMutationCount", moves.size()),
                 Map.entry("acceptedMutationTypes", moves.stream().filter(MoveEvaluationTrace::accepted).map(MoveEvaluationTrace::moveType).distinct().toList()),
                 Map.entry("routeFinderUsed", intValue(selectorSources.get("ML_REFINED")) > 0),
-                Map.entry("tabularUsed", false),
+                Map.entry("tabularUsed", pdLnsMode.tabularScored()),
                 Map.entry("greedRlUsed", irx != null && irx.diagnostics().get("mlEvidence") instanceof Map<?, ?> evidence && intValue(objectMap(((Map<?, ?>) evidence).get("greedRl")).get("applied")) > 0),
                 Map.entry("forecastUsed", false),
                 Map.entry("qualityContribution", pdLnsMode != PdLnsMode.HEURISTIC_PD_LNS && (acceptedMoves > 0 || pdLnsMode.mlDestroyRepair() || pdLnsMode.hybridPdLns())),
