@@ -38,3 +38,7 @@ Runtime layers:
 - Metrics registry in `src/main/java/com/routechain/runtime/metrics`.
 
 Security MVP uses `X-Api-Key`, `X-Tenant-Id`, and idempotent request identifiers for mutating commands.
+
+## Backend-only Recertification
+
+`v1.0.1-backend-core-recertified` confirms the backend core no longer depends on removed dashboard/mobile/demo worktrees while retaining static dispatch, live dispatch, compare, timeline, event, security, idempotency, rate-limit, and observability APIs.

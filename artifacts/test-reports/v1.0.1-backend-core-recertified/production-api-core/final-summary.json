@@ -1,0 +1,24 @@
+{
+    "version":  "v1.0.0-production-api-core",
+    "overallPass":  true,
+    "fullReleaseReady":  true,
+    "results":  {
+                    "compileJava":  "PASS",
+                    "apiContract":  "PASS",
+                    "runtimeStore":  "PASS",
+                    "asyncWorker":  "PASS",
+                    "executionTimeline":  "PASS",
+                    "staticDispatchApi":  "PASS",
+                    "liveDynamicApi":  "PASS",
+                    "freezePolicy":  "PASS",
+                    "compareApi":  "PASS",
+                    "security":  "PASS",
+                    "idempotency":  "PASS",
+                    "rateLimit":  "PASS",
+                    "artifactStore":  "PASS",
+                    "eventStream":  "PASS",
+                    "observability":  "PASS",
+                    "dockerComposeSmoke":  "PASS"
+                },
+    "error":  null
+}

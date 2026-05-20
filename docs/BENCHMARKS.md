@@ -17,3 +17,18 @@ powershell -ExecutionPolicy Bypass -File scripts/run-production-api-core-gate.ps
 ```
 
 The gate verifies compile, OpenAPI/AsyncAPI contracts, runtime store abstractions, queue/worker abstractions, static/live/rescue/compare APIs, execution timeline, security/idempotency/rate-limit hooks, artifact store, event stream, observability, and Docker Compose presence.
+
+## v1.0.1 Backend Core Recertification
+
+After removing dashboard/mobile/demo surfaces, backend-only core was recertified with:
+- clean backend-only dependency check
+- compileJava
+- production API core gate
+- static dispatch smoke
+- live dynamic smoke
+- compare API smoke
+- execution timeline/events smoke
+- Adaptive ML QUALITY_SEEKING diagnostics check
+- security, idempotency, rate-limit, event stream, observability checks
+
+Final artifact: `artifacts/test-reports/v1.0.1-backend-core-recertified/final-summary.json`.

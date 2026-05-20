@@ -1,0 +1,25 @@
+{
+    "version":  "v1.0.1-backend-core-recertified",
+    "startedAt":  "2026-05-20T16:42:58.3147586+07:00",
+    "finishedAt":  "2026-05-20T16:44:28.8325779+07:00",
+    "compileJava":  "PASS",
+    "backendOnly":  true,
+    "dashboardDependencyRemoved":  true,
+    "staticDispatchApi":  "PASS",
+    "liveDynamicApi":  "PASS",
+    "compareApi":  "PASS",
+    "executionTimeline":  "PASS",
+    "adaptiveMlQualitySeeking":  "PASS",
+    "security":  "PASS",
+    "idempotency":  "PASS",
+    "rateLimit":  "PASS",
+    "eventStream":  "PASS",
+    "observability":  "PASS",
+    "productionApiCore":  "PASS",
+    "health":  "PASS",
+    "versionCheck":  "PASS",
+    "details":  {
+
+                },
+    "overallPass":  true
+}

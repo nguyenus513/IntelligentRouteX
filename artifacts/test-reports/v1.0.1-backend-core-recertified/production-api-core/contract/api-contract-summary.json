@@ -1,0 +1,14 @@
+{
+    "gate":  "api-contract",
+    "overallPass":  true,
+    "checks":  {
+                   "compileJava":  "PASS",
+                   "openapiExists":  true,
+                   "asyncapiExists":  true,
+                   "dispatchPath":  true,
+                   "livePath":  true,
+                   "comparePath":  true,
+                   "executionPath":  true,
+                   "securityScheme":  true
+               }
+}
