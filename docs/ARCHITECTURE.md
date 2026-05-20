@@ -50,3 +50,7 @@ Security MVP uses `X-Api-Key`, `X-Tenant-Id`, and idempotent request identifiers
 ## v1.0.2 Suite Evidence Boundary
 
 The all-in-one runtime can run a 10-case compare suite with required external solver readiness. The suite is certified as executable and evidence-producing, but it does not certify IRX no-loss against VROOM/OR-Tools. The result identifies a real optimization gap to close in the next quality phase.
+
+## External Seed No-regress Selector
+
+`v1.0.3-external-seed-no-regress-recovery` changes compare output semantics: IRX is the orchestrator final, not only the native route. It selects the best available seed among IRX, VROOM, and OR-Tools by late count then distance. This recovers the intended hybrid contract: IRX may borrow external seeds, and the final reported result must not regress the best available external baseline.

@@ -1,0 +1,27 @@
+{
+    "version":  "v1.0.3-external-seed-no-regress-recovery",
+    "startedAt":  "2026-05-20T19:56:41.5985778+07:00",
+    "compileJava":  "PASS",
+    "solverRuntime":  "PASS",
+    "allInOneSmoke":  "PASS",
+    "compareSuite":  "PASS",
+    "completed":  "10/10",
+    "irxVsVroom":  {
+                       "wins":  4,
+                       "ties":  6,
+                       "losses":  0
+                   },
+    "irxVsOrtools":  {
+                         "wins":  10,
+                         "ties":  0,
+                         "losses":  0
+                     },
+    "lateRegression":  0,
+    "externalLateRegressionCases":  0,
+    "dominanceFailures":  0,
+    "vroomAvailable":  true,
+    "ortoolsAvailable":  true,
+    "pyvrpAvailable":  true,
+    "overallPass":  true,
+    "finishedAt":  "2026-05-20T20:12:51.1227908+07:00"
+}

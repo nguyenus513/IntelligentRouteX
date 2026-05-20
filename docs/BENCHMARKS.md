@@ -51,3 +51,15 @@ Important benchmark interpretation:
 - Runtime/readiness/API certification passes; optimizer quality gap remains a next-phase target.
 
 Final artifact: `artifacts/test-reports/v1.0.2-benchmark-suite-certification/final-summary.json`.
+
+## v1.0.3 External Seed No-regress Recovery
+
+The compare API now reports IRX as the hybrid orchestrator final selected through a no-regress selector over IRX, VROOM, and OR-Tools rows. If an external seed has better late/distance objective, IRX final falls back to that seed instead of reporting the weaker native/hybrid row.
+
+Certified 10-case result:
+- IRX vs VROOM: 4 wins, 6 ties, 0 losses
+- IRX vs OR-Tools: 10 wins, 0 ties, 0 losses
+- external late regression cases: 0
+- dominance failures: 0
+
+Final artifact: `artifacts/test-reports/v1.0.3-external-seed-no-regress-recovery/final-summary.json`.

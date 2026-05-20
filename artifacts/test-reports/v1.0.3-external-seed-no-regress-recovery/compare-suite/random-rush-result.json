@@ -1,0 +1,13 @@
+{
+    "dataset":  "random-rush",
+    "jobId":  "cmp_d0955404ec",
+    "irxKm":  34.9,
+    "vroomKm":  34.9,
+    "ortoolsKm":  51.9,
+    "irxLate":  0,
+    "vroomLate":  0,
+    "ortoolsLate":  0,
+    "irxVsVroom":  "TIE",
+    "irxVsOrtools":  "WIN",
+    "winner":  "IRX"
+}

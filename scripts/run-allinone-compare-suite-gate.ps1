@@ -11,7 +11,7 @@ function GetJson($path){ Invoke-RestMethod -Method Get -Uri "$BaseUrl$path" -Hea
 function Outcome($left,$right){ $eps=0.01; if($left -lt ($right-$eps)){"WIN"} elseif($left -gt ($right+$eps)){"LOSS"} else {"TIE"} }
 function OutcomeKey($outcome){ if($outcome -eq "WIN") { "wins" } elseif($outcome -eq "LOSS") { "losses" } else { "ties" } }
 function Bump($map,$key){ $map[$key] = [int]$map[$key] + 1 }
-$summary=[ordered]@{version="v1.0.2-benchmark-suite-certification"; startedAt=(Get-Date).ToString("o"); datasets=$Datasets}
+$summary=[ordered]@{version="v1.0.3-external-seed-no-regress-recovery"; startedAt=(Get-Date).ToString("o"); datasets=$Datasets}
 $health=GetJson "/v1/health"
 $summary.vroomAvailable=($health.externalSolvers.vroom -eq "AVAILABLE")
 $summary.ortoolsAvailable=($health.externalSolvers.ortools -eq "AVAILABLE")
@@ -55,11 +55,12 @@ $summary.irxVsOrtools=$vsOrtools
 $summary.lateRegression=$lateRegression
 $summary.externalLateRegressionCases=$externalLateRegressionCases
 $summary.dominanceFailures=$dominanceFailures
-$summary.overallPass=($rows.Count -eq $Datasets.Count -and $dominanceFailures -eq 0 -and $summary.vroomAvailable -and $summary.ortoolsAvailable -and $summary.pyvrpAvailable)
+$summary.overallPass=($rows.Count -eq $Datasets.Count -and $vsVroom.losses -eq 0 -and $vsOrtools.losses -eq 0 -and $externalLateRegressionCases -eq 0 -and $dominanceFailures -eq 0 -and $summary.vroomAvailable -and $summary.ortoolsAvailable -and $summary.pyvrpAvailable)
 $summary.finishedAt=(Get-Date).ToString("o")
 $path=Join-Path $OutputDir "allinone-compare-suite-summary.json"
 $summary | ConvertTo-Json -Depth 50 | Set-Content $path
 Write-Output "SUMMARY=$path"
 if(-not $summary.overallPass){ exit 1 }
+
 
 

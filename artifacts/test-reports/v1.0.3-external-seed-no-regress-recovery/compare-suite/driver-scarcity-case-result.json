@@ -1,0 +1,13 @@
+{
+    "dataset":  "driver-scarcity-case",
+    "jobId":  "cmp_0314794be6",
+    "irxKm":  48.7,
+    "vroomKm":  65.3,
+    "ortoolsKm":  130.4,
+    "irxLate":  0,
+    "vroomLate":  9,
+    "ortoolsLate":  0,
+    "irxVsVroom":  "WIN",
+    "irxVsOrtools":  "WIN",
+    "winner":  "IRX"
+}
