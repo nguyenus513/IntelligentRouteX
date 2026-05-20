@@ -21,3 +21,20 @@ IntelligentRouteX is now kept as a backend-first dispatch optimization repositor
 Client/API caller → `/api/v1/*` backend endpoints → dispatch core → optional ML worker services → JSON result/artifacts.
 
 No browser dashboard is shipped in this cleaned repo state.
+
+## v1.0.0 Production API Core
+
+Backend-only production API layer now exposes stable `/v1` contracts for static dispatch, live rolling dispatch, rescue, solver compare, execution timeline, artifacts, and admin observability.
+
+Contract files:
+- `docs/openapi/irx-api-v1.yaml`
+- `docs/asyncapi/irx-events-v1.yaml`
+
+Runtime layers:
+- API contract and validation DTOs in `src/main/java/com/routechain/api/v1`.
+- Runtime queues in `src/main/java/com/routechain/runtime/queue`.
+- In-memory stores in `src/main/java/com/routechain/runtime/store`.
+- Artifact guard/store in `src/main/java/com/routechain/runtime/artifact`.
+- Metrics registry in `src/main/java/com/routechain/runtime/metrics`.
+
+Security MVP uses `X-Api-Key`, `X-Tenant-Id`, and idempotent request identifiers for mutating commands.

@@ -1,0 +1,36 @@
+asyncapi: 2.6.0
+info:
+  title: IRX Dispatch Events
+  version: v1.0.0-production-api-core
+channels:
+  dispatch.job.created: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  dispatch.job.started: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  dispatch.job.completed: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  dispatch.job.failed: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  execution.stage.started: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  execution.stage.completed: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  execution.stage.failed: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  live.order.buffered: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  live.order.assigned: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  live.route.updated: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  live.cycle.started: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  live.cycle.completed: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  rescue.triggered: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  rescue.completed: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  ml.policy.applied: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  ml.reward.updated: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+  ml.quality_gain.detected: { subscribe: { message: { $ref: '#/components/messages/EventEnvelope' } } }
+components:
+  messages:
+    EventEnvelope:
+      payload:
+        type: object
+        required: [eventId, type, tenantId, occurredAt]
+        properties:
+          eventId: { type: string }
+          type: { type: string }
+          tenantId: { type: string }
+          executionId: { type: string }
+          subjectId: { type: string }
+          occurredAt: { type: string, format: date-time }
+          data: { type: object }

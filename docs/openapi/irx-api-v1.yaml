@@ -1,306 +1,174 @@
-﻿openapi: 3.0.3
+openapi: 3.0.3
 info:
-  title: IntelligentRouteX API
-  version: v1
-  description: Locked API contract for IRX production-demo MVP.
+  title: IRX Production API
+  version: v1.0.0-production-api-core
 servers:
-  - url: http://localhost:18116/api/v1
+  - url: http://localhost:18116
+security:
+  - ApiKeyAuth: []
 paths:
-  /health:
+  /v1/health:
     get:
       summary: Health check
       responses:
-        '200': { description: Success envelope }
-  /jobs:
+        '200': { description: Backend health }
+  /v1/version:
+    get:
+      summary: Version metadata
+      responses:
+        '200': { description: API version }
+  /v1/dispatch/jobs:
     post:
-      summary: Create generic async job
-      parameters:
-        - in: header
-          name: Idempotency-Key
-          schema: { type: string }
+      summary: Create static dispatch job
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DispatchJobRequest' }
       responses:
-        '200': { description: Job envelope }
-  /jobs/{jobId}:
+        '202': { description: Job accepted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/dispatch/jobs/{jobId}:
     get:
-      summary: Get job status
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
+      summary: Get static job status
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/JobId' } ]
       responses:
-        '200': { description: Job envelope }
-        '404': { description: NOT_FOUND error envelope }
-  /jobs/{jobId}/result:
+        '200': { description: Job status }
+  /v1/dispatch/jobs/{jobId}/result:
     get:
-      summary: Get job result
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
+      summary: Get static job result
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/JobId' } ]
       responses:
-        '200': { description: Result envelope }
-  /jobs/{jobId}/cancel:
+        '200': { description: Dispatch result }
+  /v1/dispatch/jobs/{jobId}/artifacts:
+    get:
+      summary: List job artifacts
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/JobId' } ]
+      responses:
+        '200': { description: Artifacts }
+  /v1/live/sessions:
     post:
-      summary: Cancel job
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
+      summary: Create live rolling dispatch session
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
       responses:
-        '200': { description: Cancel envelope }
-        '409': { description: CONFLICT error envelope }
-  /jobs/{jobId}/events:
-    get:
-      summary: Job events
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Event page envelope }
-  /jobs/{jobId}/artifacts:
-    get:
-      summary: Job artifacts
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Artifact list envelope }
-  /static/dispatch:
+        '201': { description: Session created }
+  /v1/live/sessions/{sessionId}/orders:
     post:
-      summary: Synchronous static dispatch
+      summary: Buffer live order
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/SessionId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
       responses:
-        '200': { description: Static dispatch result envelope }
-  /static/dispatch/jobs:
+        '202': { description: Order buffered }
+  /v1/live/sessions/{sessionId}/drivers/{driverId}/telemetry:
     post:
-      summary: Async static dispatch
+      summary: Update driver telemetry
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/SessionId' }, { name: driverId, in: path, required: true, schema: { type: string } } ]
       responses:
-        '200': { description: Job envelope }
-  /static/dispatch/jobs/{jobId}:
-    get:
-      summary: Static job status
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Job envelope }
-  /static/dispatch/jobs/{jobId}/result:
-    get:
-      summary: Static job result
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Result envelope }
-  /live/start:
+        '202': { description: Telemetry accepted }
+  /v1/live/sessions/{sessionId}/cycles:
     post:
-      summary: Start live rolling session
+      summary: Run live rolling dispatch cycle
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/SessionId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
       responses:
-        '200': { description: Live state envelope }
-  /live/stop:
+        '202': { description: Cycle completed }
+  /v1/live/sessions/{sessionId}/state:
+    get:
+      summary: Get live session state
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/SessionId' } ]
+      responses:
+        '200': { description: Live state }
+  /v1/live/sessions/{sessionId}/events:
+    get:
+      summary: Stream live session events
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/SessionId' } ]
+      responses:
+        '200': { description: Server-sent events }
+  /v1/rescue/jobs:
     post:
-      summary: Stop live rolling session
+      summary: Create rescue dispatch job
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
       responses:
-        '200': { description: Live state envelope }
-  /live/state:
-    get:
-      summary: Live state
-      responses:
-        '200': { description: Live state envelope }
-  /live/orders:
+        '202': { description: Rescue job accepted }
+  /v1/compare/jobs:
     post:
-      summary: Add live order
+      summary: Compare IRX, OR-Tools, and VROOM on same scenario
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
       responses:
-        '200': { description: Accepted envelope }
-  /live/drivers/location:
-    post:
-      summary: Update driver location
-      responses:
-        '200': { description: Accepted envelope }
-  /live/cycles/run-now:
-    post:
-      summary: Run live cycle immediately
-      responses:
-        '200': { description: Cycle envelope }
-  /live/cycles/{cycleId}:
+        '202': { description: Compare job accepted }
+  /v1/compare/jobs/{jobId}/result:
     get:
-      summary: Cycle status
-      parameters:
-        - in: path
-          name: cycleId
-          required: true
-          schema: { type: string }
+      summary: Get solver comparison result
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { $ref: '#/components/parameters/JobId' } ]
       responses:
-        '200': { description: Cycle envelope }
-  /live/cycles/{cycleId}/result:
+        '200': { description: Compare result }
+  /v1/executions/{executionId}/timeline:
     get:
-      summary: Cycle result
-      parameters:
-        - in: path
-          name: cycleId
-          required: true
-          schema: { type: string }
+      summary: Get execution timeline
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { name: executionId, in: path, required: true, schema: { type: string } } ]
       responses:
-        '200': { description: Cycle result envelope }
-  /live/events:
+        '200': { description: Timeline }
+  /v1/executions/{executionId}/events:
     get:
-      summary: Live events
+      summary: Get execution events
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { name: executionId, in: path, required: true, schema: { type: string } } ]
       responses:
-        '200': { description: Event page envelope }
-  /rescue/jobs:
-    post:
-      summary: Create rescue job
-      responses:
-        '200': { description: Rescue job envelope }
-  /rescue/jobs/{jobId}:
+        '200': { description: Events }
+  /v1/executions/{executionId}/result:
     get:
-      summary: Rescue job status
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
+      summary: Get execution result
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { name: executionId, in: path, required: true, schema: { type: string } } ]
       responses:
-        '200': { description: Job envelope }
-  /rescue/jobs/{jobId}/result:
+        '200': { description: Result }
+  /v1/artifacts/{artifactId}:
     get:
-      summary: Rescue result
-      parameters:
-        - in: path
-          name: jobId
-          required: true
-          schema: { type: string }
+      summary: Get artifact metadata with tenant guard
+      parameters: [ { $ref: '#/components/parameters/TenantId' }, { name: artifactId, in: path, required: true, schema: { type: string } } ]
       responses:
-        '200': { description: Rescue result envelope }
-  /bigdata/batches:
-    post:
-      summary: Submit BigData-lite batch
-      responses:
-        '200': { description: Batch envelope }
-  /bigdata/batches/{batchId}:
+        '200': { description: Artifact }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/queues:
     get:
-      summary: Batch status
-      parameters:
-        - in: path
-          name: batchId
-          required: true
-          schema: { type: string }
+      summary: Queue metrics
       responses:
-        '200': { description: Batch envelope }
-  /bigdata/batches/{batchId}/items:
+        '200': { description: Queue state }
+  /v1/admin/workers:
     get:
-      summary: Batch items page
-      parameters:
-        - in: path
-          name: batchId
-          required: true
-          schema: { type: string }
-        - in: query
-          name: page
-          schema: { type: integer }
-        - in: query
-          name: size
-          schema: { type: integer }
+      summary: Worker metrics
       responses:
-        '200': { description: Page envelope }
-  /bigdata/batches/{batchId}/requeue:
-    post:
-      summary: Requeue batch
-      responses:
-        '200': { description: Requeue envelope }
-  /bigdata/dead-letter:
-    get:
-      summary: BigData dead-letter items
-      responses:
-        '200': { description: Dead-letter envelope }
-  /bigdata/dead-letter/{itemId}/requeue:
-    post:
-      summary: Requeue dead-letter item
-      parameters:
-        - in: path
-          name: itemId
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Requeue envelope }
-  /bigdata/metrics:
-    get:
-      summary: BigData metrics
-      responses:
-        '200': { description: Metrics envelope }
-  /artifacts:
-    get:
-      summary: Artifact list
-      responses:
-        '200': { description: Artifact list envelope }
-  /artifacts/{artifactId}:
-    get:
-      summary: Artifact metadata
-      parameters:
-        - in: path
-          name: artifactId
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Artifact envelope }
-  /artifacts/{artifactId}/download:
-    get:
-      summary: Artifact download metadata
-      responses:
-        '200': { description: Artifact envelope }
-  /events:
-    get:
-      summary: Global events
-      responses:
-        '200': { description: Event page envelope }
-  /runtime/state:
-    get:
-      summary: Runtime state
-      responses:
-        '200': { description: Runtime state envelope }
-  /runtime/queues:
-    get:
-      summary: Runtime queues
-      responses:
-        '200': { description: Queue metrics envelope }
-  /runtime/workers:
-    get:
-      summary: Runtime workers
-      responses:
-        '200': { description: Worker metrics envelope }
-  /metrics:
+        '200': { description: Worker state }
+  /v1/admin/metrics:
     get:
       summary: Runtime metrics
       responses:
-        '200': { description: Metrics envelope }
+        '200': { description: Metrics }
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+  parameters:
+    TenantId: { name: X-Tenant-Id, in: header, required: true, schema: { type: string } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
+    JobId: { name: jobId, in: path, required: true, schema: { type: string } }
+    SessionId: { name: sessionId, in: path, required: true, schema: { type: string } }
+  responses:
+    Unauthorized: { description: Missing or invalid API key }
+    Forbidden: { description: Cross-tenant or scope denied }
   schemas:
-    ApiMeta:
+    DispatchJobRequest:
       type: object
       properties:
-        version: { type: string }
-        timestamp: { type: string }
-    ApiError:
+        requestId: { type: string }
+        tenantId: { type: string }
+        profile: { type: string, example: QUALITY_SEEKING }
+        datasetId: { type: string, example: raw-s }
+        drivers: { type: array, items: { type: object } }
+        orders: { type: array, items: { type: object } }
+        adaptiveMl: { type: object }
+        options: { type: object }
+    ErrorResponse:
       type: object
       properties:
         code: { type: string }
         message: { type: string }
-        details: { type: array, items: { type: object } }
-    ApiEnvelope:
-      type: object
-      properties:
-        ok: { type: boolean }
-        requestId: { type: string }
-        data: { type: object }
-        error: { $ref: '#/components/schemas/ApiError' }
-        meta: { $ref: '#/components/schemas/ApiMeta' }
