@@ -1,0 +1,106 @@
+{
+    "version":  "official-solomon-lilim-benchmark",
+    "gate":  "official-solomon-lilim",
+    "dataSource":  "official",
+    "tier":  "fast",
+    "timeLimitMs":  1000,
+    "targetCount":  6,
+    "totalCells":  18,
+    "completedCells":  18,
+    "solvers":  [
+                    "our-dispatch-v2",
+                    "ortools-baseline",
+                    "pyvrp-baseline"
+                ],
+    "irxFeasible":  "6/6",
+    "ortoolsFeasible":  "6/6",
+    "pyvrpFeasible":  "0/6",
+    "pyvrpEvidenceGap":  6,
+    "hardViolationRows":  0,
+    "irxVsOrtools":  {
+                         "wins":  1,
+                         "losses":  0,
+                         "ties":  5
+                     },
+    "compareRows":  [
+                        {
+                            "suite":  "li-lim",
+                            "instance":  "LC101",
+                            "irxVehicleCount":  10,
+                            "ortoolsVehicleCount":  10,
+                            "irxDistance":  828.937,
+                            "ortoolsDistance":  828.937,
+                            "distanceDelta":  0,
+                            "verdict":  "TIE",
+                            "irxResult":  "PASS",
+                            "ortoolsResult":  "PASS"
+                        },
+                        {
+                            "suite":  "li-lim",
+                            "instance":  "LR101",
+                            "irxVehicleCount":  21,
+                            "ortoolsVehicleCount":  21,
+                            "irxDistance":  1720.304,
+                            "ortoolsDistance":  1720.304,
+                            "distanceDelta":  0,
+                            "verdict":  "TIE",
+                            "irxResult":  "PASS_WITH_LIMITS",
+                            "ortoolsResult":  "PASS_WITH_LIMITS"
+                        },
+                        {
+                            "suite":  "li-lim",
+                            "instance":  "LRC101",
+                            "irxVehicleCount":  16,
+                            "ortoolsVehicleCount":  16,
+                            "irxDistance":  1749.026,
+                            "ortoolsDistance":  1749.026,
+                            "distanceDelta":  0,
+                            "verdict":  "TIE",
+                            "irxResult":  "PASS_WITH_LIMITS",
+                            "ortoolsResult":  "PASS_WITH_LIMITS"
+                        },
+                        {
+                            "suite":  "solomon",
+                            "instance":  "C101",
+                            "irxVehicleCount":  10,
+                            "ortoolsVehicleCount":  10,
+                            "irxDistance":  854.314,
+                            "ortoolsDistance":  854.314,
+                            "distanceDelta":  0,
+                            "verdict":  "TIE",
+                            "irxResult":  "PASS",
+                            "ortoolsResult":  "PASS"
+                        },
+                        {
+                            "suite":  "solomon",
+                            "instance":  "R101",
+                            "irxVehicleCount":  19,
+                            "ortoolsVehicleCount":  20,
+                            "irxDistance":  1682.258,
+                            "ortoolsDistance":  1690.518,
+                            "distanceDelta":  -8.26,
+                            "verdict":  "WIN",
+                            "irxResult":  "PASS",
+                            "ortoolsResult":  "PASS_WITH_LIMITS"
+                        },
+                        {
+                            "suite":  "solomon",
+                            "instance":  "RC101",
+                            "irxVehicleCount":  16,
+                            "ortoolsVehicleCount":  16,
+                            "irxDistance":  1749.894,
+                            "ortoolsDistance":  1749.894,
+                            "distanceDelta":  0,
+                            "verdict":  "TIE",
+                            "irxResult":  "PASS_WITH_LIMITS",
+                            "ortoolsResult":  "PASS_WITH_LIMITS"
+                        }
+                    ],
+    "officialSmokePass":  true,
+    "fullThreeSolverOfficialPass":  false,
+    "blockedClaims":  [
+                          "PyVRP official Solomon/LiLim baseline pass",
+                          "IRX official no-loss vs PyVRP",
+                          "IRX official no-loss vs BKS"
+                      ]
+}

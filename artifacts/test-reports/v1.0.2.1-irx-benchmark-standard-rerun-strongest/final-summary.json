@@ -1,0 +1,59 @@
+{
+    "version":  "v1.0.2.1-irx-benchmark-standard",
+    "startedAt":  "2026-05-20T21:46:01.1491774+07:00",
+    "compileJava":  "PASS",
+    "solverReadiness":  "PASS",
+    "staticGate":  "PASS",
+    "dynamicGate":  "PASS",
+    "mlGate":  "PASS",
+    "officialSolomonLiLimGate":  "PASS",
+    "runtimePass":  true,
+    "qualityPass":  true,
+    "static":  {
+                   "improvedExternalCases":  4,
+                   "lossesVsBestExternal":  0,
+                   "completed":  "10/10",
+                   "lateRegressionVsBestExternal":  0,
+                   "externalDominanceRollbacks":  10
+               },
+    "dynamic":  {
+                    "status":  "SAFETY_PASS_WIN_NOT_CLAIMED",
+                    "completed":  "5/5",
+                    "cycleRuntimeP95":  26821,
+                    "hypotheses":  {
+                                       "H2":  "NOT_MEASURED_AGAINST_RERUN_BASELINE",
+                                       "H1":  "NOT_MEASURED_AGAINST_RERUN_BASELINE",
+                                       "H3":  "NOT_MEASURED_AGAINST_NO_ML_BASELINE"
+                                   }
+                },
+    "mlContribution":  {
+                           "status":  "NO_REGRESS_ONLY",
+                           "lossesVsNoMl":  0,
+                           "qualityGainCases":  0
+                       },
+    "officialSolomonLiLim":  {
+                                 "fullThreeSolverOfficialPass":  false,
+                                 "irxFeasible":  "6/6",
+                                 "pyvrpFeasible":  "0/6",
+                                 "officialSmokePass":  true,
+                                 "ortoolsFeasible":  "6/6",
+                                 "pyvrpEvidenceGap":  6,
+                                 "irxVsOrtools":  {
+                                                      "wins":  1,
+                                                      "losses":  0,
+                                                      "ties":  5
+                                                  }
+                             },
+    "allowedClaims":  [
+                          "runtime readiness certified",
+                          "external solver integration certified",
+                          "IRX Hybrid no-loss vs BestExternal",
+                          "IRX uses external dominance guard for safe final selection"
+                      ],
+    "blockedClaims":  [
+                          "IRX dynamic win vs rerun baseline",
+                          "IRX improves external seed on every dataset"
+                      ],
+    "overallPass":  true,
+    "finishedAt":  "2026-05-20T22:04:39.7902508+07:00"
+}

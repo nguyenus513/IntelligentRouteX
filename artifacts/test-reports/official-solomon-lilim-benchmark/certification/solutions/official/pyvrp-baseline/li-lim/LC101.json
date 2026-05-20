@@ -1,0 +1,6 @@
+{
+  "evidenceGapReason": "pyvrp-baseline-not-installed",
+  "routes": [],
+  "schemaVersion": "external-benchmark-solution/v1",
+  "solver": "pyvrp-baseline"
+}

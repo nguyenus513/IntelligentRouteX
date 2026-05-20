@@ -170,7 +170,7 @@ Required algorithms:
 
 Goal:
 
-- reduce vehicle-count gap;
+- improve fleet efficiency;
 - reduce strong-baseline gap;
 - avoid case-specific rules or BKS leakage.
 

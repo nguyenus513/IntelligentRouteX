@@ -1,0 +1,251 @@
+{
+  "budgetAllocation": {
+    "candidate_ms": 175,
+    "degrade_level": "L2_SMALL_POOL",
+    "incumbent_ms": 100,
+    "max_tick_ms": 1000,
+    "mode": "resource-aware-quality-per-ms",
+    "repair_ms": 287,
+    "reserve_ms": 212,
+    "scenario_ms": 75,
+    "selector_ms": 150
+  },
+  "budgetPolicy": {
+    "consolidationMs": 0,
+    "constructionMs": 0,
+    "diversificationMs": 0,
+    "fixedProbeMs": 0,
+    "incumbentMs": 1000,
+    "mode": "short-budget-portfolio",
+    "timeLimitMs": 1000
+  },
+  "budgetUsage": {
+    "allocatedMs": 6000,
+    "degradeLevel": "L2_SMALL_POOL",
+    "overrun": false,
+    "solverOverrun": true,
+    "solverTimeLimitMs": 1000,
+    "usedMs": 1931,
+    "wallClockAllowedMs": 6000,
+    "wallClockOverheadMs": 931,
+    "wallClockOverrun": false
+  },
+  "constraintProfile": {
+    "distanceSource": "benchmark-matrix",
+    "enforceCapacity": true,
+    "enforcePickupBeforeDropoff": false,
+    "enforceTimeWindows": true,
+    "mode": "dispatch-v2-external-benchmark",
+    "objectiveOrder": [
+      "feasible",
+      "vehicle-count",
+      "distance"
+    ]
+  },
+  "objectivePolicy": {
+    "implementationStatus": "adaptive-portfolio-enabled",
+    "order": [
+      "feasible",
+      "vehicle-count",
+      "distance"
+    ],
+    "vehicleFixedCost": 9713869
+  },
+  "referenceSeedPolicy": {
+    "enabled": true,
+    "source": null,
+    "used": false
+  },
+  "resourcePolicy": {
+    "enabled": true,
+    "mode": "resource-aware-quality-per-ms"
+  },
+  "resourceSnapshot": {
+    "active_route_count": 25,
+    "driver_count": 25,
+    "feasible_candidate_ratio": 1.0,
+    "hot_partition_ratio": 1.0,
+    "order_count": 100,
+    "queue_lag_ms": 0.0
+  },
+  "routes": [
+    [
+      "0",
+      "20",
+      "24",
+      "25",
+      "27",
+      "29",
+      "30",
+      "28",
+      "26",
+      "23",
+      "22",
+      "21",
+      "0"
+    ],
+    [
+      "0",
+      "67",
+      "65",
+      "63",
+      "62",
+      "74",
+      "72",
+      "61",
+      "64",
+      "68",
+      "66",
+      "69",
+      "0"
+    ],
+    [
+      "0",
+      "5",
+      "3",
+      "7",
+      "8",
+      "10",
+      "11",
+      "9",
+      "6",
+      "4",
+      "2",
+      "1",
+      "0"
+    ],
+    [
+      "0",
+      "43",
+      "42",
+      "41",
+      "40",
+      "44",
+      "46",
+      "45",
+      "48",
+      "51",
+      "50",
+      "52",
+      "49",
+      "47",
+      "0"
+    ],
+    [
+      "0",
+      "90",
+      "87",
+      "86",
+      "83",
+      "82",
+      "84",
+      "85",
+      "88",
+      "89",
+      "91",
+      "0"
+    ],
+    [
+      "0",
+      "13",
+      "17",
+      "18",
+      "19",
+      "15",
+      "16",
+      "14",
+      "12",
+      "99",
+      "0"
+    ],
+    [
+      "0",
+      "98",
+      "96",
+      "95",
+      "94",
+      "92",
+      "93",
+      "97",
+      "100",
+      "75",
+      "0"
+    ],
+    [
+      "0",
+      "32",
+      "33",
+      "31",
+      "35",
+      "37",
+      "38",
+      "39",
+      "36",
+      "34",
+      "0"
+    ],
+    [
+      "0",
+      "57",
+      "55",
+      "54",
+      "53",
+      "56",
+      "58",
+      "60",
+      "59",
+      "0"
+    ],
+    [
+      "0",
+      "81",
+      "78",
+      "76",
+      "71",
+      "70",
+      "73",
+      "77",
+      "79",
+      "80",
+      "0"
+    ]
+  ],
+  "schemaVersion": "external-benchmark-solution/v1",
+  "solver": "our-dispatch-v2",
+  "solverImplementation": "external-benchmark-dispatch-adapter-v2",
+  "stageRuntimeSummary": {
+    "stageCount": 3,
+    "stages": {
+      "portfolio-candidates": {
+        "candidateCount": 1,
+        "count": 1,
+        "fallbackLevels": [],
+        "feasibleCandidateCount": 1,
+        "feasibleCandidateRatio": 1.0,
+        "runtimeMsP50": 1456.0,
+        "runtimeMsP95": 1456.0,
+        "runtimeMsP99": 1456.0
+      },
+      "reference-seed": {
+        "candidateCount": 0,
+        "count": 1,
+        "fallbackLevels": [],
+        "feasibleCandidateCount": 0,
+        "feasibleCandidateRatio": null,
+        "runtimeMsP50": 2.0,
+        "runtimeMsP95": 2.0,
+        "runtimeMsP99": 2.0
+      },
+      "slack-portfolio-probe": {
+        "candidateCount": 1,
+        "count": 1,
+        "fallbackLevels": [],
+        "feasibleCandidateCount": 1,
+        "feasibleCandidateRatio": 1.0,
+        "runtimeMsP50": 464.0,
+        "runtimeMsP95": 464.0,
+        "runtimeMsP99": 464.0
+      }
+    }
+  }
+}

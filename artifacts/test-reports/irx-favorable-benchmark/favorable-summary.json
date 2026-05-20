@@ -1,0 +1,99 @@
+{
+    "version":  "irx-favorable-benchmark",
+    "sourceArtifact":  "artifacts/test-reports/v1.0.2.1-irx-benchmark-standard-rerun-strongest",
+    "generatedAt":  "2026-05-20T22:31:54.6786555+07:00",
+    "overallPass":  true,
+    "positioning":  "FAVORABLE_BUT_TRUTHFUL",
+    "headline":  "IRX Hybrid/no-regress is zero-loss versus the strongest baseline candidate on the static standard suite and passes official Solomon/LiLim smoke with zero hard violations.",
+    "strongestClaims":  [
+                            "Static standard: 10/10 PASS",
+                            "Static standard: 4 wins / 6 ties / 0 losses versus strongest baseline candidate",
+                            "Static standard: 0 late regressions and 0 dominance failures",
+                            "Official Solomon/LiLim smoke: IRX feasible 6/6 with 0 hard violations",
+                            "Official Solomon/LiLim smoke: 1 win / 5 ties / 0 losses versus OR-Tools",
+                            "Dynamic smoke: 5/5 safety PASS with 0 freeze/capacity/pickup-dropoff violations",
+                            "ML smoke: 0 losses versus no-ML baseline"
+                        ],
+    "static":  {
+                   "completed":  "10/10",
+                   "wins":  4,
+                   "ties":  6,
+                   "losses":  0,
+                   "lateRegression":  0,
+                   "dominanceFailures":  0,
+                   "improvedExternalCases":  4,
+                   "bestWins":  [
+                                    {
+                                        "dataset":  "driver-scarcity-case",
+                                        "irxKm":  48.7,
+                                        "baselineKm":  65.3,
+                                        "advantageKm":  16.6
+                                    },
+                                    {
+                                        "dataset":  "raw-m",
+                                        "irxKm":  34.6,
+                                        "baselineKm":  41.6,
+                                        "advantageKm":  7
+                                    },
+                                    {
+                                        "dataset":  "raw-s",
+                                        "irxKm":  30.2,
+                                        "baselineKm":  33.5,
+                                        "advantageKm":  3.3
+                                    },
+                                    {
+                                        "dataset":  "opposite-direction-dropoffs",
+                                        "irxKm":  67.5,
+                                        "baselineKm":  67.9,
+                                        "advantageKm":  0.4
+                                    }
+                                ]
+               },
+    "officialSolomonLiLim":  {
+                                 "smokePass":  true,
+                                 "irxFeasible":  "6/6",
+                                 "hardViolationRows":  0,
+                                 "vsOrtools":  {
+                                                   "wins":  1,
+                                                   "losses":  0,
+                                                   "ties":  5
+                                               },
+                                 "wins":  [
+                                              {
+                                                  "suite":  "solomon",
+                                                  "instance":  "R101",
+                                                  "irxVehicleCount":  19,
+                                                  "ortoolsVehicleCount":  20,
+                                                  "irxDistance":  1682.258,
+                                                  "ortoolsDistance":  1690.518,
+                                                  "distanceDelta":  -8.26,
+                                                  "verdict":  "WIN",
+                                                  "irxResult":  "PASS",
+                                                  "ortoolsResult":  "PASS_WITH_LIMITS"
+                                              }
+                                          ],
+                                 "ties":  5,
+                                 "pyvrpEvidenceGap":  6
+                             },
+    "dynamic":  {
+                    "completed":  "5/5",
+                    "status":  "SAFETY_PASS_WIN_NOT_CLAIMED",
+                    "cycleRuntimeP95":  26821,
+                    "frozenNextStopViolations":  0,
+                    "pickedOrderLostViolations":  0,
+                    "capacityViolations":  0,
+                    "pickupBeforeDropoffViolations":  0
+                },
+    "ml":  {
+               "status":  "NO_REGRESS_ONLY",
+               "lossesVsNoMl":  0,
+               "qualityGainCases":  0
+           },
+    "presentationSummary":  "IRX passes the strongest current benchmark pack: static 10/10, zero loss versus strongest baseline candidate, official Solomon/LiLim 6/6 feasible with 0 hard violations, and dynamic safety 5/5.",
+    "boundaries":  [
+                       "Do not claim dynamic latency/churn/SLA win yet.",
+                       "Do not claim official PyVRP comparison yet.",
+                       "Do not claim BKS no-loss yet.",
+                       "Do not claim native-only IRX beats every external solver."
+                   ]
+}

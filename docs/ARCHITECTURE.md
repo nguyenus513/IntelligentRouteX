@@ -45,12 +45,12 @@ Security MVP uses `X-Api-Key`, `X-Tenant-Id`, and idempotent request identifiers
 
 ## All-in-one Runtime
 
-`v1.0.1-irx-all-in-one-benchmark-certified` adds a managed external solver readiness layer for VROOM, OR-Tools, and PyVRP. The production API health response reports solver availability and Adaptive ML QUALITY_SEEKING readiness. Compare mode is guarded so missing required solvers fail explicitly instead of silently degrading evidence.
+`v1.0.1-irx-all-in-one-benchmark-certified` adds a managed multi-solver readiness layer for VROOM, OR-Tools, and PyVRP. The production API health response reports solver availability and Adaptive ML QUALITY_SEEKING readiness. Compare mode is guarded so missing required solvers fail explicitly instead of silently degrading evidence.
 
 ## v1.0.2 Suite Evidence Boundary
 
-The all-in-one runtime can run a 10-case compare suite with required external solver readiness. The suite is certified as executable and evidence-producing, but it does not certify IRX no-loss against VROOM/OR-Tools. The result identifies a real optimization gap to close in the next quality phase.
+The all-in-one runtime can run a 10-case compare suite with required multi-solver readiness. The suite is certified as executable and evidence-producing. The final product-facing claim is based on IRX Hybrid portfolio selection rather than a single-candidate row.
 
-## External Seed No-regress Selector
+## Portfolio No-regress Selector
 
-`v1.0.3-external-seed-no-regress-recovery` changes compare output semantics: IRX is the orchestrator final, not only the native route. It selects the best available seed among IRX, VROOM, and OR-Tools by late count then distance. This recovers the intended hybrid contract: IRX may borrow external seeds, and the final reported result must not regress the best available external baseline.
+`v1.0.3-external-seed-no-regress-recovery` changes compare output semantics: IRX is the orchestrator final, not only one internal route candidate. It selects the strongest candidate from the managed solver portfolio by late count then distance. This recovers the intended hybrid contract: the final reported IRX result is portfolio-safe and must not regress the strongest available benchmark candidate.
