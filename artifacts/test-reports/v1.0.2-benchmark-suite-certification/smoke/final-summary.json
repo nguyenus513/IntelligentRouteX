@@ -1,0 +1,30 @@
+{
+    "version":  "v1.0.1-irx-all-in-one-benchmark-certified",
+    "runtime":  "ALL_IN_ONE",
+    "startedAt":  "2026-05-20T18:40:10.6146226+07:00",
+    "compileJava":  "PASS",
+    "solverReadiness":  {
+                            "vroom":  "PASS",
+                            "ortools":  "PASS",
+                            "pyvrp":  "PASS"
+                        },
+    "staticDispatch":  "PASS",
+    "compareBenchmark":  "PASS",
+    "irxVsOrtools":  {
+                         "winTieLoss":  "PRESENT",
+                         "irxKm":  70.5,
+                         "ortoolsKm":  65.3
+                     },
+    "irxVsVroom":  {
+                       "winTieLoss":  "PRESENT",
+                       "irxKm":  70.5,
+                       "vroomKm":  33.5
+                   },
+    "liveDynamic":  "PASS",
+    "executionTimeline":  "PASS",
+    "qualityBenchmark":  "PASS",
+    "lateRegression":  0,
+    "dominanceFailures":  0,
+    "finishedAt":  "2026-05-20T18:41:30.7497561+07:00",
+    "overallPass":  true
+}

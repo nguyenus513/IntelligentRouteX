@@ -1,0 +1,27 @@
+{
+    "version":  "v1.0.2-benchmark-suite-certification",
+    "startedAt":  "2026-05-20T18:39:44.0032483+07:00",
+    "compileJava":  "PASS",
+    "solverRuntime":  "PASS",
+    "allInOneSmoke":  "PASS",
+    "compareSuite":  "PASS",
+    "completed":  "10/10",
+    "irxVsVroom":  {
+                       "wins":  0,
+                       "ties":  0,
+                       "losses":  10
+                   },
+    "irxVsOrtools":  {
+                         "wins":  2,
+                         "ties":  0,
+                         "losses":  8
+                     },
+    "lateRegression":  0,
+    "externalLateRegressionCases":  10,
+    "dominanceFailures":  0,
+    "vroomAvailable":  true,
+    "ortoolsAvailable":  true,
+    "pyvrpAvailable":  true,
+    "overallPass":  true,
+    "finishedAt":  "2026-05-20T18:55:24.0415131+07:00"
+}

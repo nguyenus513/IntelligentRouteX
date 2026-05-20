@@ -46,3 +46,7 @@ Security MVP uses `X-Api-Key`, `X-Tenant-Id`, and idempotent request identifiers
 ## All-in-one Runtime
 
 `v1.0.1-irx-all-in-one-benchmark-certified` adds a managed external solver readiness layer for VROOM, OR-Tools, and PyVRP. The production API health response reports solver availability and Adaptive ML QUALITY_SEEKING readiness. Compare mode is guarded so missing required solvers fail explicitly instead of silently degrading evidence.
+
+## v1.0.2 Suite Evidence Boundary
+
+The all-in-one runtime can run a 10-case compare suite with required external solver readiness. The suite is certified as executable and evidence-producing, but it does not certify IRX no-loss against VROOM/OR-Tools. The result identifies a real optimization gap to close in the next quality phase.

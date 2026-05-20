@@ -39,3 +39,15 @@ All-in-one certification requires local startup to expose IRX Core, VROOM, OR-To
 Compare benchmark requires all external solvers and fails with `SOLVER_UNAVAILABLE` if readiness is incomplete.
 
 Certification artifact: `artifacts/test-reports/v1.0.1-all-in-one-benchmark/final/final-summary.json`.
+
+## v1.0.2 Benchmark Suite Certification
+
+All-in-one compare suite completed 10/10 datasets with VROOM, OR-Tools, and PyVRP available.
+
+Important benchmark interpretation:
+- This is a suite-level evidence artifact, not a no-loss claim.
+- True external solver extraction shows IRX raw distance loses to VROOM on 10/10 cases and loses to OR-Tools on 8/10 cases.
+- IRX has external late regression cases versus the best external baseline on 10/10 cases.
+- Runtime/readiness/API certification passes; optimizer quality gap remains a next-phase target.
+
+Final artifact: `artifacts/test-reports/v1.0.2-benchmark-suite-certification/final-summary.json`.

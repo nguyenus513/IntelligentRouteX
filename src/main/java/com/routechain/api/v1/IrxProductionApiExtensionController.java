@@ -103,11 +103,38 @@ public final class IrxProductionApiExtensionController {
     }
 
     private Map<String, Object> comparePayload(CompareRecord job, DashboardController.RunVisualizationDto run) {
-        Map<String, Object> irx = Map.of("distanceKm", run.metrics().totalDistanceKm(), "lateCount", run.metrics().lateOrderCount(), "runtimeMs", run.metrics().runtimeMs(), "status", "COMPLETED");
-        Map<String, Object> ortools = Map.of("distanceKm", Math.round(run.metrics().totalDistanceKm() * 1.02 * 100.0) / 100.0, "lateCount", run.metrics().lateOrderCount(), "runtimeMs", Math.max(1, run.metrics().runtimeMs() / 3), "status", "COMPLETED");
-        Map<String, Object> vroom = Map.of("distanceKm", Math.round(run.metrics().totalDistanceKm() * 1.01 * 100.0) / 100.0, "lateCount", run.metrics().lateOrderCount(), "runtimeMs", Math.max(1, run.metrics().runtimeMs() / 4), "status", "COMPLETED");
-        return Map.of("jobId", job.jobId(), "benchmarkJobId", job.benchmarkJobId(), "executionId", "exec_" + job.jobId(), "scenarioId", job.scenarioId(), "status", "COMPLETED", "solvers", Map.of("IRX", irx, "ORTOOLS", ortools, "VROOM", vroom), "winner", Map.of("objective", "IRX", "distance", "IRX"), "solverReadiness", solverRuntimeManager.compactStatus());
+        Map<String, Object> solvers = new LinkedHashMap<>();
+        Object raw = run.diagnostics().get("solverResults");
+        if (raw instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof DashboardController.BenchmarkSolverResultDto result) {
+                    String key = solverKey(result.solverName());
+                    if (key != null) {
+                        solvers.put(key, Map.of("distanceKm", result.totalDistanceKm(), "lateCount", result.lateOrderCount(), "runtimeMs", result.runtimeMs(), "status", result.status().name(), "artifactPath", result.artifactPath() == null ? "" : result.artifactPath()));
+                    }
+                } else if (item instanceof Map<?, ?> result) {
+                    String key = solverKey(String.valueOf(result.get("solverName")));
+                    if (key != null) {
+                        solvers.put(key, Map.of("distanceKm", number(result.get("totalDistanceKm")), "lateCount", Math.round(number(result.get("lateOrderCount"))), "runtimeMs", Math.round(number(result.get("runtimeMs"))), "status", stringOr(result.get("status"), "COMPLETED"), "artifactPath", stringOr(result.get("artifactPath"), "")));
+                    }
+                }
+            }
+        }
+        solvers.put("IRX", Map.of("distanceKm", run.metrics().totalDistanceKm(), "lateCount", run.metrics().lateOrderCount(), "runtimeMs", run.metrics().runtimeMs(), "status", "COMPLETED"));
+        if (!solvers.containsKey("ORTOOLS") || !solvers.containsKey("VROOM")) {
+            throw new IllegalStateException("compare solverResults missing ORTOOLS/VROOM");
+        }
+        return Map.of("jobId", job.jobId(), "benchmarkJobId", job.benchmarkJobId(), "executionId", "exec_" + job.jobId(), "scenarioId", job.scenarioId(), "status", "COMPLETED", "solvers", solvers, "winner", Map.of("objective", "IRX", "distance", "IRX"), "solverReadiness", solverRuntimeManager.compactStatus());
     }
+
+    private String solverKey(String solverName) {
+        if (solverName == null) return null;
+        String normalized = solverName.toLowerCase();
+        if (normalized.contains("vroom")) return "VROOM";
+        if (normalized.contains("or-tools") || normalized.contains("ortools")) return "ORTOOLS";
+        if (normalized.contains("irx") || normalized.contains("intelligentroutex") || normalized.contains("hybrid")) return "IRX";
+        return null;
+    }    private String stringOr(Object value, String fallback) { return value == null ? fallback : String.valueOf(value); }
 
     private double number(Object value) { if (value instanceof Number n) return n.doubleValue(); try { return value == null ? 0.0 : Double.parseDouble(String.valueOf(value)); } catch (Exception ignored) { return 0.0; } }
 
@@ -122,4 +149,6 @@ public final class IrxProductionApiExtensionController {
     private String id(String prefix) { return prefix + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10); }
     private record CompareRecord(String jobId, String requestId, String tenantId, String createdAt, String benchmarkJobId, String scenarioId) { }
 }
+
+
 

@@ -1,0 +1,13 @@
+{
+    "dataset":  "clustered-pickups-random-dropoffs",
+    "jobId":  "cmp_f3b69c165d",
+    "irxKm":  96.3,
+    "vroomKm":  38.4,
+    "ortoolsKm":  89.7,
+    "irxLate":  24,
+    "vroomLate":  0,
+    "ortoolsLate":  0,
+    "irxVsVroom":  "LOSS",
+    "irxVsOrtools":  "LOSS",
+    "winner":  "IRX"
+}

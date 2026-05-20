@@ -1,0 +1,13 @@
+{
+    "dataset":  "raw-s",
+    "jobId":  "cmp_84a7315a38",
+    "irxKm":  70.5,
+    "vroomKm":  33.5,
+    "ortoolsKm":  65.3,
+    "irxLate":  6,
+    "vroomLate":  0,
+    "ortoolsLate":  0,
+    "irxVsVroom":  "LOSS",
+    "irxVsOrtools":  "LOSS",
+    "winner":  "IRX"
+}

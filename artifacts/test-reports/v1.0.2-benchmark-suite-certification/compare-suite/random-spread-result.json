@@ -1,0 +1,13 @@
+{
+    "dataset":  "random-spread",
+    "jobId":  "cmp_91a1624250",
+    "irxKm":  70.1,
+    "vroomKm":  32,
+    "ortoolsKm":  54.2,
+    "irxLate":  25,
+    "vroomLate":  0,
+    "ortoolsLate":  0,
+    "irxVsVroom":  "LOSS",
+    "irxVsOrtools":  "LOSS",
+    "winner":  "IRX"
+}

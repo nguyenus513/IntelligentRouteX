@@ -1,0 +1,13 @@
+{
+    "dataset":  "opposite-direction-dropoffs",
+    "jobId":  "cmp_3b39921c60",
+    "irxKm":  268.6,
+    "vroomKm":  67.9,
+    "ortoolsKm":  183,
+    "irxLate":  26,
+    "vroomLate":  0,
+    "ortoolsLate":  0,
+    "irxVsVroom":  "LOSS",
+    "irxVsOrtools":  "LOSS",
+    "winner":  "IRX"
+}

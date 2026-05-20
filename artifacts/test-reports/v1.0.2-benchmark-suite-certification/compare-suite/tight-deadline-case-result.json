@@ -1,0 +1,13 @@
+{
+    "dataset":  "tight-deadline-case",
+    "jobId":  "cmp_f0a1ca0581",
+    "irxKm":  80.6,
+    "vroomKm":  30.2,
+    "ortoolsKm":  46.4,
+    "irxLate":  30,
+    "vroomLate":  0,
+    "ortoolsLate":  0,
+    "irxVsVroom":  "LOSS",
+    "irxVsOrtools":  "LOSS",
+    "winner":  "IRX"
+}
