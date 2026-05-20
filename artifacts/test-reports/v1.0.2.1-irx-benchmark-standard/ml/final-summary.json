@@ -1,0 +1,43 @@
+{
+    "version":  "v1.0.2.1-irx-benchmark-standard",
+    "gate":  "ml-contribution",
+    "rows":  [
+                 {
+                     "mode":  "NO_ML_HEURISTIC",
+                     "jobId":  "BMJ-AB4CB93F",
+                     "distanceKm":  70.5,
+                     "lateCount":  6,
+                     "coverageRate":  1.0,
+                     "runtimeMs":  0
+                 },
+                 {
+                     "mode":  "TOP_K_ASSISTED",
+                     "jobId":  "BMJ-BF2093B2",
+                     "distanceKm":  70.5,
+                     "lateCount":  6,
+                     "coverageRate":  1.0,
+                     "runtimeMs":  0
+                 },
+                 {
+                     "mode":  "QUALITY_SEEKING",
+                     "jobId":  "BMJ-ACB47186",
+                     "distanceKm":  70.5,
+                     "lateCount":  6,
+                     "coverageRate":  1.0,
+                     "runtimeMs":  0
+                 },
+                 {
+                     "mode":  "QUALITY_SEEKING_EXTERNAL_DOMINANCE",
+                     "jobId":  "BMJ-1D8B2934",
+                     "distanceKm":  70.5,
+                     "lateCount":  6,
+                     "coverageRate":  1.0,
+                     "runtimeMs":  0
+                 }
+             ],
+    "lossesVsNoMl":  0,
+    "qualityGainCases":  0,
+    "runtimeSearchGainCases":  0,
+    "status":  "NO_REGRESS_ONLY",
+    "overallPass":  true
+}

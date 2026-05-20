@@ -1,0 +1,106 @@
+{
+    "version":  "v1.0.2.1-irx-benchmark-standard",
+    "gate":  "standard-static",
+    "runtimePass":  true,
+    "qualityPass":  true,
+    "overallPass":  true,
+    "completed":  "10/10",
+    "hardViolations":  0,
+    "coverageRegression":  0,
+    "lossesVsBestExternal":  0,
+    "lateRegressionVsBestExternal":  0,
+    "externalDominanceRollbacks":  10,
+    "improvedExternalCases":  4,
+    "rows":  [
+                 {
+                     "dataset":  "raw-s",
+                     "irxKm":  30.2,
+                     "bestExternalKm":  33.5,
+                     "irxLate":  0,
+                     "bestExternalLate":  0,
+                     "lossVsBestExternal":  false,
+                     "lateRegressionVsBestExternal":  false
+                 },
+                 {
+                     "dataset":  "raw-m",
+                     "irxKm":  34.6,
+                     "bestExternalKm":  41.6,
+                     "irxLate":  0,
+                     "bestExternalLate":  0,
+                     "lossVsBestExternal":  false,
+                     "lateRegressionVsBestExternal":  false
+                 },
+                 {
+                     "dataset":  "random-spread",
+                     "irxKm":  32,
+                     "bestExternalKm":  32,
+                     "irxLate":  0,
+                     "bestExternalLate":  0,
+                     "lossVsBestExternal":  false,
+                     "lateRegressionVsBestExternal":  false
+                 },
+                 {
+                     "dataset":  "driver-scarcity-case",
+                     "irxKm":  48.7,
+                     "bestExternalKm":  65.3,
+                     "irxLate":  0,
+                     "bestExternalLate":  0,
+                     "lossVsBestExternal":  false,
+                     "lateRegressionVsBestExternal":  false
+                 },
+                 {
+                     "dataset":  "tight-deadline-case",
+                     "irxKm":  30.2,
+                     "bestExternalKm":  30.2,
+                     "irxLate":  0,
+                     "bestExternalLate":  0,
+                     "lossVsBestExternal":  false,
+                     "lateRegressionVsBestExternal":  false
+                 },
+                 {
+                     "dataset":  "wide-deadline-case",
+                     "irxKm":  32.3,
+                     "bestExternalKm":  32.3,
+                     "irxLate":  0,
+                     "bestExternalLate":  0,
+                     "lossVsBestExternal":  false,
+                     "lateRegressionVsBestExternal":  false
+                 },
+                 {
+                     "dataset":  "driver-imbalanced-case",
+                     "irxKm":  18.1,
+                     "bestExternalKm":  18.1,
+                     "irxLate":  0,
+                     "bestExternalLate":  0,
+                     "lossVsBestExternal":  false,
+                     "lateRegressionVsBestExternal":  false
+                 },
+                 {
+                     "dataset":  "clustered-pickups-random-dropoffs",
+                     "irxKm":  38.5,
+                     "bestExternalKm":  38.5,
+                     "irxLate":  0,
+                     "bestExternalLate":  0,
+                     "lossVsBestExternal":  false,
+                     "lateRegressionVsBestExternal":  false
+                 },
+                 {
+                     "dataset":  "random-rush",
+                     "irxKm":  34.9,
+                     "bestExternalKm":  34.9,
+                     "irxLate":  0,
+                     "bestExternalLate":  0,
+                     "lossVsBestExternal":  false,
+                     "lateRegressionVsBestExternal":  false
+                 },
+                 {
+                     "dataset":  "opposite-direction-dropoffs",
+                     "irxKm":  67.5,
+                     "bestExternalKm":  67.9,
+                     "irxLate":  0,
+                     "bestExternalLate":  0,
+                     "lossVsBestExternal":  false,
+                     "lateRegressionVsBestExternal":  false
+                 }
+             ]
+}

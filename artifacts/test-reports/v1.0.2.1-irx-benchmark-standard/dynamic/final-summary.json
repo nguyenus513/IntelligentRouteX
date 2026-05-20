@@ -1,0 +1,59 @@
+{
+    "version":  "v1.0.2.1-irx-benchmark-standard",
+    "gate":  "standard-dynamic",
+    "completed":  "5/5",
+    "status":  "SAFETY_PASS_WIN_NOT_CLAIMED",
+    "frozenNextStopViolations":  0,
+    "pickedOrderLostViolations":  0,
+    "capacityViolations":  0,
+    "pickupBeforeDropoffViolations":  0,
+    "cycleRuntimeP95":  26273,
+    "hypothesisResults":  {
+                              "H2":  "NOT_MEASURED_AGAINST_RERUN_BASELINE",
+                              "H1":  "NOT_MEASURED_AGAINST_RERUN_BASELINE",
+                              "H3":  "NOT_MEASURED_AGAINST_NO_ML_BASELINE"
+                          },
+    "overallPass":  true,
+    "rows":  [
+                 {
+                     "case":  "solomon-r-dynamic",
+                     "sessionId":  "sess_47ae509f6d",
+                     "status":  "COMPLETED",
+                     "cycleRuntimeMs":  25784,
+                     "assigned":  1,
+                     "buffered":  1
+                 },
+                 {
+                     "case":  "solomon-rc-dynamic",
+                     "sessionId":  "sess_4171e40649",
+                     "status":  "COMPLETED",
+                     "cycleRuntimeMs":  26273,
+                     "assigned":  1,
+                     "buffered":  1
+                 },
+                 {
+                     "case":  "lilim-pdptw-dynamic",
+                     "sessionId":  "sess_26203b3965",
+                     "status":  "COMPLETED",
+                     "cycleRuntimeMs":  25705,
+                     "assigned":  1,
+                     "buffered":  1
+                 },
+                 {
+                     "case":  "rush-hour-synthetic",
+                     "sessionId":  "sess_28f02fdf75",
+                     "status":  "COMPLETED",
+                     "cycleRuntimeMs":  26195,
+                     "assigned":  1,
+                     "buffered":  1
+                 },
+                 {
+                     "case":  "driver-delay-rescue",
+                     "sessionId":  "sess_60d9feee8d",
+                     "status":  "COMPLETED",
+                     "cycleRuntimeMs":  26254,
+                     "assigned":  1,
+                     "buffered":  1
+                 }
+             ]
+}
