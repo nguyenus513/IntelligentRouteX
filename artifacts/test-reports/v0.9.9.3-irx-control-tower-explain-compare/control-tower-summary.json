@@ -1,0 +1,22 @@
+﻿{
+    "version":  "v0.9.9.3-irx-control-tower-explain-compare",
+    "generatedAt":  "2026-05-20T07:13:59.9055418Z",
+    "compileJava":  "PASS",
+    "dashboardBuild":  "PASS",
+    "backendHealth":  true,
+    "startStaticButton":  true,
+    "startLiveButton":  true,
+    "benchmarkCompareButton":  true,
+    "resetButton":  true,
+    "navTabsPresent":  true,
+    "staticRunPass":  true,
+    "liveRunPass":  true,
+    "randomSpreadPass":  true,
+    "explainTracePresent":  true,
+    "compareThreeSolverPass":  true,
+    "compareThreeMapUiPresent":  true,
+    "routeAnimationUiPresent":  true,
+    "apiArtifactsTabPresent":  true,
+    "controlTowerStylesPresent":  true,
+    "overallPass":  true
+}

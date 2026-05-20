@@ -1,0 +1,19 @@
+﻿{
+    "data":  {
+                 "jobId":  "JOB-13",
+                 "tenantId":  "demo",
+                 "queue":  "STATIC_QUEUE",
+                 "kind":  "STATIC_DISPATCH",
+                 "status":  "COMPLETED",
+                 "accepted":  12,
+                 "rejected":  0,
+                 "attempts":  0,
+                 "createdAt":  "2026-05-20T07:13:58.846246110Z"
+             },
+    "ok":  true,
+    "meta":  {
+                 "timestamp":  "2026-05-20T07:13:58.846476803Z",
+                 "version":  "v1"
+             },
+    "requestId":  "REQ-22"
+}

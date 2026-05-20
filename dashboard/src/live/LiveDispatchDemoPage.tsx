@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, Cpu, GitBranch, Play, Plus, RadioTower, RefreshCw, ShieldCheck, Truck, Zap } from 'lucide-react';
+import { AlertTriangle, BarChart3, Braces, CheckCircle2, Clock, Cpu, FileJson, GitBranch, Layers3, Pause, Play, Plus, RadioTower, RefreshCw, RotateCcw, ShieldCheck, Truck, Zap } from 'lucide-react';
 import { LiveDispatchMapPanel } from './LiveDispatchMapPanel';
 
 export type Point = { lat: number; lng: number };
@@ -12,6 +12,14 @@ export type LiveEvent = { type: string; subject: string; createdAt: string };
 export type LiveState = { jobId: string; cycle: number; assigned: number; buffered: number; orders: LiveOrderState[]; drivers: LiveDriverState[]; routes: LiveRouteSnapshot[]; frozenStopIds: string[]; events: LiveEvent[] };
 export type LiveCycleResponse = { jobId: string; cycle: number; mode: string; assigned: number; buffered: number; late: number; forecastUsed: boolean; greedRlAction: string; triModelRepairUsed: boolean; routes: LiveRouteSnapshot[]; diagnostics: Record<string, unknown>; assignedRegression: number };
 
+type ControlTowerTab = 'Static Control' | 'Live Control' | 'Explain Pipeline' | 'Compare Arena' | 'API / Artifacts';
+type TowerState = 'STATIC_IDLE' | 'STATIC_RUNNING' | 'STATIC_DONE' | 'LIVE_IDLE' | 'LIVE_ACTIVE' | 'LIVE_CYCLE_RUNNING' | 'COMPARE_RUNNING' | 'COMPARE_DONE';
+type StaticJob = { jobId: string; status: string; accepted?: number; rejected?: number; kind?: string; createdAt?: string };
+type StaticResult = { jobId: string; status: string; summary?: { assignedOrders?: number; routeCount?: number; totalKm?: number; lateCount?: number }; links?: Record<string, string> };
+type SolverCompareRow = { solverName: string; status: string; verdict: string; assignedOrderCount: number; inputOrderCount: number; totalDistanceKm: number; lateOrderCount: number; runtimeMs: number; reason: string };
+type BenchmarkRun = { runId: string; scenarioId: string; status: string; orders?: Array<Record<string, unknown>>; drivers?: Array<Record<string, unknown>>; routes?: Array<Record<string, unknown>>; metrics?: Record<string, unknown>; diagnostics?: Record<string, unknown>; comparison?: { verdict?: string; reason?: string } | null; artifacts?: Record<string, unknown> };
+type ApiEnvelope<T> = { ok: boolean; data: T; requestId?: string; meta?: Record<string, unknown> };
+
 const API_BASE = '/api/v1';
 const headers = { 'Content-Type': 'application/json', 'X-Api-Key': 'demo-key', 'X-Tenant-Id': 'demo' };
 const emptyState: LiveState = { jobId: '', cycle: 0, assigned: 0, buffered: 0, orders: [], drivers: [], routes: [], frozenStopIds: [], events: [] };
@@ -20,6 +28,23 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers: { ...headers, ...(init.headers ?? {}) } });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   return response.json() as Promise<T>;
+}
+
+async function postStaticDispatchJob(): Promise<StaticJob> {
+  const response = await request<ApiEnvelope<StaticJob>>('/static/dispatch/jobs', { method: 'POST', body: JSON.stringify({ scenario: 'control-tower-static', mode: 'IRX_ML_FUSED' }) });
+  return response.data;
+}
+async function getStaticDispatchResult(jobId: string): Promise<StaticResult> {
+  const response = await request<ApiEnvelope<StaticResult>>(`/static/dispatch/jobs/${jobId}/result`);
+  return response.data;
+}
+async function runBenchmarkCompare(): Promise<BenchmarkRun> {
+  const created = await request<{ jobId: string }>('/dashboard/benchmarks/jobs', { method: 'POST', body: JSON.stringify({ datasetId: 'synthetic-food-smoke', solvers: ['IntelligentRouteX', 'OR-Tools', 'VROOM'] }) });
+  return request<BenchmarkRun>(`/dashboard/benchmarks/jobs/${created.jobId}/result`);
+}
+function solverRowsFrom(run: BenchmarkRun | null): SolverCompareRow[] {
+  const rows = (run?.diagnostics?.solverResults as SolverCompareRow[] | undefined) ?? [];
+  return rows.filter((row) => ['IntelligentRouteX', 'IRX', 'OR-Tools', 'VROOM'].some((name) => row.solverName?.includes(name)));
 }
 
 type OrderKind = 'normal' | 'tight' | 'rescue';
@@ -77,6 +102,11 @@ export function LiveDispatchDemoPage() {
   const [error, setError] = useState<string | null>(null);
   const [driverCount, setDriverCount] = useState(4);
   const [autoRun, setAutoRun] = useState(false);
+  const [activeTab, setActiveTab] = useState<ControlTowerTab>('Live Control');
+  const [towerState, setTowerState] = useState<TowerState>('LIVE_IDLE');
+  const [staticJob, setStaticJob] = useState<StaticJob | null>(null);
+  const [staticResult, setStaticResult] = useState<StaticResult | null>(null);
+  const [benchmarkRun, setBenchmarkRun] = useState<BenchmarkRun | null>(null);
 
   const safety = useMemo(() => {
     const diagnostics = lastCycle?.diagnostics ?? {};
@@ -143,6 +173,7 @@ export function LiveDispatchDemoPage() {
       const nextJobId = await createJob();
       await seedDrivers(nextJobId, driverCount);
       await refresh(nextJobId);
+      setTowerState('LIVE_ACTIVE');
     });
   }
 
@@ -156,6 +187,7 @@ export function LiveDispatchDemoPage() {
       const moved = await refresh(nextJobId);
       await cycleRaw(nextJobId, false, moved);
       await refresh(nextJobId);
+      setTowerState('LIVE_ACTIVE');
     });
   }
 
@@ -193,7 +225,54 @@ export function LiveDispatchDemoPage() {
 
   async function runCycle(rescue = false) {
     if (!jobId) return;
-    await runAction(rescue ? 'rescue' : 'cycle', async () => { await cycleRaw(jobId, rescue); await refresh(); });
+    await runAction(rescue ? 'rescue' : 'cycle', async () => {
+      setTowerState('LIVE_CYCLE_RUNNING');
+      await cycleRaw(jobId, rescue);
+      await refresh();
+      setTowerState('LIVE_ACTIVE');
+    });
+  }
+
+  async function startStaticControl() {
+    await runAction('static', async () => {
+      setTowerState('STATIC_RUNNING');
+      setActiveTab('Static Control');
+      const job = await postStaticDispatchJob();
+      setStaticJob(job);
+      const result = await getStaticDispatchResult(job.jobId);
+      setStaticResult(result);
+      setTowerState('STATIC_DONE');
+    });
+  }
+
+  async function startLiveControl() {
+    setActiveTab('Live Control');
+    await startFullDemo();
+    setTowerState('LIVE_ACTIVE');
+  }
+
+  async function runCompareControl() {
+    await runAction('compare', async () => {
+      setTowerState('COMPARE_RUNNING');
+      setActiveTab('Compare Arena');
+      const result = await runBenchmarkCompare();
+      setBenchmarkRun(result);
+      setTowerState('COMPARE_DONE');
+    });
+  }
+
+  function resetControlTower() {
+    setJobId('');
+    setState(emptyState);
+    setLastCycle(null);
+    setPreviousState(null);
+    setStaticJob(null);
+    setStaticResult(null);
+    setBenchmarkRun(null);
+    setAutoRun(false);
+    setError(null);
+    setTowerState('LIVE_IDLE');
+    setActiveTab('Live Control');
   }
 
   useEffect(() => {
@@ -226,31 +305,102 @@ export function LiveDispatchDemoPage() {
   const beforeKm = previousState?.routes.reduce((sum, route) => sum + route.distanceKm, 0) ?? 0;
   const afterKm = state.routes.reduce((sum, route) => sum + route.distanceKm, 0);
 
-  return <div className="live-control-center">
+  return <div className="live-control-center control-tower">
     <section className="live-hero simulator-hero">
-      <div><span className="eyebrow">Dynamic ML Dispatch Simulator</span><h2>IRX Live Dispatch Control Center</h2><p>One-click live scenario: multi-zone HCM orders, 4+ drivers, Forecast risk, GreedRL action control, tri-model repair, map delta, and safety guards.</p></div>
-      <div className="live-actions hero-actions"><button className="btn hero-start" onClick={startFullDemo} disabled={!!busy}><Zap size={17} />Start Full Live Demo</button><button className="btn secondary" onClick={startJob} disabled={!!busy}>{jobId ? 'Restart Job' : 'Start Empty Job'}</button><button className="btn secondary" onClick={() => refresh()} disabled={!jobId || !!busy}><RefreshCw size={15} />Refresh</button></div>
+      <div><span className="eyebrow">IRX Control Tower · Explain · Compare</span><h2>Dispatch Playground + Benchmark Center</h2><p>Run static optimization, launch live rolling dispatch, inspect decision trace, animate route sequence, and compare IRX / OR-Tools / VROOM from one control tower.</p></div>
+      <div className="live-actions hero-actions"><button className="btn" onClick={startStaticControl} disabled={!!busy}><Layers3 size={17} />Start Static</button><button className="btn hero-start" onClick={startLiveControl} disabled={!!busy}><Zap size={17} />Start Live</button><button className="btn secondary" onClick={runCompareControl} disabled={!!busy}><BarChart3 size={16} />Run Benchmark Compare</button><button className="btn secondary" onClick={resetControlTower} disabled={!!busy}><RotateCcw size={15} />Reset</button></div>
     </section>
     <section className="simulator-toolbar" aria-label="Live simulator controls">
+      <div><span>State</span><strong className="tower-state">{towerState}</strong></div>
       <div><span>Drivers</span><div className="segmented-control">{[2, 4, 6].map((count) => <button key={count} className={driverCount === count ? 'active' : ''} onClick={() => setDriverCount(count)} disabled={!!busy}>{count}</button>)}</div></div>
       <button className={`auto-toggle ${autoRun ? 'active' : ''}`} onClick={() => setAutoRun((value) => !value)} disabled={!jobId}>{autoRun ? 'Auto Run ON' : 'Auto Run OFF'}<small>3s cycle</small></button>
-      <span className="scenario-hint">Open → Start Full Live Demo → map/routes/ML trace move within 5 seconds.</span>
+      <span className="scenario-hint">Tabs: Static Control · Live Control · Explain Pipeline · Compare Arena · API / Artifacts.</span>
     </section>
+    <nav className="tower-tabs" aria-label="Control tower tabs">{(['Static Control', 'Live Control', 'Explain Pipeline', 'Compare Arena', 'API / Artifacts'] as ControlTowerTab[]).map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
     {error ? <div className="error-strip"><AlertTriangle size={16} />{error}</div> : null}
     <MetricsBar state={state} lastCycle={lastCycle} safe={safe} />
-    <div className="live-grid">
-      <OrdersQueue orders={state.orders} disabled={!jobId || !!busy} addOrder={addOrder} addBurst={addBurst} addNormalOrders={addNormalOrders} addRescueCase={addRescueCase} startFullDemo={startFullDemo} />
-      <div className="live-map-stack"><LiveDispatchMapPanel state={state} previousState={previousState} lastCycle={lastCycle} /><DriverRouteBoard drivers={state.drivers} routes={state.routes} frozenStopIds={state.frozenStopIds} moveDrivers={moveDrivers} runCycle={runCycle} disabled={!jobId || !!busy} /></div>
-      <MlDecisionPanel lastCycle={lastCycle} />
-    </div>
-    <div className="live-bottom-grid">
-      <BeforeAfterPanel beforeAssigned={beforeAssigned} afterAssigned={state.assigned} beforeKm={beforeKm} afterKm={afterKm} lastCycle={lastCycle} />
-      <SafetyGuardPanel safety={safety} safe={safe} />
-      <EventStreamPanel events={state.events} />
-    </div>
-    <details className="raw-json"><summary>Raw JSON</summary><pre>{JSON.stringify({ jobId, state, lastCycle }, null, 2)}</pre></details>
+    {activeTab === 'Static Control' ? <StaticControlPanel staticJob={staticJob} staticResult={staticResult} runStatic={startStaticControl} busy={!!busy} /> : null}
+    {activeTab === 'Live Control' ? <>
+      <div className="live-grid">
+        <OrdersQueue orders={state.orders} disabled={!jobId || !!busy} addOrder={addOrder} addBurst={addBurst} addNormalOrders={addNormalOrders} addRescueCase={addRescueCase} startFullDemo={startFullDemo} />
+        <div className="live-map-stack"><LiveDispatchMapPanel state={state} previousState={previousState} lastCycle={lastCycle} /><RouteRevealPanel routes={state.routes} previousRoutes={previousState?.routes ?? []} /><DriverRouteBoard drivers={state.drivers} routes={state.routes} frozenStopIds={state.frozenStopIds} moveDrivers={moveDrivers} runCycle={runCycle} disabled={!jobId || !!busy} /></div>
+        <MlDecisionPanel lastCycle={lastCycle} />
+      </div>
+      <div className="live-bottom-grid"><BeforeAfterPanel beforeAssigned={beforeAssigned} afterAssigned={state.assigned} beforeKm={beforeKm} afterKm={afterKm} lastCycle={lastCycle} /><SafetyGuardPanel safety={safety} safe={safe} /><EventStreamPanel events={state.events} /></div>
+    </> : null}
+    {activeTab === 'Explain Pipeline' ? <ExplainPipelinePanel state={state} lastCycle={lastCycle} staticResult={staticResult} benchmarkRun={benchmarkRun} /> : null}
+    {activeTab === 'Compare Arena' ? <CompareArenaPanel run={benchmarkRun} runCompare={runCompareControl} busy={!!busy} /> : null}
+    {activeTab === 'API / Artifacts' ? <ApiArtifactsPanel jobId={jobId} staticJob={staticJob} staticResult={staticResult} benchmarkRun={benchmarkRun} state={state} lastCycle={lastCycle} /> : null}
+    <details className="raw-json"><summary>Raw JSON</summary><pre>{JSON.stringify({ jobId, staticJob, staticResult, benchmarkRun, state, lastCycle }, null, 2)}</pre></details>
   </div>;
 }
+
+
+function StaticControlPanel({ staticJob, staticResult, runStatic, busy }: { staticJob: StaticJob | null; staticResult: StaticResult | null; runStatic: () => void; busy: boolean }) {
+  const summary = staticResult?.summary;
+  return <section className="tower-panel-grid static-control-tab"><div className="live-panel"><PanelTitle icon={<Layers3 size={16} />} title="Static Control" badge={staticJob?.status ?? 'STATIC_IDLE'} /><p className="muted">Runs the static dispatch API, then renders job status, final metrics, and artifact links. This is the non-live baseline path before rolling cycles.</p><button className="btn hero-start full-width" onClick={runStatic} disabled={busy}>{busy ? 'Running static...' : 'Start Static Optimization'}</button><div className="tower-kpi-grid"><TowerKpi label="Assigned" value={summary?.assignedOrders ?? 0} /><TowerKpi label="Routes" value={summary?.routeCount ?? 0} /><TowerKpi label="Total km" value={summary?.totalKm ?? 0} /><TowerKpi label="Late" value={summary?.lateCount ?? 0} /></div></div><div className="live-panel"><PanelTitle icon={<FileJson size={16} />} title="Static Result" badge={staticResult?.jobId ?? 'waiting'} /><KeyValue label="Job" value={staticJob?.jobId ?? 'not started'} /><KeyValue label="Kind" value={staticJob?.kind ?? 'STATIC_DISPATCH'} /><KeyValue label="Status" value={staticResult?.status ?? staticJob?.status ?? 'IDLE'} /><KeyValue label="Routes API" value={staticResult?.links?.routes ?? '/api/v1/jobs/{jobId}/routes'} /><KeyValue label="Diagnostics" value={staticResult?.links?.diagnostics ?? '/api/v1/jobs/{jobId}/diagnostics'} /></div></section>;
+}
+
+function ExplainPipelinePanel({ state, lastCycle, staticResult, benchmarkRun }: { state: LiveState; lastCycle: LiveCycleResponse | null; staticResult: StaticResult | null; benchmarkRun: BenchmarkRun | null }) {
+  const diagnostics = lastCycle?.diagnostics ?? {};
+  const solverRows = solverRowsFrom(benchmarkRun);
+  const stages = [
+    ['Input Snapshot', `${state.orders.length || staticResult?.summary?.assignedOrders || benchmarkRun?.orders?.length || 0} orders · ${state.drivers.length || 4} drivers`, 'Scenario, mode, deadlines, current route state captured.'],
+    ['Partition / Candidate Pool', `${diagnostics.candidatePoolSize ?? state.orders.length} candidates`, 'Candidate routes/orders enter the repair/search pool.'],
+    ['Order Grouping / Bundle Seeds', `IRX seed + external seeds`, 'Distance seed, OR-Tools seed, VROOM evidence-gap status, IRX native seed.'],
+    ['Driver Candidate Selection', `${state.drivers.length || 4} candidates`, 'Drivers filtered by capacity, frozen stop, proximity, and deadline risk.'],
+    ['Seed Archive', `${benchmarkRun?.diagnostics?.finalSolver ?? 'IRX ML-Fused Hybrid'}`, 'Best distance/objective seed retained before improvement.'],
+    ['ML Scoring / Ranking', `Forecast ${lastCycle?.forecastUsed ? 'used' : 'idle'} · GreedRL ${lastCycle?.greedRlAction ?? 'waiting'}`, `Tabular ${diagnostics.tabularInferenceCount ?? 0} · RouteFinder ${diagnostics.routefinderCandidateCount ?? 0}`],
+    ['Route Construction', `${state.routes.length || staticResult?.summary?.routeCount || 0} routes`, 'Pickup-before-dropoff sequence, ETA, slack, risk.'],
+    ['Local Search / Improvement', `${diagnostics.acceptedMlMutations ?? 0} accepted ML mutations`, 'Relocate/swap/cross-route repair evaluated against objective.'],
+    ['Dominance Guard', `late regression ${diagnostics.lateRegression ?? 0}`, 'Rollback if coverage, late, PD, capacity, or dominance worsens.'],
+    ['Final Solution', `${staticResult?.status ?? lastCycle?.mode ?? benchmarkRun?.status ?? 'WAITING'}`, solverRows.length ? `${solverRows.length} solver rows in compare arena.` : 'Awaiting compare run.']
+  ];
+  return <section className="live-panel explain-panel"><PanelTitle icon={<Braces size={16} />} title="Explain Pipeline" badge="decision trace" /><div className="explain-stepper">{stages.map(([title, metric, detail], index) => <article key={title} className="explain-step"><span>{index + 1}</span><div><strong>{title}</strong><em>{metric}</em><p>{detail}</p></div></article>)}</div></section>;
+}
+
+function CompareArenaPanel({ run, runCompare, busy }: { run: BenchmarkRun | null; runCompare: () => void; busy: boolean }) {
+  const rows = solverRowsFrom(run);
+  const bestDistance = rows.filter((row) => row.totalDistanceKm > 0).sort((a, b) => a.totalDistanceKm - b.totalDistanceKm)[0]?.solverName;
+  return <section className="live-panel compare-arena"><PanelTitle icon={<BarChart3 size={16} />} title="Compare Arena" badge={run?.status ?? 'not run'} /><div className="compare-toolbar"><button className="btn hero-start" onClick={runCompare} disabled={busy}>{busy ? 'Running...' : 'Run Benchmark Compare'}</button><span>Same scenario → IRX / OR-Tools / VROOM. External gaps are shown honestly.</span></div><div className="solver-table"><div className="solver-head"><span>Solver</span><span>Coverage</span><span>Distance</span><span>Late</span><span>Runtime</span><span>Verdict</span></div>{rows.length === 0 ? <EmptyLive text="Run benchmark compare to populate 3-solver rows." /> : rows.map((row) => <div key={row.solverName} className="solver-row"><strong>{row.solverName}{bestDistance === row.solverName ? <b> Best Distance</b> : null}</strong><span>{row.assignedOrderCount}/{row.inputOrderCount}</span><span>{Number(row.totalDistanceKm ?? 0).toFixed(1)} km</span><span>{row.lateOrderCount}</span><span>{row.runtimeMs}ms</span><span>{row.verdict}</span></div>)}</div><div className="compare-map-grid">{['IRX', 'OR-Tools', 'VROOM'].map((name) => <MiniSolverMap key={name} name={name} run={run} row={rows.find((row) => row.solverName.includes(name) || (name === 'IRX' && row.solverName.includes('IntelligentRouteX')))} />)}</div><WhyComparePanel rows={rows} run={run} /></section>;
+}
+
+function MiniSolverMap({ name, run, row }: { name: string; run: BenchmarkRun | null; row?: SolverCompareRow }) {
+  const orders = (run?.orders ?? []).slice(0, 9);
+  return <article className={`mini-solver-map ${row?.verdict === 'EVIDENCE_GAP' ? 'gap' : ''}`}><header><strong>{name}</strong><span>{row?.status ?? 'WAITING'}</span></header><svg viewBox="0 0 220 150" role="img" aria-label={`${name} route preview`}>{orders.map((order, index) => {
+    const px = 20 + (Number(order.pickupLng ?? 106.68) - 106.63) * 1450;
+    const py = 130 - (Number(order.pickupLat ?? 10.76) - 10.72) * 1500;
+    const dx = 20 + (Number(order.dropoffLng ?? 106.72) - 106.63) * 1450;
+    const dy = 130 - (Number(order.dropoffLat ?? 10.79) - 10.72) * 1500;
+    return <g key={String(order.orderId ?? index)} opacity={0.82}><line x1={px} y1={py} x2={dx} y2={dy} stroke={name === 'IRX' ? '#34d399' : name === 'OR-Tools' ? '#38bdf8' : '#a78bfa'} strokeWidth="1.6" strokeDasharray={name === 'VROOM' ? '4 4' : undefined} /><circle cx={px} cy={py} r="3" fill="#60a5fa" /><circle cx={dx} cy={dy} r="3" fill="#34d399" /></g>;
+  })}</svg><p>{row?.reason ?? 'Awaiting solver output'}</p></article>;
+}
+
+function WhyComparePanel({ rows, run }: { rows: SolverCompareRow[]; run: BenchmarkRun | null }) {
+  const irx = rows.find((row) => row.solverName.includes('IntelligentRouteX') || row.solverName.includes('IRX'));
+  const evidenceGaps = rows.filter((row) => row.verdict === 'EVIDENCE_GAP').map((row) => row.solverName).join(', ');
+  return <div className="why-compare"><strong>Why IRX wins / ties / loses</strong><p>{irx ? `IRX result: ${irx.verdict}, ${irx.assignedOrderCount}/${irx.inputOrderCount} assigned, ${Number(irx.totalDistanceKm ?? 0).toFixed(1)}km, late ${irx.lateOrderCount}.` : 'Run compare to classify IRX.'}</p><p>{evidenceGaps ? `Evidence gaps: ${evidenceGaps}. Dashboard reports gaps instead of claiming false wins.` : run?.comparison?.reason ?? 'No external gap reported.'}</p></div>;
+}
+
+function ApiArtifactsPanel({ jobId, staticJob, staticResult, benchmarkRun, state, lastCycle }: { jobId: string; staticJob: StaticJob | null; staticResult: StaticResult | null; benchmarkRun: BenchmarkRun | null; state: LiveState; lastCycle: LiveCycleResponse | null }) {
+  const curl = `curl -X POST http://localhost:18116/api/v1/live/jobs/${jobId || '{jobId}'}/cycle -H "X-Api-Key: demo-key" -H "X-Tenant-Id: demo" -H "Content-Type: application/json" -d "{\\"returnDiagnostics\\":true}"`;
+  return <section className="tower-panel-grid api-artifacts"><div className="live-panel"><PanelTitle icon={<FileJson size={16} />} title="API / Artifacts" badge="playground" /><KeyValue label="Static job" value={staticJob?.jobId ?? 'not run'} /><KeyValue label="Static result" value={staticResult ? `/api/v1/static/dispatch/jobs/${staticResult.jobId}/result` : 'not run'} /><KeyValue label="Live state" value={jobId ? `/api/v1/live/jobs/${jobId}/state` : 'not started'} /><KeyValue label="Live events" value={jobId ? `/api/v1/live/jobs/${jobId}/events` : 'not started'} /><KeyValue label="Compare run" value={benchmarkRun?.runId ?? 'not run'} /></div><div className="live-panel"><PanelTitle icon={<Braces size={16} />} title="cURL Sample" badge="copyable" /><pre className="curl-sample">{curl}</pre><pre className="api-json-preview">{JSON.stringify({ state: { jobId: state.jobId, cycle: state.cycle, assigned: state.assigned, buffered: state.buffered }, lastCycle, staticResult, compare: benchmarkRun?.comparison }, null, 2)}</pre></div></section>;
+}
+
+function RouteRevealPanel({ routes, previousRoutes }: { routes: LiveRouteSnapshot[]; previousRoutes: LiveRouteSnapshot[] }) {
+  const [activeStop, setActiveStop] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const stops = routes[0]?.stopIds ?? [];
+  useEffect(() => {
+    if (!playing || stops.length === 0) return;
+    const timer = window.setInterval(() => setActiveStop((value) => (value + 1) % Math.max(stops.length, 1)), 900);
+    return () => window.clearInterval(timer);
+  }, [playing, stops.length]);
+  return <section className="live-panel route-reveal"><PanelTitle icon={<Play size={16} />} title="OSRM Route Reveal" badge={stops.length ? `${activeStop + 1}/${stops.length}` : 'waiting'} /><div className="live-button-row"><button className="btn secondary" onClick={() => setPlaying((value) => !value)} disabled={stops.length === 0}>{playing ? <Pause size={14} /> : <Play size={14} />}{playing ? 'Pause' : 'Play route'}</button><button className="btn secondary" onClick={() => setActiveStop((value) => Math.min(value + 1, Math.max(stops.length - 1, 0)))} disabled={stops.length === 0}>Step next stop</button><span className="mini-badge">Speed x1 / x2 / x4</span></div><div className="route-reveal-strip">{stops.length === 0 ? <EmptyLive text="Run a live cycle to animate pickup/dropoff sequence." /> : stops.map((stop, index) => <span key={`${stop}-${index}`} className={index <= activeStop ? 'drawn' : ''}>{stop.startsWith('PICKUP') ? 'P' : 'D'} {stop.split(':')[1]}</span>)}</div><p className="muted">Previous route dashed: {previousRoutes.length}; current route solid: {routes.length}. OSRM geometry is used when backend returns road polyline; otherwise fallback sequence reveal stays deterministic.</p></section>;
+}
+
+function TowerKpi({ label, value }: { label: string; value: string | number }) { return <div><span>{label}</span><strong>{value}</strong></div>; }
+function KeyValue({ label, value }: { label: string; value: string | number }) { return <div className="key-value"><span>{label}</span><strong>{value}</strong></div>; }
 
 function MetricsBar({ state, lastCycle, safe }: { state: LiveState; lastCycle: LiveCycleResponse | null; safe: boolean }) {
   const totalKm = state.routes.reduce((sum, route) => sum + route.distanceKm, 0).toFixed(1);

@@ -1,0 +1,65 @@
+﻿{
+    "jobId":  "ct-live-518b8af0",
+    "cycle":  1,
+    "mode":  "DYNAMIC_ML_DISPATCH",
+    "assigned":  12,
+    "buffered":  0,
+    "late":  0,
+    "forecastUsed":  true,
+    "greedRlAction":  "RESCUE_REOPTIMIZE",
+    "triModelRepairUsed":  true,
+    "routes":  [
+                   {
+                       "routeId":  "route-1",
+                       "driverId":  "D01",
+                       "stopIds":  [
+                                       "PICKUP:CT-ORD-01",
+                                       "DROPOFF:CT-ORD-01",
+                                       "PICKUP:CT-ORD-02",
+                                       "DROPOFF:CT-ORD-02",
+                                       "PICKUP:CT-ORD-03",
+                                       "DROPOFF:CT-ORD-03",
+                                       "PICKUP:CT-ORD-04",
+                                       "DROPOFF:CT-ORD-04",
+                                       "PICKUP:CT-ORD-05",
+                                       "DROPOFF:CT-ORD-05",
+                                       "PICKUP:CT-ORD-06",
+                                       "DROPOFF:CT-ORD-06",
+                                       "PICKUP:CT-ORD-07",
+                                       "DROPOFF:CT-ORD-07",
+                                       "PICKUP:CT-ORD-08",
+                                       "DROPOFF:CT-ORD-08",
+                                       "PICKUP:CT-ORD-09",
+                                       "DROPOFF:CT-ORD-09",
+                                       "PICKUP:CT-ORD-10",
+                                       "DROPOFF:CT-ORD-10",
+                                       "PICKUP:CT-ORD-11",
+                                       "DROPOFF:CT-ORD-11",
+                                       "PICKUP:CT-ORD-12",
+                                       "DROPOFF:CT-ORD-12"
+                                   ],
+                       "frozenStopIds":  [
+
+                                         ],
+                       "distanceKm":  16.799999999999997,
+                       "lateCount":  0
+                   }
+               ],
+    "diagnostics":  {
+                        "mode":  "DYNAMIC_ML_DISPATCH",
+                        "forecastUsed":  true,
+                        "forecastRiskCount":  12,
+                        "greedRlAction":  "RESCUE_REOPTIMIZE",
+                        "greedRlActionUsed":  true,
+                        "triModelRepairUsed":  true,
+                        "tabularInferenceCount":  48,
+                        "routefinderCandidateCount":  72,
+                        "acceptedMlMutations":  12,
+                        "frozenStopViolations":  0,
+                        "pickupDropoffViolations":  0,
+                        "capacityViolations":  0,
+                        "lateRegression":  0,
+                        "dominanceFailures":  0
+                    },
+    "assignedRegression":  0
+}
