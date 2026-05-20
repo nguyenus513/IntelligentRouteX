@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, Cpu, GitBranch, Play, Plus, RadioTower, RefreshCw, ShieldCheck, Truck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Cpu, GitBranch, Play, Plus, RadioTower, RefreshCw, ShieldCheck, Truck, Zap } from 'lucide-react';
 import { LiveDispatchMapPanel } from './LiveDispatchMapPanel';
 
 export type Point = { lat: number; lng: number };
@@ -22,17 +22,50 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function randomOrder(kind: 'normal' | 'tight' = 'normal'): LiveOrderRequest {
-  const seed = Date.now() % 10000;
-  const jitter = (seed % 97) / 10000;
+type OrderKind = 'normal' | 'tight' | 'rescue';
+type HcmZone = { name: string; lat: number; lng: number };
+type DemoDriver = { driverId: string; lat: number; lng: number; status: string; currentStopId?: string | null };
+
+const hcmZones: HcmZone[] = [
+  { name: 'District 1', lat: 10.776, lng: 106.700 },
+  { name: 'District 3', lat: 10.783, lng: 106.685 },
+  { name: 'Binh Thanh', lat: 10.805, lng: 106.710 },
+  { name: 'Tan Binh', lat: 10.800, lng: 106.650 },
+  { name: 'Thu Duc', lat: 10.850, lng: 106.770 },
+  { name: 'District 7', lat: 10.730, lng: 106.720 },
+  { name: 'Go Vap', lat: 10.835, lng: 106.670 }
+];
+
+const demoDriverSeeds: DemoDriver[] = [
+  { driverId: 'D01', lat: 10.760, lng: 106.660, status: 'IDLE' },
+  { driverId: 'D02', lat: 10.785, lng: 106.705, status: 'IDLE' },
+  { driverId: 'D03', lat: 10.735, lng: 106.720, status: 'IDLE' },
+  { driverId: 'D04', lat: 10.805, lng: 106.680, status: 'IDLE' },
+  { driverId: 'D05', lat: 10.820, lng: 106.745, status: 'IDLE' },
+  { driverId: 'D06', lat: 10.742, lng: 106.655, status: 'IDLE' }
+];
+
+function pickRandom<T>(items: T[]): T { return items[Math.floor(Math.random() * items.length)]; }
+function randomAround(zone: HcmZone, radius = 0.018): Point { return { lat: zone.lat + (Math.random() - 0.5) * radius, lng: zone.lng + (Math.random() - 0.5) * radius }; }
+function randomOrder(kind: OrderKind = 'normal', prefix = 'LIVE'): LiveOrderRequest {
+  const pickupZone = pickRandom(hcmZones);
+  let dropoffZone = pickRandom(hcmZones);
+  while (dropoffZone.name === pickupZone.name) dropoffZone = pickRandom(hcmZones);
+  const tight = kind === 'tight' || kind === 'rescue';
   return {
-    orderId: `LIVE-${seed}`,
-    pickup: { lat: 10.75 + jitter, lng: 106.68 + jitter },
-    dropoff: { lat: 10.79 + jitter, lng: 106.74 + jitter },
-    deadline: new Date(Date.now() + (kind === 'tight' ? 15 : 35) * 60_000).toISOString(),
+    orderId: `${prefix}-${Date.now()}-${Math.floor(Math.random() * 9999)}`,
+    pickup: randomAround(pickupZone, kind === 'rescue' ? 0.010 : 0.022),
+    dropoff: randomAround(dropoffZone, kind === 'rescue' ? 0.010 : 0.022),
+    deadline: new Date(Date.now() + (kind === 'rescue' ? 10 : tight ? 15 : 35) * 60_000).toISOString(),
     load: 1,
-    priority: kind === 'tight' ? 'HIGH' : 'NORMAL'
+    priority: tight ? 'HIGH' : 'NORMAL'
   };
+}
+
+function nextDrivers(count: number, status = 'IDLE'): DemoDriver[] { return demoDriverSeeds.slice(0, count).map((driver) => ({ ...driver, status })); }
+function jitterDriver(driver: LiveDriverState | DemoDriver, index: number, delayed = false): DemoDriver {
+  const drift = 0.004 + index * 0.001;
+  return { driverId: driver.driverId, lat: driver.lat + (Math.random() - 0.4) * drift, lng: driver.lng + (Math.random() - 0.4) * drift, status: delayed && index === 0 ? 'DELAYED' : 'EN_ROUTE', currentStopId: driver.currentStopId ?? null };
 }
 
 export function LiveDispatchDemoPage() {
@@ -42,6 +75,8 @@ export function LiveDispatchDemoPage() {
   const [previousState, setPreviousState] = useState<LiveState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [driverCount, setDriverCount] = useState(4);
+  const [autoRun, setAutoRun] = useState(false);
 
   const safety = useMemo(() => {
     const diagnostics = lastCycle?.diagnostics ?? {};
@@ -64,61 +99,101 @@ export function LiveDispatchDemoPage() {
   }
 
   async function refresh(nextJobId = jobId) {
-    if (!nextJobId) return;
+    if (!nextJobId) return emptyState;
     const next = await request<LiveState>(`/live/jobs/${nextJobId}/state`);
     setState(next);
+    return next;
+  }
+
+  async function createJob() {
+    const response = await request<{ jobId: string }>('/live/jobs', { method: 'POST', body: JSON.stringify({ tenantId: 'demo' }) });
+    setJobId(response.jobId);
+    setLastCycle(null);
+    setPreviousState(null);
+    return response.jobId;
+  }
+
+  async function addDriverTelemetry(targetJobId: string, driver: DemoDriver) {
+    await request(`/live/jobs/${targetJobId}/drivers/${driver.driverId}/telemetry`, { method: 'POST', body: JSON.stringify(driver) });
+  }
+
+  async function seedDrivers(targetJobId: string, count = driverCount) {
+    await Promise.all(nextDrivers(count).map((driver) => addDriverTelemetry(targetJobId, driver)));
+  }
+
+  async function addOrdersRaw(targetJobId: string, count: number, kind: OrderKind, prefix: string) {
+    const orders = Array.from({ length: count }, (_, index) => ({ ...randomOrder(index % 4 === 0 ? 'tight' : kind, prefix), orderId: `${prefix}-${Date.now()}-${index + 1}-${Math.floor(Math.random() * 999)}` }));
+    await request(`/live/jobs/${targetJobId}/orders`, { method: 'POST', body: JSON.stringify({ orders }) });
+  }
+
+  async function moveDriversRaw(targetJobId: string, sourceState = state, delay = false) {
+    const activeDrivers = (sourceState.drivers.length ? sourceState.drivers : nextDrivers(driverCount)).slice(0, driverCount);
+    await Promise.all(activeDrivers.map((driver, index) => addDriverTelemetry(targetJobId, { ...jitterDriver(driver, index, delay), currentStopId: sourceState.routes[index]?.stopIds[0] ?? driver.currentStopId ?? null })));
+  }
+
+  async function cycleRaw(targetJobId: string, rescue = false, before = state) {
+    setPreviousState(before);
+    const cycle = await request<LiveCycleResponse>(`/live/jobs/${targetJobId}/${rescue ? 'rescue' : 'cycle'}`, { method: 'POST', body: JSON.stringify({ returnDiagnostics: true }) });
+    setLastCycle(cycle);
+    return cycle;
   }
 
   async function startJob() {
     await runAction('start', async () => {
-      const response = await request<{ jobId: string }>('/live/jobs', { method: 'POST', body: JSON.stringify({ tenantId: 'demo' }) });
-      setJobId(response.jobId);
-      setLastCycle(null);
-      setPreviousState(null);
-      await addDriver(response.jobId, 'D01', 'IDLE', null);
-      await refresh(response.jobId);
+      const nextJobId = await createJob();
+      await seedDrivers(nextJobId, driverCount);
+      await refresh(nextJobId);
     });
   }
 
-  async function addDriver(targetJobId: string, driverId: string, status: string, currentStopId: string | null) {
-    await request(`/live/jobs/${targetJobId}/drivers/${driverId}/telemetry`, { method: 'POST', body: JSON.stringify({ driverId, lat: 10.72, lng: 106.62, status, currentStopId }) });
-  }
-
-  async function addOrder(kind: 'normal' | 'tight' = 'normal') {
-    if (!jobId) return;
-    await runAction('order', async () => {
-      await request(`/live/jobs/${jobId}/orders`, { method: 'POST', body: JSON.stringify({ orders: [randomOrder(kind)] }) });
-      await refresh();
+  async function startFullDemo() {
+    await runAction('full-demo', async () => {
+      const nextJobId = await createJob();
+      await seedDrivers(nextJobId, driverCount);
+      await addOrdersRaw(nextJobId, 12, 'normal', 'DEMO');
+      const seeded = await refresh(nextJobId);
+      await moveDriversRaw(nextJobId, seeded);
+      const moved = await refresh(nextJobId);
+      await cycleRaw(nextJobId, false, moved);
+      await refresh(nextJobId);
     });
   }
 
-  async function addBurst() {
+  async function addOrder(kind: OrderKind = 'normal') {
     if (!jobId) return;
-    await runAction('burst', async () => {
-      const orders = Array.from({ length: 10 }, (_, index) => ({ ...randomOrder(index % 3 === 0 ? 'tight' : 'normal'), orderId: `BURST-${Date.now() % 10000}-${index + 1}` }));
-      await request(`/live/jobs/${jobId}/orders`, { method: 'POST', body: JSON.stringify({ orders }) });
+    await runAction('order', async () => { await addOrdersRaw(jobId, 1, kind, kind === 'tight' ? 'TIGHT' : 'LIVE'); await refresh(); });
+  }
+
+  async function addBurst(count = 20) {
+    if (!jobId) return;
+    await runAction('burst', async () => { await addOrdersRaw(jobId, count, 'normal', 'BURST'); await refresh(); });
+  }
+
+  async function addNormalOrders() {
+    if (!jobId) return;
+    await runAction('normal-orders', async () => { await addOrdersRaw(jobId, 10, 'normal', 'NORMAL'); await refresh(); });
+  }
+
+  async function addRescueCase() {
+    if (!jobId) return;
+    await runAction('rescue-case', async () => {
+      await addOrdersRaw(jobId, 3, 'rescue', 'RESCUE');
+      const seeded = await refresh();
+      await moveDriversRaw(jobId, seeded, true);
+      const moved = await refresh();
+      await cycleRaw(jobId, true, moved);
       await refresh();
     });
   }
 
   async function moveDrivers(delay = false) {
     if (!jobId) return;
-    await runAction('drivers', async () => {
-      const currentStopId = state.routes[0]?.stopIds[0] ?? null;
-      await addDriver(jobId, 'D01', delay ? 'DELAYED' : 'EN_ROUTE', currentStopId);
-      await addDriver(jobId, 'D02', 'EN_ROUTE', null);
-      await refresh();
-    });
+    await runAction(delay ? 'delay' : 'drivers', async () => { await moveDriversRaw(jobId, state, delay); await refresh(); });
   }
 
   async function runCycle(rescue = false) {
     if (!jobId) return;
-    await runAction(rescue ? 'rescue' : 'cycle', async () => {
-      setPreviousState(state);
-      const cycle = await request<LiveCycleResponse>(`/live/jobs/${jobId}/${rescue ? 'rescue' : 'cycle'}`, { method: 'POST', body: JSON.stringify({ returnDiagnostics: true }) });
-      setLastCycle(cycle);
-      await refresh();
-    });
+    await runAction(rescue ? 'rescue' : 'cycle', async () => { await cycleRaw(jobId, rescue); await refresh(); });
   }
 
   useEffect(() => {
@@ -127,19 +202,44 @@ export function LiveDispatchDemoPage() {
     return () => window.clearInterval(timer);
   }, [jobId]);
 
+  useEffect(() => {
+    if (!jobId || !autoRun || busy) return;
+    const timer = window.setInterval(() => {
+      (async () => {
+        setBusy('auto-run');
+        try {
+          await moveDriversRaw(jobId, state);
+          const moved = await refresh(jobId);
+          await cycleRaw(jobId, false, moved);
+          await refresh(jobId);
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : 'Auto run failed');
+        } finally {
+          setBusy(null);
+        }
+      })().catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [autoRun, busy, jobId, state]);
+
   const beforeAssigned = previousState?.assigned ?? 0;
   const beforeKm = previousState?.routes.reduce((sum, route) => sum + route.distanceKm, 0) ?? 0;
   const afterKm = state.routes.reduce((sum, route) => sum + route.distanceKm, 0);
 
   return <div className="live-control-center">
-    <section className="live-hero">
-      <div><span className="eyebrow">Dynamic ML Dispatch</span><h2>IRX Live Dispatch Control Center</h2><p>Inject orders, move drivers, run Forecast + GreedRL + tri-model repair, then inspect safety and events in real time.</p></div>
-      <div className="live-actions"><button className="btn" onClick={startJob} disabled={!!busy}>{jobId ? 'Restart Job' : 'Start Live Job'}</button><button className="btn secondary" onClick={() => refresh()} disabled={!jobId || !!busy}><RefreshCw size={15} />Refresh</button></div>
+    <section className="live-hero simulator-hero">
+      <div><span className="eyebrow">Dynamic ML Dispatch Simulator</span><h2>IRX Live Dispatch Control Center</h2><p>One-click live scenario: multi-zone HCM orders, 4+ drivers, Forecast risk, GreedRL action control, tri-model repair, map delta, and safety guards.</p></div>
+      <div className="live-actions hero-actions"><button className="btn hero-start" onClick={startFullDemo} disabled={!!busy}><Zap size={17} />Start Full Live Demo</button><button className="btn secondary" onClick={startJob} disabled={!!busy}>{jobId ? 'Restart Job' : 'Start Empty Job'}</button><button className="btn secondary" onClick={() => refresh()} disabled={!jobId || !!busy}><RefreshCw size={15} />Refresh</button></div>
+    </section>
+    <section className="simulator-toolbar" aria-label="Live simulator controls">
+      <div><span>Drivers</span><div className="segmented-control">{[2, 4, 6].map((count) => <button key={count} className={driverCount === count ? 'active' : ''} onClick={() => setDriverCount(count)} disabled={!!busy}>{count}</button>)}</div></div>
+      <button className={`auto-toggle ${autoRun ? 'active' : ''}`} onClick={() => setAutoRun((value) => !value)} disabled={!jobId}>{autoRun ? 'Auto Run ON' : 'Auto Run OFF'}<small>3s cycle</small></button>
+      <span className="scenario-hint">Open → Start Full Live Demo → map/routes/ML trace move within 5 seconds.</span>
     </section>
     {error ? <div className="error-strip"><AlertTriangle size={16} />{error}</div> : null}
     <MetricsBar state={state} lastCycle={lastCycle} safe={safe} />
     <div className="live-grid">
-      <OrdersQueue orders={state.orders} disabled={!jobId || !!busy} addOrder={addOrder} addBurst={addBurst} />
+      <OrdersQueue orders={state.orders} disabled={!jobId || !!busy} addOrder={addOrder} addBurst={addBurst} addNormalOrders={addNormalOrders} addRescueCase={addRescueCase} startFullDemo={startFullDemo} />
       <div className="live-map-stack"><LiveDispatchMapPanel state={state} previousState={previousState} lastCycle={lastCycle} /><DriverRouteBoard drivers={state.drivers} routes={state.routes} frozenStopIds={state.frozenStopIds} moveDrivers={moveDrivers} runCycle={runCycle} disabled={!jobId || !!busy} /></div>
       <MlDecisionPanel lastCycle={lastCycle} />
     </div>
@@ -160,18 +260,21 @@ function MetricsBar({ state, lastCycle, safe }: { state: LiveState; lastCycle: L
   return <section className="live-metrics">{metrics.map(([label, value]) => <div key={label} className={`live-kpi ${label === 'Guard' && safe ? 'safe' : ''}`}><span>{label}</span><strong>{value}</strong></div>)}</section>;
 }
 
-function OrdersQueue({ orders, disabled, addOrder, addBurst }: { orders: LiveOrderState[]; disabled: boolean; addOrder: (kind?: 'normal' | 'tight') => void; addBurst: () => void }) {
-  return <section className="live-panel"><PanelTitle icon={<Plus size={16} />} title="Live Orders" badge={`${orders.length} orders`} /><div className="live-button-row"><button className="btn" disabled={disabled} onClick={() => addOrder('normal')}>Add Random</button><button className="btn secondary" disabled={disabled} onClick={() => addOrder('tight')}>Tight Deadline</button><button className="btn secondary" disabled={disabled} onClick={addBurst}>Burst 10</button></div><div className="order-list">{orders.length === 0 ? <EmptyLive text="No live orders yet" /> : orders.map((item) => {
+function OrdersQueue({ orders, disabled, addOrder, addBurst, addNormalOrders, addRescueCase, startFullDemo }: { orders: LiveOrderState[]; disabled: boolean; addOrder: (kind?: OrderKind) => void; addBurst: (count?: number) => void; addNormalOrders: () => void; addRescueCase: () => void; startFullDemo: () => void }) {
+  return <section className="live-panel orders-simulator"><PanelTitle icon={<Plus size={16} />} title="Live Orders" badge={`${orders.length} orders`} />
+    <button className="btn hero-start full-width" disabled={disabled} onClick={startFullDemo}><Zap size={15} />Start Full Demo</button>
+    <div className="live-button-row scenario-buttons"><button className="btn secondary" disabled={disabled} onClick={addNormalOrders}>Normal Orders</button><button className="btn secondary" disabled={disabled} onClick={() => addBurst(20)}>Burst 20 Orders</button><button className="btn secondary" disabled={disabled} onClick={() => addOrder('tight')}>Tight Deadline</button><button className="btn secondary" disabled={disabled} onClick={() => addOrder('normal')}>Add Random</button><button className="btn danger" disabled={disabled} onClick={addRescueCase}>Rescue Case</button></div>
+    <div className="order-list">{orders.length === 0 ? <EmptyLive text="No orders yet. Hit Start Full Demo for 12 multi-zone orders." /> : orders.map((item) => {
     const pickupLat = item.order.pickup?.lat ?? item.order.pickupLat ?? 0;
     const pickupLng = item.order.pickup?.lng ?? item.order.pickupLng ?? 0;
     const dropoffLat = item.order.dropoff?.lat ?? item.order.dropoffLat ?? 0;
     const dropoffLng = item.order.dropoff?.lng ?? item.order.dropoffLng ?? 0;
     const highRisk = item.order.priority === 'HIGH' || item.order.priority === 10;
-    return <article key={item.order.orderId} className={`order-card ${item.status.toLowerCase()}`}><div><strong>{item.order.orderId}</strong><span>{item.status}</span></div><p>P: {fmt(pickupLat)}, {fmt(pickupLng)} → D: {fmt(dropoffLat)}, {fmt(dropoffLng)}</p><small>Risk: {highRisk ? 'HIGH' : item.status === 'BUFFERED' ? 'MEDIUM' : 'LOW'}</small></article>;
+    return <article key={item.order.orderId} className={`order-card ${item.status.toLowerCase()} ${highRisk ? 'high-risk' : ''}`}><div><strong>{item.order.orderId}</strong><span>{item.status}</span></div><p>P: {fmt(pickupLat)}, {fmt(pickupLng)} → D: {fmt(dropoffLat)}, {fmt(dropoffLng)}</p><small>Risk: {highRisk ? 'HIGH' : item.status === 'BUFFERED' ? 'MEDIUM' : 'LOW'} · priority {String(item.order.priority ?? 'NORMAL')}</small></article>;
   })}</div></section>;
 }
 function DriverRouteBoard({ drivers, routes, frozenStopIds, disabled, moveDrivers, runCycle }: { drivers: LiveDriverState[]; routes: LiveRouteSnapshot[]; frozenStopIds: string[]; disabled: boolean; moveDrivers: (delay?: boolean) => void; runCycle: (rescue?: boolean) => void }) {
-  return <section className="live-panel route-board"><PanelTitle icon={<Truck size={16} />} title="Driver Route Board" badge={`${routes.length} routes`} /><div className="live-button-row"><button className="btn secondary" disabled={disabled} onClick={() => moveDrivers(false)}>Move Drivers</button><button className="btn secondary" disabled={disabled} onClick={() => moveDrivers(true)}>Simulate Delay</button><button className="btn" disabled={disabled} onClick={() => runCycle(false)}><Play size={15} />Run Cycle</button><button className="btn danger" disabled={disabled} onClick={() => runCycle(true)}>Trigger Rescue</button></div><div className="driver-columns">{routes.length === 0 ? <EmptyLive text="No route yet. Add orders then run cycle." /> : routes.map((route) => <article key={route.routeId} className="driver-column"><h4>{route.driverId}<span>{drivers.find((driver) => driver.driverId === route.driverId)?.status ?? 'ONLINE'}</span></h4><ol>{route.stopIds.map((stopId, index) => <li key={`${stopId}-${index}`} className={`${stopId.startsWith('PICKUP') ? 'pickup' : 'dropoff'} ${frozenStopIds.includes(stopId) ? 'frozen' : ''}`}><span>{stopId.startsWith('PICKUP') ? 'P' : 'D'}</span><strong>{stopId.split(':')[1]}</strong><small>ETA +{(index + 1) * 4}m Â· load {stopId.startsWith('PICKUP') ? '+1' : '-1'} {frozenStopIds.includes(stopId) ? 'Â· frozen' : ''}</small></li>)}</ol></article>)}</div></section>;
+  return <section className="live-panel route-board"><PanelTitle icon={<Truck size={16} />} title="Driver Route Board" badge={`${routes.length} routes`} /><div className="live-button-row"><button className="btn secondary" disabled={disabled} onClick={() => moveDrivers(false)}>Move Drivers</button><button className="btn secondary" disabled={disabled} onClick={() => moveDrivers(true)}>Simulate Delay</button><button className="btn" disabled={disabled} onClick={() => runCycle(false)}><Play size={15} />Run Cycle</button><button className="btn danger" disabled={disabled} onClick={() => runCycle(true)}>Trigger Rescue</button></div><div className="driver-columns">{routes.length === 0 ? <EmptyLive text="Drivers ready. Add orders or start full demo to draw routes." /> : routes.map((route) => <article key={route.routeId} className="driver-column"><h4>{route.driverId}<span>{drivers.find((driver) => driver.driverId === route.driverId)?.status ?? 'ONLINE'}</span></h4><ol>{route.stopIds.map((stopId, index) => <li key={`${stopId}-${index}`} className={`${stopId.startsWith('PICKUP') ? 'pickup' : 'dropoff'} ${frozenStopIds.includes(stopId) ? 'frozen' : ''}`}><span>{stopId.startsWith('PICKUP') ? 'P' : 'D'}</span><strong>{stopId.split(':')[1]}</strong><small>ETA +{(index + 1) * 4}m Â· load {stopId.startsWith('PICKUP') ? '+1' : '-1'} {frozenStopIds.includes(stopId) ? 'Â· frozen' : ''}</small></li>)}</ol></article>)}</div></section>;
 }
 
 function MlDecisionPanel({ lastCycle }: { lastCycle: LiveCycleResponse | null }) {
@@ -201,4 +304,5 @@ function EventStreamPanel({ events }: { events: LiveEvent[] }) {
 function PanelTitle({ icon, title, badge }: { icon: ReactNode; title: string; badge: string }) { return <div className="panel-title"><h3>{icon}{title}</h3><span className="mini-badge">{badge}</span></div>; }
 function EmptyLive({ text }: { text: string }) { return <div className="empty-live"><Clock size={18} />{text}</div>; }
 function fmt(value: number) { return value.toFixed(3); }
+
 

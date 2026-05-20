@@ -541,3 +541,25 @@ code { color: #67e8f9; }
 .map-warning { margin: 6px 0; padding: 8px 10px; border: 1px solid rgba(245,158,11,.24); border-radius: 12px; color: #fbbf24; background: rgba(245,158,11,.08); font-size: 12px; }
 .leaflet-popup-content-irx { display: grid; gap: 4px; color: #0f172a; }
 .irx-map-label { border: 0 !important; border-radius: 999px !important; padding: 2px 6px !important; color: #0f172a !important; font-weight: 800; }
+
+.simulator-hero { position: relative; overflow: hidden; background: radial-gradient(circle at 88% 18%, rgba(34,211,238,.26), transparent 22%), radial-gradient(circle at 12% 0%, rgba(168,85,247,.22), transparent 28%), linear-gradient(135deg, rgba(2,6,23,.96), rgba(15,23,42,.74)); }
+.simulator-hero:after { content: ''; position: absolute; inset: auto -10% -46% 40%; height: 160px; background: linear-gradient(90deg, transparent, rgba(34,211,238,.18), rgba(52,211,153,.18), transparent); transform: rotate(-8deg); pointer-events: none; }
+.hero-actions { justify-content: flex-end; min-width: 320px; }
+.btn.hero-start { border-color: rgba(34,211,238,.52); background: linear-gradient(135deg, #22d3ee, #34d399); color: #031019; box-shadow: 0 18px 38px rgba(34,211,238,.22); font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+.btn.hero-start:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 22px 48px rgba(34,211,238,.30); }
+.full-width { width: 100%; justify-content: center; margin-bottom: 10px; }
+.simulator-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid rgba(148,163,184,.16); border-radius: 22px; background: rgba(2,6,23,.58); }
+.simulator-toolbar > div { display: flex; align-items: center; gap: 10px; }
+.simulator-toolbar span { color: #8ba4bd; font-size: 12px; text-transform: uppercase; letter-spacing: .12em; }
+.segmented-control { display: inline-flex; padding: 3px; border: 1px solid rgba(148,163,184,.16); border-radius: 999px; background: rgba(15,23,42,.72); }
+.segmented-control button { min-width: 42px; border: 0; border-radius: 999px; padding: 8px 11px; background: transparent; color: #9fb4c9; cursor: pointer; font-weight: 800; }
+.segmented-control button.active { background: rgba(34,211,238,.18); color: #e5f5ff; box-shadow: inset 0 0 0 1px rgba(34,211,238,.34); }
+.auto-toggle { display: grid; gap: 1px; border: 1px solid rgba(148,163,184,.18); border-radius: 16px; padding: 8px 12px; background: rgba(15,23,42,.70); color: #cbd5e1; cursor: pointer; font-weight: 900; }
+.auto-toggle small { color: #7d93ab; font-size: 10px; font-weight: 700; }
+.auto-toggle.active { border-color: rgba(52,211,153,.45); background: rgba(20,83,45,.28); color: #bbf7d0; }
+.scenario-hint { margin-left: auto; max-width: 520px; color: #67e8f9 !important; text-transform: none !important; letter-spacing: 0 !important; }
+.orders-simulator .scenario-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 10px; }
+.orders-simulator .scenario-buttons .danger { grid-column: 1 / -1; justify-content: center; }
+.order-card.high-risk { border-color: rgba(248,113,113,.46); background: radial-gradient(circle at 95% 18%, rgba(248,113,113,.18), transparent 34%), rgba(127,29,29,.12); }
+.order-card.high-risk small { color: #fecaca; }
+@media (max-width: 720px) { .live-hero { align-items: flex-start; flex-direction: column; } .hero-actions { min-width: 0; width: 100%; } .hero-actions .btn { width: 100%; justify-content: center; } .orders-simulator .scenario-buttons { grid-template-columns: 1fr; } .scenario-hint { margin-left: 0; } }
