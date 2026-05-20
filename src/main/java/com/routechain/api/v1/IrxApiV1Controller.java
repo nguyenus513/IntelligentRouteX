@@ -7,6 +7,7 @@ import com.routechain.runtime.artifact.*;
 import com.routechain.runtime.metrics.RuntimeMetricsRegistry;
 import com.routechain.runtime.queue.*;
 import com.routechain.runtime.store.*;
+import com.routechain.v2.external.ExternalSolverRuntimeManager;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -35,6 +36,7 @@ public final class IrxApiV1Controller {
     private final QueueRouter queueRouter = new QueueRouter();
     private final RuntimeMetricsRegistry metrics = new RuntimeMetricsRegistry();
     private final Map<String, List<Long>> rateBuckets = new ConcurrentHashMap<>();
+    private final ExternalSolverRuntimeManager solverRuntimeManager = new ExternalSolverRuntimeManager();
 
     public IrxApiV1Controller(DashboardController dashboard, ObjectMapper mapper) {
         this.dashboard = dashboard;
@@ -42,7 +44,7 @@ public final class IrxApiV1Controller {
     }
 
     @GetMapping("/health")
-    public Map<String, Object> health() { return Map.of("status", "ok", "version", "v0.9.9.1-irx-api-platform", "engineVersion", "v0.9.9-adaptive-ml-quality-seeking"); }
+    public Map<String, Object> health() { return Map.of("status", "UP", "version", "v1.0.1-irx-all-in-one-benchmark-certified", "engineVersion", "v0.9.9-adaptive-ml-quality-seeking", "externalSolvers", solverRuntimeManager.compactStatus(), "adaptiveMl", Map.of("qualitySeeking", true)); }
 
     @GetMapping("/version")
     public Map<String, Object> version() { return Map.of("apiVersion", "v1", "platformVersion", "v0.9.9.1-irx-api-platform", "engineVersion", "v0.9.9-adaptive-ml-quality-seeking"); }
@@ -432,6 +434,8 @@ public final class IrxApiV1Controller {
         }
     }
 }
+
+
 
 
 

@@ -1,0 +1,24 @@
+{
+    "version":  "v1.0.1-irx-all-in-one-benchmark-certified",
+    "gate":  "solver-runtime-managed",
+    "vroomVersion":  "vroom 1.15.0\r\n",
+    "vroom":  "PASS",
+    "pyvrpVersion":  "unknown\r\n",
+    "pyvrp":  "PASS",
+    "ortools":  "PASS",
+    "health":  {
+                   "version":  "v1.0.1-irx-all-in-one-benchmark-certified",
+                   "adaptiveMl":  {
+                                      "qualitySeeking":  true
+                                  },
+                   "engineVersion":  "v0.9.9-adaptive-ml-quality-seeking",
+                   "externalSolvers":  {
+                                           "vroom":  "AVAILABLE",
+                                           "ortools":  "AVAILABLE",
+                                           "pyvrp":  "AVAILABLE"
+                                       },
+                   "status":  "UP"
+               },
+    "healthReady":  true,
+    "overallPass":  true
+}

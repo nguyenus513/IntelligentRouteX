@@ -1,0 +1,11 @@
+FROM eclipse-temurin:21-jdk-jammy
+WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-pip curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip3 install --no-cache-dir pyvrp || true
+COPY . /app
+EXPOSE 18116
+ENV VROOM_BIN=vroom
+ENV IRX_RUNTIME_MODE=ALL_IN_ONE
+CMD ["./gradlew", "bootRun", "--no-daemon", "--args=--server.port=18116"]

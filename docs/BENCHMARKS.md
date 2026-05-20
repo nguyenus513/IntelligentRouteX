@@ -32,3 +32,10 @@ After removing dashboard/mobile/demo surfaces, backend-only core was recertified
 - security, idempotency, rate-limit, event stream, observability checks
 
 Final artifact: `artifacts/test-reports/v1.0.1-backend-core-recertified/final-summary.json`.
+
+## v1.0.1 All-in-one Benchmark Runtime
+
+All-in-one certification requires local startup to expose IRX Core, VROOM, OR-Tools, PyVRP, and Adaptive ML readiness through `/v1/health`.
+Compare benchmark requires all external solvers and fails with `SOLVER_UNAVAILABLE` if readiness is incomplete.
+
+Certification artifact: `artifacts/test-reports/v1.0.1-all-in-one-benchmark/final/final-summary.json`.

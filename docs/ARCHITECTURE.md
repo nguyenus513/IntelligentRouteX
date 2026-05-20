@@ -42,3 +42,7 @@ Security MVP uses `X-Api-Key`, `X-Tenant-Id`, and idempotent request identifiers
 ## Backend-only Recertification
 
 `v1.0.1-backend-core-recertified` confirms the backend core no longer depends on removed dashboard/mobile/demo worktrees while retaining static dispatch, live dispatch, compare, timeline, event, security, idempotency, rate-limit, and observability APIs.
+
+## All-in-one Runtime
+
+`v1.0.1-irx-all-in-one-benchmark-certified` adds a managed external solver readiness layer for VROOM, OR-Tools, and PyVRP. The production API health response reports solver availability and Adaptive ML QUALITY_SEEKING readiness. Compare mode is guarded so missing required solvers fail explicitly instead of silently degrading evidence.

@@ -1,0 +1,13 @@
+services:
+  irx-all-in-one:
+    build:
+      context: .
+      dockerfile: Dockerfile.allinone
+    container_name: irx-all-in-one
+    ports:
+      - "${IRX_API_PORT:-18116}:18116"
+    environment:
+      IRX_API_KEY: ${IRX_API_KEY:-demo-key}
+      VROOM_BIN: ${VROOM_BIN:-vroom}
+      IRX_RUNTIME_MODE: ALL_IN_ONE
+      IRX_COMPARE_VROOM_REQUIRED: "true"
