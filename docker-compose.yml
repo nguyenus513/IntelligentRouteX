@@ -1,4 +1,4 @@
-services:
+﻿services:
   irx-api:
     build:
       context: .
@@ -8,14 +8,6 @@ services:
     environment:
       - VROOM_BIN=${VROOM_BIN:-tools/vroom/vroom-wsl.cmd}
       - IRX_API_KEY=${IRX_API_KEY:-demo-key}
-  dashboard:
-    build:
-      context: .
-      dockerfile: dashboard/Dockerfile
-    ports:
-      - "${IRX_DASHBOARD_PORT:-5173}:5173"
-    depends_on:
-      - irx-api
   redis:
     image: redis:7-alpine
     profiles: ["optional-persistent"]

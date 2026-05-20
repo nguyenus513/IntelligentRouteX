@@ -199,6 +199,7 @@ public final class VroomSeedContributor implements ExternalSeedContributor {
         double totalKm = routes.stream().mapToDouble(SolutionSeedRoute::distanceKm).sum();
         long late = routes.stream().mapToLong(SolutionSeedRoute::lateOrderCount).sum();
         double coverage = request.orders().isEmpty() ? 0.0 : assigned.size() / (double) request.orders().size();
+        boolean fullCoverage = request.orders().isEmpty() || assigned.size() == request.orders().size();
         double score = coverage * 1_000_000.0 - Math.max(0, request.orders().size() - assigned.size()) * 1_000_000.0 - totalKm * 100.0 - late * 10_000.0;
         return new SolutionSeedCandidate(
                 "SOL-VROOM-SEED",
@@ -208,8 +209,8 @@ public final class VroomSeedContributor implements ExternalSeedContributor {
                 round(totalKm),
                 late,
                 routes.stream().map(route -> new DriverSeedLoad(route.driverId(), route.orderIds().size())).toList(),
-                !routes.isEmpty(),
-                routes.isEmpty() ? "empty-vroom-routes" : "",
+                !routes.isEmpty() && fullCoverage,
+                routes.isEmpty() ? "empty-vroom-routes" : fullCoverage ? "" : "partial-vroom-coverage",
                 List.of("vroom-external-seed-contributor"),
                 new HybridCostBreakdown(round(totalKm), late * 10.0, 0.0, 0.0, 0.0, 0.0, score));
     }

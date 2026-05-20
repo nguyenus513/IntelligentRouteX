@@ -33,7 +33,19 @@ public final class EliteSolutionArchive {
     }
 
     private SolutionSeedCandidate better(SolutionSeedCandidate left, SolutionSeedCandidate right) {
-        return LexicographicSolutionComparator.SLA_STRICT.better(left, right);
+        int comparison = LexicographicSolutionComparator.SLA_STRICT.compare(left, right);
+        if (comparison > 0) {
+            return left;
+        }
+        if (comparison < 0) {
+            return right;
+        }
+        boolean leftRouteBound = left != null && !left.routes().isEmpty();
+        boolean rightRouteBound = right != null && !right.routes().isEmpty();
+        if (rightRouteBound && !leftRouteBound) {
+            return right;
+        }
+        return left;
     }
 
     public Optional<SolutionSeedCandidate> bestDistanceSeed() {

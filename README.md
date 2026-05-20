@@ -1,55 +1,29 @@
 ﻿# IntelligentRouteX
 
-IntelligentRouteX (IRX) is a Java/Spring Boot dispatch optimization platform with a React Playground, an API-first runtime, BigData-lite batch handling, and an Adaptive ML policy layer for search guidance.
+Java/Spring Boot dispatch optimization backend.
 
-Current certified milestone: `v0.9.9.7-production-docs-rewrite`.
+Current repo cleanup status:
+- React dashboard/playground source removed.
+- Android/mobile demo worktrees removed locally.
+- Generated artifacts, build output, release zips, data dumps, and local caches removed locally.
+- Backend API, optimization core, ML worker services, benchmark scripts, and Gradle build remain.
 
-## What is included
-
-- Static dispatch API and async job lifecycle.
-- Live rolling dispatch demo API.
-- Rescue dispatch API with late-not-worse and dominance guard evidence.
-- BigData-lite batch ingest, validation, queueing, pagination, backpressure, dead-letter, and metrics.
-- Adaptive ML policy modes: `TOP_K_ASSISTED` and `QUALITY_SEEKING`.
-- Browser Playground at `/playground` for static/live/rescue/BigData demos.
-- One-click local launcher and release package builder.
-
-## One-click usage
+Run backend compile:
 
 ```powershell
-.\scripts\irx.ps1 up
-.\scripts\irx.ps1 status
-.\scripts\irx.ps1 test -Quick
-.\scripts\irx.ps1 down
-.\scripts\irx.ps1 package
+.\gradlew.bat compileJava --no-daemon --console=plain
 ```
 
-URLs:
+Run backend API locally:
 
-- Backend: `http://localhost:18116`
-- Playground: `http://localhost:5173/playground`
-- API health: `http://localhost:18116/api/v1/health`
+```powershell
+.\gradlew.bat bootRun --args="--server.port=18116"
+```
 
-## Documentation
-
-Start with `docs/README.md`.
-
-Key docs:
-
-- `docs/SYSTEM_OVERVIEW.md`
-- `docs/ARCHITECTURE.md`
+Primary backend docs:
 - `docs/API_REFERENCE.md`
 - `docs/API_EXAMPLES.md`
-- `docs/BIGDATA_LITE_API.md`
+- `docs/DYNAMIC_DISPATCH.md`
 - `docs/ADAPTIVE_ML_POLICY.md`
 - `docs/BENCHMARKS.md`
-- `docs/OPERATIONS.md`
-- `docs/PLAYGROUND.md`
-- `docs/RELEASE.md`
-- `docs/THESIS_GUIDE.md`
-
-## Evidence boundary
-
-IRX is certified as a production-demo MVP in this repository. It is not claimed as a distributed production system, a guaranteed global optimum solver, or a replacement for external solvers. All claims in the docs point to committed gate artifacts under `artifacts/test-reports/`.
-
-Large generated release zips are not committed. Rebuild locally with `./scripts/irx.ps1 package`.
+- `docs/REPO_CLEANUP.md`

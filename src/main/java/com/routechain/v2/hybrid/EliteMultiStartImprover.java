@@ -713,15 +713,16 @@ public final class EliteMultiStartImprover {
     }
 
     private SolutionSeedCandidate withImprovedSource(SolutionSeedCandidate original, SolutionSeedCandidate selected) {
-        if (selected == null || original == null || original.source() != CandidateSource.VROOM_SEED || selected.source() == CandidateSource.VROOM_SEED_IMPROVED) {
+        if (selected == null || original == null || selected.source() == improvedSourceFor(original.source())) {
             return selected;
         }
         if (LexicographicSolutionComparator.SLA_STRICT.compare(selected, original) <= 0) {
             return selected;
         }
+        CandidateSource improvedSource = improvedSourceFor(original.source());
         return new SolutionSeedCandidate(
                 selected.solutionSeedId(),
-                CandidateSource.VROOM_SEED_IMPROVED,
+                improvedSource,
                 selected.routes(),
                 selected.coverageRate(),
                 selected.totalDistanceKm(),
@@ -734,17 +735,32 @@ public final class EliteMultiStartImprover {
     }
 
     private CandidateSource improvedSource(SolutionSeedCandidate original, SolutionSeedCandidate selected) {
-        if (original != null && selected != null && original.source() == CandidateSource.VROOM_SEED
-                && LexicographicSolutionComparator.SLA_STRICT.compare(selected, original) > 0) {
-            return CandidateSource.VROOM_SEED_IMPROVED;
+        if (original != null && selected != null && LexicographicSolutionComparator.SLA_STRICT.compare(selected, original) > 0) {
+            return improvedSourceFor(original.source());
         }
         return selected == null || selected.source() == null ? (original == null ? CandidateSource.IRX_NATIVE : original.source()) : selected.source();
     }
 
     private CandidateSource improvedSource(SolutionSeedCandidate original, MoveEvaluationResult move) {
-        return original != null && original.source() == CandidateSource.VROOM_SEED && move != null && move.accepted()
-                ? CandidateSource.VROOM_SEED_IMPROVED
+        return original != null && move != null && move.accepted()
+                ? improvedSourceFor(original.source())
                 : original == null ? CandidateSource.IRX_NATIVE : original.source();
+    }
+
+    private CandidateSource improvedSourceFor(CandidateSource source) {
+        if (source == CandidateSource.VROOM_SEED) {
+            return CandidateSource.VROOM_SEED_IMPROVED;
+        }
+        if (source == CandidateSource.PYVRP_SEED) {
+            return CandidateSource.PYVRP_SEED_IMPROVED;
+        }
+        if (source == CandidateSource.ORTOOLS_SEED) {
+            return CandidateSource.ORTOOLS_SEED_IMPROVED;
+        }
+        if (source == CandidateSource.IRX_NATIVE) {
+            return CandidateSource.IRX_NATIVE_IMPROVED;
+        }
+        return source == null ? CandidateSource.BEST_EXTERNAL_SEED_IMPROVED : source;
     }
 
     private SolutionSeedCandidate emptySeed(SeedRouteBinding binding) {

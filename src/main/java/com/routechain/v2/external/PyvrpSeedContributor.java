@@ -52,7 +52,7 @@ public final class PyvrpSeedContributor implements ExternalSeedContributor {
                     "--time-limit-ms", "650")
                     .redirectErrorStream(true)
                     .start();
-            boolean completed = process.waitFor(3, TimeUnit.SECONDS);
+            boolean completed = process.waitFor(15, TimeUnit.SECONDS);
             String processOutput = new String(process.getInputStream().readAllBytes());
             if (!completed) {
                 process.destroyForcibly();
@@ -160,6 +160,7 @@ public final class PyvrpSeedContributor implements ExternalSeedContributor {
         long late = routes.stream().mapToLong(SolutionSeedRoute::lateOrderCount).sum();
         List<DriverSeedLoad> loads = routes.stream().map(route -> new DriverSeedLoad(route.driverId(), route.orderIds().size())).toList();
         double coverage = request.orders().isEmpty() ? 0.0 : assigned.size() / (double) request.orders().size();
+        boolean fullCoverage = request.orders().isEmpty() || assigned.size() == request.orders().size();
         double score = coverage * 1_000_000.0 - Math.max(0, request.orders().size() - assigned.size()) * 1_000_000.0 - totalKm * 100.0 - late * 10_000.0;
         return new SolutionSeedCandidate(
                 "SOL-PYVRP-SEED",
@@ -169,8 +170,8 @@ public final class PyvrpSeedContributor implements ExternalSeedContributor {
                 round(totalKm),
                 late,
                 loads,
-                !routes.isEmpty(),
-                routes.isEmpty() ? "empty-pyvrp-routes" : "",
+                !routes.isEmpty() && fullCoverage,
+                routes.isEmpty() ? "empty-pyvrp-routes" : fullCoverage ? "" : "partial-pyvrp-coverage",
                 List.of("pyvrp-external-seed-contributor", result.path("solver").asText("pyvrp")),
                 new HybridCostBreakdown(round(totalKm), late * 10.0, 0.0, 0.0, 0.0, 0.0, score));
     }
