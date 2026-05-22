@@ -20,7 +20,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     result = solve_vrptw(instance, args.time_limit_ms, seed=args.seed)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+    output.write_text(json.dumps(result, allow_nan=False, indent=2, sort_keys=True), encoding="utf-8")
     print(f"[PYVRP SEED] wrote {output}")
     return 0
 

@@ -174,7 +174,7 @@ public final class BigDataLiteApiController {
 
     @GetMapping("/health")
     public ResponseEntity<?> health() {
-        return ResponseEntity.ok(ok(Map.of("status", "UP", "version", "v1", "engineVersion", "v0.9.9-adaptive-ml-quality-seeking")));
+        return ResponseEntity.ok(ok(Map.of("status", "UP", "version", "v1.0.2.1-irx-final", "engineVersion", "v1.0.2.1-irx-final")));
     }
 
     @PostMapping("/jobs")

@@ -19,6 +19,14 @@ services/models/materialized/tabular/
 artifacts/osrm/
 artifacts/visual/
 artifacts/validation/geo-tiles/
+artifacts/test-reports/
+artifacts/external-seeds/
+.runtime/
+.gradle-tmp/
+playground/node_modules/
+playground/dist/
+playground/.env.local
+playground/*.tsbuildinfo
 benchmarks/external/official/traffic/*/*.csv
 benchmarks/external/official/traffic/*/*.pkl
 benchmarks/external/official/dimacs-road/*.gz

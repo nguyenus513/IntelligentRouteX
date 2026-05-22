@@ -39,10 +39,30 @@ if ($RefreshOsm -or -not (Test-Path $osmPath)) {
 (._;>;);
 out meta;
 "@ | Out-File -Encoding ascii $queryPath
-    curl.exe -L --fail --retry 2 --connect-timeout 20 --max-time 240 `
-        --data-urlencode "data@$queryPath" `
-        https://overpass-api.de/api/interpreter `
-        -o $osmPath
+    Push-Location $dataPath
+    try {
+        $downloaded = $false
+        foreach ($endpoint in @("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter")) {
+            curl.exe -L --fail --retry 2 --connect-timeout 20 --max-time 240 `
+                -A "IntelligentRouteX local OSRM demo" `
+                --data-urlencode "data@hcmc-demo.overpassql" `
+                $endpoint `
+                -o "hcmc-demo.osm"
+            if ($LASTEXITCODE -eq 0 -and (Test-Path $osmPath) -and (Get-Item $osmPath).Length -gt 1024) {
+                $downloaded = $true
+                break
+            }
+        }
+        if (-not $downloaded) {
+            throw "Failed to download HCMC OSM extract from Overpass. Check network, Overpass availability, or run again with an existing $osmPath."
+        }
+    } finally {
+        Pop-Location
+    }
+}
+
+if (-not (Test-Path $osmPath) -or (Get-Item $osmPath).Length -le 1024) {
+    throw "OSM input missing or too small: $osmPath"
 }
 
 docker pull osrm/osrm-backend | Out-Host

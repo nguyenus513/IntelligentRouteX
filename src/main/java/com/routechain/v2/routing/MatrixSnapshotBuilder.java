@@ -65,7 +65,7 @@ public final class MatrixSnapshotBuilder {
                                                              List<MatrixNode> nodes,
                                                              OsrmTableClient osrmTableClient) {
         if (osrmTableClient == null) {
-            return build(datasetId, scenarioHash, routingMode, nodes);
+            throw new IllegalStateException("OSRM_REQUIRED: osrm table client is not configured");
         }
         List<MatrixNode> uniqueNodes = uniqueNodes(nodes);
         String provider = osrmTableClient.providerId();
@@ -80,7 +80,7 @@ public final class MatrixSnapshotBuilder {
                 .toList();
         DurationMatrix matrix = osrmTableClient.fetchMatrix(stops, stops);
         if (!matrix.degradeReasons().isEmpty() || !matrix.completeDurations() || matrix.nullDistanceCount() > 0) {
-            return build(datasetId, scenarioHash, routingMode, uniqueNodes);
+            throw new IllegalStateException("OSRM_REQUIRED: incomplete OSRM table for " + routingMode + " reasons=" + matrix.degradeReasons() + " nullDistances=" + matrix.nullDistanceCount());
         }
         int size = uniqueNodes.size();
         double[][] distances = new double[size][size];

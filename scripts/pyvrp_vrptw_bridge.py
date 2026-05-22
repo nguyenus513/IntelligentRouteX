@@ -2,6 +2,7 @@
 
 import importlib.metadata
 import importlib.util
+import math
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,6 +11,16 @@ from typing import Any
 from external_benchmark_support import check_solution
 
 SCALE = 1000
+
+
+def finite_or_none(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if math.isfinite(numeric) else None
 
 
 @dataclass(frozen=True)
@@ -110,8 +121,8 @@ def solution_from_result(result: Any, node_ids: list[str], solver: str) -> dict[
         "schemaVersion": "external-benchmark-solution/v1",
         "solver": solver,
         "routes": routes,
-        "pyvrpCost": float(result.cost()) if callable(getattr(result, "cost", None)) else None,
-        "pyvrpRuntimeSeconds": float(result.runtime) if hasattr(result, "runtime") else None,
+        "pyvrpCost": finite_or_none(result.cost() if callable(getattr(result, "cost", None)) else None),
+        "pyvrpRuntimeSeconds": finite_or_none(result.runtime if hasattr(result, "runtime") else None),
         "pyvrpFeasible": bool(result.is_feasible()) if callable(getattr(result, "is_feasible", None)) else None,
         "pyvrpIterations": int(result.num_iterations) if hasattr(result, "num_iterations") else None,
     }

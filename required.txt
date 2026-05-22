@@ -1,0 +1,16 @@
+# IRX Control Tower runtime Python dependencies.
+# Install with: py -3 -m pip install -r required.txt
+pyvrp
+ortools
+requests
+numpy
+pandas
+
+# Non-pip machine requirements for start.bat:
+# - Java 21 in PATH
+# - Node.js 20+ and npm in PATH
+# - Docker Desktop running. start.bat -InstallDeps can install Docker Desktop with winget if missing.
+# - VROOM runs through Docker by default: tools\vroom\vroom-docker.cmd --version
+# - Default VROOM image: vroomvrp/vroom-docker:v1.14.0-rc.2
+# - WSL VROOM is optional legacy fallback only: tools\vroom\vroom-wsl.cmd
+# - Free local ports: 18116 backend, 5173 frontend, 5001 OSRM

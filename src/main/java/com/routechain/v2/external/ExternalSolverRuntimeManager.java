@@ -51,17 +51,17 @@ public final class ExternalSolverRuntimeManager {
         }
         String bin = System.getenv("VROOM_BIN");
         if (bin == null || bin.isBlank()) {
-            Path bundled = Path.of("tools", "vroom", isWindows() ? "vroom-wsl.cmd" : "vroom");
+            Path bundled = Path.of("tools", "vroom", isWindows() ? "vroom-docker.cmd" : "vroom");
             bin = Files.exists(bundled) ? bundled.toString() : "vroom";
         }
-        return checkCommand("vroom", List.of(bin, "--version"), "VROOM_REQUIRED_BUT_NOT_AVAILABLE");
+        return checkCommand("vroom", List.of(bin, "--version"), "VROOM_REQUIRED_BUT_NOT_AVAILABLE", 30);
     }
 
     private ExternalSolverAvailability checkPyvrp() {
         List<String> command = isWindows()
                 ? List.of("py", "-3", "-c", "import pyvrp; print(getattr(pyvrp, '__version__', 'unknown'))")
                 : List.of("python3", "-c", "import pyvrp; print(getattr(pyvrp, '__version__', 'unknown'))");
-        return checkCommand("pyvrp", command, "PYVRP_REQUIRED_BUT_NOT_AVAILABLE");
+        return checkCommand("pyvrp", command, "PYVRP_REQUIRED_BUT_NOT_AVAILABLE", 5);
     }
 
     private ExternalSolverAvailability checkOrtools() {
@@ -73,10 +73,10 @@ public final class ExternalSolverRuntimeManager {
         }
     }
 
-    private ExternalSolverAvailability checkCommand(String solverId, List<String> command, String reason) {
+    private ExternalSolverAvailability checkCommand(String solverId, List<String> command, String reason, int timeoutSeconds) {
         try {
             Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-            boolean completed = process.waitFor(5, TimeUnit.SECONDS);
+            boolean completed = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!completed) {
                 process.destroyForcibly();
                 return new ExternalSolverAvailability(solverId, ExternalContributorStatus.TIMEOUT, reason, "", Map.of("command", command));

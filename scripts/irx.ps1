@@ -46,7 +46,7 @@ function Start-Local {
   $backendCmd = "cd '$Root'; `$env:GRADLE_USER_HOME='$env:GRADLE_USER_HOME'; `$env:VROOM_BIN='$env:VROOM_BIN'; `$env:ROUTECHAIN_DISPATCH_V2_ROUTING_PROVIDER='$env:IRX_ROUTING_PROVIDER'; `$env:ROUTECHAIN_DISPATCH_V2_ROUTING_BASE_URL='$env:IRX_ROUTING_BASE_URL'; .\gradlew.bat bootRun --args='--server.port=$BackendPort --routechain.dispatch-v2.sidecar-required=false --routechain.dispatch-v2.routing.provider=$env:IRX_ROUTING_PROVIDER --routechain.dispatch-v2.routing.base-url=$env:IRX_ROUTING_BASE_URL' *> '$BackendLog'"
   $bp = Start-Process powershell.exe -ArgumentList @('-NoExit','-Command',$backendCmd) -WindowStyle Minimized -PassThru
   Set-Content $BackendPid $bp.Id
-  Wait-Http "$BackendUrl/api/v1/health" 180 "API Health" | Out-Null
+  Wait-Http "$BackendUrl/v1/health" 180 "API Health" | Out-Null
   Write-Host "IRX backend started: $BackendUrl"
 }
 function Stop-System {
@@ -59,7 +59,7 @@ function Stop-System {
 function Show-Status {
   Ensure-Runtime
   $bpid = if(Test-Path $BackendPid){ (Get-Content $BackendPid -Raw).Trim() } else { "" }
-  $bh = Test-Http "$BackendUrl/api/v1/health"
+  $bh = Test-Http "$BackendUrl/v1/health"
   Write-Host "Backend:"
   Write-Host "  URL: $BackendUrl"
   Write-Host "  Health: $(if($bh){'PASS'}else{'FAIL'})"
@@ -76,7 +76,7 @@ function Package-Release {
 }
 
 switch($Command){
-  "up" { if($Profile -eq "docker"){ docker compose up -d --build; Wait-Http "$BackendUrl/api/v1/health" 180 "API Health" | Out-Null } else { Start-Local } }
+  "up" { if($Profile -eq "docker"){ docker compose up -d --build; Wait-Http "$BackendUrl/v1/health" 180 "API Health" | Out-Null } else { Start-Local } }
   "down" { Stop-System }
   "status" { Show-Status }
   "test" { Run-Test }

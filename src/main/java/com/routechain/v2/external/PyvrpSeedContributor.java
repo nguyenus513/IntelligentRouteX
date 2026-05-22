@@ -62,8 +62,8 @@ public final class PyvrpSeedContributor implements ExternalSeedContributor {
                 return skipped("pyvrp-seed-runner-failed", started, Map.of("input", input.toString(), "processOutput", processOutput, "exitCode", process.exitValue()));
             }
             JsonNode result = OBJECT_MAPPER.readTree(output.toFile());
-            if (!"PASS".equalsIgnoreCase(result.path("status").asText()) || !result.path("routes").isArray() || result.path("routes").isEmpty()) {
-                return skipped(result.path("evidenceGapReason").asText("pyvrp-no-feasible-seed"), started, Map.of("input", input.toString(), "output", output.toString(), "status", result.path("status").asText("")));
+            if (!result.path("routes").isArray() || result.path("routes").isEmpty()) {
+                return skipped(result.path("evidenceGapReason").asText("pyvrp-no-routes"), started, Map.of("input", input.toString(), "output", output.toString(), "status", result.path("status").asText("")));
             }
             SolutionSeedCandidate seed = seedFromResult(request, matrixSnapshot, result);
             if (seed.routes().isEmpty()) {
@@ -78,8 +78,15 @@ public final class PyvrpSeedContributor implements ExternalSeedContributor {
             diagnostics.put("routeCount", seed.routes().size());
             diagnostics.put("input", input.toString());
             diagnostics.put("output", output.toString());
+            diagnostics.put("checkerStatus", result.path("status").asText("UNKNOWN"));
+            diagnostics.put("checkerFeasible", result.path("checked").path("feasible").asBoolean(false));
+            diagnostics.put("checkerViolations", result.path("checked").path("violations").toString());
+            diagnostics.put("pyvrpFeasible", result.path("pyvrpFeasible").asBoolean(false));
             diagnostics.put("pyvrpVersion", result.path("pyvrpVersion").asText(""));
-            return new ExternalSeedContribution(contributorId(), ExternalContributorStatus.OK, seed, "pyvrp-seed-emitted", diagnostics);
+            String reason = "PASS".equalsIgnoreCase(result.path("status").asText())
+                    ? "pyvrp-seed-emitted"
+                    : "pyvrp-seed-emitted-with-checker-violations";
+            return new ExternalSeedContribution(contributorId(), ExternalContributorStatus.OK, seed, reason, diagnostics);
         } catch (Exception exception) {
             return skipped("pyvrp-seed-error-" + exception.getClass().getSimpleName(), started, Map.of("error", exception.getMessage() == null ? "" : exception.getMessage()));
         }
@@ -101,7 +108,7 @@ public final class PyvrpSeedContributor implements ExternalSeedContributor {
                     "id", "PICKUP:" + order.orderId(),
                     "x", order.pickupPoint().longitude(),
                     "y", order.pickupPoint().latitude(),
-                    "demand", 1,
+                    "demand", 0,
                     "readyTime", 0,
                     "dueTime", Math.max(1, order.promisedEtaMinutes()),
                     "serviceTime", 1));
@@ -109,7 +116,7 @@ public final class PyvrpSeedContributor implements ExternalSeedContributor {
                     "id", "DROPOFF:" + order.orderId(),
                     "x", order.dropoffPoint().longitude(),
                     "y", order.dropoffPoint().latitude(),
-                    "demand", 1,
+                    "demand", 0,
                     "readyTime", 0,
                     "dueTime", Math.max(1, order.promisedEtaMinutes()),
                     "serviceTime", 1));
@@ -131,7 +138,7 @@ public final class PyvrpSeedContributor implements ExternalSeedContributor {
                 "scenarioId", request.traceId(),
                 "depotNodeId", "DRIVER:" + depotDriver.driverId(),
                 "vehicleCount", request.drivers().size(),
-                "capacity", Math.max(1, request.orders().size()),
+                "capacity", Math.max(1, request.orders().size() * 2),
                 "nodes", nodes,
                 "distanceMatrix", distances);
     }

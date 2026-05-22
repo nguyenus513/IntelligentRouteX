@@ -13,6 +13,22 @@ public record DispatchJobRequest(
         DispatchOptions options) {
     public record AdaptiveMlOptions(Boolean enabled, String mode, Integer topKMoves, Double explorationRate, Integer qualityBudgetMs) { }
     public record DispatchOptions(Integer maxRuntimeMs, Boolean returnDiagnostics) { }
-    public record ApiOrderDto(String orderId, Double pickupLat, Double pickupLng, Double dropoffLat, Double dropoffLng, Integer demand, Integer readyTimeMinutes, Integer deadlineMinutes) { }
-    public record ApiDriverDto(String driverId, Double lat, Double lng, Integer capacity) { }
+    public record ApiOrderDto(
+            String orderId,
+            Double pickupLat,
+            Double pickupLng,
+            Double dropoffLat,
+            Double dropoffLng,
+            Integer demand,
+            Integer readyTimeMinutes,
+            Integer deadlineMinutes,
+            String createdAt,
+            String pickupReadyAt,
+            String deliveryWindowStartAt,
+            String deliveryWindowEndAt,
+            Integer pickupServiceSeconds,
+            Integer dropoffServiceSeconds,
+            String priority,
+            Integer gracePeriodSeconds) { }
+    public record ApiDriverDto(String driverId, Double lat, Double lng, Integer capacity, Double speedKmh, String status) { }
 }

@@ -177,7 +177,7 @@ public final class HttpOsrmRoutingProvider implements RoutingProvider {
                 request.fromStop().latitude(),
                 request.toStop().longitude(),
                 request.toStop().latitude());
-        String query = "overview=full&geometries=geojson&steps=false&annotations=false";
+        String query = "overview=simplified&geometries=geojson&steps=false&annotations=false";
         return baseUri.resolve("route/v1/driving/" + encodePath(coordinates) + "?" + query);
     }
 

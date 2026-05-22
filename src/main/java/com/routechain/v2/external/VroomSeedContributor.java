@@ -46,7 +46,12 @@ public final class VroomSeedContributor implements ExternalSeedContributor {
         String baseUrl = System.getenv("VROOM_BASE_URL");
         String bin = System.getenv("VROOM_BIN");
         if ((baseUrl == null || baseUrl.isBlank()) && (bin == null || bin.isBlank())) {
-            return skipped("vroom-runtime-not-configured", started, Map.of("expectedSource", "VROOM_SEED", "supportedModes", List.of("VROOM_BASE_URL", "VROOM_BIN")));
+            Path bundled = Path.of("tools", "vroom", isWindows() ? "vroom-docker.cmd" : "vroom");
+            if (Files.exists(bundled)) {
+                bin = bundled.toString();
+            } else {
+                bin = "vroom";
+            }
         }
         try {
             Map<String, Object> payload = vroomRequest(request, matrixSnapshot);
@@ -291,6 +296,10 @@ public final class VroomSeedContributor implements ExternalSeedContributor {
         Map<String, Object> copy = new LinkedHashMap<>(diagnostics);
         copy.put("runtimeMs", elapsedMs(started));
         return new ExternalSeedContribution(contributorId(), ExternalContributorStatus.EVIDENCE_GAP, null, reason, copy);
+    }
+
+    private boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
     }
 
     private long elapsedMs(long startedNanos) {
