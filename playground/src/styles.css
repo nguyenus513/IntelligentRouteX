@@ -349,6 +349,15 @@ textarea, pre { width: 100%; min-height: 300px; margin: 0; padding: 14px; backgr
 .apiAccordion { display: grid; gap: 8px; }
 .apiAccordion button { border: 1px solid #27272a; background: #050505; color: #d4d4d8; min-height: 34px; text-align: left; padding: 0 12px; font-weight: 950; text-transform: uppercase; letter-spacing: .08em; }
 
+.bigDataPanel { margin-top: 14px; border: 1px solid #163827; background: linear-gradient(180deg, rgba(6, 28, 18, .9), #020202); padding: 12px; }
+.sectionTitle { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.sectionTitle b { color: #fff; font-size: 10px; text-transform: uppercase; letter-spacing: .14em; }
+.sectionTitle small { color: #86efac; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+.miniEventList { max-height: 170px; overflow: auto; display: grid; gap: 6px; margin: 10px 0; content-visibility: auto; }
+.miniEventList span { display: grid; grid-template-columns: 1fr; border-left: 3px solid #22c55e; background: #050505; padding: 8px; }
+.miniEventList b { color: #fff; font-size: 10px; letter-spacing: .04em; }
+.miniEventList small { color: #a1a1aa; font-size: 9px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 
 
 

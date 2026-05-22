@@ -6,7 +6,7 @@ import { getStringId, irxApi } from './api/irxApi';
 import { CompareRow, SolverMapMode, UiRoute, UiStop, compareRowsFromResult, mapRoutesForSolver, mapRoutesFromBackend } from './mappers/routeMapper';
 
 type Tab = 'live' | 'compare' | 'demo' | 'trace' | 'api';
-type ApiEndpoint = 'dispatch' | 'compare' | 'live' | 'liveOrder' | 'liveCycle' | 'rescue';
+type ApiEndpoint = 'dispatch' | 'compare' | 'live' | 'liveOrder' | 'liveCycle' | 'rescue' | 'bigdataOrders' | 'bigdataRuntime' | 'aiContext' | 'aiAsk';
 type LogKind = 'info' | 'ok' | 'warn' | 'err';
 type LogLine = { id: number; at: string; kind: LogKind; text: string };
 type ConsoleTraceLine = { id: string; at: string; kind: LogKind; stage: string; type: string; message: string; orderId?: string; driverId?: string; cycleId?: string; data: unknown };
@@ -402,6 +402,13 @@ function payloadForEndpoint(endpoint: ApiEndpoint, datasetId: string) {
   if (endpoint === 'liveOrder') return liveOrderPayload();
   if (endpoint === 'liveCycle') return liveCyclePayload();
   if (endpoint === 'rescue') return rescuePayload();
+  if (endpoint === 'bigdataOrders') return {
+    batchId: requestId('bd-orders'),
+    tenantId: 'demo',
+    items: Array.from({ length: 80 }, (_, index) => ({ orderId: `BD_ORD_${String(index + 1).padStart(4, '0')}`, pickupLat: 10.77 + (index % 8) * 0.006, pickupLng: 106.68 + (index % 10) * 0.005, deadlineMinutes: 25 + (index % 7) * 8, zone: index % 3 === 0 ? 'central-hcm' : index % 3 === 1 ? 'east-hcm' : 'west-hcm' })),
+    options: { enqueueDispatch: true, dedupeKey: 'orderId' }
+  };
+  if (endpoint === 'aiAsk') return { question: 'Khu vực nào sắp nổ đơn và driver nào đang quá tải?' };
   return dispatchPayload(datasetId);
 }
 
@@ -611,6 +618,9 @@ export default function App() {
   const [liveState, setLiveState] = useState<unknown>();
   const [executionEvents, setExecutionEvents] = useState<unknown>();
   const [response, setResponse] = useState('');
+  const [bigDataRuntime, setBigDataRuntime] = useState<unknown>();
+  const [bigDataEvents, setBigDataEvents] = useState<unknown[]>([]);
+  const [aiContext, setAiContext] = useState<unknown>();
   const [apiEndpoint, setApiEndpoint] = useState<ApiEndpoint>('dispatch');
   const [customPayload, setCustomPayload] = useState('');
   const [timeline, setTimeline] = useState<unknown>();
@@ -1777,7 +1787,15 @@ export default function App() {
   const sendSandbox = async () => {
     try {
       const parsed = JSON.parse(customPayload);
-      const result = apiEndpoint === 'compare'
+      const result = apiEndpoint === 'bigdataOrders'
+        ? await irxApi.ingestBigData('orders', parsed)
+        : apiEndpoint === 'bigdataRuntime'
+          ? await irxApi.getBigDataRuntime()
+          : apiEndpoint === 'aiContext'
+            ? await irxApi.getAiContext()
+            : apiEndpoint === 'aiAsk'
+              ? await irxApi.askAi(parsed)
+              : apiEndpoint === 'compare'
         ? await irxApi.createCompareJob(parsed)
         : apiEndpoint === 'live'
           ? await irxApi.createLiveSession(parsed)
@@ -1790,6 +1808,12 @@ export default function App() {
                 : await irxApi.createDispatchJob(parsed);
       setLatencyMs(result.durationMs);
       setResponse(stringify(result.data ?? result.error));
+      if (apiEndpoint === 'bigdataOrders' || apiEndpoint === 'bigdataRuntime') {
+        const [runtimeResult, eventsResult] = await Promise.all([irxApi.getBigDataRuntime(), irxApi.getBigDataEvents(80)]);
+        setBigDataRuntime(runtimeResult.data);
+        setBigDataEvents(asArray(asRecord(eventsResult.data).items ?? asRecord(asRecord(eventsResult.data).data).items).slice(-80));
+      }
+      if (apiEndpoint === 'aiContext' || apiEndpoint === 'aiAsk') setAiContext(result.data);
       log(`Sandbox sent real ${apiEndpoint} request.`, result.ok ? 'ok' : 'err');
     } catch (error) {
       log(error instanceof Error ? error.message : 'Invalid sandbox payload.', 'err');
@@ -1819,7 +1843,7 @@ export default function App() {
           {tab === 'compare' && <CompareTab datasetId={datasetId} compareRows={displayedCompareRows} health={health} mode={compareDisplayMode} compareResult={compareResult} backendReady={backendReady} benchmarkRunning={benchmarkRunning} onMode={setCompareDisplayMode} onDataset={selectDataset} onRunCompare={runCompare} onClear={clearBenchmark} />}
           {tab === 'demo' && <DemoBuilderTab mode={mapToolMode} points={draftPoints} pendingPickup={pendingOrderPickup} liveDemo={liveDemo} scenarioId={demoScenarioId} backendReady={backendReady} liveBusy={liveBusy} phase={realtimePhase} kpi={demoKpi} events={demoEvents} onScenario={selectScenario} onMode={setMapToolMode} onRunDraft={runDraftDispatch} onClear={clearDraftPoints} onGenerate={generateControlledLive} onSpam={() => spamLiveOrders()} onRunLiveDemo={runControlledLiveDemo} onRunFullRealtime={runFullRealtimeDemo} onRunCompare={runDemoCompare} />}
           {tab === 'trace' && <><Pipeline stages={stages} /><DecisionStory tab={tab} routes={routes} compareRows={displayedCompareRows} compareResult={displayedCompareResult} dispatchResult={dispatchResult} liveState={liveState} streamEvents={streamEvents} /><Panel title="Execution Timeline" icon={<Cpu size={15} />}><TimelineTable stages={stages} /><pre className="miniCode">{stringify(timeline ?? { source: 'backend', status: 'WAITING_FOR_JOB' })}</pre></Panel><Panel title="Execution Stream Events" icon={<Terminal size={15} />}><pre className="miniCode">{stringify(streamEvents.length ? streamEvents.slice(-18) : asArray(asRecord(executionEvents).events).slice(-18))}</pre></Panel></>}
-          {tab === 'api' && <ApiSandboxPanel endpoint={apiEndpoint} payload={customPayload} response={response} health={health} version={version} onEndpoint={setApiEndpoint} onPayload={setCustomPayload} onHealth={refreshHealth} onSend={sendSandbox} />}
+          {tab === 'api' && <><ApiSandboxPanel endpoint={apiEndpoint} payload={customPayload} response={response} health={health} version={version} bigDataRuntime={bigDataRuntime} bigDataEvents={bigDataEvents} aiContext={aiContext} onEndpoint={setApiEndpoint} onPayload={setCustomPayload} onHealth={refreshHealth} onSend={sendSandbox} /></>}
           <Console logs={logs} liveState={liveState} streamEvents={streamEvents} />
         </aside>
       </main>
@@ -2563,10 +2587,10 @@ function DatasetPicker({ dataset, onChange }: { dataset: string; onChange: (valu
 }
 
 function EndpointPicker({ endpoint, onChange }: { endpoint: ApiEndpoint; onChange: (value: ApiEndpoint) => void }) {
-  return <div className="picker endpointPicker">{[['dispatch', 'POST dispatch'], ['compare', 'POST compare'], ['live', 'POST live'], ['liveOrder', 'POST live order'], ['liveCycle', 'POST live cycle'], ['rescue', 'POST rescue']].map(([id, label]) => <button key={id} className={endpoint === id ? 'active' : ''} onClick={() => onChange(id as ApiEndpoint)}>{label}</button>)}</div>;
+  return <div className="picker endpointPicker">{[['dispatch', 'POST dispatch'], ['compare', 'POST compare'], ['live', 'POST live'], ['liveOrder', 'POST live order'], ['liveCycle', 'POST live cycle'], ['rescue', 'POST rescue'], ['bigdataOrders', 'POST bigdata orders'], ['bigdataRuntime', 'GET bigdata runtime'], ['aiContext', 'GET AI context'], ['aiAsk', 'POST AI ask']].map(([id, label]) => <button key={id} className={endpoint === id ? 'active' : ''} onClick={() => onChange(id as ApiEndpoint)}>{label}</button>)}</div>;
 }
 
-function ApiSandboxPanel({ endpoint, payload, response, health, version, onEndpoint, onPayload, onHealth, onSend }: { endpoint: ApiEndpoint; payload: string; response: string; health: unknown; version: unknown; onEndpoint: (value: ApiEndpoint) => void; onPayload: (value: string) => void; onHealth: () => void; onSend: () => void }) {
+function ApiSandboxPanel({ endpoint, payload, response, health, version, bigDataRuntime, bigDataEvents, aiContext, onEndpoint, onPayload, onHealth, onSend }: { endpoint: ApiEndpoint; payload: string; response: string; health: unknown; version: unknown; bigDataRuntime?: unknown; bigDataEvents: unknown[]; aiContext?: unknown; onEndpoint: (value: ApiEndpoint) => void; onPayload: (value: string) => void; onHealth: () => void; onSend: () => void }) {
   const [payloadOpen, setPayloadOpen] = useState(false);
   const [responseOpen, setResponseOpen] = useState(false);
   let parsedResponse: Record<string, unknown> = {};
@@ -2585,7 +2609,23 @@ function ApiSandboxPanel({ endpoint, payload, response, health, version, onEndpo
       {responseOpen && <pre>{response || stringify({ health, version, hint: 'Run an API action to see real response JSON.' })}</pre>}
     </div>
     <div className="actions"><button onClick={onHealth}>Health</button><button onClick={onSend}>Send Payload</button></div>
+    <BigDataRuntimePanel runtime={bigDataRuntime} events={bigDataEvents} aiContext={aiContext} />
   </Panel>;
+}
+
+function BigDataRuntimePanel({ runtime, events, aiContext }: { runtime?: unknown; events: unknown[]; aiContext?: unknown }) {
+  const data = asRecord(asRecord(runtime).data ?? runtime);
+  const lake = asRecord(data.lake);
+  const contextData = asRecord(asRecord(aiContext).data ?? aiContext);
+  const hotZones = asArray(asRecord(asRecord(contextData.demand).hotZones).items ?? asRecord(contextData.demand).hotZones);
+  return <div className="bigDataPanel">
+    <div className="sectionTitle"><b>BigData Runtime</b><small>windowed UI · top events only · no log flood</small></div>
+    <div className="apiSummaryGrid">
+      {[['Queue', scalar(data.queueDepth, '--')], ['Workers', `${scalar(data.activeWorkers, '0')}/${scalar(data.workerCount, '--')}`], ['Done', scalar(data.jobsCompleted, '--')], ['DLQ', scalar(data.deadLetter, '--')], ['Lake rows', scalar(lake.rowsWritten, '--')], ['Avg ms', scalar(data.avgLatencyMs, '--')]].map(([label, value]) => <span key={label}><small>{label}</small><b>{value}</b></span>)}
+    </div>
+    <div className="miniEventList">{events.slice(-12).map((event, index) => { const record = asRecord(event); return <span key={`${record.eventId ?? index}`}><b>{scalar(record.type, 'EVENT')}</b><small>{scalar(record.jobId, '--')} · {scalar(record.timestamp, '--')}</small></span>; })}</div>
+    <pre className="miniCode">{stringify({ aiContext: { hotZones: hotZones.slice(0, 5), guardrail: scalar(contextData.guardrail ?? asRecord(contextData).instructions, 'context-only') }, lake: lake.baseDir ? lake : 'Run BigData Runtime to load lake summary.' })}</pre>
+  </div>;
 }
 
 function CompareTable({ rows, health, mode }: { rows: CompareRow[]; health: unknown; mode: CompareDisplayMode }) {

@@ -74,6 +74,11 @@ export const irxApi = {
   getExecutionTimeline: (executionId: string) => irxRequest(`/v1/executions/${encodeURIComponent(executionId)}/timeline`),
   getExecutionEvents: (executionId: string) => irxRequest(`/v1/executions/${encodeURIComponent(executionId)}/events`),
   executionEventStreamUrl: (executionId: string) => eventUrl(`/v1/executions/${encodeURIComponent(executionId)}/events`),
+  ingestBigData: (kind: string, body: unknown) => command(`/api/v1/bigdata/ingest/${encodeURIComponent(kind)}`, body, `bigdata-${kind}`),
+  getBigDataRuntime: () => irxRequest('/api/v1/bigdata/runtime'),
+  getBigDataEvents: (limit = 80) => irxRequest(`/api/v1/bigdata/events?limit=${encodeURIComponent(String(limit))}`),
+  getAiContext: () => irxRequest('/api/v1/ai/context/live-summary'),
+  askAi: (body: unknown) => command('/api/v1/ai/ask', body, 'ai-ask'),
   runDashboardDispatch: (body: unknown) => irxRequest('/api/v1/dashboard/dispatch/run', {
     method: 'POST',
     body: JSON.stringify(body)
