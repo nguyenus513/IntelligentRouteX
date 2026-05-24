@@ -4,12 +4,18 @@ import com.routechain.api.DashboardController;
 import com.routechain.api.v1.dto.ApiErrorResponse;
 import com.routechain.api.v1.dto.DispatchJobRequest;
 import com.routechain.api.v1.dto.DispatchJobResponse;
+import com.routechain.config.RouteChainDispatchV2Properties;
 import com.routechain.v2.external.ExternalSolverRuntimeManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,10 +33,13 @@ public final class IrxProductionApiExtensionController {
     private final ExternalSolverRuntimeManager solverRuntimeManager = new ExternalSolverRuntimeManager();
     private final DashboardController dashboard;
     private final ExecutionEventService executionEvents;
+    private final RouteChainDispatchV2Properties properties;
+    private final HttpClient osrmHealthClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
 
-    public IrxProductionApiExtensionController(DashboardController dashboard, ExecutionEventService executionEvents) {
+    public IrxProductionApiExtensionController(DashboardController dashboard, ExecutionEventService executionEvents, RouteChainDispatchV2Properties properties) {
         this.dashboard = dashboard;
         this.executionEvents = executionEvents;
+        this.properties = properties;
     }
 
     @PostMapping("/compare/jobs")
@@ -49,10 +58,15 @@ public final class IrxProductionApiExtensionController {
         String jobId = id("cmp");
         DashboardController.RunVisualizationDto realInputRun = null;
         DashboardController.BenchmarkJob benchmark = null;
-        if (hasRealInput(request)) {
-            realInputRun = runCompareInput(jobId, datasetId, request);
-        } else {
-            benchmark = dashboard.createBenchmarkJob(new DashboardController.BenchmarkJobRequest(datasetId, COMPARE_SOLVERS, "QUALITY_BENCHMARK", "QUALITY_SEEKING", 80, 0.20, false, null, 5000, "TRI_MODEL_FUSION_PD_LNS", 3, 12, 3000));
+        try {
+            if (hasRealInput(request)) {
+                realInputRun = runCompareInput(jobId, datasetId, request);
+            } else {
+                benchmark = dashboard.createBenchmarkJob(new DashboardController.BenchmarkJobRequest(datasetId, COMPARE_SOLVERS, "QUALITY_BENCHMARK", "QUALITY_SEEKING", 80, 0.20, false, null, 5000, "TRI_MODEL_FUSION_PD_LNS", 3, 12, 3000));
+            }
+        } catch (IllegalStateException exception) {
+            if (String.valueOf(exception.getMessage()).contains("OSRM_REQUIRED")) return osrmUnavailable(exception.getMessage());
+            throw exception;
         }
         CompareRecord record = new CompareRecord(jobId, requestId, tenantId, Instant.now().toString(), benchmark == null ? null : benchmark.jobId(), datasetId, realInputRun);
         compareJobs.put(jobId, record);
@@ -142,8 +156,27 @@ public final class IrxProductionApiExtensionController {
         return ResponseEntity.ok(Map.of("executionId", executionId, "status", "COMPLETED", "finalSolver", "IRX_ML_FUSED_HYBRID", "metrics", Map.of("coverageRate", 1.0, "distanceKm", 60.4, "lateCount", 0, "runtimeMs", 12000)));
     }
     private ResponseEntity<?> requireSolvers() {
-        if (solverRuntimeManager.ready("vroom") && solverRuntimeManager.ready("ortools") && solverRuntimeManager.ready("pyvrp")) return null;
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ApiErrorResponse("SOLVER_UNAVAILABLE", "VROOM, OR-Tools, and PyVRP are required for compare benchmark.", Map.of("externalSolvers", solverRuntimeManager.compactStatus())));
+        if (!solverRuntimeManager.ready("vroom") || !solverRuntimeManager.ready("ortools") || !solverRuntimeManager.ready("pyvrp")) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ApiErrorResponse("SOLVER_UNAVAILABLE", "VROOM, OR-Tools, and PyVRP are required for compare benchmark.", Map.of("externalSolvers", solverRuntimeManager.compactStatus())));
+        }
+        if (!osrmReady()) return osrmUnavailable("OSRM table service is required for compare benchmark.");
+        return null;
+    }
+
+    private ResponseEntity<?> osrmUnavailable(String message) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ApiErrorResponse("OSRM_UNAVAILABLE", message == null || message.isBlank() ? "OSRM table service is required for compare benchmark." : message, Map.of("osrm", Map.of("status", "UNAVAILABLE", "baseUrl", properties.getRouting().getBaseUrl()))));
+    }
+
+    private boolean osrmReady() {
+        try {
+            String baseUrl = properties.getRouting().getBaseUrl();
+            URI uri = URI.create((baseUrl.endsWith("/") ? baseUrl : baseUrl + "/") + "table/v1/driving/106.7009,10.7769;106.6983,10.7721?annotations=duration,distance");
+            HttpRequest request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(3)).GET().build();
+            HttpResponse<String> response = osrmHealthClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.statusCode() >= 200 && response.statusCode() < 300 && response.body() != null && response.body().contains("\"code\":\"Ok\"");
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private boolean hasRealInput(DispatchJobRequest request) {
@@ -324,20 +357,29 @@ public final class IrxProductionApiExtensionController {
         solvers.values().forEach(value -> asSolverRow(value).putIfAbsent("stopSequencePreview", finalSequence));
         Map<String, Object> hybrid = asSolverRow(solvers.get("IRX_HYBRID_FINAL"));
         Map<String, Object> nativeIrx = asSolverRow(solvers.get("IRX_NATIVE"));
-        if (!hybrid.isEmpty()) {
-            long seedRuntime = solvers.entrySet().stream()
-                    .filter(entry -> !entry.getKey().startsWith("IRX") && !entry.getKey().equals("DISTANCE_NEAREST") && !entry.getKey().equals("ONE_BY_ONE_DELIVERY"))
-                    .mapToLong(entry -> Math.round(number(asSolverRow(entry.getValue()).get("runtimeMs"))))
-                    .max()
-                    .orElse(0L);
-            long irxRuntime = Math.max(1L, Math.round(number(hybrid.get("runtimeMs"))));
-            long totalRuntime = Math.max(irxRuntime, seedRuntime + irxRuntime);
-            hybrid.put("runtimeMs", totalRuntime);
-            hybrid.put("runtimeDisplay", totalRuntime + "ms total · " + irxRuntime + "ms IRX");
-            hybrid.put("stopSequencePreview", finalSequence);
-        } else if (!nativeIrx.isEmpty()) {
-            nativeIrx.put("stopSequencePreview", finalSequence);
+        if (hybrid.isEmpty() && !nativeIrx.isEmpty()) {
+            hybrid = new LinkedHashMap<>(nativeIrx);
+            hybrid.put("solver", "IRX_HYBRID_FINAL");
+            hybrid.put("selectedSource", "IRX_NATIVE");
+            hybrid.put("isFinal", true);
+            solvers.put("IRX_HYBRID_FINAL", hybrid);
         }
+        if (!hybrid.isEmpty()) {
+            long vroomRuntime = solverRuntime(solvers, "VROOM");
+            long ortoolsRuntime = solverRuntime(solvers, "ORTOOLS");
+            long pyvrpRuntime = solverRuntime(solvers, "PYVRP");
+            long irxRuntime = Math.max(1L, Math.round(number(nativeIrx.isEmpty() ? hybrid.get("runtimeMs") : nativeIrx.get("runtimeMs"))));
+            long totalRuntime = Math.max(irxRuntime, vroomRuntime + ortoolsRuntime + pyvrpRuntime + irxRuntime);
+            hybrid.put("runtimeMs", totalRuntime);
+            hybrid.put("runtimeDisplay", totalRuntime + "ms");
+            hybrid.put("runtimeComponents", Map.of("vroomMs", vroomRuntime, "ortoolsMs", ortoolsRuntime, "pyvrpMs", pyvrpRuntime, "irxMlMs", irxRuntime, "totalMs", totalRuntime));
+            hybrid.put("stopSequencePreview", finalSequence);
+        }
+        if (!nativeIrx.isEmpty()) nativeIrx.put("stopSequencePreview", finalSequence);
+    }
+
+    private long solverRuntime(Map<String, Object> solvers, String key) {
+        return Math.max(0L, Math.round(number(asSolverRow(solvers.get(key)).get("runtimeMs"))));
     }
 
     private List<Map<String, Object>> seedRaceRows(Map<String, Object> solvers, DashboardController.RunVisualizationDto run) {
@@ -413,22 +455,19 @@ public final class IrxProductionApiExtensionController {
             asSolverRow(entry.getValue()).put("rank", rank++);
             asSolverRow(entry.getValue()).put("isFinal", entry.getKey().equals(selected));
         }
-        boolean suppressHybrid = "IRX_NATIVE".equals(selected);
-        if (!suppressHybrid) {
-            Map<String, Object> selectedRow = new LinkedHashMap<>(best);
-            selectedRow.put("selectedSource", selected);
-            selectedRow.put("noRegressSelector", true);
-            selectedRow.put("solver", "IRX_HYBRID_FINAL");
-            selectedRow.put("isFinal", true);
-            solvers.put("IRX_HYBRID_FINAL", selectedRow);
-        }
+        Map<String, Object> selectedRow = new LinkedHashMap<>(best);
+        selectedRow.put("selectedSource", selected);
+        selectedRow.put("noRegressSelector", true);
+        selectedRow.put("solver", "IRX_HYBRID_FINAL");
+        selectedRow.put("isFinal", true);
+        solvers.put("IRX_HYBRID_FINAL", selectedRow);
         return Map.of(
                 "selectedSource", selected,
-                "selectionReason", "coverage → late count → distance → runtime objective selected " + selected,
+                "selectionReason", "coverage -> late count -> distance -> runtime objective selected " + selected,
                 "dominanceGuard", "PASS",
                 "rollbackApplied", false,
-                "hybridRowSuppressed", suppressHybrid,
-                "suppressedReason", suppressHybrid ? "IRX_HYBRID_FINAL equals IRX_NATIVE" : "HYBRID_FINAL_HAS_DISTINCT_SELECTED_SOURCE");
+                "hybridRowSuppressed", false,
+                "suppressedReason", "IRX_HYBRID_FINAL_REPORTS_TOTAL_PIPELINE_RUNTIME");
     }
 
     private boolean betterSolverRow(Map<String, Object> candidate, Map<String, Object> current) {
