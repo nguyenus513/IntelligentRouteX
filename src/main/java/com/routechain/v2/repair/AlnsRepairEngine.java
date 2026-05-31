@@ -1,6 +1,7 @@
 package com.routechain.v2.repair;
 
 import com.routechain.v2.active.ActiveRouteInsertionCandidate;
+import com.routechain.v2.bundle.AdaptiveBundleDispatchConfig;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,7 +27,9 @@ public final class AlnsRepairEngine {
 
     public ActiveRouteRepairResult repairWithTelemetry(RepairContext context) {
         long startedAt = System.nanoTime();
-        int maxIterations = Math.max(1, context.insertionCandidates().size() * (repairOperators.size() + 1));
+        int maxIterations = Math.min(
+                AdaptiveBundleDispatchConfig.MAX_REPAIR_ITERATIONS,
+                Math.max(1, context.insertionCandidates().size() * (repairOperators.size() + 1)));
         RepairBudgetController budget = new RepairBudgetController(context.runtimeBudget(), maxIterations);
         List<RepairCandidate> repaired = new ArrayList<>();
         RepairCandidate incumbent = null;

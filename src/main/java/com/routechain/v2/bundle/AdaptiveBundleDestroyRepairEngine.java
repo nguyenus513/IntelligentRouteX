@@ -39,6 +39,7 @@ public final class AdaptiveBundleDestroyRepairEngine {
                                                          Duration runtimeBudget) {
         List<BundleCandidate> riskyBundles = selectedBundles == null ? List.of() : selectedBundles.stream()
                 .filter(bundle -> adaptiveLayer.breakRisk(bundle, context, etaContext, decisionTime) > DEFAULT_BREAK_RISK_THRESHOLD)
+                .limit(AdaptiveBundleDispatchConfig.MAX_CANDIDATE_BUNDLES)
                 .toList();
         if (riskyBundles.isEmpty()) {
             return new AdaptiveBundleRepairResult(List.of(), null, Map.of(
@@ -53,8 +54,10 @@ public final class AdaptiveBundleDestroyRepairEngine {
                 etaLegCache);
         var repairResult = repairEngine.repairWithTelemetry(new RepairContext(
                 activeRoutes,
-                insertionCandidates,
-                runtimeBudget == null ? Duration.ofMillis(100) : runtimeBudget));
+                insertionCandidates.stream()
+                        .limit(AdaptiveBundleDispatchConfig.MAX_INSERTION_CANDIDATES)
+                        .toList(),
+                boundedBudget(runtimeBudget)));
         return new AdaptiveBundleRepairResult(riskyBundles, repairResult, Map.of(
                 "destroyRepairApplied", true,
                 "riskyBundleCount", riskyBundles.size(),
@@ -62,5 +65,13 @@ public final class AdaptiveBundleDestroyRepairEngine {
                 "candidateInputCount", insertionCandidates.size(),
                 "candidateOutputCount", repairResult.candidates().size(),
                 "repairSuccess", !repairResult.candidates().isEmpty()));
+    }
+
+    private Duration boundedBudget(Duration requestedBudget) {
+        Duration defaultBudget = Duration.ofMillis(100);
+        Duration candidate = requestedBudget == null ? defaultBudget : requestedBudget;
+        return candidate.compareTo(AdaptiveBundleDispatchConfig.MAX_REPAIR_BUDGET) > 0
+                ? AdaptiveBundleDispatchConfig.MAX_REPAIR_BUDGET
+                : candidate;
     }
 }

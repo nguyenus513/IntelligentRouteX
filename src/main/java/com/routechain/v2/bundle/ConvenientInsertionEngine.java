@@ -43,9 +43,11 @@ public final class ConvenientInsertionEngine {
         return generated.stream()
                 .filter(ActiveRouteInsertionCandidate::feasible)
                 .filter(candidate -> preservesFrozenStop(activeRoutes, candidate))
+                .filter(this::deadlineSafe)
                 .sorted(Comparator.comparingDouble(ActiveRouteInsertionCandidate::score).reversed()
                         .thenComparingDouble(ActiveRouteInsertionCandidate::incrementalCompletionEtaMinutes)
                         .thenComparing(ActiveRouteInsertionCandidate::candidateId))
+                .limit(AdaptiveBundleDispatchConfig.MAX_INSERTION_CANDIDATES)
                 .toList();
     }
 
@@ -58,5 +60,19 @@ public final class ConvenientInsertionEngine {
             return true;
         }
         return route.remainingStopOrder().getFirst().equals(candidate.newStopOrder().getFirst());
+    }
+
+    private boolean deadlineSafe(ActiveRouteInsertionCandidate candidate) {
+        if (candidate.incrementalCompletionEtaMinutes() > AdaptiveBundleDispatchConfig.MAX_INSERTION_INCREMENTAL_COMPLETION_MINUTES) {
+            return false;
+        }
+        if (candidate.freshnessRisk() > AdaptiveBundleDispatchConfig.MAX_INSERTION_FRESHNESS_RISK) {
+            return false;
+        }
+        if (candidate.churnRisk() > AdaptiveBundleDispatchConfig.MAX_INSERTION_CHURN_RISK) {
+            return false;
+        }
+        double slackProxy = candidate.projectedCompletionEtaMinutes() - candidate.projectedPickupEtaMinutes();
+        return slackProxy >= AdaptiveBundleDispatchConfig.MIN_DEADLINE_SLACK_MINUTES;
     }
 }

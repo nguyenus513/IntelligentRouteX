@@ -17,6 +17,9 @@ public final class AdaptiveMlBundleDispatchLayer {
                                     BundleContext context,
                                     EtaContext etaContext,
                                     Instant decisionTime) {
+        if (forceAssign(order, etaContext, decisionTime)) {
+            return 1.0;
+        }
         double ageScore = ageScore(order, decisionTime);
         double lateRisk = lateRisk(order, etaContext, decisionTime);
         double regretScore = regretScore(order, context);
@@ -117,8 +120,26 @@ public final class AdaptiveMlBundleDispatchLayer {
 
     private double ageScore(Order order, Instant decisionTime) {
         long waitingSeconds = Math.max(0L, Duration.between(order.readyAt(), decisionTime).toSeconds());
-        double promisedSeconds = Math.max(60.0, order.promisedEtaMinutes() * 60.0);
-        return clamp(waitingSeconds / promisedSeconds);
+        double waitingMinutes = waitingSeconds / 60.0;
+        double nonlinearAge;
+        if (waitingMinutes < 5.0) {
+            nonlinearAge = waitingMinutes;
+        } else if (waitingMinutes < 15.0) {
+            nonlinearAge = 5.0 + Math.pow(waitingMinutes - 5.0, 1.3);
+        } else {
+            nonlinearAge = 30.0 + Math.pow(waitingMinutes - 15.0, 2.0);
+        }
+        double promisedMinutes = Math.max(1.0, order.promisedEtaMinutes());
+        return clamp(nonlinearAge / promisedMinutes);
+    }
+
+    private boolean forceAssign(Order order, EtaContext etaContext, Instant decisionTime) {
+        long waitingMinutes = Math.max(0L, Duration.between(order.readyAt(), decisionTime).toMinutes());
+        if (waitingMinutes >= AdaptiveBundleDispatchConfig.FORCE_ASSIGN_OLD_ORDER_MINUTES) {
+            return true;
+        }
+        long deadlineMinutes = Math.max(0L, Duration.between(decisionTime, order.createdAt().plusSeconds(order.promisedEtaMinutes() * 60L)).toMinutes());
+        return deadlineMinutes < Math.max(2L, Math.round(2.0 * etaContext.averageEtaMinutes()));
     }
 
     private double lateRisk(Order order, EtaContext etaContext, Instant decisionTime) {
