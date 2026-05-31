@@ -32,6 +32,13 @@ final class BundleContext {
     List<Order> orders(List<String> orderIds) {
         return orderIds.stream()
                 .map(orderById::get)
+                .filter(java.util.Objects::nonNull)
+                .sorted(Comparator.comparing(Order::orderId))
+                .toList();
+    }
+
+    List<Order> allOrders() {
+        return orderById.values().stream()
                 .sorted(Comparator.comparing(Order::orderId))
                 .toList();
     }

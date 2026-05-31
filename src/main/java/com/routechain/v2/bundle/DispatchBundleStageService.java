@@ -4,6 +4,7 @@ import com.routechain.config.RouteChainDispatchV2Properties;
 import com.routechain.v2.DispatchStageLatency;
 import com.routechain.v2.EtaContext;
 import com.routechain.v2.HotStartReuseSummary;
+import com.routechain.v2.MlStageMetadata;
 import com.routechain.v2.compute.AdaptiveComputeGate;
 import com.routechain.v2.cluster.DispatchPairClusterStage;
 import com.routechain.v2.decision.DecisionStageLogger;
@@ -224,7 +225,7 @@ public final class DispatchBundleStageService {
                     validated.degradeReasons().forEach(reason -> rejectedByReasonCounts.merge(reason, 1, Integer::sum));
                     continue;
                 }
-                scoredCandidates.add(bundleScorer.score(validated, context));
+                scoredCandidates.add(bundleScorer.score(validated, context, etaContext, pairClusterStage.bufferedOrderWindow().decisionTime()));
             }
             List<BundleCandidate> familyCandidates = scoredCandidates.stream()
                     .sorted(bundleDominancePruner.bundleComparator())
@@ -254,6 +255,16 @@ public final class DispatchBundleStageService {
                 diversityRetainedCount(retained),
                 familyRetainedCounts.getOrDefault(BundleFamily.LATE_RISK_RESCUE, 0),
                 familyRetainedCounts.getOrDefault(BundleFamily.ACTIVE_ROUTE_ADDON, 0));
+        List<MlStageMetadata> mlStageMetadata = new ArrayList<>(greedRlMetadata.build().stream().toList());
+        mlStageMetadata.add(new MlStageMetadata(
+                "ml-stage-metadata/v1",
+                "adaptive-ml-bundle-dispatch",
+                "forecast-routefinder-greedrl-policy",
+                "adaptive-ml-bundle-dispatch/v1",
+                "local-formula",
+                bundlePoolElapsedMs,
+                true,
+                false));
         return new DispatchBundleStage(
                 "dispatch-bundle-stage/v1",
                 boundaryExpansions,
@@ -264,7 +275,7 @@ public final class DispatchBundleStageService {
                 List.of(
                         DispatchStageLatency.measured("boundary-expansion", boundaryExpansionElapsedMs, false),
                         DispatchStageLatency.measured("bundle-pool", bundlePoolElapsedMs, false)),
-                greedRlMetadata.build().stream().toList(),
+                List.copyOf(mlStageMetadata),
                 List.copyOf(degradeReasons));
     }
 
