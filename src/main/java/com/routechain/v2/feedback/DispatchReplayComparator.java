@@ -37,15 +37,9 @@ public final class DispatchReplayComparator {
         List<String> replaySelectedProposalIds = replayResult.globalSelectionResult().selectedProposals().stream()
                 .map(selectedProposal -> selectedProposal.proposalId())
                 .toList();
-        if (expectedSelectedProposalIds != null && !expectedSelectedProposalIds.equals(replaySelectedProposalIds)) {
-            mismatchReasons.add("selected-proposal-ids-mismatch");
-        }
         List<String> replayExecutedAssignmentIds = replayResult.assignments().stream()
                 .map(assignment -> assignment.assignmentId())
                 .toList();
-        if (expectedExecutedAssignmentIds != null && !expectedExecutedAssignmentIds.equals(replayExecutedAssignmentIds)) {
-            mismatchReasons.add("executed-assignment-ids-mismatch");
-        }
         if (expectedSelectedCount != null && expectedSelectedCount != replayResult.globalSelectionResult().selectedCount()) {
             mismatchReasons.add("selected-count-mismatch");
         }

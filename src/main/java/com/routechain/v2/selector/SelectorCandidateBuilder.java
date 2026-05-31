@@ -75,12 +75,14 @@ public final class SelectorCandidateBuilder {
             String shapeVerdict = RouteShapeQuality.verdict(proposal);
             boolean weakShape = shouldRejectWeakShape(proposal);
             if ("REJECT_SHAPE".equals(shapeVerdict)) {
-                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-zigzag-penalty-applied"));
-                degradeReasons.add("selector-zigzag-penalty-applied");
+                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-reject-zigzag-route"));
+                degradeReasons.add("selector-reject-zigzag-route");
+                continue;
             }
             if (weakShape) {
-                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-weak-shape-penalty-applied"));
-                degradeReasons.add("selector-weak-shape-penalty-applied");
+                missingContextSkips.add(new SelectorTraceEvent(proposal.proposalId(), "selector-reject-weak-shape-route"));
+                degradeReasons.add("selector-reject-weak-shape-route");
+                continue;
             }
 
             SelectorCandidate candidate = new SelectorCandidate(

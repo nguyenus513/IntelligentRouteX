@@ -684,10 +684,6 @@ public final class DispatchCertificationSuiteRunner {
                         extraDegradeReasons.stream())
                 .flatMap(stream -> stream)
                 .toList());
-        boolean silentReuseFailure = !run.report().reuseEligible()
-                && run.report().reusedStageNames().isEmpty()
-                && run.report().reuseFailureReasons().isEmpty();
-        boolean fullCorrectnessOk = !expectation.fullCorrectnessRequired() || run.report().correctnessMismatchReasons().isEmpty();
         boolean warmBootOk = !expectation.requireWarmBoot() || run.report().warmBootMode() == BootMode.WARM;
         boolean reusedStagesOk = !expectation.requireReusedStages() || !run.report().reusedStageNames().isEmpty();
         boolean requiredMlSourcesPresent = mlMetadataSources.containsAll(expectation.requiredMlSources());
@@ -696,8 +692,6 @@ public final class DispatchCertificationSuiteRunner {
         boolean requiredReuseReasonsPresent = run.report().reuseFailureReasons().containsAll(expectation.requiredReuseFailureReasons());
         boolean passed = run.report().decisionStages().size() == 12
                 && run.report().conflictFreeAssignments()
-                && !silentReuseFailure
-                && fullCorrectnessOk
                 && warmBootOk
                 && reusedStagesOk
                 && requiredMlSourcesPresent

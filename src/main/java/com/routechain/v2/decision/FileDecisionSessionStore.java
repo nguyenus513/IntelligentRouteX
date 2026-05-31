@@ -94,6 +94,26 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
                 selectedCandidateRefs.addAll(textList(refs.get("selectedCandidateRefs")));
                 critiqueRefs.addAll(textList(refs.get("critiqueRefs")));
             }
+            for (String writeRef : textList(summary.get("sessionWriteRefs"))) {
+                if (writeRef.startsWith("route-vector:")) {
+                    routeVectorRefs.add(writeRef.substring("route-vector:".length()));
+                } else if (writeRef.startsWith("tile-context:")) {
+                    tileContextRefs.add(writeRef.substring("tile-context:".length()));
+                } else if (writeRef.startsWith("selected-candidate:")) {
+                    selectedCandidateRefs.add(writeRef.substring("selected-candidate:".length()));
+                } else if (writeRef.startsWith("critique:")) {
+                    critiqueRefs.add(writeRef.substring("critique:".length()));
+                }
+            }
+            if (routeVectorRefs.isEmpty()
+                    && tileContextRefs.isEmpty()
+                    && selectedCandidateRefs.isEmpty()
+                    && critiqueRefs.isEmpty()) {
+                routeVectorRefs.add(upstreamRef);
+                tileContextRefs.add(upstreamRef);
+                selectedCandidateRefs.add(upstreamRef);
+                critiqueRefs.add(upstreamRef);
+            }
             priorStageRefs.add(Map.copyOf(stageRef));
         }
         routeVectorRefs.forEach(ref -> readRefs.add("route-vector:" + ref));
@@ -173,7 +193,7 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
         stageRefs.put("traceId", input.traceId());
         stageRefs.put("stageName", input.stageName().wireName());
         stageRefs.put("selectedCandidateRefs", output.selectedIds());
-        stageRefs.put("routeVectorRefs", routeVectorRefs(output.assessments()));
+        stageRefs.put("routeVectorRefs", routeVectorRefs(output.assessments(), output.selectedIds()));
         stageRefs.put("tileContextRefs", tileContextRefs(input.geospatialContext()));
         stageRefs.put("critiqueRefs", critiqueRefs(output.assessments()));
         List<String> writeRefs = sessionWriteRefs(stageRefs);
@@ -234,17 +254,18 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
         return list.stream().map(String::valueOf).toList();
     }
 
-    private List<String> routeVectorRefs(Map<String, Object> assessments) {
+    private List<String> routeVectorRefs(Map<String, Object> assessments, List<String> selectedIds) {
         Object rawItems = assessments.get("items");
         if (!(rawItems instanceof List<?> items)) {
-            return List.of();
+            return selectedIds == null ? List.of() : selectedIds;
         }
-        return items.stream()
+        List<String> refs = items.stream()
                 .filter(Map.class::isInstance)
                 .map(Map.class::cast)
                 .flatMap(item -> textList(item.get("routeVectorRefs")).stream())
                 .distinct()
                 .toList();
+        return refs.isEmpty() && selectedIds != null ? selectedIds : refs;
     }
 
     private List<String> critiqueRefs(Map<String, Object> assessments) {
@@ -252,12 +273,16 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
         if (!(rawItems instanceof List<?> items)) {
             return List.of();
         }
-        return items.stream()
+        List<String> refs = items.stream()
                 .filter(Map.class::isInstance)
                 .map(Map.class::cast)
                 .flatMap(item -> textList(item.get("dominanceReasonCodes")).stream())
                 .distinct()
                 .toList();
+        if (!refs.isEmpty()) {
+            return refs;
+        }
+        return textList(assessments.get("reasonCodes")).stream().distinct().toList();
     }
 
     private List<String> sessionWriteRefs(Map<String, Object> stageRefs) {

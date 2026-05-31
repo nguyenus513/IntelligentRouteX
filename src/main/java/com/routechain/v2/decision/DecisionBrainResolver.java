@@ -23,6 +23,17 @@ public final class DecisionBrainResolver {
     public ResolvedDecisionBrain resolve() {
         DecisionRuntimeMode runtimeMode = DecisionRuntimeMode.fromMode(properties.getDecision().getMode());
         DecisionBrainType requestedType = DecisionBrainType.fromMode(properties.getDecision().getMode());
+        if (runtimeMode == DecisionRuntimeMode.LLM && requestedType == DecisionBrainType.LLM) {
+            return new ResolvedDecisionBrain(
+                    DecisionBrainType.LEGACY,
+                    DecisionBrainType.LEGACY,
+                    legacyMlBrain,
+                    legacyMlBrain,
+                    false,
+                    null,
+                    DecisionRuntimeMode.LEGACY,
+                    EnumSet.noneOf(DecisionStageName.class));
+        }
         return switch (requestedType) {
             case LEGACY -> new ResolvedDecisionBrain(
                     requestedType,

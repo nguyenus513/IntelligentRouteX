@@ -361,8 +361,39 @@ public final class NineRouterResponsesClient {
                 throw new IllegalStateException("provider-schema-invalid");
             }
         }
-        return objectMapper.convertValue(outputNode, new TypeReference<>() {
-        });
+        Object normalized = javaValue(outputNode);
+        if (normalized instanceof Map<?, ?> map) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            map.forEach((key, value) -> result.put(String.valueOf(key), value));
+            return result;
+        }
+        throw new IllegalStateException("provider-schema-invalid");
+    }
+
+    private Object javaValue(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isObject()) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            node.fields().forEachRemaining(entry -> result.put(entry.getKey(), javaValue(entry.getValue())));
+            return result;
+        }
+        if (node.isArray()) {
+            java.util.List<Object> result = new java.util.ArrayList<>();
+            node.forEach(item -> result.add(javaValue(item)));
+            return result;
+        }
+        if (node.isBoolean()) {
+            return node.asBoolean();
+        }
+        if (node.isIntegralNumber()) {
+            return node.asLong();
+        }
+        if (node.isFloatingPointNumber()) {
+            return node.asDouble();
+        }
+        return node.asText();
     }
 
     private Map<String, Object> normalizeTokenUsage(Map<String, Object> tokenUsage) {

@@ -313,7 +313,9 @@ public final class DispatchQualityBenchmarkHarness {
                     feedbackSummary.tokenUsageSummary(),
                     feedbackSummary.stageFallbackSummary(),
                     distinctDegrades(result),
-                    distinctSources(result.mlStageMetadata().stream()
+                    execution.attachDiagnostics().mlAttachStatus() == DispatchQualityMlAttachStatus.ML_ATTACH_FAIL
+                            ? List.of()
+                            : distinctSources(result.mlStageMetadata().stream()
                             .filter(MlStageMetadata::applied)
                             .map(MlStageMetadata::sourceModel)
                             .toList()),
@@ -2106,10 +2108,13 @@ public final class DispatchQualityBenchmarkHarness {
         if (!properties.isMlEnabled() || enabledWorkers == 0) {
             return DispatchQualityMlAttachStatus.ATTACHED;
         }
+        if (!Files.exists(Path.of(blankToEmpty(properties.getMl().getModelManifestPath())).toAbsolutePath().normalize())) {
+            return DispatchQualityMlAttachStatus.ML_ATTACH_FAIL;
+        }
         if (authorityRun
                 && baselineId == DispatchPerfBenchmarkHarness.BaselineId.C
                 && workerAppliedSources.isEmpty()) {
-            return readyWorkers > 0 ? DispatchQualityMlAttachStatus.PARTIAL_ATTACH : DispatchQualityMlAttachStatus.ML_ATTACH_FAIL;
+            return DispatchQualityMlAttachStatus.ML_ATTACH_FAIL;
         }
         if (appliedWorkers == 0 && workerAppliedSources.isEmpty()) {
             return readyWorkers > 0 ? DispatchQualityMlAttachStatus.PARTIAL_ATTACH : DispatchQualityMlAttachStatus.ML_ATTACH_FAIL;

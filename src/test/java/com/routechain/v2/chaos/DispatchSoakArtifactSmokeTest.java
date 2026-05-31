@@ -15,12 +15,12 @@ class DispatchSoakArtifactSmokeTest {
         Path outputDirectory = Path.of(value("dispatchSoak.outputDir", "DISPATCH_SOAK_OUTPUT_DIR", "build/dispatch-soak-smoke"));
         DispatchSoakRunResult result = harness.run(new DispatchSoakHarness.SoakRequest(
                 DispatchSoakHarness.DurationProfile.fromWire(value("dispatchSoak.duration", "DISPATCH_SOAK_DURATION", "1h")),
-                DispatchPerfBenchmarkHarness.WorkloadSize.valueOf(value("dispatchSoak.size", "DISPATCH_SOAK_SIZE", "M")),
+                DispatchPerfBenchmarkHarness.WorkloadSize.valueOf(value("dispatchSoak.size", "DISPATCH_SOAK_SIZE", "S")),
                 DispatchPhase3Support.ScenarioPack.fromWire(value("dispatchSoak.scenarioPack", "DISPATCH_SOAK_SCENARIO_PACK", "normal-clear")),
                 DispatchPhase3Support.ExecutionMode.fromWire(value("dispatchSoak.executionMode", "DISPATCH_SOAK_EXECUTION_MODE", "controlled")),
                 value("dispatchSoak.machineLabel", "DISPATCH_SOAK_MACHINE_LABEL", DispatchPerfBenchmarkHarness.DEFAULT_MACHINE_LABEL),
                 Boolean.parseBoolean(value("dispatchSoak.authority", "DISPATCH_SOAK_AUTHORITY", "false")),
-                optionalIntegerValue("dispatchSoak.sampleCountOverride", "DISPATCH_SOAK_SAMPLE_COUNT_OVERRIDE"),
+                optionalIntegerValue("dispatchSoak.sampleCountOverride", "DISPATCH_SOAK_SAMPLE_COUNT_OVERRIDE", 1),
                 outputDirectory));
 
         DispatchStabilityArtifactWriter.ArtifactPaths artifacts = DispatchStabilityArtifactWriter.writeSoakResult(result, outputDirectory);
@@ -40,7 +40,7 @@ class DispatchSoakArtifactSmokeTest {
         return defaultValue;
     }
 
-    private Integer optionalIntegerValue(String propertyName, String envName) {
+    private Integer optionalIntegerValue(String propertyName, String envName, Integer defaultValue) {
         String propertyValue = System.getProperty(propertyName);
         if (propertyValue != null && !propertyValue.isBlank()) {
             return Integer.parseInt(propertyValue);
@@ -49,6 +49,6 @@ class DispatchSoakArtifactSmokeTest {
         if (envValue != null && !envValue.isBlank()) {
             return Integer.parseInt(envValue);
         }
-        return null;
+        return defaultValue;
     }
 }

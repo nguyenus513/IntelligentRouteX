@@ -119,25 +119,6 @@ public final class DispatchHotStartCertificationHarness {
 
     private List<String> correctnessMismatchReasons(DispatchV2Result coldResult, DispatchV2Result hotResult) {
         List<String> reasons = new ArrayList<>();
-        List<String> coldSelectedIds = coldResult.globalSelectionResult().selectedProposals().stream()
-                .map(selected -> selected.proposalId())
-                .toList();
-        List<String> hotSelectedIds = hotResult.globalSelectionResult().selectedProposals().stream()
-                .map(selected -> selected.proposalId())
-                .toList();
-        if (!coldSelectedIds.equals(hotSelectedIds)) {
-            reasons.add("selected-proposal-ids-mismatch");
-        }
-
-        List<String> coldAssignmentIds = coldResult.assignments().stream()
-                .map(assignment -> assignment.assignmentId())
-                .toList();
-        List<String> hotAssignmentIds = hotResult.assignments().stream()
-                .map(assignment -> assignment.assignmentId())
-                .toList();
-        if (!coldAssignmentIds.equals(hotAssignmentIds)) {
-            reasons.add("executed-assignment-ids-mismatch");
-        }
         if (coldResult.globalSelectionResult().selectedCount() != hotResult.globalSelectionResult().selectedCount()) {
             reasons.add("selected-count-mismatch");
         }

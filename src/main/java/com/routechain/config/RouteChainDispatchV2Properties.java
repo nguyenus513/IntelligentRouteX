@@ -252,7 +252,7 @@ public class RouteChainDispatchV2Properties {
     public static final class Routing {
         private String provider = "synthetic";
         private String baseUrl = "http://127.0.0.1:5000";
-        private int refineLimitPerTick = 24;
+        private int refineLimitPerTick = 2000;
         private Duration connectTimeout = Duration.ofSeconds(2);
         private Duration readTimeout = Duration.ofSeconds(5);
 
@@ -1662,7 +1662,7 @@ public class RouteChainDispatchV2Properties {
     }
 
     public static final class Decision {
-        private String mode = "legacy";
+        private String mode = "llm";
         private boolean fallbackToLegacy = true;
         private java.util.List<String> authoritativeStages = new java.util.ArrayList<>();
         private final EffortPolicy effortPolicy = new EffortPolicy();

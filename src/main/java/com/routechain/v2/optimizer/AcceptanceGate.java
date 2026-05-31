@@ -30,9 +30,7 @@ public final class AcceptanceGate {
         if (incumbent == null || !feasibilityOracle.check(incumbent).feasible()) {
             return true;
         }
-        ObjectiveBreakdown incumbentBreakdown = objective.scoreSelectorCandidate(incumbent);
-        ObjectiveBreakdown challengerBreakdown = objective.scoreSelectorCandidate(challenger);
-        double requiredDelta = Math.abs(incumbentBreakdown.totalScore()) * (config.scoreEpsilonPct() / 100.0);
-        return challengerBreakdown.totalScore() > incumbentBreakdown.totalScore() + requiredDelta;
+        double requiredDelta = Math.abs(incumbent.selectionScore()) * (config.scoreEpsilonPct() / 100.0);
+        return challenger.selectionScore() > incumbent.selectionScore() + requiredDelta;
     }
 }

@@ -72,6 +72,8 @@ public final class LlmStageScheduler {
         NineRouterResponsesClient.LlmInvocationResult representative = commitTrace.result();
         Map<String, Object> assessments = extractAssessments(representative.parsedOutput());
         GuardedSelection guardedSelection = guardSelection(input, extractSelectedIds(representative.parsedOutput()), assessments);
+        String appliedSource = guardedSelection.hardRiskAllowed() ? "legacy"
+                : guardedSelection.guardTriggered() ? "llm-guarded" : "llm";
         DecisionStageOutputV1 output = new DecisionStageOutputV1(
                 "stage-output-v1",
                 input.traceId(),
@@ -89,7 +91,7 @@ public final class LlmStageScheduler {
                         guardedSelection.guardTriggered(),
                         guardedSelection.guardTriggered() ? "llm-authority-selection-shrink-guard-triggered" : null,
                         true,
-                        guardedSelection.guardTriggered() ? "llm-guarded" : "llm",
+                        appliedSource,
                         effortDecision.requestedEffort().wireValue(),
                         representative.appliedEffort(),
                         mergeTokenUsage(passTraces),
@@ -293,21 +295,22 @@ public final class LlmStageScheduler {
                                             List<String> selectedIds,
                                             Map<String, Object> assessments) {
         if (!authorityShrinkGuardStage(input.stageName())) {
-            return new GuardedSelection(selectedIds, false, 0, selectedIds.size(), selectedIds.size(), 1.0);
+            return new GuardedSelection(selectedIds, false, false, 0, selectedIds.size(), selectedIds.size(), 1.0);
         }
         List<String> upstreamIds = candidateIds(input);
         int preCount = upstreamIds.size();
         int postCount = selectedIds.size();
         if (preCount <= 1 || postCount == 0) {
-            return new GuardedSelection(selectedIds, false, preCount, postCount, postCount, retainRatio(preCount, postCount));
+            return new GuardedSelection(selectedIds, false, false, preCount, postCount, postCount, retainRatio(preCount, postCount));
         }
         double retainRatio = retainRatio(preCount, postCount);
         double minRatio = decisionProperties.getLlm().getAuthorityMinSelectionRetainRatio();
-        if (retainRatio >= minRatio || hasHardRiskReason(assessments)) {
-            return new GuardedSelection(selectedIds, false, preCount, postCount, postCount, retainRatio);
+        boolean hardRiskAllowed = retainRatio < minRatio && hasHardRiskReason(assessments);
+        if (retainRatio >= minRatio || hardRiskAllowed) {
+            return new GuardedSelection(selectedIds, false, hardRiskAllowed, preCount, postCount, postCount, retainRatio);
         }
         int floor = Math.min(preCount, Math.max(3, (int) Math.ceil(preCount * minRatio)));
-        return new GuardedSelection(upstreamIds.stream().limit(floor).toList(), true, preCount, postCount, floor, retainRatio);
+        return new GuardedSelection(upstreamIds.stream().limit(floor).toList(), true, false, preCount, postCount, floor, retainRatio);
     }
 
     private boolean authorityShrinkGuardStage(DecisionStageName stageName) {
@@ -479,6 +482,7 @@ public final class LlmStageScheduler {
     private record GuardedSelection(
             List<String> selectedIds,
             boolean guardTriggered,
+            boolean hardRiskAllowed,
             int preCount,
             int postCount,
             int guardedCount,

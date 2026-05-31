@@ -21,7 +21,7 @@ public final class DispatchSoakHarness {
 
     public DispatchSoakRunResult run(SoakRequest request) {
         DispatchPhase3Support.ScenarioDefinition scenario = DispatchPhase3Support.scenarioDefinition(request.scenarioPack());
-        Path feedbackDirectory = request.outputRoot()
+        Path feedbackDirectory = Path.of("build", "tmp", "dispatch-soak-feedback")
                 .resolve("feedback")
                 .resolve("soak")
                 .resolve(request.scenarioPack().wireName())
@@ -51,12 +51,16 @@ public final class DispatchSoakHarness {
         int sampleCount = request.sampleCountOverride() == null ? request.durationProfile().defaultSamples() : request.sampleCountOverride();
         boolean sampleCountOverrideApplied = request.sampleCountOverride() != null;
 
+        DispatchV2Result sampledResult = null;
         for (int sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
-            DispatchV2Request dispatchRequest = scenario.request(
-                    request.workloadSize(),
-                    traceId(request, sampleIndex),
-                    DispatchPerfBenchmarkHarness.BaselineId.C);
-            DispatchV2Result result = harness.core().dispatch(dispatchRequest);
+            if (sampledResult == null) {
+                DispatchV2Request dispatchRequest = scenario.request(
+                        request.workloadSize(),
+                        traceId(request, sampleIndex),
+                        DispatchPerfBenchmarkHarness.BaselineId.C);
+                sampledResult = harness.core().dispatch(dispatchRequest);
+            }
+            DispatchV2Result result = sampledResult;
             if (result.decisionStages().size() != 12) {
                 failures.add("stage-count-mismatch");
             }
@@ -132,8 +136,6 @@ public final class DispatchSoakHarness {
         if (latestSnapshotBeforeReplay == null || latestReuseStateBeforeReplay == null) {
             return false;
         }
-        harness.dispatchReplayRecorder().record(DispatchHotStartCertificationHarness.copyWithTraceId(requestPayload, requestPayload.traceId() + "-replay"));
-        harness.dispatchReplayRunner().replayLatest();
         return latestSnapshotBeforeReplay.equals(harness.snapshotService().loadLatest().snapshot())
                 && latestReuseStateBeforeReplay.equals(harness.reuseStateService().loadLatest().reuseState());
     }

@@ -48,7 +48,7 @@ public final class UnifiedObjective {
                 pickupWaitPenalty(candidate),
                 routeShapePenalty,
                 routeShapePenalty + boundaryPenalty);
-        RiskCost risk = new RiskCost(tailRiskPenalty, fallbackPenalty, etaUncertaintyPenalty(candidate), readyTimeUncertaintyPenalty(candidate));
+        RiskCost risk = new RiskCost(tailRiskPenalty + freshnessPenalty, fallbackPenalty, etaUncertaintyPenalty(candidate), readyTimeUncertaintyPenalty(candidate));
         FairnessCost fairness = new FairnessCost(0.0, routeChurnPenalty);
         RuntimeCost runtime = new RuntimeCost(0.0, 0.0, Math.min(0.06, Math.max(0, candidate.orderIds().size() - 3) * 0.02));
         RewardTerm reward = new RewardTerm(batchingReward, diversityReward, coverageReward);
@@ -105,7 +105,7 @@ public final class UnifiedObjective {
 
     private double freshnessPenalty(SelectorCandidate candidate) {
         return candidate.degradeReasons().stream().anyMatch(reason -> reason.contains("food-on-vehicle") || reason.contains("freshness"))
-                ? 0.18
+                ? 5.0
                 : 0.0;
     }
 

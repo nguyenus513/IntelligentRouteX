@@ -78,7 +78,13 @@ public final class GlobalSelector {
                 reducedConflictGraph);
         if (solverResult.selectionResult().isPresent()) {
             GlobalSelectionResult solverSelection = solverResult.selectionResult().get();
-            if (solverSelection.objectiveValue() + 1e-9 < greedyIncumbent.selectionResult().objectiveValue()) {
+            double solverSelectionScore = solverSelection.selectedProposals().stream()
+                    .mapToDouble(SelectedProposal::selectionScore)
+                    .sum();
+            double greedySelectionScore = greedyIncumbent.selectionResult().selectedProposals().stream()
+                    .mapToDouble(SelectedProposal::selectionScore)
+                    .sum();
+            if (solverSelectionScore + 1e-9 < greedySelectionScore) {
                 return new SelectorSelectionOutcome(
                         withSelectionTelemetry(withDegradeReasons(greedyIncumbent.selectionResult(), appendDistinct(
                                 appendAll(solverResult.degradeReasons(), poolReduction.reasons()),
@@ -220,7 +226,7 @@ public final class GlobalSelector {
                 originalCandidateCount,
                 selectionResult.selectedCount(),
                 selectionResult.solverMode(),
-                selectionResult.objectiveValue(),
+                selectionResult.selectedProposals().stream().mapToDouble(SelectedProposal::selectionScore).sum(),
                 originalCandidateCount,
                 poolReduction.retainedCandidates().size(),
                 poolReduction.feasibleCandidateCount(),

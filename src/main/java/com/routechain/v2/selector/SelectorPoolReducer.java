@@ -63,13 +63,8 @@ public final class SelectorPoolReducer {
                     feasibleBestObjectiveUtility);
         }
 
-        int protectedOrderCount = distinctOrderCount(feasible);
-        if (protectedOrderCount > effectiveMaxPoolSize) {
-            effectiveMaxPoolSize = protectedOrderCount;
-        }
         final int poolSizeLimit = effectiveMaxPoolSize;
         Map<String, SelectorCandidateEnvelope> retainedByProposalId = new LinkedHashMap<>();
-        retainCoverageProtected(feasible, retainedByProposalId, poolSizeLimit);
         Map<RouteProposalSource, List<SelectorCandidateEnvelope>> bySource = new LinkedHashMap<>();
         for (SelectorCandidateEnvelope envelope : feasible) {
             bySource.computeIfAbsent(envelope.candidate().source(), ignored -> new ArrayList<>()).add(envelope);
@@ -83,6 +78,7 @@ public final class SelectorPoolReducer {
                 .filter(envelope -> envelope.candidate().source() == RouteProposalSource.ACTIVE_ROUTE_INSERTION)
                 .limit(MIN_ACTIVE_REPAIR)
                 .forEach(envelope -> retainIfRoom(retainedByProposalId, envelope, poolSizeLimit));
+        retainCoverageProtected(feasible, retainedByProposalId, poolSizeLimit);
         for (List<SelectorCandidateEnvelope> sourceCandidates : bySource.values()) {
             sourceCandidates.stream()
                     .limit(MIN_PER_SOURCE)

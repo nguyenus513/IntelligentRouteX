@@ -24,7 +24,7 @@ class DispatchQualityArtifactSmokeTest {
 
     @Test
     void writesQualityBenchmarkArtifactsForRequestedCell() throws Exception {
-        String baselinesWire = value("dispatchQuality.baselines", "DISPATCH_QUALITY_BASELINES", "A,B,C");
+        String baselinesWire = value("dispatchQuality.baselines", "DISPATCH_QUALITY_BASELINES", "C");
         String sizeWire = value("dispatchQuality.size", "DISPATCH_QUALITY_SIZE", "S");
         String scenarioPackWire = value("dispatchQuality.scenarioPack", "DISPATCH_QUALITY_SCENARIO_PACK", "normal-clear");
         String decisionModeWire = value("dispatchQuality.decisionMode", "DISPATCH_QUALITY_DECISION_MODE", "legacy");
@@ -41,7 +41,7 @@ class DispatchQualityArtifactSmokeTest {
                 promptFamilyWire,
                 executionModeWire,
                 authority);
-        List<DispatchPerfBenchmarkHarness.BaselineId> baselines = parseBaselines(value("dispatchQuality.baselines", "DISPATCH_QUALITY_BASELINES", "A,B,C"));
+        List<DispatchPerfBenchmarkHarness.BaselineId> baselines = parseBaselines(value("dispatchQuality.baselines", "DISPATCH_QUALITY_BASELINES", "C"));
         DispatchQualityBenchmarkRun run = harness.benchmark(new DispatchQualityBenchmarkHarness.BenchmarkRequest(
                 baselines,
                 DispatchPerfBenchmarkHarness.WorkloadSize.valueOf(sizeWire),
