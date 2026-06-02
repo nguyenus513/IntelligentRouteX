@@ -999,13 +999,21 @@ public final class BigDataLiteApiController {
             return;
         }
         String regionId = liveBufferKey(order);
+        long nowMs = System.currentTimeMillis();
         Map<String, Object> buffered = new LinkedHashMap<>(order);
+        long placedAtMs = livePlacedAtMs(buffered, nowMs);
+        buffered.putIfAbsent("placedAtMs", placedAtMs);
+        buffered.putIfAbsent("orderCreatedAtMs", placedAtMs);
         buffered.putIfAbsent("_rawRegionId", String.valueOf(order.getOrDefault("regionId", "live-region")));
+        buffered.putIfAbsent("_firstSeenAtMs", nowMs);
         buffered.putIfAbsent("_timeBucket", liveTimeBucket(buffered));
         buffered.putIfAbsent("_priorityClass", livePriorityClass(buffered));
         buffered.putIfAbsent("_geoCell", liveGeoCell(buffered));
         buffered.putIfAbsent("_lane", liveLane(buffered));
-        buffered.putIfAbsent("_bufferedAtMs", System.currentTimeMillis());
+        buffered.putIfAbsent("_bufferedAtMs", nowMs);
+        buffered.put("_orderAliveMs", liveOrderAliveMs(buffered, nowMs));
+        buffered.putIfAbsent("_deferCount", 0);
+        buffered.putIfAbsent("_forcedDispatch", false);
         buffered.putIfAbsent("_priorityScore", livePriorityScore(buffered));
         List<Map<String, Object>> buffer = liveOrderBuffers.computeIfAbsent(regionId, ignored -> Collections.synchronizedList(new ArrayList<>()));
         synchronized (buffer) {
@@ -1050,6 +1058,35 @@ public final class BigDataLiteApiController {
         String orderId = order == null ? "unknown" : String.valueOf(order.getOrDefault("externalOrderId", order.getOrDefault("orderId", "unknown")));
         deadLetter.add("live:" + reason + ":" + orderId);
         addLiveEvent("LIVE_ORDER_REJECTED", Map.of("reason", reason, "orderId", orderId));
+    }
+
+    private long livePlacedAtMs(Map<String, Object> order, long fallbackNowMs) {
+        for (String key : List.of("placedAtMs", "orderCreatedAtMs", "createdAtMs", "placedAt", "createdAt")) {
+            Object value = order.get(key);
+            Long parsed = parseEpochMs(value);
+            if (parsed != null) return parsed;
+        }
+        return fallbackNowMs;
+    }
+
+    private long liveOrderAliveMs(Map<String, Object> order, long nowMs) {
+        return Math.max(0L, nowMs - livePlacedAtMs(order, nowMs));
+    }
+
+    private Long parseEpochMs(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number number) {
+            long raw = number.longValue();
+            return raw > 0L && raw < 1_000_000_000_000L ? raw * 1000L : raw;
+        }
+        String text = String.valueOf(value).trim();
+        if (text.isBlank()) return null;
+        try {
+            long raw = Long.parseLong(text);
+            return raw > 0L && raw < 1_000_000_000_000L ? raw * 1000L : raw;
+        } catch (NumberFormatException ignored) {
+            try { return Instant.parse(text).toEpochMilli(); } catch (Exception ignoredAgain) { return null; }
+        }
     }
 
     private String liveLane(Map<String, Object> order) {
@@ -1116,12 +1153,15 @@ public final class BigDataLiteApiController {
         double avgSimilarity;
         int urgentCount;
         int maxScore;
+        SelectedLiveBatch batch;
         synchronized (buffer) {
             buffer.sort(Comparator.comparingDouble(this::livePriorityScore).reversed());
             int take = dynamicLiveBatchSize(buffer);
             if (take <= 0) return 0;
-            selected = selectSimilarityLiveBatch(buffer, take);
+            batch = selectBestLiveDispatchBatch(buffer, take);
+            selected = batch.orders();
             buffer.removeAll(selected);
+            markLiveSelectionAging(buffer, selected);
             if (buffer.isEmpty()) liveBufferFirstSeen.remove(regionId); else liveBufferFirstSeen.put(regionId, System.currentTimeMillis());
             avgScore = selected.stream().mapToDouble(this::livePriorityScore).average().orElse(0.0);
             Map<String, Object> seed = selected.isEmpty() ? Map.of() : selected.get(0);
@@ -1139,9 +1179,10 @@ public final class BigDataLiteApiController {
         liveSimilarityScoreScaled.addAndGet(Math.round(avgSimilarity * 1000.0));
         completedCycles++;
         lastCycleId = cycleId;
-        Map<String, Object> result = liveCycleResult(cycleId, regionId, assigned, avgScore, maxScore, avgSimilarity, urgentCount, liveCoreExecution);
+        Map<String, Object> result = liveCycleResult(cycleId, regionId, assigned, avgScore, maxScore, avgSimilarity, urgentCount, liveCoreExecution, batch);
         cycleResults.put(cycleId, result);
         addLiveEvent("LIVE_CYCLE_STARTED", Map.of("cycleId", cycleId, "regionId", regionId, "orders", assigned));
+        addLiveEvent("LIVE_BATCH_SELECTED", batch.asMap(bufferedOrders));
         addLiveEvent("LIVE_CYCLE_COMPLETED", result);
         LiveKafkaBridge bridge = liveKafkaBridgeProvider.getIfAvailable();
         if (bridge != null) bridge.publishResult(result);
@@ -1212,7 +1253,7 @@ public final class BigDataLiteApiController {
         return current.getClass().getSimpleName() + (message == null || message.isBlank() ? "" : ":" + message);
     }
 
-    private Map<String, Object> liveCycleResult(String cycleId, String regionId, int assigned, double avgScore, int maxScore, double avgSimilarity, int urgentCount, LiveCoreExecution coreExecution) {
+    private Map<String, Object> liveCycleResult(String cycleId, String regionId, int assigned, double avgScore, int maxScore, double avgSimilarity, int urgentCount, LiveCoreExecution coreExecution, SelectedLiveBatch batch) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("cycleId", cycleId);
         result.put("regionId", regionId);
@@ -1225,6 +1266,7 @@ public final class BigDataLiteApiController {
         result.put("maxPriority", maxScore);
         result.put("avgSimilarity", Math.round(avgSimilarity * 100.0) / 100.0);
         result.put("urgentCount", urgentCount);
+        result.put("selection", batch.asMap(Math.max(0, bufferedOrders)));
         result.put("core", coreExecution.core());
         result.put("fallbackReason", coreExecution.fallbackReason());
         result.put("coreAssigned", coreExecution.assigned());
@@ -1375,6 +1417,155 @@ public final class BigDataLiteApiController {
         return Math.min(buffer.size(), Math.max(25, max / 2));
     }
 
+    private SelectedLiveBatch selectBestLiveDispatchBatch(List<Map<String, Object>> buffer, int take) {
+        if (buffer.isEmpty() || take <= 0) return SelectedLiveBatch.empty();
+        List<Map<String, Object>> forced = liveForcedDispatchOrders(buffer, take);
+        if (!forced.isEmpty()) {
+            Map<String, Object> seed = forced.get(0);
+            List<Map<String, Object>> selected = new ArrayList<>(forced);
+            buffer.stream()
+                    .filter(order -> !selected.contains(order))
+                    .filter(order -> selected.stream().allMatch(selectedOrder -> liveFeasiblePair(selectedOrder, order)))
+                    .sorted(Comparator.<Map<String, Object>>comparingDouble(order -> liveGraphEdgeValue(seed, order)).reversed())
+                    .forEach(order -> {
+                        if (selected.size() < take && liveFeasibleWithBatch(selected, order)) selected.add(order);
+                    });
+            SelectedLiveBatch batch = describeSelectedBatch(seed, selected, buffer.size());
+            List<String> reasons = new ArrayList<>(batch.reasons());
+            reasons.add("starvation-guard-applied");
+            if (forced.stream().anyMatch(order -> liveOrderAliveMs(order, System.currentTimeMillis()) >= liveForceAliveMs())) reasons.add("forced-alive-time");
+            if (forced.stream().anyMatch(order -> longNumber(order, "_deferCount", 0L) >= liveMaxDeferCycles())) reasons.add("max-defer-cycles");
+            if (forced.stream().anyMatch(this::liveSlaHot)) reasons.add("sla-hot");
+            return batch.withFairness("RESCUE", forced.size(), true, reasons);
+        }
+        List<Map<String, Object>> seeds = buffer.stream()
+                .sorted(Comparator.<Map<String, Object>>comparingDouble(this::liveSeedValue).reversed())
+                .limit(Math.min(buffer.size(), Math.max(4, Math.min(16, take * 2))))
+                .toList();
+        SelectedLiveBatch best = null;
+        for (Map<String, Object> seed : seeds) {
+            List<Map<String, Object>> candidate = new ArrayList<>();
+            candidate.add(seed);
+            buffer.stream()
+                    .filter(order -> order != seed)
+                    .filter(order -> liveFeasiblePair(seed, order))
+                    .sorted(Comparator.<Map<String, Object>>comparingDouble(order -> liveGraphEdgeValue(seed, order)).reversed())
+                    .forEach(order -> {
+                        if (candidate.size() < take && liveFeasibleWithBatch(candidate, order)) candidate.add(order);
+                    });
+            SelectedLiveBatch current = describeSelectedBatch(seed, candidate, buffer.size());
+            if (best == null || current.batchValue() > best.batchValue()) best = current;
+        }
+        return best == null ? describeSelectedBatch(buffer.get(0), List.of(buffer.get(0)), buffer.size()) : best.withFairness("GRAPH", 0, false, best.reasons());
+    }
+
+    private List<Map<String, Object>> liveForcedDispatchOrders(List<Map<String, Object>> buffer, int take) {
+        int quota = Math.max(1, Math.min(3, take));
+        return buffer.stream()
+                .filter(this::liveMustForceDispatch)
+                .sorted(Comparator.<Map<String, Object>>comparingDouble(this::liveSeedValue).reversed())
+                .limit(quota)
+                .toList();
+    }
+
+    private boolean liveMustForceDispatch(Map<String, Object> order) {
+        long now = System.currentTimeMillis();
+        return liveOrderAliveMs(order, now) >= liveForceAliveMs()
+                || longNumber(order, "_deferCount", 0L) >= liveMaxDeferCycles()
+                || liveSlaHot(order);
+    }
+
+    private boolean liveSlaHot(Map<String, Object> order) {
+        return isUrgentLiveOrder(order) || number(order, "promisedEtaMinutes", 45.0) <= 15.0 || livePriorityScore(order) >= 120.0;
+    }
+
+    private long liveForceAliveMs() {
+        return 30_000L;
+    }
+
+    private long liveMaxDeferCycles() {
+        return 3L;
+    }
+
+    private void markLiveSelectionAging(List<Map<String, Object>> remaining, List<Map<String, Object>> selected) {
+        long now = System.currentTimeMillis();
+        for (Map<String, Object> order : selected) {
+            order.put("_selectedAtMs", now);
+            order.put("_orderAliveMs", liveOrderAliveMs(order, now));
+            order.put("_forcedDispatch", liveMustForceDispatch(order));
+        }
+        for (Map<String, Object> order : remaining) {
+            order.put("_orderAliveMs", liveOrderAliveMs(order, now));
+            order.put("_deferCount", longNumber(order, "_deferCount", 0L) + 1L);
+            order.put("_lastDeferredAtMs", now);
+            order.put("_lastDeferredReason", "not-selected-by-current-cycle");
+        }
+    }
+
+    private boolean liveFeasibleWithBatch(List<Map<String, Object>> selected, Map<String, Object> candidate) {
+        return selected.stream().allMatch(order -> liveFeasiblePair(order, candidate));
+    }
+
+    private SelectedLiveBatch describeSelectedBatch(Map<String, Object> seed, List<Map<String, Object>> selected, int candidateCount) {
+        double priorityValue = selected.stream().mapToDouble(this::livePriorityScore).sum();
+        double shareabilityValue = selected.stream().filter(order -> order != seed).mapToDouble(order -> liveGraphEdgeValue(seed, order)).sum();
+        double riskPenalty = selected.stream().mapToDouble(this::liveSelectionRiskPenalty).sum();
+        double corePenalty = Math.max(0, selected.size() - 8) * 4.0;
+        double value = priorityValue + shareabilityValue - riskPenalty - corePenalty;
+        List<String> reasons = new ArrayList<>();
+        if (selected.stream().anyMatch(this::isUrgentLiveOrder)) reasons.add("urgent-or-sla-hot");
+        if (selected.size() > 1) reasons.add("shareability-graph-positive");
+        if (selected.stream().mapToDouble(this::livePriorityScore).max().orElse(0) >= 80) reasons.add("high-admission-value");
+        if (riskPenalty <= selected.size() * 5.0) reasons.add("low-break-risk");
+        return new SelectedLiveBatch(
+                List.copyOf(selected),
+                orderId(seed),
+                Math.round(value * 100.0) / 100.0,
+                candidateCount,
+                Math.max(0, candidateCount - selected.size()),
+                "GRAPH",
+                0,
+                liveBadOrderCount(selected),
+                liveOldestAliveMs(selected),
+                liveAvgAliveMs(selected),
+                false,
+                reasons.isEmpty() ? List.of("best-graph-value") : List.copyOf(reasons));
+    }
+
+    private long liveOldestAliveMs(List<Map<String, Object>> orders) {
+        long now = System.currentTimeMillis();
+        return orders.stream().mapToLong(order -> liveOrderAliveMs(order, now)).max().orElse(0L);
+    }
+
+    private long liveAvgAliveMs(List<Map<String, Object>> orders) {
+        long now = System.currentTimeMillis();
+        return Math.round(orders.stream().mapToLong(order -> liveOrderAliveMs(order, now)).average().orElse(0.0));
+    }
+
+    private int liveBadOrderCount(List<Map<String, Object>> orders) {
+        return (int) orders.stream().filter(order -> orderKm(order) > 8.0 || liveSelectionRiskPenalty(order) > 8.0).count();
+    }
+
+    private double liveSeedValue(Map<String, Object> order) {
+        long now = System.currentTimeMillis();
+        double age = Math.min(300.0, liveOrderAliveMs(order, now) / 1000.0 * 5.0 + longNumber(order, "_deferCount", 0L) * 30.0);
+        double sla = Math.max(0.0, 60.0 - number(order, "promisedEtaMinutes", 45.0));
+        return livePriorityScore(order) + age + sla + (isUrgentLiveOrder(order) ? 30.0 : 0.0);
+    }
+
+    private double liveGraphEdgeValue(Map<String, Object> seed, Map<String, Object> candidate) {
+        return liveHybridBatchScore(seed, candidate)
+                + routeDirectionSimilarity(seed, candidate) * 15.0
+                + liveInsertionSavingScore(seed, candidate) * 20.0
+                - liveSelectionRiskPenalty(candidate);
+    }
+
+    private double liveSelectionRiskPenalty(Map<String, Object> order) {
+        double deadlineRisk = Math.max(0.0, 20.0 - number(order, "promisedEtaMinutes", 45.0)) * 0.6;
+        double longRouteRisk = Math.max(0.0, orderKm(order) - 8.0) * 0.5;
+        return deadlineRisk + longRouteRisk;
+    }
+
     private List<Map<String, Object>> selectSimilarityLiveBatch(List<Map<String, Object>> buffer, int take) {
         if (buffer.isEmpty() || take <= 0) return List.of();
         Map<String, Object> seed = buffer.get(0);
@@ -1437,6 +1628,10 @@ public final class BigDataLiteApiController {
     private boolean sameOrder(Map<String, Object> left, Map<String, Object> right) {
         return Objects.equals(left.get("externalOrderId"), right.get("externalOrderId"))
                 || Objects.equals(left.get("orderId"), right.get("orderId"));
+    }
+
+    private String orderId(Map<String, Object> order) {
+        return String.valueOf(order.getOrDefault("externalOrderId", order.getOrDefault("orderId", "unknown")));
     }
 
     private double liveSimilarityScore(Map<String, Object> left, Map<String, Object> right) {
@@ -1503,8 +1698,7 @@ public final class BigDataLiteApiController {
         if (isUrgentLiveOrder(order)) score += 100.0;
         score += number(order, "priority", 0.0) * 10.0;
         long now = System.currentTimeMillis();
-        long bufferedAt = longNumber(order, "_bufferedAtMs", now);
-        score += Math.min(50.0, Math.max(0.0, (now - bufferedAt) / 1000.0) * 2.0);
+        score += Math.min(300.0, liveOrderAliveMs(order, now) / 1000.0 * 5.0 + longNumber(order, "_deferCount", 0L) * 30.0);
         double promised = number(order, "promisedEtaMinutes", 45.0);
         score += Math.max(0.0, 45.0 - promised);
         return score;
@@ -1584,6 +1778,31 @@ public final class BigDataLiteApiController {
     private record QueuedJob(String jobId, int priority, long sequence, boolean forceFail, int chunkIndex, int totalChunks, List<Map<String, Object>> items) {}
     private record DedupeResult(List<Map<String, Object>> items, int duplicates) {}
     private record LiveCoreExecution(boolean core, String fallbackReason, int assigned, int chunkCount, long runtimeMs, List<Map<String, Object>> assignments, double initialCost, double finalCost, double improvementPercent, String solverPolicy, LiveAdaptiveBundlePlanner.PlanResult plan, LivePdLnsPostSolverImprover.Result repair, List<MlStageMetadata> mlStageMetadata) {}
+
+    private record SelectedLiveBatch(List<Map<String, Object>> orders, String seedOrderId, double batchValue, int selectionCandidateCount, int heldOrderCount, String batchQuality, int forcedOrderCount, int badOrderCount, long oldestOrderAliveMs, long avgSelectedAliveMs, boolean starvationGuardApplied, List<String> reasons) {
+        static SelectedLiveBatch empty() { return new SelectedLiveBatch(List.of(), "", 0.0, 0, 0, "EMPTY", 0, 0, 0L, 0L, false, List.of("empty-buffer")); }
+        SelectedLiveBatch withFairness(String batchQuality, int forcedOrderCount, boolean starvationGuardApplied, List<String> reasons) {
+            return new SelectedLiveBatch(orders, seedOrderId, batchValue, selectionCandidateCount, heldOrderCount, batchQuality, forcedOrderCount, badOrderCount, oldestOrderAliveMs, avgSelectedAliveMs, starvationGuardApplied, List.copyOf(reasons));
+        }
+        Map<String, Object> asMap(int currentBufferedOrders) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("selectionPolicy", "GRAPH_VALUE_FAIR_BATCH_SELECTION");
+            map.put("agingPolicy", "ORDER_PLACED_AT_PERSISTENT_AGING");
+            map.put("selectedSeedOrderId", seedOrderId);
+            map.put("selectedBatchValue", batchValue);
+            map.put("batchQuality", batchQuality);
+            map.put("forcedOrderCount", forcedOrderCount);
+            map.put("badOrderCount", badOrderCount);
+            map.put("oldestOrderAliveMs", oldestOrderAliveMs);
+            map.put("avgSelectedAliveMs", avgSelectedAliveMs);
+            map.put("starvationGuardApplied", starvationGuardApplied);
+            map.put("selectionCandidateCount", selectionCandidateCount);
+            map.put("selectedOrderCount", orders.size());
+            map.put("heldOrderCount", Math.max(heldOrderCount, currentBufferedOrders));
+            map.put("selectionReasons", reasons);
+            return map;
+        }
+    }
     public record RuntimeEvent(String eventId, String jobId, String type, String timestamp, Map<String, Object> data) {
         Map<String, Object> asMap() { return Map.of("eventId", eventId, "jobId", jobId, "type", type, "timestamp", timestamp, "data", data); }
     }
