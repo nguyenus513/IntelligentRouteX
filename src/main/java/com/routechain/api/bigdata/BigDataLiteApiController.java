@@ -6,6 +6,7 @@ import com.routechain.v2.DispatchV2Result;
 import com.routechain.v2.MlStageMetadata;
 import com.routechain.v2.external.ExternalSolverRuntimeManager;
 import com.routechain.v2.executor.DispatchAssignment;
+import com.routechain.v2.mladaptive.BoundedOnlinePolicyLearner;
 import org.springframework.http.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.ObjectProvider;
@@ -15,6 +16,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -79,6 +81,7 @@ public final class BigDataLiteApiController {
     private final DispatchV2Core dispatchV2Core;
     private final LiveAdaptiveBundlePlanner liveAdaptiveBundlePlanner = new LiveAdaptiveBundlePlanner();
     private final LivePdLnsPostSolverImprover livePdLnsPostSolverImprover = new LivePdLnsPostSolverImprover();
+    private final BoundedOnlinePolicyLearner boundedOnlineLearner = new BoundedOnlinePolicyLearner();
     private final ExternalSolverRuntimeManager solverRuntimeManager = new ExternalSolverRuntimeManager();
     private ExecutorService workerPool;
     private ScheduledExecutorService liveScheduler;
@@ -97,6 +100,31 @@ public final class BigDataLiteApiController {
     private int workerCount;
     @Value("${routechain.bigdata-lite.chunk-size:500}")
     private int chunkSize;
+    @Value("${routechain.ml.online.enabled:true}")
+    private boolean onlineLearningEnabled;
+    @Value("${routechain.ml.online.shadow-only:false}")
+    private boolean onlineLearningShadowOnly;
+    @Value("${routechain.ml.online.max-contexts:256}")
+    private int onlineLearningMaxContexts;
+    @Value("${routechain.ml.online.max-actions-per-context:8}")
+    private int onlineLearningMaxActionsPerContext;
+    @Value("${routechain.ml.online.max-state-file-kb:512}")
+    private int onlineLearningMaxStateFileKb;
+    @Value("${routechain.ml.online.max-latency-ms:2}")
+    private long onlineLearningMaxLatencyMs;
+    @Value("${routechain.ml.online.exploration-rate:0.03}")
+    private double onlineLearningExplorationRate;
+    @Value("${routechain.ml.online.state-file:artifacts/online-learning/policy-state.json}")
+    private String onlineLearningStateFile;
+    @Value("${routechain.live.external-solvers.enabled:true}")
+    private boolean liveExternalSolversEnabled;
+    @Value("${routechain.live.external-solvers.required:true}")
+    private boolean liveExternalSolversRequired;
+    @Value("${routechain.live.external-solvers.strict:false}")
+    private boolean liveExternalSolversStrict;
+    @Value("${routechain.live.external-solvers.max-orders:200}")
+    private int liveExternalSolversMaxOrders;
+    private LiveExternalSeedOrchestrator liveExternalSeedOrchestrator;
 
     public BigDataLiteApiController(ObjectProvider<BigDataLiteKafkaBridge> kafkaBridgeProvider,
                                     ObjectProvider<LiveKafkaBridge> liveKafkaBridgeProvider,
@@ -114,10 +142,12 @@ public final class BigDataLiteApiController {
         this.coreProperties = coreProperties;
         this.inputMapper = inputMapper;
         this.dispatchV2Core = dispatchV2Core;
+        this.liveExternalSeedOrchestrator = new LiveExternalSeedOrchestrator(inputMapper);
     }
 
     @PostConstruct
     void startWorkers() {
+        configureBoundedOnlineLearner();
         workersRunning = true;
         int workers = Math.max(1, workerCount);
         workerPool = Executors.newFixedThreadPool(workers, runnable -> {
@@ -139,11 +169,36 @@ public final class BigDataLiteApiController {
     @PreDestroy
     void stopWorkers() throws InterruptedException {
         workersRunning = false;
+        saveBoundedOnlineLearner();
         if (workerPool != null) {
             workerPool.shutdownNow();
             workerPool.awaitTermination(2, TimeUnit.SECONDS);
         }
         if (liveScheduler != null) liveScheduler.shutdownNow();
+    }
+
+    private void configureBoundedOnlineLearner() {
+        boundedOnlineLearner.configure(new BoundedOnlinePolicyLearner.Config(
+                onlineLearningEnabled,
+                onlineLearningShadowOnly,
+                onlineLearningMaxContexts,
+                onlineLearningMaxActionsPerContext,
+                onlineLearningMaxStateFileKb,
+                onlineLearningMaxLatencyMs,
+                onlineLearningExplorationRate));
+        try {
+            boundedOnlineLearner.load(Path.of(onlineLearningStateFile));
+        } catch (IOException exception) {
+            addLiveEvent("ONLINE_LEARNING_LOAD_SKIPPED", Map.of("reason", rootReason(exception)));
+        }
+    }
+
+    private void saveBoundedOnlineLearner() {
+        try {
+            boundedOnlineLearner.save(Path.of(onlineLearningStateFile));
+        } catch (IOException exception) {
+            addLiveEvent("ONLINE_LEARNING_SAVE_SKIPPED", Map.of("reason", rootReason(exception)));
+        }
     }
 
     @PostMapping("/ingest/orders/batch")
@@ -1154,11 +1209,15 @@ public final class BigDataLiteApiController {
         int urgentCount;
         int maxScore;
         SelectedLiveBatch batch;
+        BoundedOnlinePolicyLearner.BatchDecision learningDecision;
         synchronized (buffer) {
             buffer.sort(Comparator.comparingDouble(this::livePriorityScore).reversed());
-            int take = dynamicLiveBatchSize(buffer);
+            LiveBatchSizeDecision batchSizeDecision = dynamicLiveBatchSize(buffer);
+            int take = batchSizeDecision.take();
+            learningDecision = batchSizeDecision.learningDecision();
             if (take <= 0) return 0;
             batch = selectBestLiveDispatchBatch(buffer, take);
+            batch = batch.withLearning(learningDecision);
             selected = batch.orders();
             buffer.removeAll(selected);
             markLiveSelectionAging(buffer, selected);
@@ -1171,7 +1230,16 @@ public final class BigDataLiteApiController {
         }
         int assigned = selected.size();
         String cycleId = "LIVE-CYC-" + sequence.incrementAndGet();
-        LiveCoreExecution liveCoreExecution = executeLiveCoreBatch(cycleId, regionId, selected);
+        LiveExternalSeedOrchestrator.Result externalSeedResult = liveExternalSeedOrchestrator.run(
+                cycleId,
+                regionId,
+                selected,
+                liveExternalSolversEnabled,
+                liveExternalSolversRequired,
+                liveExternalSolversStrict,
+                liveExternalSolversMaxOrders);
+        LiveCoreExecution liveCoreExecution = executeLiveCoreBatch(cycleId, regionId, selected, externalSeedResult);
+        BoundedOnlinePolicyLearner.OutcomeTelemetry learningOutcome = observeOnlineLearning(batch, assigned, liveCoreExecution);
         bufferedOrders = Math.max(0, bufferedOrders - assigned);
         liveAssignedOrders.addAndGet(assigned);
         liveMaxBatchSize.accumulateAndGet(assigned, Math::max);
@@ -1179,23 +1247,24 @@ public final class BigDataLiteApiController {
         liveSimilarityScoreScaled.addAndGet(Math.round(avgSimilarity * 1000.0));
         completedCycles++;
         lastCycleId = cycleId;
-        Map<String, Object> result = liveCycleResult(cycleId, regionId, assigned, avgScore, maxScore, avgSimilarity, urgentCount, liveCoreExecution, batch);
+        Map<String, Object> result = liveCycleResult(cycleId, regionId, assigned, avgScore, maxScore, avgSimilarity, urgentCount, liveCoreExecution, batch, learningOutcome);
         cycleResults.put(cycleId, result);
         addLiveEvent("LIVE_CYCLE_STARTED", Map.of("cycleId", cycleId, "regionId", regionId, "orders", assigned));
         addLiveEvent("LIVE_BATCH_SELECTED", batch.asMap(bufferedOrders));
+        if (!externalSeedResult.requirementPassed()) addLiveEvent("LIVE_EXTERNAL_SOLVER_GAP", externalSeedResult.asMap());
         addLiveEvent("LIVE_CYCLE_COMPLETED", result);
         LiveKafkaBridge bridge = liveKafkaBridgeProvider.getIfAvailable();
         if (bridge != null) bridge.publishResult(result);
         return assigned;
     }
 
-    private LiveCoreExecution executeLiveCoreBatch(String cycleId, String regionId, List<Map<String, Object>> selected) {
+    private LiveCoreExecution executeLiveCoreBatch(String cycleId, String regionId, List<Map<String, Object>> selected, LiveExternalSeedOrchestrator.Result externalSeedResult) {
         LiveAdaptiveBundlePlanner.PlanResult plan = liveAdaptiveBundlePlanner.plan(selected);
         if (!coreProperties.isEnabled()) {
             liveFallbackCycles.incrementAndGet();
             double initialCost = liveInitialRouteCost(selected);
             LivePdLnsPostSolverImprover.Result repair = livePdLnsPostSolverImprover.improve(selected, List.of(), initialCost, initialCost, solverPolicy(selected), plan.breakRisk());
-            return new LiveCoreExecution(false, "core-disabled", 0, 0, 0L, List.of(), initialCost, initialCost, 0.0, solverPolicy(selected), plan, repair, List.of());
+            return new LiveCoreExecution(false, "core-disabled", 0, 0, 0L, List.of(), initialCost, initialCost, 0.0, solverPolicy(selected), plan, repair, List.of(), externalSeedResult);
         }
         int maxChunkSize = liveCoreChunkSize(selected);
         int assigned = 0;
@@ -1238,11 +1307,11 @@ public final class BigDataLiteApiController {
             liveCoreAssignedOrders.addAndGet(assigned);
             liveCoreRuntimeSamples.incrementAndGet();
             liveCoreRuntimeMsTotal.addAndGet(runtimeMsTotal);
-            return new LiveCoreExecution(true, "", assigned, chunkCount, runtimeMsTotal, assignmentRows, initialCost, finalCost, improvementPercent(initialCost, finalCost), solverPolicy(selected), plan, repair, mlRows);
+            return new LiveCoreExecution(true, "", assigned, chunkCount, runtimeMsTotal, assignmentRows, initialCost, finalCost, improvementPercent(initialCost, finalCost), solverPolicy(selected), plan, repair, mlRows, externalSeedResult);
         } catch (Exception exception) {
             liveFallbackCycles.incrementAndGet();
             LivePdLnsPostSolverImprover.Result repair = livePdLnsPostSolverImprover.improve(selected, assignmentRows, initialCost, initialCost, solverPolicy(selected), plan.breakRisk());
-            return new LiveCoreExecution(false, rootReason(exception), selected.size(), Math.max(1, chunkCount), runtimeMsTotal, assignmentRows, initialCost, initialCost, 0.0, solverPolicy(selected), plan, repair, mlRows);
+            return new LiveCoreExecution(false, rootReason(exception), selected.size(), Math.max(1, chunkCount), runtimeMsTotal, assignmentRows, initialCost, initialCost, 0.0, solverPolicy(selected), plan, repair, mlRows, externalSeedResult);
         }
     }
 
@@ -1253,7 +1322,7 @@ public final class BigDataLiteApiController {
         return current.getClass().getSimpleName() + (message == null || message.isBlank() ? "" : ":" + message);
     }
 
-    private Map<String, Object> liveCycleResult(String cycleId, String regionId, int assigned, double avgScore, int maxScore, double avgSimilarity, int urgentCount, LiveCoreExecution coreExecution, SelectedLiveBatch batch) {
+    private Map<String, Object> liveCycleResult(String cycleId, String regionId, int assigned, double avgScore, int maxScore, double avgSimilarity, int urgentCount, LiveCoreExecution coreExecution, SelectedLiveBatch batch, BoundedOnlinePolicyLearner.OutcomeTelemetry learningOutcome) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("cycleId", cycleId);
         result.put("regionId", regionId);
@@ -1267,6 +1336,7 @@ public final class BigDataLiteApiController {
         result.put("avgSimilarity", Math.round(avgSimilarity * 100.0) / 100.0);
         result.put("urgentCount", urgentCount);
         result.put("selection", batch.asMap(Math.max(0, bufferedOrders)));
+        result.put("onlineLearning", liveOnlineLearningTelemetry(batch, learningOutcome));
         result.put("core", coreExecution.core());
         result.put("fallbackReason", coreExecution.fallbackReason());
         result.put("coreAssigned", coreExecution.assigned());
@@ -1278,6 +1348,7 @@ public final class BigDataLiteApiController {
         result.put("solverGoals", solverGoals(coreExecution.solverPolicy(), assigned));
         result.put("seedContributors", defaultSeedContributors());
         result.put("seedRuntime", solverRuntimeManager.compactStatus());
+        result.put("externalSolvers", coreExecution.externalSeedResult().asMap());
         result.put("pipeline", livePipeline(coreExecution));
         result.put("lm", liveLmTelemetry(coreExecution));
         result.put("initialCost", Math.round(coreExecution.initialCost() * 100.0) / 100.0);
@@ -1290,13 +1361,39 @@ public final class BigDataLiteApiController {
         return result;
     }
 
+    private Map<String, Object> liveOnlineLearningTelemetry(SelectedLiveBatch batch, BoundedOnlinePolicyLearner.OutcomeTelemetry learningOutcome) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("learningMode", "BOUNDED_EWMA");
+        map.put("decision", batch.learningDecision());
+        map.put("reward", learningOutcome == null ? 0.0 : learningOutcome.reward());
+        map.put("snapshot", learningOutcome == null ? boundedOnlineLearner.snapshot().asMap() : learningOutcome.snapshot().asMap());
+        return map;
+    }
+
+    private BoundedOnlinePolicyLearner.OutcomeTelemetry observeOnlineLearning(SelectedLiveBatch batch, int assigned, LiveCoreExecution execution) {
+        boolean safetyViolation = !execution.repair().safetyPassed();
+        double assignedRate = batch.orders().isEmpty() ? 0.0 : Math.min(1.0, assigned * 1.0 / batch.orders().size());
+        double lateRate = execution.repair().latenessPenalty() > 0.0 ? Math.min(1.0, execution.repair().latenessPenalty() / 100.0) : 0.0;
+        double onTimeRate = Math.max(0.0, 1.0 - lateRate);
+        BoundedOnlinePolicyLearner.Outcome outcome = new BoundedOnlinePolicyLearner.Outcome(
+                assignedRate,
+                onTimeRate,
+                lateRate,
+                execution.improvementPercent(),
+                execution.runtimeMs(),
+                execution.runtimeMs() > coreProperties.getTimeoutMs(),
+                safetyViolation,
+                !execution.core());
+        return boundedOnlineLearner.observe(batch.learningBatchDecision(), outcome);
+    }
+
     private Map<String, Object> livePipeline(LiveCoreExecution execution) {
         return Map.of(
                 "flow", List.of("kafka", "bigdatalite", "core", "seed", "repair", "lm"),
                 "kafka", Map.of("transport", liveKafkaBridgeProvider.getIfAvailable() == null ? "local" : "kafka"),
                 "bigdataLite", Map.of("policy", "feasibility-similarity-priority-microbatch"),
                 "core", Map.of("enabled", coreProperties.isEnabled(), "used", execution.core(), "runtimeMs", execution.runtimeMs()),
-                "seed", Map.of("policy", execution.solverPolicy(), "contributors", defaultSeedContributors()),
+                "seed", Map.of("policy", execution.solverPolicy(), "contributors", defaultSeedContributors(), "externalSolvers", execution.externalSeedResult().asMap()),
                 "repair", execution.repair().asMap(),
                 "lm", liveLmTelemetry(execution));
     }
@@ -1404,7 +1501,14 @@ public final class BigDataLiteApiController {
         return Math.max(1, Math.min(Math.min(configuredMax, selected.size()), base));
     }
 
-    private int dynamicLiveBatchSize(List<Map<String, Object>> buffer) {
+    private LiveBatchSizeDecision dynamicLiveBatchSize(List<Map<String, Object>> buffer) {
+        int base = dynamicLiveBatchSizeBase(buffer);
+        BoundedOnlinePolicyLearner.BatchDecision learningDecision = boundedOnlineLearner.suggestBatchSize(liveLearningContext(buffer), base, Math.max(1, liveKafkaProperties.getMaxOrdersPerCycle()));
+        int take = learningDecision.appliedAsHint() ? learningDecision.suggestedBatchSize() : base;
+        return new LiveBatchSizeDecision(Math.max(0, Math.min(buffer.size(), take)), learningDecision);
+    }
+
+    private int dynamicLiveBatchSizeBase(List<Map<String, Object>> buffer) {
         int max = Math.max(1, liveKafkaProperties.getMaxOrdersPerCycle());
         int backlog = Math.max(0, liveAcceptedOrders.get() - liveAssignedOrders.get());
         if (backlog >= max) return Math.min(buffer.size(), max);
@@ -1415,6 +1519,28 @@ public final class BigDataLiteApiController {
         if (hot > 0) return Math.min(buffer.size(), Math.max(25, Math.min(max, (int) hot + 25)));
         if (buffer.size() < max) return Math.min(buffer.size(), Math.max(1, buffer.size()));
         return Math.min(buffer.size(), Math.max(25, max / 2));
+    }
+
+    private BoundedOnlinePolicyLearner.BatchContext liveLearningContext(List<Map<String, Object>> buffer) {
+        int max = Math.max(1, liveKafkaProperties.getMaxOrdersPerCycle());
+        int backlog = Math.max(0, liveAcceptedOrders.get() - liveAssignedOrders.get());
+        long now = System.currentTimeMillis();
+        long urgent = buffer.stream().filter(this::isUrgentLiveOrder).count();
+        long bad = buffer.stream().filter(order -> orderKm(order) > 8.0 || liveSelectionRiskPenalty(order) > 8.0).count();
+        long oldestMs = buffer.stream().mapToLong(order -> liveOrderAliveMs(order, now)).max().orElse(0L);
+        double avgSimilarity = liveBufferSimilarityHint(buffer);
+        return new BoundedOnlinePolicyLearner.BatchContext(
+                backlog >= max * 5 ? "load-high" : backlog >= max ? "load-med" : "load-low",
+                urgent > 0 ? "urgency-urgent" : buffer.stream().anyMatch(this::liveSlaHot) ? "urgency-hot" : "urgency-normal",
+                oldestMs >= liveForceAliveMs() ? "age-old" : oldestMs >= 10_000L ? "age-warm" : "age-fresh",
+                bad >= Math.max(1, buffer.size() / 3) ? "bad-high" : bad > 0 ? "bad-med" : "bad-low",
+                avgSimilarity >= 0.8 ? "sim-high" : avgSimilarity >= 0.5 ? "sim-med" : "sim-low");
+    }
+
+    private double liveBufferSimilarityHint(List<Map<String, Object>> buffer) {
+        if (buffer.size() < 2) return 1.0;
+        Map<String, Object> seed = buffer.get(0);
+        return buffer.stream().skip(1).limit(8).mapToDouble(order -> liveSimilarityScore(seed, order)).average().orElse(1.0);
     }
 
     private SelectedLiveBatch selectBestLiveDispatchBatch(List<Map<String, Object>> buffer, int take) {
@@ -1529,6 +1655,8 @@ public final class BigDataLiteApiController {
                 liveOldestAliveMs(selected),
                 liveAvgAliveMs(selected),
                 false,
+                Map.of(),
+                BoundedOnlinePolicyLearner.BatchDecision.disabled(selected.size(), 0L),
                 reasons.isEmpty() ? List.of("best-graph-value") : List.copyOf(reasons));
     }
 
@@ -1754,6 +1882,7 @@ public final class BigDataLiteApiController {
         state.put("avgCoreRuntimeMs", Math.round(avgCoreRuntimeMs * 100.0) / 100.0);
         state.put("defaultSeedContributors", defaultSeedContributors());
         state.put("seedRuntime", solverRuntimeManager.compactStatus());
+        state.put("onlineLearning", boundedOnlineLearner.snapshot().asMap());
         state.put("slo", Map.of(
                 "targetCoreRuntimeMs", coreProperties.getTimeoutMs(),
                 "coreRuntimeBreaches", liveCoreTimeouts.get(),
@@ -1777,12 +1906,20 @@ public final class BigDataLiteApiController {
     public record IdempotencyRecord(String jobId, int payloadHash) {}
     private record QueuedJob(String jobId, int priority, long sequence, boolean forceFail, int chunkIndex, int totalChunks, List<Map<String, Object>> items) {}
     private record DedupeResult(List<Map<String, Object>> items, int duplicates) {}
-    private record LiveCoreExecution(boolean core, String fallbackReason, int assigned, int chunkCount, long runtimeMs, List<Map<String, Object>> assignments, double initialCost, double finalCost, double improvementPercent, String solverPolicy, LiveAdaptiveBundlePlanner.PlanResult plan, LivePdLnsPostSolverImprover.Result repair, List<MlStageMetadata> mlStageMetadata) {}
+    private record LiveBatchSizeDecision(int take, BoundedOnlinePolicyLearner.BatchDecision learningDecision) {}
+    private record LiveCoreExecution(boolean core, String fallbackReason, int assigned, int chunkCount, long runtimeMs, List<Map<String, Object>> assignments, double initialCost, double finalCost, double improvementPercent, String solverPolicy, LiveAdaptiveBundlePlanner.PlanResult plan, LivePdLnsPostSolverImprover.Result repair, List<MlStageMetadata> mlStageMetadata, LiveExternalSeedOrchestrator.Result externalSeedResult) {}
 
-    private record SelectedLiveBatch(List<Map<String, Object>> orders, String seedOrderId, double batchValue, int selectionCandidateCount, int heldOrderCount, String batchQuality, int forcedOrderCount, int badOrderCount, long oldestOrderAliveMs, long avgSelectedAliveMs, boolean starvationGuardApplied, List<String> reasons) {
-        static SelectedLiveBatch empty() { return new SelectedLiveBatch(List.of(), "", 0.0, 0, 0, "EMPTY", 0, 0, 0L, 0L, false, List.of("empty-buffer")); }
+    private record SelectedLiveBatch(List<Map<String, Object>> orders, String seedOrderId, double batchValue, int selectionCandidateCount, int heldOrderCount, String batchQuality, int forcedOrderCount, int badOrderCount, long oldestOrderAliveMs, long avgSelectedAliveMs, boolean starvationGuardApplied, Map<String, Object> learningDecision, BoundedOnlinePolicyLearner.BatchDecision learningBatchDecision, List<String> reasons) {
+        static SelectedLiveBatch empty() { return new SelectedLiveBatch(List.of(), "", 0.0, 0, 0, "EMPTY", 0, 0, 0L, 0L, false, Map.of(), BoundedOnlinePolicyLearner.BatchDecision.disabled(1, 0L), List.of("empty-buffer")); }
         SelectedLiveBatch withFairness(String batchQuality, int forcedOrderCount, boolean starvationGuardApplied, List<String> reasons) {
-            return new SelectedLiveBatch(orders, seedOrderId, batchValue, selectionCandidateCount, heldOrderCount, batchQuality, forcedOrderCount, badOrderCount, oldestOrderAliveMs, avgSelectedAliveMs, starvationGuardApplied, List.copyOf(reasons));
+            return new SelectedLiveBatch(orders, seedOrderId, batchValue, selectionCandidateCount, heldOrderCount, batchQuality, forcedOrderCount, badOrderCount, oldestOrderAliveMs, avgSelectedAliveMs, starvationGuardApplied, learningDecision, learningBatchDecision, List.copyOf(reasons));
+        }
+        SelectedLiveBatch withLearning(Map<String, Object> learningDecision) {
+            return new SelectedLiveBatch(orders, seedOrderId, batchValue, selectionCandidateCount, heldOrderCount, batchQuality, forcedOrderCount, badOrderCount, oldestOrderAliveMs, avgSelectedAliveMs, starvationGuardApplied, learningDecision == null ? Map.of() : Map.copyOf(learningDecision), learningBatchDecision, reasons);
+        }
+        SelectedLiveBatch withLearning(BoundedOnlinePolicyLearner.BatchDecision learningBatchDecision) {
+            BoundedOnlinePolicyLearner.BatchDecision safe = learningBatchDecision == null ? BoundedOnlinePolicyLearner.BatchDecision.disabled(orders.size(), 0L) : learningBatchDecision;
+            return new SelectedLiveBatch(orders, seedOrderId, batchValue, selectionCandidateCount, heldOrderCount, batchQuality, forcedOrderCount, badOrderCount, oldestOrderAliveMs, avgSelectedAliveMs, starvationGuardApplied, safe.asMap(), safe, reasons);
         }
         Map<String, Object> asMap(int currentBufferedOrders) {
             Map<String, Object> map = new LinkedHashMap<>();
@@ -1796,6 +1933,7 @@ public final class BigDataLiteApiController {
             map.put("oldestOrderAliveMs", oldestOrderAliveMs);
             map.put("avgSelectedAliveMs", avgSelectedAliveMs);
             map.put("starvationGuardApplied", starvationGuardApplied);
+            map.put("learningDecision", learningDecision);
             map.put("selectionCandidateCount", selectionCandidateCount);
             map.put("selectedOrderCount", orders.size());
             map.put("heldOrderCount", Math.max(heldOrderCount, currentBufferedOrders));

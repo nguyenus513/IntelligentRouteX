@@ -82,7 +82,7 @@ public final class VroomSeedContributor implements ExternalSeedContributor {
     private JsonNode runHttp(String baseUrl, Map<String, Object> payload) throws Exception {
         String url = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(30))
+                .timeout(Duration.ofSeconds(envLong("VROOM_HTTP_TIMEOUT_SECONDS", 3L)))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(OBJECT_MAPPER.writeValueAsString(payload)))
                 .build();
@@ -103,7 +103,7 @@ public final class VroomSeedContributor implements ExternalSeedContributor {
         Process process = new ProcessBuilder(bin, "-i", input.toString(), "-o", output.toString())
                 .redirectErrorStream(true)
                 .start();
-        boolean completed = process.waitFor(35, TimeUnit.SECONDS);
+        boolean completed = process.waitFor(envLong("VROOM_BINARY_TIMEOUT_SECONDS", 3L), TimeUnit.SECONDS);
         if (!completed) {
             process.destroyForcibly();
             throw new IllegalStateException("vroom-binary-timeout");
@@ -304,6 +304,12 @@ public final class VroomSeedContributor implements ExternalSeedContributor {
 
     private long elapsedMs(long startedNanos) {
         return Math.max(0L, Duration.ofNanos(System.nanoTime() - startedNanos).toMillis());
+    }
+
+    private long envLong(String key, long fallback) {
+        String value = System.getenv(key);
+        if (value == null || value.isBlank()) return fallback;
+        try { return Math.max(1L, Long.parseLong(value.trim())); } catch (NumberFormatException ignored) { return fallback; }
     }
 
     private double round(double value) {

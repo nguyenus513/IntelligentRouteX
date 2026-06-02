@@ -66,7 +66,7 @@ public final class PyvrpSeedContributor implements ExternalSeedContributor {
             Process process = new ProcessBuilder(command)
                     .redirectErrorStream(true)
                     .start();
-            boolean completed = process.waitFor(15, TimeUnit.SECONDS);
+            boolean completed = process.waitFor(envLong("PYVRP_PROCESS_TIMEOUT_SECONDS", 3L), TimeUnit.SECONDS);
             String processOutput = new String(process.getInputStream().readAllBytes());
             if (!completed) {
                 process.destroyForcibly();
@@ -265,6 +265,12 @@ public final class PyvrpSeedContributor implements ExternalSeedContributor {
 
     private long elapsedMs(long startedNanos) {
         return Math.max(0L, Duration.ofNanos(System.nanoTime() - startedNanos).toMillis());
+    }
+
+    private long envLong(String key, long fallback) {
+        String value = System.getenv(key);
+        if (value == null || value.isBlank()) return fallback;
+        try { return Math.max(1L, Long.parseLong(value.trim())); } catch (NumberFormatException ignored) { return fallback; }
     }
 
     private double round(double value) {

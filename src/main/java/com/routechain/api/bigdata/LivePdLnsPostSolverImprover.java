@@ -11,6 +11,29 @@ import java.util.Set;
 final class LivePdLnsPostSolverImprover {
     Result improve(List<Map<String, Object>> selectedOrders, List<Map<String, Object>> assignments, double initialCost, double coreFinalCost, String solverPolicy, double breakRisk) {
         long started = System.nanoTime();
+        GuardSnapshot preGuard = preGuard(selectedOrders, assignments, initialCost, coreFinalCost, breakRisk);
+        if (preGuard.passed() && breakRisk < 0.20 && coreFinalCost <= initialCost + 1e-9) {
+            long runtimeMs = Math.max(1L, (System.nanoTime() - started) / 1_000_000L);
+            GuardSnapshot postGuard = preGuard.asStage("post-guard-skip-repair", "commit-core-incumbent", false);
+            return new Result(
+                    "PD_LNS_PNS_DEEP",
+                    true,
+                    true,
+                    List.of(),
+                    0,
+                    0,
+                    runtimeMs,
+                    round(coreFinalCost),
+                    round(improvementPercent(initialCost, coreFinalCost)),
+                    0.0,
+                    0.0,
+                    0.0,
+                    "pre-guard-pass-repair-skipped",
+                    preGuard,
+                    postGuard,
+                    false,
+                    true);
+        }
         int maxIterations = iterationBudget(selectedOrders, solverPolicy, breakRisk);
         List<Map<String, Object>> incumbent = deadlineFirstRoute(selectedOrders);
         Cost incumbentCost = routeCost(incumbent);
@@ -35,8 +58,12 @@ final class LivePdLnsPostSolverImprover {
         }
 
         double algorithmicFinalCost = bestCost.total();
-        double finalCost = Math.min(coreFinalCost, algorithmicFinalCost);
-        boolean safetyPassed = bestCost.safetyPassed() && safetyPassed(selectedOrders, assignments);
+        boolean repairWins = algorithmicFinalCost <= coreFinalCost + 1e-9;
+        double finalCost = repairWins ? algorithmicFinalCost : coreFinalCost;
+        GuardSnapshot postGuard = repairWins
+                ? postRepairGuard(bestCost, selectedOrders, assignments, coreFinalCost, algorithmicFinalCost, breakRisk)
+                : preGuard.asStage("post-guard-core-incumbent", preGuard.passed() ? "rollback-to-core-incumbent" : "rollback-blocked-core-incumbent", true);
+        boolean safetyPassed = postGuard.passed();
         boolean accepted = safetyPassed && finalCost <= coreFinalCost + 1e-9;
         long runtimeMs = Math.max(1L, (System.nanoTime() - started) / 1_000_000L);
         return new Result(
@@ -52,7 +79,11 @@ final class LivePdLnsPostSolverImprover {
                 round(bestCost.distanceKm()),
                 round(bestCost.latenessPenalty()),
                 round(bestCost.detourPenalty()),
-                accepted ? "accepted-best-of-core-and-pdlns" : "rollback-safety-or-no-gain");
+                accepted ? (repairWins ? "accepted-post-guard-repair" : "rollback-to-safe-core-incumbent") : "post-guard-blocked-commit",
+                preGuard,
+                postGuard,
+                !repairWins,
+                false);
     }
 
     private List<Map<String, Object>> deadlineFirstRoute(List<Map<String, Object>> orders) {
@@ -209,6 +240,25 @@ final class LivePdLnsPostSolverImprover {
         return selectedOrders.stream().noneMatch(order -> number(order, "promisedEtaMinutes", 45.0) <= 0.0);
     }
 
+    private GuardSnapshot preGuard(List<Map<String, Object>> selectedOrders, List<Map<String, Object>> assignments, double initialCost, double coreFinalCost, double breakRisk) {
+        List<String> reasons = new ArrayList<>();
+        if (assignments.isEmpty() && !selectedOrders.isEmpty()) reasons.add("missing-core-assignment");
+        if (selectedOrders.stream().anyMatch(order -> number(order, "promisedEtaMinutes", 45.0) <= 0.0)) reasons.add("invalid-sla");
+        if (!Double.isFinite(initialCost) || !Double.isFinite(coreFinalCost)) reasons.add("invalid-cost");
+        if (breakRisk >= 0.35) reasons.add("break-risk-high");
+        boolean passed = reasons.isEmpty();
+        return new GuardSnapshot("pre-guard", passed, passed ? "commit-or-skip-repair" : "repair-required", false, List.copyOf(reasons), round(coreFinalCost), 0.0, 0.0, round(breakRisk));
+    }
+
+    private GuardSnapshot postRepairGuard(Cost repairCost, List<Map<String, Object>> selectedOrders, List<Map<String, Object>> assignments, double coreFinalCost, double repairFinalCost, double breakRisk) {
+        List<String> reasons = new ArrayList<>();
+        if (!repairCost.safetyPassed()) reasons.add("route-hard-guard-failed");
+        if (!safetyPassed(selectedOrders, assignments)) reasons.add("assignment-guard-failed");
+        if (repairFinalCost > coreFinalCost + 1e-9) reasons.add("no-regress-cost-failed");
+        boolean passed = reasons.isEmpty();
+        return new GuardSnapshot("post-guard-repair", passed, passed ? "commit-repaired-route" : "rollback-to-incumbent-or-requeue", !passed, List.copyOf(reasons), round(repairFinalCost), round(repairCost.latenessPenalty()), round(repairCost.detourPenalty()), round(breakRisk));
+    }
+
     private double singleOrderCost(Map<String, Object> order) { return orderKm(order) + latenessRisk(order) * 5.0; }
     private double latenessRisk(Map<String, Object> order) { return Math.max(0.0, 45.0 - number(order, "promisedEtaMinutes", 45.0)) / 45.0; }
     private double priorityScore(Map<String, Object> order) { return (urgent(order) ? 100.0 : 0.0) + number(order, "priority", 1.0) * 10.0; }
@@ -235,7 +285,7 @@ final class LivePdLnsPostSolverImprover {
     private double improvementPercent(double initialCost, double finalCost) { return initialCost <= 0.0 ? 0.0 : Math.max(0.0, (initialCost - finalCost) * 100.0 / initialCost); }
     private double round(double value) { return Math.round(value * 100.0) / 100.0; }
 
-    record Result(String repairMode, boolean accepted, boolean safetyPassed, List<String> operators, int iterations, int acceptedMoves, long runtimeMs, double finalCost, double improvementPercent, double distanceKm, double latenessPenalty, double detourPenalty, String reason) {
+    record Result(String repairMode, boolean accepted, boolean safetyPassed, List<String> operators, int iterations, int acceptedMoves, long runtimeMs, double finalCost, double improvementPercent, double distanceKm, double latenessPenalty, double detourPenalty, String reason, GuardSnapshot preGuard, GuardSnapshot postGuard, boolean rollbackApplied, boolean repairSkipped) {
         Map<String, Object> asMap() {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("repairMode", repairMode);
@@ -251,6 +301,32 @@ final class LivePdLnsPostSolverImprover {
             map.put("latenessPenalty", latenessPenalty);
             map.put("detourPenalty", detourPenalty);
             map.put("reason", reason);
+            map.put("preGuard", preGuard.asMap());
+            map.put("postGuard", postGuard.asMap());
+            map.put("rollbackApplied", rollbackApplied);
+            map.put("repairSkipped", repairSkipped);
+            return map;
+        }
+    }
+
+    record GuardSnapshot(String stage, boolean passed, String action, boolean rollbackApplied, List<String> reasons, double cost, double latenessPenalty, double detourPenalty, double breakRisk) {
+        GuardSnapshot {
+            reasons = reasons == null ? List.of() : List.copyOf(reasons);
+        }
+        GuardSnapshot asStage(String stage, String action, boolean rollbackApplied) {
+            return new GuardSnapshot(stage, passed, action, rollbackApplied, reasons, cost, latenessPenalty, detourPenalty, breakRisk);
+        }
+        Map<String, Object> asMap() {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("stage", stage);
+            map.put("passed", passed);
+            map.put("action", action);
+            map.put("rollbackApplied", rollbackApplied);
+            map.put("reasons", reasons);
+            map.put("cost", cost);
+            map.put("latenessPenalty", latenessPenalty);
+            map.put("detourPenalty", detourPenalty);
+            map.put("breakRisk", breakRisk);
             return map;
         }
     }
