@@ -1,4 +1,7 @@
-const API_BASE = (import.meta.env.VITE_IRX_API_BASE ?? '/irx-api').replace(/\/$/, '');
+const DEFAULT_API_BASE = import.meta.env.PROD
+  ? (globalThis.location?.protocol === 'file:' ? 'http://127.0.0.1:18116' : '')
+  : '/irx-api';
+const API_BASE = (import.meta.env.VITE_IRX_API_BASE ?? DEFAULT_API_BASE).replace(/\/$/, '');
 const API_KEY = import.meta.env.VITE_IRX_API_KEY ?? 'demo-key';
 const TENANT_ID = import.meta.env.VITE_IRX_TENANT_ID ?? 'demo';
 const eventUrl = (path: string) => `${API_BASE}${path}${path.includes('?') ? '&' : '?'}stream=true&apiKey=${encodeURIComponent(API_KEY)}`;
@@ -36,7 +39,8 @@ async function irxRequest<T>(path: string, init: RequestInit = {}): Promise<IrxR
     });
     const text = await res.text();
     const data = text ? JSON.parse(text) : undefined;
-    return { ok: res.ok, status: res.status, durationMs: Math.round(performance.now() - started), data };
+    const error = res.ok ? undefined : apiErrorMessage(data, res.status);
+    return { ok: res.ok, status: res.status, durationMs: Math.round(performance.now() - started), data, error };
   } catch (error) {
     return {
       ok: false,
@@ -45,6 +49,14 @@ async function irxRequest<T>(path: string, init: RequestInit = {}): Promise<IrxR
       error: error instanceof Error ? error.message : 'Unknown IRX API error'
     };
   }
+}
+
+function apiErrorMessage(data: unknown, status: number) {
+  if (!data || typeof data !== 'object') return `HTTP_${status}`;
+  const record = data as Record<string, unknown>;
+  const code = typeof record.code === 'string' ? record.code : `HTTP_${status}`;
+  const message = typeof record.message === 'string' ? record.message : undefined;
+  return message ? `${code}: ${message}` : code;
 }
 
 function command(path: string, body: unknown, prefix: string) {
@@ -63,6 +75,7 @@ export const irxApi = {
   getDispatchJob: (jobId: string) => irxRequest(`/v1/dispatch/jobs/${encodeURIComponent(jobId)}`),
   getDispatchResult: (jobId: string) => irxRequest(`/v1/dispatch/jobs/${encodeURIComponent(jobId)}/result`),
   createCompareJob: (body: unknown) => command('/v1/compare/jobs', body, 'compare'),
+  getCompareJob: (jobId: string) => irxRequest(`/v1/compare/jobs/${encodeURIComponent(jobId)}`),
   getCompareResult: (jobId: string) => irxRequest(`/v1/compare/jobs/${encodeURIComponent(jobId)}/result`),
   cancelCompareJob: (jobId: string) => command(`/v1/compare/jobs/${encodeURIComponent(jobId)}/cancel`, {}, 'compare-cancel'),
   createLiveSession: (body: unknown) => command('/v1/live/sessions', body, 'live'),

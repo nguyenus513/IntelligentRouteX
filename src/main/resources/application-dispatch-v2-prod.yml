@@ -4,6 +4,41 @@ spring:
       on-profile: dispatch-v2-prod
 
 routechain:
+  bigdata-lite:
+    max-batch-items: ${IRX_BIGDATA_MAX_BATCH_ITEMS:25000}
+    max-queue-depth: ${IRX_BIGDATA_MAX_QUEUE_DEPTH:5000}
+    max-lane-depth: ${IRX_BIGDATA_MAX_LANE_DEPTH:2000}
+    worker-count: ${IRX_BIGDATA_WORKER_COUNT:4}
+    chunk-size: ${IRX_BIGDATA_CHUNK_SIZE:1000}
+    kafka:
+      enabled: ${IRX_BIGDATA_KAFKA_ENABLED:false}
+      fallback-to-local: ${IRX_BIGDATA_KAFKA_FALLBACK_TO_LOCAL:true}
+      input-topic: ${IRX_BIGDATA_KAFKA_INPUT_TOPIC:irx.bigdata.chunks.v1}
+      result-topic: ${IRX_BIGDATA_KAFKA_RESULT_TOPIC:irx.bigdata.results.v1}
+      consumer-group-id: ${IRX_BIGDATA_KAFKA_CONSUMER_GROUP:irx-bigdata-lite}
+      concurrency: ${IRX_BIGDATA_KAFKA_CONCURRENCY:4}
+    postgres:
+      enabled: ${IRX_BIGDATA_POSTGRES_ENABLED:false}
+      url: ${IRX_BIGDATA_POSTGRES_URL:jdbc:postgresql://localhost:5432/irx}
+      username: ${IRX_BIGDATA_POSTGRES_USER:irx}
+      password: ${IRX_BIGDATA_POSTGRES_PASSWORD:irx}
+    core:
+      enabled: ${IRX_BIGDATA_CORE_ENABLED:false}
+      synthetic-driver-count: ${IRX_BIGDATA_SYNTHETIC_DRIVER_COUNT:500}
+      max-orders-per-chunk: ${IRX_BIGDATA_CORE_MAX_ORDERS_PER_CHUNK:1000}
+      promised-eta-minutes: ${IRX_BIGDATA_PROMISED_ETA_MINUTES:45}
+      timeout-ms: ${IRX_BIGDATA_CORE_TIMEOUT_MS:5000}
+  live-kafka:
+    enabled: ${IRX_LIVE_KAFKA_ENABLED:false}
+    order-topic: ${IRX_LIVE_ORDER_TOPIC:irx.live.orders.v1}
+    telemetry-topic: ${IRX_LIVE_TELEMETRY_TOPIC:irx.live.telemetry.v1}
+    result-topic: ${IRX_LIVE_RESULT_TOPIC:irx.live.results.v1}
+    consumer-group-id: ${IRX_LIVE_CONSUMER_GROUP:irx-live-dispatch}
+    concurrency: ${IRX_LIVE_KAFKA_CONCURRENCY:4}
+    max-buffered-orders: ${IRX_LIVE_MAX_BUFFERED_ORDERS:10000}
+    max-orders-per-cycle: ${IRX_LIVE_MAX_ORDERS_PER_CYCLE:100}
+    max-wait-ms: ${IRX_LIVE_MAX_WAIT_MS:3000}
+    flush-interval-ms: ${IRX_LIVE_FLUSH_INTERVAL_MS:1000}
   dispatch-v2:
     enabled: true
     ml-enabled: true

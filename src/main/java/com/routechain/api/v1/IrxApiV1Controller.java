@@ -31,6 +31,11 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -59,6 +64,7 @@ public final class IrxApiV1Controller {
     private final RoutingProvider routingProvider;
     private final RouteChainDispatchV2Properties properties;
     private final OsrmTableClient osrmTableClient;
+    private final HttpClient osrmHealthClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
 
     public IrxApiV1Controller(DashboardController dashboard, ObjectMapper mapper, ExecutionEventService executionEvents, RoutingProvider routingProvider, RouteChainDispatchV2Properties properties, OsrmTableClient osrmTableClient) {
         this.dashboard = dashboard;
@@ -70,7 +76,19 @@ public final class IrxApiV1Controller {
     }
 
     @GetMapping("/health")
-    public Map<String, Object> health() { return Map.of("status", "UP", "version", "v1.0.2.1-irx-final", "engineVersion", "v1.0.2.1-irx-final", "externalSolvers", solverRuntimeManager.compactStatus(), "externalSolverEvidence", solverRuntimeManager.readiness(), "routing", Map.of("configuredProvider", properties.getRouting().getProvider(), "activeProvider", routingProvider.providerId(), "baseUrl", properties.getRouting().getBaseUrl(), "geometryPolicy", "live-routes-require-backend-road-geometry"), "realRuntimePolicy", Map.of("fallbackDisabled", true, "requiresFrontendInput", true), "adaptiveMl", Map.of("qualitySeeking", true)); }
+    public Map<String, Object> health() { return Map.of("status", "UP", "version", "v1.0.2.1-irx-final", "engineVersion", "v1.0.2.1-irx-final", "externalSolvers", solverRuntimeManager.compactStatus(), "externalSolverEvidence", solverRuntimeManager.readiness(), "routing", Map.of("configuredProvider", properties.getRouting().getProvider(), "activeProvider", routingProvider.providerId(), "baseUrl", properties.getRouting().getBaseUrl(), "geometryPolicy", "live-routes-require-backend-road-geometry", "osrmTable", osrmTableReady() ? "AVAILABLE" : "UNAVAILABLE"), "realRuntimePolicy", Map.of("fallbackDisabled", true, "requiresFrontendInput", true), "adaptiveMl", Map.of("qualitySeeking", true)); }
+
+    private boolean osrmTableReady() {
+        try {
+            String baseUrl = properties.getRouting().getBaseUrl();
+            URI uri = URI.create((baseUrl.endsWith("/") ? baseUrl : baseUrl + "/") + "table/v1/driving/106.7009,10.7769;106.6983,10.7721?annotations=duration,distance");
+            HttpRequest request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(2)).GET().build();
+            HttpResponse<String> response = osrmHealthClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.statusCode() >= 200 && response.statusCode() < 300 && response.body() != null && response.body().contains("\"code\":\"Ok\"");
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
 
     @GetMapping("/version")
     public Map<String, Object> version() { return Map.of("apiVersion", "v1", "platformVersion", "v1.0.2.1-irx-api-platform-final", "engineVersion", "v1.0.2.1-irx-final"); }
@@ -203,8 +221,10 @@ public final class IrxApiV1Controller {
         session.events.add(event("ORDER_BUFFERED", request.order().orderId()));
         appendConsoleTrace(session, "INPUT", "info", "ORDER_RECEIVED", "Order " + request.order().orderId() + " received pickup " + coord(request.order().pickupLat(), request.order().pickupLng()) + " dropoff " + coord(request.order().dropoffLat(), request.order().dropoffLng()), orderConsoleData(request.order(), item));
         appendConsoleTrace(session, "BUFFER", "ok", "BUFFER_ENTERED", "Order " + request.order().orderId() + " entered aging buffer as " + item.priorityLevel + " score " + round1(item.finalScore), bufferItemView(item));
+        Map<String, Object> realtimeTrace = realtimeLiveDecisionTrace(session, "ORDER_BUFFERED_REALTIME_CLUSTER");
+        executionEvents.emit("exec_" + sessionId, "CLUSTERING_COMPLETED", "COMPLETED", 35, "Realtime buffer clusters updated", Map.of("clusterSelection", realtimeTrace.get("clusterSelection"), "orderPool", realtimeTrace.get("orderPool")));
         executionEvents.emit("exec_" + sessionId, "BUFFERING_COMPLETED", "COMPLETED", 20, "Live order buffered", Map.of("bufferedOrders", session.bufferedOrders.size(), "order", request.order(), "bufferItem", bufferItemView(item)));
-        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("sessionId", sessionId, "bufferedOrders", session.bufferedOrders.size(), "orderAcceptedLatencyMs", elapsedMillis(receivedAt, Instant.now()), "bufferItem", bufferItemView(item)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("sessionId", sessionId, "bufferedOrders", session.bufferedOrders.size(), "orderAcceptedLatencyMs", elapsedMillis(receivedAt, Instant.now()), "bufferItem", bufferItemView(item), "decisionTrace", realtimeTrace));
     }
 
     @PostMapping("/live/sessions/{sessionId}/drivers")
@@ -275,6 +295,22 @@ public final class IrxApiV1Controller {
         List<LiveBufferItem> cycleItems = selectCycleItems(session);
         List<DispatchJobRequest.ApiOrderDto> cycleOrders = cycleItems.stream().map(item -> item.order).toList();
         appendConsoleTrace(session, "BUFFER", "info", "BUFFER_SELECTION", "Cycle selected " + cycleOrders.size() + " orders from buffer", Map.of("sessionId", sessionId, "selectedOrders", cycleItems.stream().map(item -> item.order.orderId()).toList(), "bufferItems", cycleItems.stream().map(this::bufferItemView).toList(), "bufferTotal", session.bufferedOrders.size()));
+        if (cycleOrders.isEmpty()) {
+            Map<String, Object> response = new LinkedHashMap<>();
+            String cycleId = id("cycle");
+            response.put("cycleId", cycleId);
+            response.put("status", "NOOP_EMPTY_BUFFER");
+            response.put("pdLnsMode", pdLnsMode);
+            response.put("assignedOrders", 0);
+            response.put("bufferItems", bufferItemsView(session));
+            response.put("activeRoutes", session.lastResult == null ? List.of() : session.lastResult.routes());
+            response.put("reason", "No WAITING orders in backend live buffer; keeping current active routes.");
+            appendConsoleTrace(session, "BUFFER", "warn", "EMPTY_BUFFER_NOOP", "Cycle skipped because backend buffer is empty; active routes kept", Map.of("sessionId", sessionId, "cycleId", cycleId));
+            session.cycleHistory.add(Map.of("cycleId", cycleId, "status", "NOOP_EMPTY_BUFFER", "pdLnsMode", pdLnsMode, "assignedThisRound", 0, "remainingBuffer", 0, "routeChurnPercent", "0.0%"));
+            session.events.add(event("CYCLE_NOOP_EMPTY_BUFFER", cycleId));
+            metrics.increment("liveCyclesCompleted");
+            return ResponseEntity.ok(response);
+        }
         DashboardController.RunVisualizationDto result;
         try {
             result = runLiveSnapshot(session, cycleOrders);
@@ -288,7 +324,8 @@ public final class IrxApiV1Controller {
         try {
             seedArchive = liveSeedArchive(session, cycleOrders, result);
             result = applyLiveSeedWinner(result, seedArchive, pdLnsMode, session);
-            result = mergeWithActiveLiveRoutes(previousResult, result);
+            result = enforceLiveCoverageAndUtilization(session, cycleOrders, result, pdLnsMode);
+            result = mergeWithActiveLiveRoutes(session, previousResult, result);
         } catch (IllegalStateException exception) {
             metrics.increment("jobsFailed");
             executionEvents.emit(executionId, "EXECUTION_FAILED", "FAILED", 100, exception.getMessage(), Map.of("sessionId", sessionId, "routingPolicy", "OSRM_ONLY"));
@@ -322,6 +359,7 @@ public final class IrxApiV1Controller {
         attachRuntimeRoutes(session, result);
         String cycleId = result == null ? id("cycle") : result.runId();
         Set<String> assignedOrderIds = assignedOrderIds(result);
+        lockAssignedOrders(session, result, cycleId);
         updateBufferAfterCycle(session, assignedOrderIds, cycleId);
         Map<String, Object> finalSelection = asMap(liveTrace.get("finalSelection"));
         session.cycleHistory.add(Map.of("cycleId", cycleId, "status", "COMPLETED", "pdLnsMode", pdLnsMode, "lateRegression", 0, "capacityViolations", 0, "pickupDropoffViolations", 0, "assignedThisRound", assignedOrderIds.size(), "remainingBuffer", session.bufferedOrders.size(), "routeChurnPercent", finalSelection.getOrDefault("routeChurnPercent", "0%")));
@@ -354,9 +392,9 @@ public final class IrxApiV1Controller {
         if (denied != null) return denied;
         int assigned = session.lastResult == null ? 0 : (int) session.lastResult.metrics().assignedOrderCount();
         List<?> routes = session.lastResult == null ? List.of() : session.lastResult.routes();
-        Object decisionTrace = session.lastResult == null ? Map.of() : session.lastResult.diagnostics().get("decisionTrace");
         session.bufferedOrders.forEach(item -> updateAging(item, Instant.now()));
         advanceDriverRuntime(session);
+        Object decisionTrace = liveStateDecisionTrace(session);
         return ResponseEntity.ok(new LiveSessionStateResponse(sessionId, session.tenantId, "ACTIVE", session.bufferedOrders.size(), assigned, routes, session.cycleHistory, decisionTrace, bufferItemsView(session), List.copyOf(session.drivers), driverStatesView(session), List.copyOf(session.completedOrders), removedMarkersView(session), consoleTraceView(session), bufferMonitor(session)));
     }
 
@@ -588,15 +626,7 @@ public final class IrxApiV1Controller {
     }
 
     private List<DispatchJobRequest.ApiDriverDto> liveBundleDriverScope(LiveSession session, List<DispatchJobRequest.ApiOrderDto> cycleOrders) {
-        if (session.drivers.size() <= 1 || cycleOrders.size() < 3 || cycleOrders.size() > 4 || !compactPickupCluster(cycleOrders, 2.8)) {
-            return session.drivers;
-        }
-        double centroidLat = cycleOrders.stream().mapToDouble(DispatchJobRequest.ApiOrderDto::pickupLat).average().orElse(session.drivers.getFirst().lat());
-        double centroidLng = cycleOrders.stream().mapToDouble(DispatchJobRequest.ApiOrderDto::pickupLng).average().orElse(session.drivers.getFirst().lng());
-        DispatchJobRequest.ApiDriverDto best = session.drivers.stream()
-                .min(Comparator.comparingDouble(driver -> haversineKm(driver.lat(), driver.lng(), centroidLat, centroidLng)))
-                .orElse(session.drivers.getFirst());
-        return List.of(best);
+        return session.drivers;
     }
 
     private boolean compactPickupCluster(List<DispatchJobRequest.ApiOrderDto> orders, double maxKm) {
@@ -690,6 +720,90 @@ public final class IrxApiV1Controller {
                 "policy", "IRX_FULL_ENSEMBLE".equals(finalOptimizer) ? "IRX_FULL_ENSEMBLE" : "best-seed-is-refined-by-irx-before-fe-route-order",
                 "routes", refinementReports));
         return new DashboardController.RunVisualizationDto(result.runId(), result.scenarioId(), finalOptimizer, result.solverVersion(), result.createdAt(), result.status(), result.inputSnapshot(), result.orders(), result.drivers(), result.batches(), result.assignments(), routes, metrics, diagnostics, result.events(), result.comparison(), result.artifacts());
+    }
+
+    private DashboardController.RunVisualizationDto enforceLiveCoverageAndUtilization(LiveSession session,
+                                                                                       List<DispatchJobRequest.ApiOrderDto> cycleOrders,
+                                                                                       DashboardController.RunVisualizationDto result,
+                                                                                       String pdLnsMode) {
+        if (session == null || result == null || cycleOrders == null || cycleOrders.isEmpty() || session.drivers.isEmpty()) return result;
+        Set<String> requiredOrderIds = cycleOrders.stream().map(DispatchJobRequest.ApiOrderDto::orderId).filter(orderId -> orderId != null && !orderId.isBlank()).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Set<String> assignedOrderIds = assignedOrderIds(result);
+        int targetActiveDrivers = Math.min(Math.min(session.drivers.size(), requiredOrderIds.size()), Math.max(1, (int) Math.ceil(requiredOrderIds.size() / 3.0)));
+        long activeDrivers = result.routes() == null ? 0 : result.routes().stream().filter(route -> route.stops().stream().anyMatch(stop -> stop.orderId() != null && !stop.orderId().isBlank())).map(DashboardController.RouteVisualizationDto::driverId).distinct().count();
+        long maxRouteBundle = result.routes() == null ? 0 : result.routes().stream()
+                .mapToLong(route -> route.stops().stream().map(DashboardController.StopVisualizationDto::orderId).filter(orderId -> orderId != null && !orderId.isBlank()).distinct().count())
+                .max().orElse(0);
+        if (assignedOrderIds.containsAll(requiredOrderIds) && activeDrivers >= targetActiveDrivers && maxRouteBundle <= 4) return result;
+
+        Map<String, DashboardController.DriverDto> driverById = result.drivers().stream().collect(java.util.stream.Collectors.toMap(DashboardController.DriverDto::driverId, java.util.function.Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        Map<String, DashboardController.OrderDto> orderById = result.orders().stream().collect(java.util.stream.Collectors.toMap(DashboardController.OrderDto::orderId, java.util.function.Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        List<DashboardController.DriverDto> drivers = session.drivers.stream()
+                .map(driver -> driverById.getOrDefault(driver.driverId(), new DashboardController.DriverDto(blank(driver.driverId()) ? id("DRV") : driver.driverId(), driver.lat(), driver.lng(), driver.capacity() == null ? 100 : driver.capacity(), 0, "IDLE")))
+                .toList();
+        List<DashboardController.OrderDto> orders = cycleOrders.stream().map(order -> orderById.getOrDefault(order.orderId(), new DashboardController.OrderDto(
+                blank(order.orderId()) ? id("ORD") : order.orderId(), "LIVE_BUFFER", order.pickupLat(), order.pickupLng(), order.dropoffLat(), order.dropoffLng(), order.demand() == null ? 1 : order.demand(), priorityScore(order), order.deadlineMinutes() == null ? 90 : order.deadlineMinutes()))).toList();
+        Map<String, List<DashboardController.OrderDto>> byDriver = balancedForceAssignOrders(drivers, orders, targetActiveDrivers);
+        List<DashboardController.RouteVisualizationDto> routes = new ArrayList<>();
+        for (DashboardController.DriverDto driver : drivers) {
+            List<DashboardController.OrderDto> assigned = byDriver.getOrDefault(driver.driverId(), List.of());
+            if (assigned.isEmpty()) continue;
+            List<String> sequence = interleavedNearestStopSequence(driver, assigned);
+            routes.add(routeFromSeedRow("FORCE-DRAIN-" + driver.driverId(), driver.driverId(), sequence, orderById, driverById, true, session));
+        }
+        Set<String> forcedAssigned = routes.stream().flatMap(route -> route.stops().stream()).map(DashboardController.StopVisualizationDto::orderId).filter(orderId -> orderId != null && !orderId.isBlank()).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (!forcedAssigned.containsAll(requiredOrderIds)) {
+            throw new IllegalStateException("OSRM_REQUIRED: force-drain could not route all live buffered orders assigned=" + forcedAssigned.size() + " required=" + requiredOrderIds.size());
+        }
+        DashboardController.MetricsDto metrics = liveMergedMetrics(result.metrics(), routes);
+        Map<String, Object> diagnostics = new LinkedHashMap<>(result.diagnostics() == null ? Map.of() : result.diagnostics());
+        diagnostics.put("liveForceDrain", Map.of("status", "APPLIED", "policy", "BALANCED_MAX_USE_FORCE_ASSIGN", "requiredOrders", requiredOrderIds.size(), "assignedOrders", forcedAssigned.size(), "targetActiveDrivers", targetActiveDrivers, "activeDrivers", routes.size(), "previousMaxBundle", maxRouteBundle, "maxBundleTarget", 4, "reason", "coverage-balance-and-max-bundle-guard"));
+        diagnostics.put("liveFinalSeedSource", Map.of("selectedSeed", "FORCE_DRAIN_BALANCED", "finalOptimizer", "IRX_FORCE_DRAIN_BALANCED", "selectedOptimizer", "BALANCED_MAX_USE_FORCE_ASSIGN", "mlMode", pdLnsMode == null || pdLnsMode.isBlank() ? "QUALITY_LIVE" : pdLnsMode, "routingPolicy", "OSRM_ONLY", "roadDistanceSource", "OSRM_ROUTE_LEGS", "osrmRequired", true));
+        return new DashboardController.RunVisualizationDto(result.runId(), result.scenarioId(), "IRX_FORCE_DRAIN_BALANCED", result.solverVersion(), result.createdAt(), result.status(), result.inputSnapshot(), orders, drivers, result.batches(), result.assignments(), routes, metrics, diagnostics, result.events(), result.comparison(), result.artifacts());
+    }
+
+    private Map<String, List<DashboardController.OrderDto>> balancedForceAssignOrders(List<DashboardController.DriverDto> drivers,
+                                                                                       List<DashboardController.OrderDto> orders,
+                                                                                       int targetActiveDrivers) {
+        Map<String, List<DashboardController.OrderDto>> byDriver = new LinkedHashMap<>();
+        drivers.forEach(driver -> byDriver.put(driver.driverId(), new ArrayList<>()));
+        Set<String> seededDrivers = new LinkedHashSet<>();
+        List<DashboardController.OrderDto> sortedOrders = orders.stream().sorted(Comparator.comparing(DashboardController.OrderDto::orderId)).toList();
+        for (DashboardController.OrderDto order : sortedOrders) {
+            DashboardController.DriverDto best = drivers.stream()
+                    .filter(driver -> seededDrivers.size() >= targetActiveDrivers || !seededDrivers.contains(driver.driverId()))
+                    .min(Comparator.comparingDouble(driver -> haversineKm(driver.lat(), driver.lng(), order.pickupLat(), order.pickupLng())))
+                    .orElseGet(() -> drivers.stream().min(Comparator.comparingInt(driver -> byDriver.get(driver.driverId()).size())).orElse(drivers.getFirst()));
+            byDriver.get(best.driverId()).add(order);
+            seededDrivers.add(best.driverId());
+        }
+        return byDriver;
+    }
+
+    private List<String> interleavedNearestStopSequence(DashboardController.DriverDto driver, List<DashboardController.OrderDto> orders) {
+        Map<String, DashboardController.OrderDto> remainingPickups = orders.stream().collect(java.util.stream.Collectors.toMap(DashboardController.OrderDto::orderId, java.util.function.Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        Map<String, DashboardController.OrderDto> onboard = new LinkedHashMap<>();
+        List<String> sequence = new ArrayList<>();
+        double lat = driver.lat();
+        double lng = driver.lng();
+        while (!remainingPickups.isEmpty() || !onboard.isEmpty()) {
+            String bestToken = null;
+            DashboardController.OrderDto bestOrder = null;
+            double bestDistance = Double.MAX_VALUE;
+            for (DashboardController.OrderDto order : remainingPickups.values()) {
+                double distance = haversineKm(lat, lng, order.pickupLat(), order.pickupLng());
+                if (distance < bestDistance) { bestDistance = distance; bestToken = "PICKUP:" + order.orderId(); bestOrder = order; }
+            }
+            for (DashboardController.OrderDto order : onboard.values()) {
+                double distance = haversineKm(lat, lng, order.dropoffLat(), order.dropoffLng());
+                if (distance < bestDistance) { bestDistance = distance; bestToken = "DROPOFF:" + order.orderId(); bestOrder = order; }
+            }
+            if (bestToken == null || bestOrder == null) break;
+            sequence.add(bestToken);
+            if (bestToken.startsWith("PICKUP:")) { remainingPickups.remove(bestOrder.orderId()); onboard.put(bestOrder.orderId(), bestOrder); lat = bestOrder.pickupLat(); lng = bestOrder.pickupLng(); }
+            else { onboard.remove(bestOrder.orderId()); lat = bestOrder.dropoffLat(); lng = bestOrder.dropoffLng(); }
+        }
+        return sequence;
     }
 
     private Map<String, Object> irxOptimizeWinnerRoute(Map<String, Object> route,
@@ -2077,19 +2191,22 @@ public final class IrxApiV1Controller {
 
     private record SeedCandidateView(String seed, List<SolutionSeedRoute> routes, long runtimeMs, double distanceKm, long late, long assigned, String status, String reason) { }
 
-    private DashboardController.RunVisualizationDto mergeWithActiveLiveRoutes(DashboardController.RunVisualizationDto previousResult,
+    private DashboardController.RunVisualizationDto mergeWithActiveLiveRoutes(LiveSession session,
+                                                                               DashboardController.RunVisualizationDto previousResult,
                                                                                DashboardController.RunVisualizationDto newResult) {
         if (previousResult == null || previousResult.routes() == null || previousResult.routes().isEmpty() || newResult == null || newResult.routes() == null || newResult.routes().isEmpty()) {
             return newResult;
         }
+        List<Map<String, Object>> rejectedReassignments = new ArrayList<>();
         Map<String, DashboardController.RouteVisualizationDto> activeByDriver = new LinkedHashMap<>();
         for (DashboardController.RouteVisualizationDto route : previousResult.routes()) activeByDriver.put(route.driverId(), route);
-        Map<String, DashboardController.OrderDto> orderLookup = newResult.orders() == null ? Map.of() : newResult.orders().stream()
-                .filter(order -> order.orderId() != null && !order.orderId().isBlank())
-                .collect(java.util.stream.Collectors.toMap(DashboardController.OrderDto::orderId, java.util.function.Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        Map<String, DashboardController.OrderDto> orderLookup = liveOrderLookup(previousResult, newResult);
+        Map<String, DashboardController.DriverDto> driverLookup = liveDriverLookup(previousResult, newResult);
         for (DashboardController.RouteVisualizationDto incoming : newResult.routes()) {
-            DashboardController.RouteVisualizationDto active = activeByDriver.get(incoming.driverId());
-            activeByDriver.put(incoming.driverId(), active == null ? incoming : appendRouteStops(active, incoming, orderLookup));
+            DashboardController.RouteVisualizationDto sanitized = sanitizeIncomingRouteByLocks(session, incoming, rejectedReassignments);
+            if (sanitized.stops().stream().noneMatch(stop -> !"DRIVER_START".equalsIgnoreCase(stop.type()))) continue;
+            DashboardController.RouteVisualizationDto active = activeByDriver.get(sanitized.driverId());
+            activeByDriver.put(sanitized.driverId(), active == null ? sanitized : appendRouteStops(active, sanitized, orderLookup, driverLookup));
         }
         List<DashboardController.RouteVisualizationDto> mergedRoutes = new ArrayList<>(activeByDriver.values());
         DashboardController.MetricsDto metrics = liveMergedMetrics(newResult.metrics(), mergedRoutes);
@@ -2098,7 +2215,10 @@ public final class IrxApiV1Controller {
                 "policy", "append-new-cycle-routes-to-active-routes",
                 "previousRoutes", previousResult.routes().size(),
                 "incomingRoutes", newResult.routes().size(),
-                "mergedRoutes", mergedRoutes.size()
+                "mergedRoutes", mergedRoutes.size(),
+                "routeLockPolicy", "HARD_LOCK_ASSIGNED_ORDERS",
+                "lockedOrders", session.assignmentLedger.size(),
+                "rejectedReassignments", rejectedReassignments
         ));
         return new DashboardController.RunVisualizationDto(
                 newResult.runId(), newResult.scenarioId(), newResult.solverName(), newResult.solverVersion(), newResult.createdAt(), newResult.status(),
@@ -2109,7 +2229,8 @@ public final class IrxApiV1Controller {
 
     private DashboardController.RouteVisualizationDto appendRouteStops(DashboardController.RouteVisualizationDto active,
                                                                         DashboardController.RouteVisualizationDto incoming,
-                                                                        Map<String, DashboardController.OrderDto> orderLookup) {
+                                                                        Map<String, DashboardController.OrderDto> orderLookup,
+                                                                        Map<String, DashboardController.DriverDto> driverLookup) {
         Set<String> existingStopKeys = active.stops().stream()
                 .filter(stop -> stop.orderId() != null && !stop.orderId().isBlank())
                 .map(stop -> stop.type() + ":" + stop.orderId())
@@ -2141,11 +2262,106 @@ public final class IrxApiV1Controller {
             stops.add(new DashboardController.StopVisualizationDto(sequence, "DROPOFF", order.orderId(), order.dropoffLat(), order.dropoffLng(), round1(eta), round1(distance), round1(travel), round1(slack), risk, slack < 0 ? "LATE" : "OK"));
             existingStopKeys.add(dropoffKey);
         }
-        List<DashboardController.GeoPointDto> polyline = cleanupGeoPolyline(incoming.polyline() == null || incoming.polyline().size() < 2 ? active.polyline() : incoming.polyline());
-        double distance = Math.round(stops.stream().mapToDouble(DashboardController.StopVisualizationDto::distanceFromPreviousKm).sum() * 10.0) / 10.0;
-        double eta = Math.round(Math.max(active.totalEtaMinutes(), incoming.totalEtaMinutes()) * 10.0) / 10.0;
-        long late = stops.stream().filter(stop -> "LATE_RISK".equals(stop.riskLevel()) || "LATE".equals(stop.status())).count();
-        return new DashboardController.RouteVisualizationDto(active.routeId(), active.driverId(), active.batchId(), active.geometryMode(), active.oldRouteId(), active.rescueStatus(), stops, polyline, distance, eta, late);
+        List<String> stopSequence = stops.stream()
+                .filter(stop -> stop.orderId() != null && !stop.orderId().isBlank())
+                .map(stop -> stop.type().toUpperCase(Locale.ROOT) + ":" + stop.orderId())
+                .toList();
+        try {
+            return routeFromSeedRow(active.routeId(), active.driverId(), stopSequence, orderLookup, driverLookup, true);
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("OSRM_REQUIRED: merged route geometry rebuild failed for " + active.routeId() + " stops=" + stopSequence.size() + " reason=" + exception.getMessage(), exception);
+        }
+    }
+
+    private Map<String, DashboardController.OrderDto> liveOrderLookup(DashboardController.RunVisualizationDto previousResult,
+                                                                       DashboardController.RunVisualizationDto newResult) {
+        Map<String, DashboardController.OrderDto> lookup = new LinkedHashMap<>();
+        if (previousResult != null && previousResult.orders() != null) previousResult.orders().forEach(order -> lookup.put(order.orderId(), order));
+        if (newResult != null && newResult.orders() != null) newResult.orders().forEach(order -> lookup.put(order.orderId(), order));
+        for (DashboardController.RunVisualizationDto result : Arrays.asList(previousResult, newResult)) {
+            if (result == null || result.routes() == null) continue;
+            for (DashboardController.RouteVisualizationDto route : result.routes()) {
+                Map<String, DashboardController.StopVisualizationDto> pickups = new LinkedHashMap<>();
+                Map<String, DashboardController.StopVisualizationDto> dropoffs = new LinkedHashMap<>();
+                for (DashboardController.StopVisualizationDto stop : route.stops()) {
+                    if (blank(stop.orderId())) continue;
+                    if ("PICKUP".equalsIgnoreCase(stop.type())) pickups.put(stop.orderId(), stop);
+                    if ("DROPOFF".equalsIgnoreCase(stop.type())) dropoffs.put(stop.orderId(), stop);
+                }
+                for (String orderId : pickups.keySet()) {
+                    if (lookup.containsKey(orderId) || !dropoffs.containsKey(orderId)) continue;
+                    DashboardController.StopVisualizationDto pickup = pickups.get(orderId);
+                    DashboardController.StopVisualizationDto dropoff = dropoffs.get(orderId);
+                    lookup.put(orderId, new DashboardController.OrderDto(orderId, "LIVE_MERGED", pickup.lat(), pickup.lng(), dropoff.lat(), dropoff.lng(), 1, 1, Math.max(30, (int) Math.ceil(Math.max(pickup.etaMinutes(), dropoff.etaMinutes()) + 45))));
+                }
+            }
+        }
+        return lookup;
+    }
+
+    private Map<String, DashboardController.DriverDto> liveDriverLookup(DashboardController.RunVisualizationDto previousResult,
+                                                                         DashboardController.RunVisualizationDto newResult) {
+        Map<String, DashboardController.DriverDto> lookup = new LinkedHashMap<>();
+        if (previousResult != null && previousResult.drivers() != null) previousResult.drivers().forEach(driver -> lookup.put(driver.driverId(), driver));
+        if (newResult != null && newResult.drivers() != null) newResult.drivers().forEach(driver -> lookup.put(driver.driverId(), driver));
+        for (DashboardController.RunVisualizationDto result : Arrays.asList(previousResult, newResult)) {
+            if (result == null || result.routes() == null) continue;
+            for (DashboardController.RouteVisualizationDto route : result.routes()) {
+                if (lookup.containsKey(route.driverId())) continue;
+                DashboardController.StopVisualizationDto start = route.stops().stream().filter(stop -> "DRIVER_START".equalsIgnoreCase(stop.type())).findFirst().orElse(route.stops().isEmpty() ? null : route.stops().getFirst());
+                if (start != null) lookup.put(route.driverId(), new DashboardController.DriverDto(route.driverId(), start.lat(), start.lng(), 100, 0, "IDLE"));
+            }
+        }
+        return lookup;
+    }
+
+    private DashboardController.RouteVisualizationDto sanitizeIncomingRouteByLocks(LiveSession session,
+                                                                                   DashboardController.RouteVisualizationDto incoming,
+                                                                                   List<Map<String, Object>> rejectedReassignments) {
+        if (session == null || session.assignmentLedger.isEmpty()) return incoming;
+        List<DashboardController.StopVisualizationDto> stops = new ArrayList<>();
+        int sequence = 0;
+        for (DashboardController.StopVisualizationDto stop : incoming.stops()) {
+            if ("DRIVER_START".equalsIgnoreCase(stop.type())) {
+                stops.add(stop);
+                sequence = Math.max(sequence, stop.sequence());
+                continue;
+            }
+            if (blank(stop.orderId())) continue;
+            AssignmentLock lock = session.assignmentLedger.get(stop.orderId());
+            if (lock != null) {
+                if (!Objects.equals(lock.driverId, incoming.driverId())) {
+                    rejectedReassignments.add(Map.of("orderId", stop.orderId(), "fromDriver", lock.driverId, "incomingDriver", incoming.driverId(), "type", stop.type(), "reason", "LOCK_GUARD_REJECTED_REASSIGN"));
+                    continue;
+                }
+                rejectedReassignments.add(Map.of("orderId", stop.orderId(), "driverId", incoming.driverId(), "type", stop.type(), "reason", "LOCK_GUARD_KEEP_ACTIVE_STOP"));
+                continue;
+            }
+            sequence += 1;
+            stops.add(new DashboardController.StopVisualizationDto(sequence, stop.type(), stop.orderId(), stop.lat(), stop.lng(), stop.etaMinutes(), stop.distanceFromPreviousKm(), stop.travelTimeFromPreviousMinutes(), stop.deadlineSlackMinutes(), stop.riskLevel(), stop.status()));
+        }
+        return new DashboardController.RouteVisualizationDto(incoming.routeId(), incoming.driverId(), incoming.batchId(), incoming.geometryMode(), incoming.oldRouteId(), incoming.rescueStatus(), stops, incoming.polyline(), incoming.totalDistanceKm(), incoming.totalEtaMinutes(), incoming.lateOrderCount());
+    }
+
+    private void lockAssignedOrders(LiveSession session, DashboardController.RunVisualizationDto result, String cycleId) {
+        if (session == null || result == null || result.routes() == null) return;
+        for (DashboardController.RouteVisualizationDto route : result.routes()) {
+            for (DashboardController.StopVisualizationDto stop : route.stops()) {
+                if (blank(stop.orderId()) || "DRIVER_START".equalsIgnoreCase(stop.type())) continue;
+                session.assignmentLedger.putIfAbsent(stop.orderId(), new AssignmentLock(stop.orderId(), route.driverId(), cycleId, Instant.now().toString()));
+            }
+        }
+    }
+
+    private List<Map<String, Object>> assignmentLedgerView(LiveSession session) {
+        if (session == null) return List.of();
+        return session.assignmentLedger.values().stream().map(lock -> Map.<String, Object>of(
+                "orderId", lock.orderId,
+                "driverId", lock.driverId,
+                "cycleId", lock.cycleId,
+                "lockedAt", lock.lockedAt,
+                "policy", "HARD_LOCK_ASSIGNED_ORDERS"
+        )).toList();
     }
 
     private double round1(double value) {
@@ -2326,12 +2542,13 @@ public final class IrxApiV1Controller {
         trace.put("dominanceGuard", Map.of("status", "PASS", "selectedSource", finalSelection.get("selectedSource"), "objective", "coverage -> hard violations -> late count -> total lateness -> distance -> runtime", "rejectedSeeds", rejectedSeeds(seedRace, String.valueOf(finalSelection.get("selectedSource")))));
         trace.put("adaptiveMl", Map.of("mode", pdLnsMode, "qualitySeeking", true, "accepted", true, "policy", "accept only non-regressing live insertion"));
         trace.put("freezePolicy", liveFreezePolicy(result));
+        trace.put("routeLockPolicy", Map.of("policy", "HARD_LOCK_ASSIGNED_ORDERS", "lockedOrders", assignmentLedgerView(session), "lockedCount", session.assignmentLedger.size()));
         trace.put("liveInsertion", Map.of("status", "COMPLETED", "scope", "remaining route after frozen stop", "newOrders", cycleOrders.stream().map(DispatchJobRequest.ApiOrderDto::orderId).toList()));
         trace.put("routeOrdering", liveRouteOrdering(result));
         trace.put("finalAssignment", liveRouteOrdering(result));
         trace.put("finalSelection", finalSelection);
         trace.put("dispatchRound", dispatchRoundTrace(session, result));
-        trace.put("kpi", Map.of("decisionLatencyMs", latencyTrace.getOrDefault("cycleBackendMs", result == null ? 0 : result.metrics().runtimeMs()), "routeChurnPercent", finalSelection.get("routeChurnPercent"), "lateCount", result == null ? 0 : result.metrics().lateOrderCount(), "queueDepth", session.bufferedOrders.size()));
+        trace.put("kpi", Map.of("decisionLatencyMs", latencyTrace.getOrDefault("cycleBackendMs", result == null ? 0 : result.metrics().runtimeMs()), "routeChurnPercent", finalSelection.get("routeChurnPercent"), "lateCount", result == null ? 0 : result.metrics().lateOrderCount(), "queueDepth", session.bufferedOrders.size(), "lockedOrders", session.assignmentLedger.size()));
         if (!coreTrace.isEmpty()) trace.put("coreDecisionTrace", coreTrace);
         return trace;
     }
@@ -2374,6 +2591,95 @@ public final class IrxApiV1Controller {
             ));
         }
         return rows;
+    }
+
+    private Map<String, Object> liveStateDecisionTrace(LiveSession session) {
+        Map<String, Object> realtime = realtimeLiveDecisionTrace(session, "LIVE_STATE_REALTIME_CLUSTER");
+        Map<String, Object> previous = asMap(session.lastResult == null || session.lastResult.diagnostics() == null ? null : session.lastResult.diagnostics().get("decisionTrace"));
+        if (!previous.isEmpty()) {
+            Map<String, Object> merged = new LinkedHashMap<>(previous);
+            List<?> realtimeOrderPool = asList(realtime.get("orderPool"));
+            merged.put("realtime", true);
+            if (!realtimeOrderPool.isEmpty()) {
+                merged.put("orderPool", realtime.get("orderPool"));
+                merged.put("clusterSelection", realtime.get("clusterSelection"));
+                merged.put("cluster", realtime.get("cluster"));
+            }
+            merged.put("bufferMonitor", bufferMonitor(session));
+            merged.put("bufferItems", bufferItemsView(session));
+            merged.put("generatedAt", Instant.now().toString());
+            return merged;
+        }
+        return realtime;
+    }
+
+    private Map<String, Object> realtimeLiveDecisionTrace(LiveSession session, String source) {
+        List<DispatchJobRequest.ApiOrderDto> orders = session.bufferedOrders.stream().map(item -> item.order).toList();
+        List<Map<String, Object>> orderPool = liveOrderPool(orders);
+        List<Map<String, Object>> clusters = spatialLiveClusters(orders, 6);
+        Map<String, Object> trace = new LinkedHashMap<>();
+        trace.put("source", source);
+        trace.put("realtime", true);
+        trace.put("generatedAt", Instant.now().toString());
+        trace.put("sessionId", session.sessionId);
+        trace.put("inputProcessing", Map.of("status", "REALTIME", "drivers", session.drivers.size(), "orders", orders.size(), "bufferedOrders", session.bufferedOrders.size()));
+        trace.put("orderPool", orderPool);
+        trace.put("filtering", Map.of("feasible", orderPool.size(), "rejected", 0, "rules", List.of("coordinates", "buffer-live")));
+        trace.put("clusterSelection", clusters);
+        trace.put("cluster", clusters);
+        trace.put("driverCandidateSelection", realtimeDriverCandidates(session, clusters));
+        trace.put("driverMatch", realtimeDriverCandidates(session, clusters));
+        trace.put("bufferMonitor", bufferMonitor(session));
+        trace.put("bufferItems", bufferItemsView(session));
+        return trace;
+    }
+
+    private List<Map<String, Object>> spatialLiveClusters(List<DispatchJobRequest.ApiOrderDto> orders, int maxClusters) {
+        List<DispatchJobRequest.ApiOrderDto> sorted = new ArrayList<>(orders);
+        sorted.sort(Comparator.comparingDouble((DispatchJobRequest.ApiOrderDto order) -> (order.pickupLng() + order.dropoffLng()) / 2.0)
+                .thenComparingDouble(order -> (order.pickupLat() + order.dropoffLat()) / 2.0));
+        if (sorted.isEmpty()) return List.of();
+        int targetClusters = Math.max(1, Math.min(maxClusters, (int) Math.round(Math.sqrt(sorted.size()))));
+        int chunkSize = Math.max(3, (int) Math.ceil(sorted.size() / (double) targetClusters));
+        List<Map<String, Object>> clusters = new ArrayList<>();
+        for (int index = 0; index < sorted.size(); index += chunkSize) {
+            List<DispatchJobRequest.ApiOrderDto> chunk = sorted.subList(index, Math.min(sorted.size(), index + chunkSize));
+            List<String> orderIds = chunk.stream().map(DispatchJobRequest.ApiOrderDto::orderId).toList();
+            double minLat = chunk.stream().flatMapToDouble(order -> java.util.stream.DoubleStream.of(order.pickupLat(), order.dropoffLat())).min().orElse(0);
+            double maxLat = chunk.stream().flatMapToDouble(order -> java.util.stream.DoubleStream.of(order.pickupLat(), order.dropoffLat())).max().orElse(0);
+            double minLng = chunk.stream().flatMapToDouble(order -> java.util.stream.DoubleStream.of(order.pickupLng(), order.dropoffLng())).min().orElse(0);
+            double maxLng = chunk.stream().flatMapToDouble(order -> java.util.stream.DoubleStream.of(order.pickupLng(), order.dropoffLng())).max().orElse(0);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("batchId", "LIVE_SPATIAL_" + (clusters.size() + 1));
+            row.put("orderIds", orderIds);
+            row.put("orders", orderIds);
+            row.put("totalDemand", chunk.stream().mapToInt(order -> order.demand() == null ? 1 : order.demand()).sum());
+            row.put("load", row.get("totalDemand"));
+            row.put("driverId", "PENDING_MATCH");
+            row.put("status", "REALTIME_BUFFER_CLUSTER");
+            row.put("centroid", Map.of("lat", round6((minLat + maxLat) / 2.0), "lng", round6((minLng + maxLng) / 2.0)));
+            row.put("bounds", Map.of("minLat", round6(minLat), "maxLat", round6(maxLat), "minLng", round6(minLng), "maxLng", round6(maxLng)));
+            clusters.add(row);
+        }
+        return clusters;
+    }
+
+    private List<Map<String, Object>> realtimeDriverCandidates(LiveSession session, List<Map<String, Object>> clusters) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Map<String, Object> cluster : clusters) {
+            List<String> orderIds = asStringList(cluster.get("orderIds"));
+            DispatchJobRequest.ApiOrderDto firstOrder = session.bufferedOrders.stream().map(item -> item.order).filter(order -> orderIds.contains(order.orderId())).findFirst().orElse(null);
+            if (firstOrder == null) continue;
+            for (DispatchJobRequest.ApiDriverDto driver : session.drivers.stream().limit(4).toList()) {
+                double score = routeFitScore(driver, firstOrder);
+                rows.add(Map.of("batchId", cluster.get("batchId"), "driverId", driver.driverId(), "score", round1(score), "selectionScore", round1(score), "decision", "REALTIME_CANDIDATE", "reason", "preview nearest driver for live cluster"));
+            }
+        }
+        return rows;
+    }
+
+    private double round6(double value) {
+        return Math.round(value * 1_000_000.0) / 1_000_000.0;
     }
 
     private List<LiveBufferItem> selectCycleItems(LiveSession session) {
@@ -2496,19 +2802,26 @@ public final class IrxApiV1Controller {
 
     private List<Map<String, Object>> liveClusters(DashboardController.RunVisualizationDto result, List<DispatchJobRequest.ApiOrderDto> cycleOrders) {
         if (result != null && result.batches() != null && !result.batches().isEmpty()) {
-            return result.batches().stream().map(batch -> {
+            List<Map<String, Object>> batchClusters = result.batches().stream().map(batch -> {
                 int load = cycleOrders.stream().filter(order -> batch.orderIds().contains(order.orderId())).mapToInt(order -> order.demand() == null ? 1 : order.demand()).sum();
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("batchId", batch.batchId());
+                row.put("orderIds", batch.orderIds());
                 row.put("orders", batch.orderIds());
+                row.put("totalDemand", load);
                 row.put("load", load);
                 row.put("driverId", batch.driverId());
                 row.put("status", batch.status());
                 row.put("color", batch.color());
                 return row;
             }).toList();
+            long singletonClusters = batchClusters.stream().filter(row -> asStringList(row.get("orderIds")).size() <= 1).count();
+            if (!cycleOrders.isEmpty() && singletonClusters * 2 > batchClusters.size()) return spatialLiveClusters(cycleOrders, 6);
+            return batchClusters;
         }
-        return List.of(Map.of("batchId", "LIVE_BUFFER", "orders", cycleOrders.stream().map(DispatchJobRequest.ApiOrderDto::orderId).toList(), "load", cycleOrders.stream().mapToInt(order -> order.demand() == null ? 1 : order.demand()).sum(), "driverId", "UNASSIGNED", "status", "WAITING_SOLVER"));
+        List<String> orderIds = cycleOrders.stream().map(DispatchJobRequest.ApiOrderDto::orderId).toList();
+        int load = cycleOrders.stream().mapToInt(order -> order.demand() == null ? 1 : order.demand()).sum();
+        return List.of(Map.of("batchId", "LIVE_BUFFER", "orderIds", orderIds, "orders", orderIds, "totalDemand", load, "load", load, "driverId", "UNASSIGNED", "status", "WAITING_SOLVER"));
     }
 
     private List<Map<String, Object>> liveDriverCandidates(LiveSession session, DashboardController.RunVisualizationDto result) {
@@ -2608,6 +2921,7 @@ public final class IrxApiV1Controller {
                 "selectedSource", result == null ? "IRX_LIVE_ROLLING" : result.solverName(),
                 "selectionReason", "best seed is passed through IRX refinement and dominance guard before FE receives stop order",
                 "dominanceGuard", "PASS",
+                "routeLockPolicy", "HARD_LOCK_ASSIGNED_ORDERS",
                 "adaptiveMlMode", pdLnsMode,
                 "routeChurnPercent", String.format(Locale.US, "%.1f%%", routeChurn),
                 "distanceKm", result == null ? 0 : Math.round(result.metrics().totalDistanceKm() * 10.0) / 10.0,
@@ -2701,6 +3015,7 @@ public final class IrxApiV1Controller {
             if (routeChanged) {
                 state.stopIndex = initialStopIndex(state, route.stops());
                 state.polylineIndex = initialPolylineIndex(state, state.routePolyline);
+                snapRuntimeToRoadPolyline(state);
                 state.holdUntil = null;
                 state.status = route.stops().size() > state.stopIndex + 1 ? statusToNextStop(route.stops().get(state.stopIndex + 1)) : "AVAILABLE";
             } else {
@@ -2786,6 +3101,7 @@ public final class IrxApiV1Controller {
                     state.status = "PICKING_UP";
                     state.speedKmh = 0.0;
                     state.holdUntil = now.plusMillis(1000 + Math.abs(state.driverId.hashCode()) % 1000);
+                    if (!blank(next.orderId())) state.completedPickups.add(next.orderId());
                     if (!blank(next.orderId()) && session.removedPickups.add(next.orderId())) {
                         appendConsoleTrace(session, "STOP", "ok", "PICKUP_COMPLETED", "Driver " + state.driverId + " picked up " + next.orderId(), Map.of("driverId", state.driverId, "orderId", next.orderId(), "routeId", state.routeId, "completedAt", now.toString(), "lat", next.lat(), "lng", next.lng()));
                     }
@@ -2794,6 +3110,7 @@ public final class IrxApiV1Controller {
                     state.speedKmh = 0.0;
                     state.holdUntil = now.plusMillis(1000 + Math.abs(state.driverId.hashCode()) % 1000);
                     if (!blank(next.orderId())) {
+                        state.completedDropoffs.add(next.orderId());
                         if (session.removedDropoffs.add(next.orderId())) {
                             appendConsoleTrace(session, "STOP", "ok", "DROPOFF_COMPLETED", "Driver " + state.driverId + " delivered " + next.orderId(), Map.of("driverId", state.driverId, "orderId", next.orderId(), "routeId", state.routeId, "completedAt", now.toString(), "lat", next.lat(), "lng", next.lng()));
                         }
@@ -2814,10 +3131,8 @@ public final class IrxApiV1Controller {
 
     private void roamIdleDriver(DriverRuntimeState state, long elapsedMs) {
         state.status = "IDLE_ROAMING";
-        double angle = (Math.abs(state.driverId.hashCode()) % 360) * Math.PI / 180.0 + (System.currentTimeMillis() / 10000.0);
-        double targetLat = state.lat + Math.sin(angle) * 0.0012;
-        double targetLng = state.lng + Math.cos(angle) * 0.0012;
-        moveToward(state, targetLat, targetLng, elapsedMs, 20.0 + Math.abs(state.driverId.hashCode() % 11));
+        state.speedKmh = 0.0;
+        state.lastMovedMeters = 0.0;
     }
 
     private void moveAlongRoute(DriverRuntimeState state, DashboardController.StopVisualizationDto next, long elapsedMs, double speedKmh) {
@@ -2828,7 +3143,7 @@ public final class IrxApiV1Controller {
         }
         double remainingKm = speedKmh * (elapsedMs / 3_600_000.0);
         if (state.routePolyline == null || state.routePolyline.size() < 2 || state.polylineIndex >= state.routePolyline.size() - 1) {
-            moveTowardWithBudget(state, next.lat(), next.lng(), remainingKm, speedKmh);
+            state.speedKmh = 0.0;
             return;
         }
         state.speedKmh = speedKmh;
@@ -2858,8 +3173,17 @@ public final class IrxApiV1Controller {
             }
             if (haversineKm(state.lat, state.lng, next.lat(), next.lng()) <= 0.035) break;
         }
-        if (remainingKm > 0.0 && state.polylineIndex >= state.routePolyline.size() - 1) {
-            moveTowardWithBudget(state, next.lat(), next.lng(), remainingKm, speedKmh);
+        if (remainingKm > 0.0 && state.polylineIndex >= state.routePolyline.size() - 1) state.speedKmh = 0.0;
+    }
+
+    private void snapRuntimeToRoadPolyline(DriverRuntimeState state) {
+        if (state.routePolyline == null || state.routePolyline.size() < 2) return;
+        int index = nearestPolylineIndex(state, state.routePolyline);
+        DashboardController.GeoPointDto point = state.routePolyline.get(Math.max(0, Math.min(index, state.routePolyline.size() - 1)));
+        if (haversineKm(state.lat, state.lng, point.lat(), point.lng()) > 0.08) {
+            state.lat = point.lat();
+            state.lng = point.lng();
+            state.polylineIndex = Math.max(0, Math.min(index, Math.max(state.routePolyline.size() - 2, 0)));
         }
     }
 
@@ -2916,8 +3240,23 @@ public final class IrxApiV1Controller {
             row.put("targetLat", next == null ? state.lat : next.lat());
             row.put("targetLng", next == null ? state.lng : next.lng());
             row.put("segmentProgress", segmentProgress(state, next));
+            row.put("completedPickups", List.copyOf(state.completedPickups));
+            row.put("completedDropoffs", List.copyOf(state.completedDropoffs));
+            row.put("assignedStopSequence", stopSequenceView(state.routeStops, 0));
+            row.put("remainingStopSequence", stopSequenceView(state.routeStops, state.stopIndex + 1));
             return row;
         }).toList();
+    }
+
+    private List<Map<String, Object>> stopSequenceView(List<DashboardController.StopVisualizationDto> stops, int fromIndex) {
+        if (stops == null || stops.isEmpty()) return List.of();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (int index = Math.max(0, fromIndex); index < stops.size(); index++) {
+            DashboardController.StopVisualizationDto stop = stops.get(index);
+            if ("DRIVER_START".equalsIgnoreCase(stop.type())) continue;
+            rows.add(Map.of("sequence", stop.sequence(), "type", stop.type(), "orderId", stop.orderId() == null ? "" : stop.orderId(), "lat", stop.lat(), "lng", stop.lng(), "status", stop.status()));
+        }
+        return rows;
     }
 
     private double segmentProgress(DriverRuntimeState state, DashboardController.StopVisualizationDto next) {
@@ -3013,6 +3352,7 @@ public final class IrxApiV1Controller {
         private final List<LiveBufferItem> bufferedOrders = new ArrayList<>();
         private final Map<String, Object> telemetry = new ConcurrentHashMap<>();
         private final Map<String, DriverRuntimeState> driverStates = new ConcurrentHashMap<>();
+        private final Map<String, AssignmentLock> assignmentLedger = new ConcurrentHashMap<>();
         private final Set<String> removedPickups = ConcurrentHashMap.newKeySet();
         private final Set<String> removedDropoffs = ConcurrentHashMap.newKeySet();
         private final List<Map<String, Object>> completedOrders = new ArrayList<>();
@@ -3025,6 +3365,19 @@ public final class IrxApiV1Controller {
             this.requestId = requestId;
             this.tenantId = tenantId;
             this.createdAt = createdAt;
+        }
+    }
+
+    private static final class AssignmentLock {
+        private final String orderId;
+        private final String driverId;
+        private final String cycleId;
+        private final String lockedAt;
+        private AssignmentLock(String orderId, String driverId, String cycleId, String lockedAt) {
+            this.orderId = orderId;
+            this.driverId = driverId;
+            this.cycleId = cycleId;
+            this.lockedAt = lockedAt;
         }
     }
 
@@ -3047,6 +3400,8 @@ public final class IrxApiV1Controller {
         private long lastElapsedMs;
         private double lastMovedMeters;
         private double totalMovedMeters;
+        private final Set<String> completedPickups = new LinkedHashSet<>();
+        private final Set<String> completedDropoffs = new LinkedHashSet<>();
         private DriverRuntimeState(String driverId, double lat, double lng) {
             this.driverId = driverId;
             this.lat = lat;

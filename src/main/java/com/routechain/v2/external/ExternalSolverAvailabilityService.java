@@ -17,7 +17,11 @@ public final class ExternalSolverAvailabilityService {
         }
         Map<String, ExternalSolverAvailability> result = new LinkedHashMap<>();
         result.put("vroom", checkVroom(enabled));
-        result.put("pyvrp", check("pyvrp", enabled, List.of("py", "-3", "-c", "import pyvrp; print(getattr(pyvrp, '__version__', 'unknown'))"), "pyvrp-runtime-not-configured"));
+        String portablePython = System.getenv("PYVRP_PYTHON");
+        List<String> pyvrpCommand = portablePython != null && !portablePython.isBlank()
+                ? List.of(portablePython, "-c", "import pyvrp; print(getattr(pyvrp, '__version__', 'unknown'))")
+                : List.of("py", "-3", "-c", "import pyvrp; print(getattr(pyvrp, '__version__', 'unknown'))");
+        result.put("pyvrp", check("pyvrp", enabled, pyvrpCommand, "pyvrp-runtime-not-configured"));
         if (enabled) {
             enabledCache = Map.copyOf(result);
             return enabledCache;

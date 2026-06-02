@@ -45,7 +45,7 @@ try {
         if (-not (Test-Path $path)) { Fail "file-$required" "Missing required file $required" }
         Pass "file-$required" $path
     }
-    if (-not (Get-ChildItem (Join-Path $BundleRoot "data/osrm") -Filter "*.osrm" -ErrorAction SilentlyContinue)) { Fail "osrmMap" "Missing .osrm map file." }
+    if (-not (Get-ChildItem (Join-Path $BundleRoot "data/osrm") -Filter "*.osrm*" -ErrorAction SilentlyContinue)) { Fail "osrmMap" "Missing .osrm map data." }
     Pass "osrmMap"
 
     & (Join-Path $BundleRoot "runtime/python/python.exe") -c "import pyvrp; print('pyvrp-ok')"

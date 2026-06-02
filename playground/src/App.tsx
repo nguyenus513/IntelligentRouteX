@@ -20,10 +20,10 @@ type MapTileMode = 'dark' | 'osm';
 type DraftStatus = 'DRAFT' | 'SENDING' | 'BUFFERED' | 'PROCESSING' | 'ASSIGNED' | 'SENT_TO_BACKEND';
 type DraftPoint = { id: string; kind: 'pickup' | 'dropoff' | 'driver'; lat: number; lng: number; label: string; orderId?: string; status?: DraftStatus };
 type LiveDemoSeed = { seed: number; drivers: Array<{ driverId: string; lat: number; lng: number; capacity: number }>; orders: Array<{ orderId: string; pickupLat: number; pickupLng: number; dropoffLat: number; dropoffLng: number; demand: number; deadlineMinutes: number }> };
-type LiveQueueStatus = 'DRAFT' | 'SENDING' | 'BUFFERED' | 'PROCESSING' | 'ASSIGNED' | 'FAILED';
+type LiveQueueStatus = 'DRAFT' | 'SENDING' | 'BUFFERED' | 'PROCESSING' | 'ASSIGNED' | 'COMPLETED' | 'STALE_LOCAL' | 'FAILED';
 type LiveQueueItem = { orderId: string; status: LiveQueueStatus; driverId?: string; cycleId?: string; message: string; updatedAt: string };
 type PlaybackMapData = { orderPool: unknown[]; clusters: unknown[]; candidates: unknown[]; seedRace: unknown[]; finalSelection: Record<string, unknown> };
-type DriverRuntimeView = { driverId: string; lat: number; lng: number; speedKmh: string; status: string; activeOrderId: string; routeId: string; remainingStops: string; nextStopType: string; nextOrderId: string; targetLat?: number; targetLng?: number; segmentProgress: string; movementTick: string; movedMeters: string; polylineIndex: string; polylineSize: string };
+type DriverRuntimeView = { driverId: string; lat: number; lng: number; speedKmh: string; status: string; activeOrderId: string; routeId: string; remainingStops: string; nextStopType: string; nextOrderId: string; targetLat?: number; targetLng?: number; segmentProgress: string; movementTick: string; movedMeters: string; polylineIndex: string; polylineSize: string; completedPickups: string[]; completedDropoffs: string[]; assignedStopSequence: unknown[]; remainingStopSequence: unknown[] };
 type DemoScenarioId = 'urban_dense' | 'cross_district' | 'live_urgent' | 'driver_shortage' | 'tight_sla' | 'hub_spoke' | 'long_tail' | 'rain_slow' | 'large_live_fixed';
 type DemoPattern = 'clustered' | 'cross_district' | 'urgent' | 'scarcity' | 'tight_sla' | 'hub_spoke' | 'long_tail' | 'rain_slow' | 'city_spread';
 type DemoScenarioConfig = { label: string; seed: number; orders: number; drivers: number; datasetId: string; note: string; pattern: DemoPattern; badge: string };
@@ -85,6 +85,14 @@ const HCM_DEMO_POINTS = [
   [10.7769, 106.7009], [10.7721, 106.6983], [10.7824, 106.6931], [10.7907, 106.7108],
   [10.7626, 106.6601], [10.7852, 106.6787], [10.8015, 106.7112], [10.7551, 106.7048],
   [10.8124, 106.6868], [10.7468, 106.6665], [10.7692, 106.7247], [10.7989, 106.6502]
+] as const;
+
+const HCM_ROAD_SAFE_POINTS = [
+  [10.7769, 106.7009], [10.7721, 106.6983], [10.7824, 106.6931], [10.7907, 106.7108],
+  [10.7626, 106.6601], [10.7852, 106.6787], [10.8015, 106.7112], [10.7551, 106.7048],
+  [10.8124, 106.6868], [10.7468, 106.6665], [10.7692, 106.7247], [10.7989, 106.6502],
+  [10.7586, 106.6822], [10.7715, 106.7043], [10.7797, 106.6819], [10.7898, 106.6779],
+  [10.8008, 106.6718], [10.7545, 106.7154], [10.7418, 106.7045], [10.8102, 106.7002]
 ] as const;
 
 const DRIVER_ALIAS: Record<string, string> = {
@@ -186,6 +194,11 @@ function routePathDistanceKm(points: L.LatLngExpression[]) {
   return total;
 }
 
+function routeCoversStop(route: UiRoute | undefined, stop: UiStop, maxKm = 0.18) {
+  if (!route || !isValidRoadGeometry(route) || !Number.isFinite(stop.lat) || !Number.isFinite(stop.lng)) return false;
+  return route.path.some((point) => pointDistanceKm({ lat: point.lat as number, lng: point.lng as number }, { lat: stop.lat as number, lng: stop.lng as number }) <= maxKm);
+}
+
 function routeCentroid(route: UiRoute) {
   const points = (route.path.length ? route.path : route.stops).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
   if (!points.length) return undefined;
@@ -223,8 +236,10 @@ function routeKey(route: UiRoute, index: number) {
   return `${route.driverId}-${route.distanceKm ?? 'na'}-${route.stops.map((stop) => stop.id).join('-')}-${index}`;
 }
 
-function isDenseRoadGeometry(route: UiRoute) {
-  return route.geometryMode === 'ROAD_ROUTE' && route.path.length >= Math.max(18, route.stops.length * 3);
+function isValidRoadGeometry(route: UiRoute) {
+  return route.geometryMode === 'ROAD_ROUTE'
+    && route.path.length >= 2
+    && route.path.every((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
 }
 
 function isDriverStartStop(stop: UiStop) {
@@ -233,9 +248,32 @@ function isDriverStartStop(stop: UiStop) {
 
 function isRemovedStop(stop: UiStop, removedPickups: Set<string>, removedDropoffs: Set<string>) {
   const type = String(stop.type ?? '').toUpperCase();
-  const orderId = stop.id.includes(':') ? stop.id.split(':').pop() ?? '' : stop.id;
+  const orderId = stopOrderId(stop);
   if (!orderId) return false;
   return (type === 'PICKUP' && removedPickups.has(orderId)) || (type === 'DROPOFF' && removedDropoffs.has(orderId));
+}
+
+function stopOrderId(stop: UiStop) {
+  const id = String(stop.id ?? '').trim();
+  if (!id) return '';
+  if (id.includes(':')) return id.split(':').pop() ?? '';
+  return id.replace(/^(PICKUP|DROPOFF|DRIVER_START)[-_]/i, '');
+}
+
+function stopLifecycleKey(kind: string, orderId: string) {
+  return `${kind.toUpperCase()}:${orderId}`;
+}
+
+function stopDisplayLabel(stop: UiStop, index: number) {
+  const type = String(stop.type ?? 'STOP').toUpperCase();
+  if (type === 'PICKUP' || type === 'DROPOFF') return `${index + 1}`;
+  return `${index + 1}`;
+}
+
+function compactOrderLabel(orderId?: string) {
+  if (!orderId) return '';
+  const parts = orderId.split('_').filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : orderId.slice(-4);
 }
 
 function routeStopsForRoad(route: UiRoute) {
@@ -315,7 +353,7 @@ function healthLabel(health: unknown) {
 }
 
 function backendIsReady(health: unknown) {
-  return healthLabel(health) === 'UP' && solverRows(health).every((row) => row.value === 'AVAILABLE');
+  return healthLabel(health) === 'UP';
 }
 
 function solverRows(health: unknown) {
@@ -339,7 +377,7 @@ function latestEventData(events: ExecutionEvent[], stageNames: string[]) {
   return {};
 }
 
-function playbackMapData(dispatchResult: unknown, liveState: unknown, compareResult: unknown, streamEvents: ExecutionEvent[]): PlaybackMapData {
+function playbackMapData(dispatchResult: unknown, liveState: unknown, compareResult: unknown, streamEvents: ExecutionEvent[], draftPoints: DraftPoint[] = []): PlaybackMapData {
   const diagnostics = asRecord(asRecord(dispatchResult).diagnostics);
   const liveDiagnostics = asRecord(asRecord(liveState).diagnostics);
   const decisionTrace = playbackTrace(compareResult, dispatchResult, liveState, streamEvents);
@@ -349,13 +387,98 @@ function playbackMapData(dispatchResult: unknown, liveState: unknown, compareRes
   const driverEvent = latestEventData(streamEvents, ['DRIVER_MATCHING_COMPLETED']);
   const seedEvent = latestEventData(streamEvents, ['SEED_RANKING_COMPLETED', 'SEED_GENERATION_COMPLETED']);
   const guardEvent = latestEventData(streamEvents, ['DOMINANCE_GUARD_COMPLETED']);
+  const activeRoutes = asArray(asRecord(liveState).activeRoutes);
+  const fallbackOrderPool = liveTraceOrderPool(activeRoutes);
+  const draftOrderPool = draftTraceOrderPool(draftPoints);
+  const fallbackClusters = liveTraceClusters(activeRoutes);
+  const draftClusters = draftTraceClusters(draftPoints);
+  const orderPool = asArray(processTrace.orderPool).length ? asArray(processTrace.orderPool) : asArray(clusterEvent.orderPool).length ? asArray(clusterEvent.orderPool) : asArray(decisionTrace.orderPool);
+  const clusters = asArray(processTrace.clusterSelection ?? processTrace.cluster).length ? asArray(processTrace.clusterSelection ?? processTrace.cluster) : asArray(clusterEvent.clusterSelection ?? clusterEvent.cluster).length ? asArray(clusterEvent.clusterSelection ?? clusterEvent.cluster) : asArray(decisionTrace.clusterSelection);
+  const resolvedOrderPool = orderPool.length ? orderPool : fallbackOrderPool.length ? fallbackOrderPool : draftOrderPool;
+  const resolvedClusters = clusters.length ? clusters : fallbackClusters.length ? fallbackClusters : draftClusters;
+  const spatialClusters = spatialTraceClusters(resolvedOrderPool, draftPoints);
+  const singletonCount = resolvedClusters.filter((cluster) => clusterOrderIds(asRecord(cluster)).length <= 1).length;
+  const visualClusters = resolvedClusters.length && singletonCount / resolvedClusters.length > 0.55 && spatialClusters.length ? spatialClusters : resolvedClusters;
   return {
-    orderPool: asArray(processTrace.orderPool).length ? asArray(processTrace.orderPool) : asArray(clusterEvent.orderPool).length ? asArray(clusterEvent.orderPool) : asArray(decisionTrace.orderPool),
-    clusters: asArray(processTrace.clusterSelection ?? processTrace.cluster).length ? asArray(processTrace.clusterSelection ?? processTrace.cluster) : asArray(clusterEvent.clusterSelection ?? clusterEvent.cluster).length ? asArray(clusterEvent.clusterSelection ?? clusterEvent.cluster) : asArray(decisionTrace.clusterSelection),
+    orderPool: resolvedOrderPool,
+    clusters: visualClusters.length ? visualClusters : spatialClusters,
     candidates: asArray(processTrace.driverCandidateSelection ?? processTrace.driverMatch).length ? asArray(processTrace.driverCandidateSelection ?? processTrace.driverMatch) : asArray(driverEvent.driverCandidateSelection ?? driverEvent.driverMatch).length ? asArray(driverEvent.driverCandidateSelection ?? driverEvent.driverMatch) : asArray(decisionTrace.driverCandidateSelection),
     seedRace: asArray(compareRecord.seedRace ?? processTrace.seedRace).length ? asArray(compareRecord.seedRace ?? processTrace.seedRace) : asArray(seedEvent.seedRace),
     finalSelection: asRecord(compareRecord.finalSelection ?? processTrace.finalSelection ?? processTrace.guard ?? guardEvent.finalSelection ?? guardEvent.guard ?? decisionTrace.finalSelection)
   };
+}
+
+function liveTraceOrderPool(activeRoutes: unknown[]) {
+  const orders = new Map<string, Record<string, unknown>>();
+  activeRoutes.forEach((route) => asArray(asRecord(route).stops).forEach((stop) => {
+    const record = asRecord(stop);
+    const orderId = scalar(record.orderId, '');
+    if (!orderId) return;
+    const current = orders.get(orderId) ?? { orderId, demand: 1, status: 'ROUTED', feasible: true };
+    const type = scalar(record.type, '').toUpperCase();
+    if (type === 'PICKUP') Object.assign(current, { pickupLat: record.lat, pickupLng: record.lng });
+    if (type === 'DROPOFF') Object.assign(current, { dropoffLat: record.lat, dropoffLng: record.lng, deadlineMinutes: record.deadlineSlackMinutes });
+    orders.set(orderId, current);
+  }));
+  return [...orders.values()];
+}
+
+function liveTraceClusters(activeRoutes: unknown[]) {
+  return activeRoutes.map((route, index) => {
+    const record = asRecord(route);
+    const orderIds = [...new Set(asArray(record.stops).map((stop) => scalar(asRecord(stop).orderId, '')).filter(Boolean))];
+    return { batchId: scalar(record.routeId, `LIVE_ROUTE_${index + 1}`), driverId: scalar(record.driverId), orderIds, totalDemand: orderIds.length, status: 'BOOTSTRAP_FROM_ACTIVE_ROUTES' };
+  }).filter((cluster) => cluster.orderIds.length);
+}
+
+function draftTraceOrderPool(draftPoints: DraftPoint[]) {
+  const orders = new Map<string, Record<string, unknown>>();
+  draftPoints.filter((point) => point.orderId && point.kind !== 'driver').forEach((point) => {
+    const orderId = point.orderId ?? '';
+    const current = orders.get(orderId) ?? { orderId, demand: 1, status: point.status ?? 'DRAFT', feasible: true };
+    if (point.kind === 'pickup') Object.assign(current, { pickupLat: point.lat, pickupLng: point.lng });
+    if (point.kind === 'dropoff') Object.assign(current, { dropoffLat: point.lat, dropoffLng: point.lng });
+    orders.set(orderId, current);
+  });
+  return [...orders.values()].filter((order) => Number.isFinite(Number(order.pickupLat)) && Number.isFinite(Number(order.dropoffLat)));
+}
+
+function draftTraceClusters(draftPoints: DraftPoint[]) {
+  const pickups = draftPoints.filter((point) => point.kind === 'pickup' && point.orderId).sort((a, b) => a.lng - b.lng || a.lat - b.lat);
+  const chunkSize = pickups.length > 14 ? 5 : 4;
+  const clusters: Array<Record<string, unknown>> = [];
+  for (let index = 0; index < pickups.length; index += chunkSize) {
+    const orderIds = pickups.slice(index, index + chunkSize).map((point) => point.orderId).filter(Boolean);
+    if (orderIds.length) clusters.push({ batchId: `MAP_CLUSTER_${clusters.length + 1}`, orderIds, totalDemand: orderIds.length, status: 'VISUAL_FALLBACK_FROM_MAP_PINS' });
+  }
+  return clusters;
+}
+
+function clusterOrderIds(cluster: Record<string, unknown>) {
+  const orderIds = asArray(cluster.orderIds);
+  return orderIds.length ? orderIds : asArray(cluster.orders);
+}
+
+function spatialTraceClusters(orderPool: unknown[], draftPoints: DraftPoint[]) {
+  const rows = orderPool.map((item) => {
+    const order = asRecord(item);
+    const orderId = scalar(order.orderId, '');
+    const points = orderCoordinates(order, orderId, draftPoints).map((point) => L.latLng(point));
+    if (!orderId || !points.length) return undefined;
+    const lat = points.reduce((sum, point) => sum + point.lat, 0) / points.length;
+    const lng = points.reduce((sum, point) => sum + point.lng, 0) / points.length;
+    return { orderId, lat, lng };
+  }).filter((row): row is { orderId: string; lat: number; lng: number } => Boolean(row));
+  if (!rows.length) return [];
+  const targetClusters = Math.max(1, Math.min(6, Math.round(Math.sqrt(rows.length))));
+  const chunkSize = Math.max(3, Math.ceil(rows.length / targetClusters));
+  const sorted = [...rows].sort((a, b) => a.lng - b.lng || a.lat - b.lat);
+  const clusters: Array<Record<string, unknown>> = [];
+  for (let index = 0; index < sorted.length; index += chunkSize) {
+    const orderIds = sorted.slice(index, index + chunkSize).map((row) => row.orderId);
+    if (orderIds.length) clusters.push({ batchId: `SPATIAL_CLUSTER_${clusters.length + 1}`, orderIds, totalDemand: orderIds.length, status: 'VISUAL_SPATIAL_CLUSTER' });
+  }
+  return clusters;
 }
 
 function playbackTrace(compareResult: unknown, dispatchResult: unknown, liveState: unknown, streamEvents: ExecutionEvent[]) {
@@ -657,9 +780,11 @@ export default function App() {
   const autoOrderEnabledRef = useRef(false);
   const autoDriverEnabledRef = useRef(false);
   const liveLoopTimerRef = useRef<number | undefined>(undefined);
+  const traceWarmupTimerRef = useRef<number | undefined>(undefined);
   const benchmarkCancelRef = useRef(false);
   const autoOrderSeqRef = useRef(1);
   const autoDriverSeqRef = useRef(1);
+  const autoZoneSeqRef = useRef(0);
   const lastManualPinAtRef = useRef(0);
 
   const payload = useMemo(() => stringify(payloadForEndpoint(apiEndpoint, datasetId)), [apiEndpoint, datasetId]);
@@ -668,7 +793,7 @@ export default function App() {
   const cards = useMemo(() => metricCards(health, dispatchResult, compareRows, liveState, latencyMs, routes), [health, dispatchResult, compareRows, liveState, latencyMs, routes]);
   const stages = useMemo(() => timelineRows(timeline), [timeline]);
   const backendReady = useMemo(() => backendIsReady(health), [health]);
-  const playbackData = useMemo(() => playbackMapData(dispatchResult, liveState, displayedCompareResult, streamEvents), [dispatchResult, liveState, displayedCompareResult, streamEvents]);
+  const playbackData = useMemo(() => playbackMapData(dispatchResult, liveState, displayedCompareResult, streamEvents, draftPoints), [dispatchResult, liveState, displayedCompareResult, streamEvents, draftPoints]);
 
   const log = (text: string, kind: LogKind = 'info') => setLogs((prev) => [...prev, { id: logSeq.current++, at: time(), kind, text }]);
 
@@ -719,7 +844,11 @@ export default function App() {
       const state = await irxApi.getLiveState(sessionId);
       if (state.ok) {
         setLiveState(state.data);
+        syncLiveQueueFromBackend(state.data);
         applyBackendMap(state.data);
+        const flushed = await flushUnsentDraftOrdersToBackend(state.data);
+        const buffered = Number(asRecord(state.data).bufferedOrders ?? 0);
+        if ((buffered > 0 || flushed > 0) && !liveCycleRunningRef.current && !microBatchTimerRef.current) scheduleLiveMicroBatch();
       }
     }, 1000);
     return () => window.clearInterval(interval);
@@ -728,6 +857,7 @@ export default function App() {
   useEffect(() => () => {
     if (microBatchTimerRef.current) window.clearTimeout(microBatchTimerRef.current);
     if (liveLoopTimerRef.current) window.clearTimeout(liveLoopTimerRef.current);
+    if (traceWarmupTimerRef.current) window.clearTimeout(traceWarmupTimerRef.current);
   }, []);
 
   const upsertLiveQueue = (orderId: string, status: LiveQueueStatus, message: string, extra: Partial<LiveQueueItem> = {}) => {
@@ -758,6 +888,80 @@ export default function App() {
     if (!assigned.size) return;
     setLiveQueueItems((prev) => prev.map((item) => assigned.has(item.orderId) ? { ...item, status: 'ASSIGNED', driverId: assigned.get(item.orderId), cycleId, message: `Assigned to ${assigned.get(item.orderId)}`, updatedAt: time() } : item));
     setDraftPoints((prev) => prev.map((point) => point.orderId && assigned.has(point.orderId) ? { ...point, status: 'ASSIGNED' } : point));
+  };
+
+  const syncLiveQueueFromBackend = (stateData: unknown) => {
+    const record = asRecord(stateData);
+    const backendBuffer = new Map(asArray(record.bufferItems).map((item) => {
+      const row = asRecord(item);
+      return [scalar(row.orderId, ''), row] as const;
+    }).filter(([orderId]) => Boolean(orderId)));
+    const assigned = new Map<string, string>();
+    asArray(record.activeRoutes).forEach((route) => {
+      const driverId = scalar(asRecord(route).driverId, 'UNKNOWN_DRIVER');
+      asArray(asRecord(route).stops).forEach((stop) => {
+        const orderId = scalar(asRecord(stop).orderId, '');
+        if (orderId) assigned.set(orderId, driverId);
+      });
+    });
+    const completed = new Set(asArray(record.completedOrders).map((item) => scalar(asRecord(item).orderId, '')).filter(Boolean));
+    setLiveQueueItems((prev) => {
+      const ids = new Set([...prev.map((item) => item.orderId), ...backendBuffer.keys(), ...assigned.keys(), ...completed]);
+      return [...ids].map((orderId) => {
+        const old = prev.find((item) => item.orderId === orderId);
+        const buffer = backendBuffer.get(orderId);
+        if (completed.has(orderId)) return { ...(old ?? { orderId, updatedAt: time(), message: '' }), status: 'COMPLETED' as const, message: 'Delivered by backend runtime', updatedAt: time() };
+        if (assigned.has(orderId)) return { ...(old ?? { orderId, updatedAt: time(), message: '' }), status: 'ASSIGNED' as const, driverId: assigned.get(orderId), message: `Assigned to ${assigned.get(orderId)}`, updatedAt: time() };
+        if (buffer) return { ...(old ?? { orderId, updatedAt: time(), message: '' }), status: 'BUFFERED' as const, message: `${scalar(buffer.priorityLevel, 'NORMAL')} · skipped ${scalar(buffer.skippedRounds, '0')} · score ${scalar(buffer.finalScore)}`, updatedAt: scalar(buffer.lastCheckedAt, time()) };
+        if (old && ['SENDING', 'BUFFERED', 'PROCESSING'].includes(old.status)) return { ...old, status: 'STALE_LOCAL' as const, message: 'Not present in backend buffer/routes; waiting next state sync', updatedAt: time() };
+        return old;
+      }).filter((item): item is LiveQueueItem => Boolean(item)).slice(0, 80);
+    });
+    setDraftPoints((prev) => prev.map((point) => {
+      if (!point.orderId) return point;
+      if (assigned.has(point.orderId)) return { ...point, status: 'ASSIGNED' };
+      if (backendBuffer.has(point.orderId)) return { ...point, status: 'BUFFERED' };
+      return point;
+    }));
+  };
+
+  const backendOrderIdSets = (stateData: unknown) => {
+    const record = asRecord(stateData);
+    const buffered = new Set(asArray(record.bufferItems).map((item) => scalar(asRecord(item).orderId, '')).filter(Boolean));
+    const assigned = new Set<string>();
+    asArray(record.activeRoutes).forEach((route) => asArray(asRecord(route).stops).forEach((stop) => {
+      const orderId = scalar(asRecord(stop).orderId, '');
+      if (orderId) assigned.add(orderId);
+    }));
+    const completed = new Set(asArray(record.completedOrders).map((item) => scalar(asRecord(item).orderId, '')).filter(Boolean));
+    return { buffered, assigned, completed };
+  };
+
+  const flushUnsentDraftOrdersToBackend = async (stateData: unknown) => {
+    const id = sessionIdRef.current;
+    if (!id || !backendReady || !liveRunningRef.current) return 0;
+    const known = backendOrderIdSets(stateData);
+    const pickupByOrder = new Map<string, DraftPoint>();
+    const dropoffByOrder = new Map<string, DraftPoint>();
+    draftPoints.forEach((point) => {
+      if (!point.orderId || point.kind === 'driver') return;
+      if (known.buffered.has(point.orderId) || known.assigned.has(point.orderId) || known.completed.has(point.orderId)) return;
+      if (point.status === 'ASSIGNED' || point.status === 'SENT_TO_BACKEND') return;
+      if (point.kind === 'pickup') pickupByOrder.set(point.orderId, point);
+      if (point.kind === 'dropoff') dropoffByOrder.set(point.orderId, point);
+    });
+    let flushed = 0;
+    for (const [orderId, pickup] of pickupByOrder) {
+      const dropoff = dropoffByOrder.get(orderId);
+      if (!dropoff) continue;
+      markDraftOrderStatus(orderId, 'SENDING');
+      upsertLiveQueue(orderId, 'SENDING', 'Auto-flush local map order to backend live buffer');
+      await sendPinnedOrderToBackend(pickup, dropoff);
+      flushed += 1;
+      if (flushed >= 8) break;
+    }
+    if (flushed > 0) log(`Flushed ${flushed} local map orders into backend buffer for continuous dispatch.`, 'ok');
+    return flushed;
   };
 
   const demoLog = (text: string, kind: LogKind = 'info') => {
@@ -885,16 +1089,21 @@ export default function App() {
     const id = sessionIdRef.current;
     if (!id || liveCycleRunningRef.current || !backendReady) return;
     liveCycleRunningRef.current = true;
+    let shouldDrainAgain = false;
+    let cycleSucceeded = false;
     setRealtimePhase('solver');
     setLiveQueueItems((prev) => prev.map((item) => item.status === 'BUFFERED' ? { ...item, status: 'PROCESSING', message: 'Backend cycle is processing this buffered order', updatedAt: time() } : item));
     setDraftPoints((prev) => prev.map((point) => point.status === 'BUFFERED' ? { ...point, status: 'PROCESSING' } : point));
     try {
       log(`Micro-batch cycle started by FE timer (${reason}).`, 'info');
       const cycle = await irxApi.runLiveCycle(id, { ...liveCyclePayload(), requestId: requestId(`live-${reason}`), pdLnsMode: 'TOP_K_ASSISTED' });
+      cycleSucceeded = cycle.ok;
       const state = await irxApi.getLiveState(id);
       setLatencyMs(Math.max(cycle.durationMs, state.durationMs));
       setLiveState(state.data);
+      if (state.ok) syncLiveQueueFromBackend(state.data);
       setResponse(stringify(state.data ?? cycle.data ?? state.error ?? cycle.error));
+      setSolverMapMode('FINAL');
       applyBackendMap(state.data ?? cycle.data);
       mergeBackendAssignmentsIntoQueue(state.data, cycle.data);
       setLiveRunning(true);
@@ -902,39 +1111,127 @@ export default function App() {
       setPlaybackStage('final');
       setProgress(5);
       log(cycle.ok && state.ok ? 'Micro-batch live cycle completed from backend.' : `Micro-batch cycle failed: cycle=${cycle.status ?? cycle.error}, state=${state.status ?? state.error}`, cycle.ok && state.ok ? 'ok' : 'err');
+      const remaining = Number(asRecord(state.data).bufferedOrders ?? 0);
+      shouldDrainAgain = state.ok && remaining > 0 && liveRunningRef.current;
     } finally {
       liveCycleRunningRef.current = false;
+      if (shouldDrainAgain) scheduleLiveMicroBatch(cycleSucceeded ? 450 : 2500);
     }
   };
 
-  const scheduleLiveMicroBatch = () => {
-    if (microBatchTimerRef.current) window.clearTimeout(microBatchTimerRef.current);
+  const scheduleLiveMicroBatch = (delayMs = 450) => {
+    if (microBatchTimerRef.current || liveCycleRunningRef.current) return;
     microBatchTimerRef.current = window.setTimeout(() => {
       microBatchTimerRef.current = undefined;
-      void runLiveMicroBatchCycle('auto-3s');
-    }, 3000);
+      void runLiveMicroBatchCycle(`auto-drain-${delayMs}ms`);
+    }, delayMs);
+  };
+
+  const hasLiveTraceForMap = (stateData: unknown) => {
+    const stateTrace = playbackTrace(undefined, undefined, stateData, streamEvents);
+    const mapData = playbackMapData(undefined, stateData, undefined, streamEvents);
+    return asArray(stateTrace.orderPool).length > 0 || mapData.orderPool.length > 0 || mapData.clusters.length > 0;
+  };
+
+  const scheduleTraceWarmup = (id: string) => {
+    if (traceWarmupTimerRef.current) window.clearTimeout(traceWarmupTimerRef.current);
+    traceWarmupTimerRef.current = window.setTimeout(async () => {
+      traceWarmupTimerRef.current = undefined;
+      if (!liveRunningRef.current || sessionIdRef.current !== id) return;
+      const state = await irxApi.getLiveState(id);
+      if (!state.ok) return;
+      syncLiveQueueFromBackend(state.data);
+      setLiveState(state.data);
+      applyBackendMap(state.data);
+      const buffered = Number(asRecord(state.data).bufferedOrders ?? 0);
+      if (buffered > 0) {
+        log('Trace warmup: backend buffer still has orders; running a drain cycle for cluster/decision trace.', 'warn');
+        await runLiveMicroBatchCycle('trace-warmup-30s');
+        return;
+      }
+      if (!hasLiveTraceForMap(state.data)) {
+        const activeRoutes = asArray(asRecord(state.data).activeRoutes);
+        if (activeRoutes.length) {
+          setPlaybackStage('cluster');
+          log('Trace warmup: cluster map bootstrapped from backend active routes.', 'ok');
+        } else {
+          log('Trace warmup: no orders/routes yet; cluster waits for first backend cycle.', 'warn');
+        }
+      }
+    }, 30000);
   };
 
   const mapAnchorPoint = () => {
-    const source = draftPoints.length ? draftPoints : demoToDraftPoints(liveDemo).slice(0, 8);
-    if (!source.length) return { lat: 10.7626, lng: 106.6601 };
-    const index = (autoOrderSeqRef.current + source.length) % source.length;
-    return source[index];
+    const backendDrivers = asArray(asRecord(liveState).driverStates)
+      .map(driverRuntimeFromBackend)
+      .filter(Boolean) as DriverRuntimeView[];
+    const driverAnchors = backendDrivers.length ? backendDrivers.map((driver) => ({ lat: driver.lat, lng: driver.lng })) : [];
+    const manualAnchors = draftPoints
+      .filter((point) => point.kind === 'pickup' || point.kind === 'driver')
+      .slice(-8)
+      .map((point) => ({ lat: point.lat, lng: point.lng }));
+    const safeAnchors = HCM_ROAD_SAFE_POINTS.map(([lat, lng]) => ({ lat, lng }));
+    const useLiveAnchors = autoBacklogPressure().backlog < 5;
+    const source = useLiveAnchors ? [...driverAnchors.slice(-3), ...manualAnchors.slice(-3), ...safeAnchors] : safeAnchors;
+    autoZoneSeqRef.current += 1;
+    const index = (autoZoneSeqRef.current * 7 + autoOrderSeqRef.current * 3) % source.length;
+    return source[index] ?? { lat: 10.7626, lng: 106.6601 };
   };
 
-  const jitterNear = (lat: number, lng: number, seq: number, scale = 0.012) => ({
-    lat: lat + Math.sin(seq * 1.73) * scale + Math.cos(seq * 0.41) * scale * 0.35,
-    lng: lng + Math.cos(seq * 1.37) * scale + Math.sin(seq * 0.29) * scale * 0.35
-  });
+  const roadSafePoint = (seq: number, scale = 0.0024, preferred?: { lat: number; lng: number }) => {
+    const fallback = HCM_ROAD_SAFE_POINTS[(seq * 5 + 3) % HCM_ROAD_SAFE_POINTS.length];
+    const lat = preferred?.lat ?? fallback[0];
+    const lng = preferred?.lng ?? fallback[1];
+    return {
+      lat: lat + Math.sin(seq * 1.73) * scale + Math.cos(seq * 0.41) * scale * 0.25,
+      lng: lng + Math.cos(seq * 1.37) * scale + Math.sin(seq * 0.29) * scale * 0.25
+    };
+  };
+
+  const autoBacklogPressure = () => {
+    const state = asRecord(liveState);
+    const bufferCount = asArray(state.bufferItems).length;
+    const activeRoutes = asArray(state.activeRoutes);
+    const assignedOrders = new Set<string>();
+    activeRoutes.forEach((route) => asArray(asRecord(route).stops).forEach((stop) => {
+      const orderId = scalar(asRecord(stop).orderId, '');
+      if (orderId) assignedOrders.add(orderId);
+    }));
+    const localPending = new Set(draftPoints.filter((point) => point.kind !== 'driver' && point.orderId && !assignedOrders.has(point.orderId)).map((point) => point.orderId as string));
+    return { bufferCount, activeOrders: assignedOrders.size, localPending: localPending.size, backlog: bufferCount + localPending.size };
+  };
+
+  const shouldGenerateAutoOrder = () => {
+    const pressure = autoBacklogPressure();
+    if (pressure.backlog >= 8) return false;
+    if (pressure.backlog >= 5) return autoOrderSeqRef.current % 4 === 0;
+    if (pressure.backlog >= 3) return autoOrderSeqRef.current % 2 === 0;
+    return true;
+  };
+
+  const nextAutoLoopDelay = () => {
+    const pressure = autoBacklogPressure();
+    const base = autoDriverEnabledRef.current && !autoOrderEnabledRef.current ? 4200 : 2200;
+    const backlogPenalty = pressure.backlog >= 8 ? 10000 : pressure.backlog >= 5 ? 7000 : pressure.backlog >= 3 ? 4500 : 0;
+    const activePenalty = pressure.activeOrders >= 40 ? 5000 : pressure.activeOrders >= 25 ? 2800 : 0;
+    return base + backlogPenalty + activePenalty + (autoOrderSeqRef.current % 3) * 700;
+  };
 
   const generateLiveOrderOnce = async (source: 'auto' | 'spam' = 'auto') => {
     if (!backendReady) return;
     const id = sessionIdRef.current ?? await startLive(liveDemo, false);
     if (!id) return;
     const seq = autoOrderSeqRef.current++;
+    if (source === 'auto' && !shouldGenerateAutoOrder()) {
+      const pressure = autoBacklogPressure();
+      log(`Auto order throttled: backlog ${pressure.backlog}, active ${pressure.activeOrders}. Waiting for backend drain.`, 'info');
+      scheduleLiveMicroBatch();
+      return;
+    }
     const anchor = mapAnchorPoint();
-    const pickupPoint = jitterNear(anchor.lat, anchor.lng, seq, 0.008);
-    const dropoffPoint = jitterNear(pickupPoint.lat, pickupPoint.lng, seq + 17, 0.014);
+    const pickupPoint = roadSafePoint(seq, source === 'spam' ? 0.0034 : 0.0022, anchor);
+    const dropAnchor = HCM_ROAD_SAFE_POINTS[(seq * 3 + 5) % HCM_ROAD_SAFE_POINTS.length];
+    const dropoffPoint = roadSafePoint(seq + 17, source === 'spam' ? 0.004 : 0.0028, { lat: dropAnchor[0], lng: dropAnchor[1] });
     const prefix = source === 'spam' ? 'ORD_SPAM' : 'ORD_AUTO';
     const orderId = `${prefix}_${String(seq).padStart(4, '0')}`;
     const pickup: DraftPoint = { id: `${source}-pickup-${orderId}`, kind: 'pickup', lat: pickupPoint.lat, lng: pickupPoint.lng, label: `${orderId}_P`, orderId, status: 'SENDING' };
@@ -950,7 +1247,7 @@ export default function App() {
     if (!id) return;
     const seq = autoDriverSeqRef.current++;
     const anchor = mapAnchorPoint();
-    const point = jitterNear(anchor.lat, anchor.lng, seq + 101, 0.018);
+    const point = roadSafePoint(seq + 101, source === 'spam' ? 0.004 : 0.0026, anchor);
     const driver = { driverId: `${source === 'spam' ? 'DRV_SPAM' : 'DRV_AUTO'}_${String(seq).padStart(3, '0')}`, lat: point.lat, lng: point.lng, capacity: 100 };
     const result = await irxApi.addLiveDriver(id, driver);
     if (result.ok) {
@@ -977,7 +1274,7 @@ export default function App() {
     }));
     const draftOrderIds = new Set(draftPoints.filter((point) => point.kind !== 'driver' && point.orderId).map((point) => point.orderId as string));
     const liveOrders = Math.max(bufferCount + routeOrderIds.size, draftOrderIds.size, autoOrderSeqRef.current - 1);
-    const targetDrivers = Math.min(15, Math.max(1, Math.ceil(liveOrders / 4), liveOrders >= 20 ? 8 : 0, liveOrders >= 36 ? 12 : 0));
+    const targetDrivers = Math.min(12, Math.max(1, Math.ceil(liveOrders / 6), liveOrders >= 24 ? 6 : 0, liveOrders >= 48 ? 9 : 0));
     const deficit = Math.max(0, targetDrivers - driverIds.size);
     return { knownDrivers: driverIds.size, liveOrders, targetDrivers, deficit };
   };
@@ -1006,7 +1303,7 @@ export default function App() {
           log(`Auto driver balanced pool: ${pressure.knownDrivers}/${pressure.targetDrivers} drivers for ${pressure.liveOrders} live orders.`, 'info');
         }
       }
-      const nextDelay = autoDriverEnabledRef.current && !autoOrderEnabledRef.current ? 3200 : 2000 + (autoOrderSeqRef.current % 3) * 900;
+      const nextDelay = nextAutoLoopDelay();
       scheduleLiveLoopTick(nextDelay);
     }, delayMs);
   };
@@ -1028,6 +1325,7 @@ export default function App() {
     const state = await irxApi.getLiveState(id);
     setLatencyMs(Math.max(result.durationMs, state.durationMs));
     setLiveState(state.data);
+    if (state.ok) syncLiveQueueFromBackend(state.data);
     setResponse(stringify(state.data ?? result.data ?? state.error ?? result.error));
     if (result.ok) {
       markDraftOrderStatus(orderId, 'BUFFERED');
@@ -1208,6 +1506,24 @@ export default function App() {
     }
   };
 
+  const pollCompareResult = async (jobId: string) => {
+    for (let attempt = 0; attempt < 120; attempt++) {
+      if (benchmarkCancelRef.current) return undefined;
+      const status = await irxApi.getCompareJob(jobId);
+      const state = scalar(asRecord(status.data).status, 'UNKNOWN').toUpperCase();
+      if (attempt === 0 || attempt % 5 === 0 || ['COMPLETED', 'FAILED', 'CANCELLED'].some((terminal) => state.includes(terminal))) {
+        log(`Benchmark status from backend: ${state}.`, status.ok ? 'info' : 'warn');
+      }
+      const result = await irxApi.getCompareResult(jobId);
+      if (result.ok) return result;
+      const code = scalar(asRecord(result.data).code, '');
+      if (result.status !== 202 && code !== 'JOB_NOT_READY') return result;
+      if (['FAILED', 'CANCELLED'].some((terminal) => state.includes(terminal))) return result;
+      await sleep(700);
+    }
+    return { ok: false, status: 408, durationMs: 0, error: 'COMPARE_TIMEOUT: benchmark result was not ready before UI timeout' };
+  };
+
   const runStatic = async () => {
     if (!backendReady) {
       log('Backend is not ready. Static dispatch is locked.', 'warn');
@@ -1259,15 +1575,24 @@ export default function App() {
       const job = await irxApi.createCompareJob(comparePayload(datasetId));
       setLatencyMs(job.durationMs);
       setResponse(stringify(job.data ?? job.error));
-      if (!job.ok) return log(`Compare failed: ${job.error ?? job.status}`, 'err');
+      if (!job.ok) {
+        const errorText = String(job.error ?? job.status);
+        return log(errorText.includes('OSRM_UNAVAILABLE') ? 'OSRM unavailable. Start IRX runtime/OSRM, then run Benchmark Compare again.' : `Compare failed: ${errorText}`, 'err');
+      }
       const jobId = getStringId(job.data, ['jobId', 'id']);
       setBenchmarkJobId(jobId);
       const executionId = getStringId(job.data, ['executionId']) ?? jobId;
       await playTimeline(executionId);
       if (benchmarkCancelRef.current) return;
-      const result = jobId ? await irxApi.getCompareResult(jobId) : job;
+      const result = jobId ? await pollCompareResult(jobId) : job;
       if (benchmarkCancelRef.current) return;
+      if (!result) return;
       setResponse(stringify(result.data ?? result.error ?? job.data));
+      if (!result.ok) {
+        const errorText = String(result.error ?? result.status);
+        log(errorText.includes('OSRM_UNAVAILABLE') ? 'OSRM unavailable. Start IRX runtime/OSRM, then run Benchmark Compare again.' : `Compare result request failed: ${errorText}.`, 'err');
+        return;
+      }
       const rows = compareRowsFromResult(result.data);
       setCompareRows(rows);
       setCompareResult(result.data);
@@ -1424,6 +1749,7 @@ export default function App() {
     const state = await irxApi.getLiveState(id);
     setLiveState(state.data);
     applyBackendMap(state.data);
+    if (Number(asRecord(state.data).bufferedOrders ?? 0) > 0) scheduleLiveMicroBatch(250);
     log(`Live session started by backend: ${id}. Drivers sent from FE: ${sessionDrivers.length} (${driverSource}).`, 'ok');
     setProgress(2);
     return id;
@@ -1446,6 +1772,7 @@ export default function App() {
       liveRunningRef.current = true;
       setRealtimePhase('stream');
       log(`Live running on session ${id}. Auto order ${autoOrderEnabledRef.current ? 'ON' : 'OFF'}, auto driver ${autoDriverEnabledRef.current ? 'ON' : 'OFF'}.`, 'ok');
+      scheduleTraceWarmup(id);
       if (shouldScheduleAuto && (autoOrderEnabledRef.current || autoDriverEnabledRef.current)) scheduleLiveLoopTick(900);
       return id;
     } finally {
@@ -1565,7 +1892,9 @@ export default function App() {
     const state = await irxApi.getLiveState(id);
     setLatencyMs(Math.max(cycle.durationMs, state.durationMs));
     setLiveState(state.data);
+    if (state.ok) syncLiveQueueFromBackend(state.data);
     setResponse(stringify(state.data ?? cycle.data ?? state.error ?? cycle.error));
+    setSolverMapMode('FINAL');
     applyBackendMap(state.data ?? cycle.data);
     log(cycle.ok && state.ok ? 'Controlled live demo completed from backend response.' : `Controlled live demo failed on ${id}: cycle=${cycle.status ?? cycle.error}, state=${state.status ?? state.error}`, cycle.ok && state.ok ? 'ok' : 'err');
     } finally {
@@ -1590,6 +1919,77 @@ export default function App() {
       heap: 'ok',
       solverRuntime: scalar(metrics.runtimeMs ?? cycleRecord.runtimeMs, '--')
     });
+  };
+
+  const liveRouteOrderIds = (stateData: unknown) => {
+    const record = asRecord(stateData);
+    const ids = new Set<string>();
+    asArray(record.activeRoutes).forEach((route) => asArray(asRecord(route).stops).forEach((stop) => {
+      const orderId = scalar(asRecord(stop).orderId, '');
+      if (orderId && orderId !== '--') ids.add(orderId);
+    }));
+    asArray(record.completedOrders).forEach((order) => {
+      const orderId = scalar(asRecord(order).orderId, '');
+      if (orderId && orderId !== '--') ids.add(orderId);
+    });
+    return ids;
+  };
+
+  const liveAssignedCoverage = (stateData: unknown) => {
+    const record = asRecord(stateData);
+    const routed = liveRouteOrderIds(stateData).size;
+    const assigned = Number(record.assignedOrders ?? 0);
+    return Math.max(routed, Number.isFinite(assigned) ? assigned : 0);
+  };
+
+  const waitUntilDemoFullyRouted = async (id: string, expectedOrders: number, startedAt: number, label: string) => {
+    let state = await irxApi.getLiveState(id);
+    let routed = liveAssignedCoverage(state.data);
+    let buffered = Number(asRecord(state.data).bufferedOrders ?? 0);
+    for (let attempt = 1; attempt <= 8 && (buffered > 0 || routed < expectedOrders); attempt += 1) {
+      demoLog(`[DEMO_GATE] ${label}: routed ${routed}/${expectedOrders}, buffer ${buffered}. Continue backend cycle ${attempt}.`, 'info');
+      const cycle = await irxApi.runLiveCycle(id, { ...liveCyclePayload(), pdLnsMode: 'TOP_K_ASSISTED', reason: `${label}-drain-${attempt}` });
+      state = await irxApi.getLiveState(id);
+      routed = liveAssignedCoverage(state.data);
+      buffered = Number(asRecord(state.data).bufferedOrders ?? 0);
+      setLatencyMs(Math.max(cycle.durationMs, state.durationMs));
+      setLiveState(state.data);
+      setResponse(stringify(state.data ?? cycle.data ?? state.error ?? cycle.error));
+      applyBackendMap(state.data ?? cycle.data);
+      updateRealtimeKpi(state.data, { ...(asRecord(cycle.data)), durationMs: cycle.durationMs }, startedAt, expectedOrders);
+      if (!cycle.ok || !state.ok) {
+        demoLog(`[DEMO_GATE] ${label} failed: cycle=${cycle.error ?? cycle.status}, state=${state.error ?? state.status}`, 'err');
+        return false;
+      }
+      await sleep(300);
+    }
+    const complete = buffered === 0 && routed >= expectedOrders;
+    demoLog(complete ? `[DEMO_GATE] ${label}: all ${expectedOrders} orders are routed. Demo can finish.` : `[DEMO_GATE] ${label}: not complete, routed ${routed}/${expectedOrders}, buffer ${buffered}. Demo stays unfinished.`, complete ? 'ok' : 'err');
+    return complete;
+  };
+
+  const playDemoDriversAfterRouteReady = async (id: string, expectedDelivered: number, startedAt: number) => {
+    demoLog(`[DRIVER_PLAYBACK] Route ready. Drivers now move along backend routes until deliveries progress.`, 'ok');
+    for (let tick = 1; tick <= 90; tick += 1) {
+      const state = await irxApi.getLiveState(id);
+      if (!state.ok) {
+        demoLog(`[DRIVER_PLAYBACK] State polling failed: ${state.error ?? state.status}`, 'err');
+        return false;
+      }
+      const delivered = asArray(asRecord(state.data).completedOrders).length;
+      const runtimes = asArray(asRecord(state.data).driverStates).map(driverRuntimeFromBackend).filter(Boolean) as DriverRuntimeView[];
+      setLiveState(state.data);
+      applyBackendMap(state.data);
+      updateRealtimeKpi(state.data, undefined, startedAt, expectedDelivered);
+      if (tick === 1 || tick % 5 === 0 || delivered >= expectedDelivered) {
+        const moving = runtimes.filter((driver) => !['AVAILABLE', 'IDLE_ROAMING'].includes(driver.status)).length;
+        demoLog(`[DRIVER_PLAYBACK] tick ${tick}: moving ${moving}/${runtimes.length}, delivered ${delivered}/${expectedDelivered}.`, delivered >= expectedDelivered ? 'ok' : 'info');
+      }
+      if (delivered >= expectedDelivered) return true;
+      await sleep(1000);
+    }
+    demoLog(`[DRIVER_PLAYBACK] Playback window ended; route remains visible, drivers continue live polling.`, 'warn');
+    return true;
   };
 
   const runFullRealtimeDemo = async () => {
@@ -1638,8 +2038,8 @@ export default function App() {
       await sleep(500);
 
       setRealtimePhase('stream');
-      const streamedOrders = isLargeFixedScenario ? generated.orders : generated.orders.slice(0, Math.min(10, generated.orders.length));
-      const batchSize = isLargeFixedScenario ? 8 : streamedOrders.length;
+      const streamedOrders = generated.orders;
+      const batchSize = isLargeFixedScenario ? 8 : Math.min(8, Math.max(4, Math.ceil(streamedOrders.length / 3)));
       let latestState: unknown;
       let latestCycle: unknown;
       for (const [index, order] of streamedOrders.entries()) {
@@ -1694,6 +2094,8 @@ export default function App() {
         demoLog(`[SOLVER] Live cycle failed: cycle=${cycle.status ?? cycle.error}, state=${state.status ?? state.error}`, 'err');
         return;
       }
+      const baseComplete = await waitUntilDemoFullyRouted(id, streamedOrders.length, startedAt, 'base-orders');
+      if (!baseComplete) return;
       setPlaybackStage('seed');
 
       setRealtimePhase('guard');
@@ -1720,6 +2122,8 @@ export default function App() {
       applyBackendMap(insertionState.data ?? insertionCycle.data);
       updateRealtimeKpi(insertionState.data, { ...(asRecord(insertionCycle.data)), durationMs: insertionCycle.durationMs }, startedAt, streamedOrders.length + 1);
       demoLog('[LIVE] Route updated', insertionCycle.ok ? 'ok' : 'err');
+      const finalComplete = await waitUntilDemoFullyRouted(id, streamedOrders.length + 1, startedAt, 'urgent-insertion');
+      if (!finalComplete) return;
       const churn = scalar(asRecord(asRecord(insertionCycle.data).decisionTrace).finalSelection ? asRecord(asRecord(asRecord(insertionCycle.data).decisionTrace).finalSelection).routeChurnPercent : asRecord(insertionCycle.data).routeChurnPercent, '--');
       demoLog(`[LIVE] Route churn ${churn}`, 'ok');
       setPlaybackStage('final');
@@ -1727,6 +2131,8 @@ export default function App() {
       setRealtimePhase('sse');
       demoLog('[SSE] Route update broadcasted', 'ok');
       demoLog('[SSE] Driver state synced', 'ok');
+      const playbackComplete = await playDemoDriversAfterRouteReady(id, streamedOrders.length + 1, startedAt);
+      if (!playbackComplete) return;
       setRealtimePhase('kpi');
       demoLog('[KPI] Realtime metrics updated', 'ok');
       setRealtimePhase('compare');
@@ -1761,6 +2167,7 @@ export default function App() {
     setResponse(stringify(state.data ?? result.data ?? state.error ?? result.error));
     applyBackendMap(state.data);
     log(result.ok ? 'Live order accepted and state reloaded from backend.' : `Live order failed: ${result.error ?? result.status}`, result.ok ? 'ok' : 'err');
+    if (result.ok) scheduleLiveMicroBatch();
   };
 
   const runCycle = async () => {
@@ -1782,6 +2189,7 @@ export default function App() {
     setPlaybackStage('final');
     setProgress(5);
     log(cycle.ok && state.ok ? 'Live cycle and live state loaded from backend.' : 'Live cycle/state request returned an error.', cycle.ok && state.ok ? 'ok' : 'err');
+    if (state.ok && Number(asRecord(state.data).bufferedOrders ?? 0) > 0) scheduleLiveMicroBatch(450);
   };
 
   const sendSandbox = async () => {
@@ -1834,7 +2242,7 @@ export default function App() {
         <section className="mapPanel">
           <div className="mapOverlay"><b>{TAB_LABELS[tab]}</b><small>Health {healthLabel(health)} - latency {latencyMs || '--'}ms - session {sessionId ?? 'none'}</small><SolverStrip health={health} /><button className="danger" onClick={cancelAndClearMap}>Cancel & Clear Map</button>{!backendReady && <span className="backendLock">Backend offline — API actions locked</span>}</div>
           {(tab === 'live' || tab === 'demo') && <MapDropToolbar mode={mapToolMode} points={draftPoints} pendingPickup={pendingOrderPickup} backendReady={backendReady} onMode={setMapToolMode} onRun={runDraftDispatch} onClear={clearDraftPoints} />}
-          <RealRouteMap stops={mapStops} routes={routes} toolMode={mapToolMode} draftPoints={draftPoints} liveState={liveState} liveBackendOnly={tab === 'live' || tab === 'demo'} playbackStage={playbackStage} playbackData={playbackData} solverMode={solverMapMode} compareResult={displayedCompareResult} mapFitVersion={mapFitVersion} trackedDriverId={trackedDriverId} trackingMode={trackingMode} osrmQaEnabled={osrmQaEnabled} mapTileMode={mapTileMode} onDropPoint={handleMapDrop} onTrackDriver={selectTrackedDriver} onTrackingMode={setTrackingMode} onClearTracking={clearTracking} />
+          <RealRouteMap stops={mapStops} routes={routes} toolMode={mapToolMode} draftPoints={draftPoints} liveState={liveState} liveBackendOnly={tab === 'live' || tab === 'demo'} showFullRouteHistory={tab === 'demo' && playbackStage === 'final'} playbackStage={playbackStage} playbackData={playbackData} solverMode={solverMapMode} compareResult={displayedCompareResult} mapFitVersion={mapFitVersion} trackedDriverId={trackedDriverId} trackingMode={trackingMode} osrmQaEnabled={osrmQaEnabled} mapTileMode={mapTileMode} onDropPoint={handleMapDrop} onTrackDriver={selectTrackedDriver} onTrackingMode={setTrackingMode} onClearTracking={clearTracking} />
         </section>
 
         <aside className="sidePanel">
@@ -1851,7 +2259,7 @@ export default function App() {
   );
 }
 
-function RealRouteMap({ stops, routes, toolMode, draftPoints, liveState, liveBackendOnly, playbackStage, playbackData, solverMode, compareResult, mapFitVersion, trackedDriverId, trackingMode, osrmQaEnabled, mapTileMode, onDropPoint, onTrackDriver, onTrackingMode, onClearTracking }: { stops: UiStop[]; routes: UiRoute[]; toolMode: MapToolMode; draftPoints: DraftPoint[]; liveState: unknown; liveBackendOnly: boolean; playbackStage: PlaybackStage; playbackData: PlaybackMapData; solverMode: SolverMapMode; compareResult: unknown; mapFitVersion: number; trackedDriverId?: string; trackingMode: TrackingMode; osrmQaEnabled: boolean; mapTileMode: MapTileMode; onDropPoint: (lat: number, lng: number) => void; onTrackDriver: (driverId: string) => void; onTrackingMode: (mode: TrackingMode) => void; onClearTracking: () => void }) {
+function RealRouteMap({ stops, routes, toolMode, draftPoints, liveState, liveBackendOnly, showFullRouteHistory, playbackStage, playbackData, solverMode, compareResult, mapFitVersion, trackedDriverId, trackingMode, osrmQaEnabled, mapTileMode, onDropPoint, onTrackDriver, onTrackingMode, onClearTracking }: { stops: UiStop[]; routes: UiRoute[]; toolMode: MapToolMode; draftPoints: DraftPoint[]; liveState: unknown; liveBackendOnly: boolean; showFullRouteHistory: boolean; playbackStage: PlaybackStage; playbackData: PlaybackMapData; solverMode: SolverMapMode; compareResult: unknown; mapFitVersion: number; trackedDriverId?: string; trackingMode: TrackingMode; osrmQaEnabled: boolean; mapTileMode: MapTileMode; onDropPoint: (lat: number, lng: number) => void; onTrackDriver: (driverId: string) => void; onTrackingMode: (mode: TrackingMode) => void; onClearTracking: () => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -1872,11 +2280,18 @@ function RealRouteMap({ stops, routes, toolMode, draftPoints, liveState, liveBac
   const removedDropoffs = new Set(removedDropoffIds);
   const removedPickupKey = removedPickupIds.join('|');
   const removedDropoffKey = removedDropoffIds.join('|');
-  const backendOrderIds = new Set([
-    ...asArray(asRecord(liveState).bufferItems).map((item) => scalar(asRecord(item).orderId, '')).filter(Boolean),
-    ...routes.flatMap((route) => route.stops.map((stop) => stop.id).filter(Boolean))
-  ]);
+  const bufferedOrderIds = new Set(asArray(asRecord(liveState).bufferItems).map((item) => scalar(asRecord(item).orderId, '')).filter(Boolean));
+  const assignedOrderIds = new Set(routes.flatMap((route) => route.stops
+    .filter((stop) => ['PICKUP', 'DROPOFF'].includes(String(stop.type ?? '').toUpperCase()))
+    .map(stopOrderId)
+    .filter(Boolean)));
+  const completedOrderIds = new Set(asArray(asRecord(liveState).completedOrders).map((item) => scalar(asRecord(item).orderId, '')).filter(Boolean));
+  const backendOrderIds = new Set([...bufferedOrderIds, ...assignedOrderIds, ...completedOrderIds]);
   const backendOrderKey = [...backendOrderIds].sort().join('|');
+  const backendStopKeys = new Set(routes.flatMap((route) => route.stops
+    .filter((stop) => ['PICKUP', 'DROPOFF'].includes(String(stop.type ?? '').toUpperCase()))
+    .map((stop) => stopLifecycleKey(String(stop.type ?? 'STOP'), stopOrderId(stop)))
+    .filter((key) => !key.endsWith(':'))));
   const driverStates = asArray(asRecord(liveState).driverStates).map(driverRuntimeFromBackend).filter(Boolean) as DriverRuntimeView[];
   const driverStateById = useMemo(() => new Map(driverStates.map((driver) => [driver.driverId, driver])), [driverStates]);
   const backendDriverIdList = [
@@ -1897,7 +2312,7 @@ function RealRouteMap({ stops, routes, toolMode, draftPoints, liveState, liveBac
     const orderIds = new Set<string>();
     if (!trackedDriverId) return orderIds;
     routes.filter((route) => route.driverId === trackedDriverId).forEach((route) => route.stops.forEach((stop) => {
-      const orderId = scalar(asRecord(stop).orderId, stop.id.includes(':') ? stop.id.split(':').pop() ?? '' : stop.id);
+      const orderId = scalar(asRecord(stop).orderId, stopOrderId(stop));
       if (orderId) orderIds.add(orderId);
     }));
     return orderIds;
@@ -1906,27 +2321,27 @@ function RealRouteMap({ stops, routes, toolMode, draftPoints, liveState, liveBac
     if (onlyTracking && route.driverId !== trackedDriverId) return accumulator;
     const color = colorForDriver(route.driverId);
       const key = routeKey(route, index);
-      if (!isDenseRoadGeometry(route)) return accumulator;
+      if (!isValidRoadGeometry(route)) return accumulator;
       const runtime = driverStateById.get(route.driverId);
       const polylineIndex = Math.max(0, Math.min(Number(runtime?.polylineIndex ?? 0), Math.max(route.path.length - 2, 0)));
-      const remainingPath = route.path.slice(polylineIndex);
-      if (remainingPath.length < 2) return accumulator;
+      const displayedPath = showFullRouteHistory ? route.path : route.path.slice(polylineIndex);
+      if (displayedPath.length < 2) return accumulator;
       accumulator.push({
         driverId: route.driverId,
         routeId: key,
         color,
-        latLngs: remainingPath.map((point) => [point.lat as number, point.lng as number] as L.LatLngExpression),
+        latLngs: displayedPath.map((point) => [point.lat as number, point.lng as number] as L.LatLngExpression),
         polylineIndex,
         polylineSize: route.path.length,
         nextStopLabel: runtime?.nextStopType ? `${runtime.nextStopType}${runtime.nextOrderId ? `:${runtime.nextOrderId}` : ''}` : '',
         geometrySource: 'BACKEND_OSRM' as const,
         distanceKm: route.distanceKm,
         etaMinutes: route.etaMinutes,
-        directDistanceKm: routeDirectDistanceKm(remainingPath.map((point) => [point.lat as number, point.lng as number] as L.LatLngExpression)),
-        detourRatio: routeDirectDistanceKm(remainingPath.map((point) => [point.lat as number, point.lng as number] as L.LatLngExpression)) <= 0 ? 1 : routePathDistanceKm(remainingPath.map((point) => [point.lat as number, point.lng as number] as L.LatLngExpression)) / routeDirectDistanceKm(remainingPath.map((point) => [point.lat as number, point.lng as number] as L.LatLngExpression))
+        directDistanceKm: routeDirectDistanceKm(displayedPath.map((point) => [point.lat as number, point.lng as number] as L.LatLngExpression)),
+        detourRatio: routeDirectDistanceKm(displayedPath.map((point) => [point.lat as number, point.lng as number] as L.LatLngExpression)) <= 0 ? 1 : routePathDistanceKm(displayedPath.map((point) => [point.lat as number, point.lng as number] as L.LatLngExpression)) / routeDirectDistanceKm(displayedPath.map((point) => [point.lat as number, point.lng as number] as L.LatLngExpression))
     });
     return accumulator;
-  }, []), [routes, driverStateById, onlyTracking, trackedDriverId, colorForDriver]);
+  }, []), [routes, driverStateById, onlyTracking, trackedDriverId, colorForDriver, showFullRouteHistory]);
   const driverLegend = useMemo(() => {
     const seen = new Set<string>();
     return routes
@@ -2003,7 +2418,7 @@ function RealRouteMap({ stops, routes, toolMode, draftPoints, liveState, liveBac
 
   useEffect(() => {
     if (!routes.length) setGeometryStatus('WAITING');
-    else setGeometryStatus(routes.every(isDenseRoadGeometry) ? 'READY' : 'ROAD_GEOMETRY_MISSING');
+    else setGeometryStatus(routes.every(isValidRoadGeometry) ? 'READY' : 'ROAD_GEOMETRY_MISSING');
   }, [routes, solverMode, compareResult]);
 
   useEffect(() => {
@@ -2018,13 +2433,15 @@ function RealRouteMap({ stops, routes, toolMode, draftPoints, liveState, liveBac
     const bounds: L.LatLngExpression[] = [];
 
     const showFinalRoutes = roadRoutes.length > 0;
+    const finalRouteStage = playbackStage === 'final' || liveBackendOnly;
     if (showFinalRoutes) roadRoutes.forEach((route) => {
       const isTrackedRoute = route.driverId === trackedDriverId;
-      const routeOpacity = trackingMode === 'view' && trackedDriverId && !isTrackedRoute ? 0.34 : 0.98;
+      const debugStageDim = finalRouteStage ? 1 : 0.18;
+      const routeOpacity = (trackingMode === 'view' && trackedDriverId && !isTrackedRoute ? 0.34 : 0.98) * debugStageDim;
       const routeWeight = liveBackendOnly ? isTrackedRoute ? 5.4 : 4.2 : isTrackedRoute ? 7 : 5;
-      L.polyline(route.latLngs, { color: '#000000', weight: routeWeight + (liveBackendOnly ? 4 : 8), opacity: routeOpacity * 0.72, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
-      if (!liveBackendOnly) L.polyline(route.latLngs, { color: '#f4f4f5', weight: routeWeight + 3, opacity: routeOpacity * 0.78, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
-      L.polyline(route.latLngs, { color: route.color, weight: routeWeight, opacity: routeOpacity, lineCap: 'round', lineJoin: 'round' })
+      L.polyline(route.latLngs, { color: '#000000', weight: routeWeight + (liveBackendOnly ? 3 : 6), opacity: routeOpacity * 0.64, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
+      if (!liveBackendOnly) L.polyline(route.latLngs, { color: '#f4f4f5', weight: routeWeight + 2, opacity: routeOpacity * 0.5, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
+      L.polyline(route.latLngs, { color: route.color, weight: Math.max(3.2, routeWeight - 0.6), opacity: routeOpacity * 0.9, lineCap: 'round', lineJoin: 'round' })
         .bindTooltip(`${driverLabel(route.driverId)} / remaining path / ${route.polylineIndex}/${route.polylineSize}${route.nextStopLabel ? ` / next ${route.nextStopLabel}` : ''}`, { sticky: true })
         .addTo(routeLayer);
       if (osrmQaEnabled) {
@@ -2047,18 +2464,25 @@ function RealRouteMap({ stops, routes, toolMode, draftPoints, liveState, liveBac
     if (playbackStage === 'guard') drawGuardLayer(stopLayer, playbackData, routes, bounds);
 
     const showBackendStops = playbackStage === 'final' || (liveBackendOnly && routes.length > 0);
+    const routeStopOrderIndex = new Map<string, number>();
+    routes.forEach((route) => route.stops.filter((stop) => ['PICKUP', 'DROPOFF'].includes(String(stop.type ?? '').toUpperCase())).forEach((stop, index) => {
+      routeStopOrderIndex.set(stopLifecycleKey(String(stop.type ?? 'STOP'), stopOrderId(stop)), index);
+    }));
     if (showBackendStops) stops.filter((stop) => {
       if (isDriverStartStop(stop) || isRemovedStop(stop, removedPickups, removedDropoffs)) return false;
-      const orderId = scalar(asRecord(stop).orderId, stop.id.includes(':') ? stop.id.split(':').pop() ?? '' : stop.id);
+      const orderId = scalar(asRecord(stop).orderId, stopOrderId(stop));
       return !onlyTracking || trackedRouteStopIds.has(orderId);
     }).forEach((stop, index) => {
       if (!Number.isFinite(stop.lat) || !Number.isFinite(stop.lng)) return;
       const latLng = [stop.lat as number, stop.lng as number] as L.LatLngExpression;
       const type = String(stop.type ?? 'STOP').toUpperCase();
+      const orderId = stopOrderId(stop);
       const driverRoute = routes.find((route) => route.stops.some((routeStop) => routeStop.id === stop.id));
+      if (!routeCoversStop(driverRoute, stop)) return;
       const color = driverRoute ? colorForDriver(driverRoute.driverId) : '#00E5FF';
-      const marker = L.circleMarker(latLng, { radius: 5.6, color: driverRoute ? color : '#050505', fillColor: color, fillOpacity: 1, weight: 2 })
-        .bindTooltip(`${index + 1}. ${stop.name} / ${type}${driverRoute ? ` / ${driverLabel(driverRoute.driverId)}` : ''}`, { sticky: true });
+      const sequenceIndex = routeStopOrderIndex.get(stopLifecycleKey(type, orderId)) ?? index;
+      const marker = L.marker(latLng, { icon: backendStopIcon(type, stopDisplayLabel(stop, sequenceIndex), color), zIndexOffset: 1300 + index })
+        .bindTooltip(`${stop.name} · ${type}${driverRoute ? ` · ${driverLabel(driverRoute.driverId)}` : ''}`, { sticky: true, className: 'mapCompactTooltip' });
       marker.addTo(stopLayer);
       bounds.push(latLng);
     });
@@ -2067,6 +2491,13 @@ function RealRouteMap({ stops, routes, toolMode, draftPoints, liveState, liveBac
       if (liveBackendOnly && point.kind === 'driver' && (point.status === 'SENT_TO_BACKEND' || point.status === 'SENDING' || backendDriverIds.has(point.label))) return false;
       if (point.kind === 'pickup' && point.orderId && removedPickups.has(point.orderId)) return false;
       if (point.kind === 'dropoff' && point.orderId && removedDropoffs.has(point.orderId)) return false;
+      if (point.orderId && completedOrderIds.has(point.orderId)) return false;
+      if (finalRouteStage && point.orderId && bufferedOrderIds.has(point.orderId) && roadRoutes.length > 0) return false;
+      if (liveBackendOnly && point.kind !== 'driver' && point.orderId) {
+        const stopKey = stopLifecycleKey(point.kind === 'pickup' ? 'PICKUP' : 'DROPOFF', point.orderId);
+        if (backendOrderIds.has(point.orderId)) return false;
+        if (assignedOrderIds.has(point.orderId) && backendStopKeys.has(stopKey)) return false;
+      }
       if (onlyTracking && point.kind === 'driver') return point.label === trackedDriverId;
       if (onlyTracking && point.kind !== 'driver') return !!point.orderId && trackedRouteStopIds.has(point.orderId);
       return true;
@@ -2076,8 +2507,11 @@ function RealRouteMap({ stops, routes, toolMode, draftPoints, liveState, liveBac
       const latLng = [point.lat, point.lng] as L.LatLngExpression;
       const color = draftPointColor(point);
       const strokeColor = point.status === 'SENT_TO_BACKEND' ? '#ffffff' : '#050505';
-      const marker = L.marker(latLng, { icon: draftPinIcon(point, color, strokeColor), zIndexOffset: 900 + index })
-        .bindTooltip(`${index + 1}. ${point.label}`, { permanent: true, direction: 'top', offset: [0, -18], className: 'draftTooltip' });
+      const lifecycle = point.orderId && bufferedOrderIds.has(point.orderId) ? 'BUFFERED'
+        : point.orderId && assignedOrderIds.has(point.orderId) ? 'ASSIGNED'
+          : point.status ?? 'DRAFT';
+      const marker = L.marker(latLng, { icon: draftPinIcon({ ...point, status: lifecycle as DraftStatus }, color, strokeColor), zIndexOffset: 900 + index })
+        .bindTooltip(`${point.label} · ${lifecycle}`, { sticky: true, className: 'draftTooltip' });
       marker.addTo(draftLayer);
       if (!liveBackendOnly && point.kind === 'dropoff' && point.orderId && !(backendOrderIds.has(point.orderId) || point.status === 'BUFFERED' || point.status === 'PROCESSING' || point.status === 'ASSIGNED' || point.status === 'SENT_TO_BACKEND')) {
         const pickup = pickupByOrder.get(point.orderId);
@@ -2157,7 +2591,7 @@ function draftPointColor(point: DraftPoint) {
   if (point.status === 'SENDING') return '#F97316';
   if (point.status === 'BUFFERED') return '#22C55E';
   if (point.status === 'PROCESSING') return '#A855F7';
-  if (point.status === 'ASSIGNED' || point.status === 'SENT_TO_BACKEND') return point.orderId ? stableDriverColor(point.orderId) : '#FFFFFF';
+  if (point.status === 'ASSIGNED' || point.status === 'SENT_TO_BACKEND') return '#94A3B8';
   if (point.kind === 'pickup') return '#00E5FF';
   return '#FFB000';
 }
@@ -2185,19 +2619,37 @@ function driverRuntimeFromBackend(value: unknown): DriverRuntimeView | undefined
     movementTick: scalar(record.movementTick, '0'),
     movedMeters: scalar(record.movedMeters, '0'),
     polylineIndex: scalar(record.polylineIndex, '0'),
-    polylineSize: scalar(record.polylineSize, '0')
+    polylineSize: scalar(record.polylineSize, '0'),
+    completedPickups: asArray(record.completedPickups).map(String),
+    completedDropoffs: asArray(record.completedDropoffs).map(String),
+    assignedStopSequence: asArray(record.assignedStopSequence),
+    remainingStopSequence: asArray(record.remainingStopSequence)
   };
 }
 
 function draftPinIcon(point: DraftPoint, color: string, strokeColor: string) {
-  const label = point.kind === 'driver' ? 'D' : point.kind === 'pickup' ? 'P' : 'O';
+  const label = point.kind === 'driver' ? 'D' : compactOrderLabel(point.orderId);
   const blackCore = point.kind === 'driver' ? '<span class="pinCore"></span>' : '';
+  const state = point.status && point.status !== 'DRAFT' ? `<em>${point.status === 'BUFFERED' ? 'BUF' : point.status === 'ASSIGNED' ? 'RUN' : point.status}</em>` : '';
+  const needle = point.kind === 'driver' ? `<span class="pinNeedle" style="--pin:${color};--stroke:${strokeColor}"></span>` : '';
   return L.divIcon({
     className: `draftPin ${point.kind} ${point.status && point.status !== 'DRAFT' ? 'sent' : 'draft'} ${String(point.status ?? 'draft').toLowerCase()}`,
-    iconSize: [30, 38],
-    iconAnchor: [15, 34],
+    iconSize: point.kind === 'driver' ? [38, 44] : [36, 36],
+    iconAnchor: point.kind === 'driver' ? [19, 38] : [18, 18],
     popupAnchor: [0, -30],
-    html: `<span class="pinHead" style="--pin:${color};--stroke:${strokeColor}">${blackCore}<b>${label}</b></span><span class="pinNeedle" style="--pin:${color};--stroke:${strokeColor}"></span>`
+    html: `<span class="pinHead" style="--pin:${color};--stroke:${strokeColor}">${blackCore}<b>${label}</b></span>${state}${needle}`
+  });
+}
+
+function backendStopIcon(type: string, label: string, color: string) {
+  const normalized = type.toUpperCase();
+  const kind = normalized === 'PICKUP' ? 'pickup' : normalized === 'DROPOFF' ? 'dropoff' : 'stop';
+  return L.divIcon({
+    className: `backendStopPin ${kind}`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+    popupAnchor: [0, -18],
+    html: `<span style="--pin:${color}">${label}</span>`
   });
 }
 
@@ -2241,7 +2693,8 @@ function drawClusterLayer(layer: L.LayerGroup, data: PlaybackMapData, draftPoint
   data.clusters.forEach((cluster, index) => {
     const record = asRecord(cluster);
     const color = DRIVER_ROUTE_PALETTE[index % DRIVER_ROUTE_PALETTE.length];
-    const points = asArray(record.orderIds).flatMap((orderId) => {
+    const orderIds = clusterOrderIds(record);
+    const points = orderIds.flatMap((orderId) => {
       const id = String(orderId);
       const order = ordersById.get(id) ?? {};
       return orderCoordinates(order, id, draftPoints);
@@ -2249,11 +2702,25 @@ function drawClusterLayer(layer: L.LayerGroup, data: PlaybackMapData, draftPoint
     points.forEach((point) => L.circleMarker(point, { radius: 6, color: '#000', fillColor: color, fillOpacity: 0.85, weight: 2 }).addTo(layer));
     if (points.length > 1) {
       const clusterBounds = L.latLngBounds(points);
-      L.rectangle(clusterBounds.pad(0.22), { color, weight: 2, fillColor: color, fillOpacity: 0.08, dashArray: '7 7' })
-        .bindTooltip(`${scalar(record.batchId, `CLUSTER_${index + 1}`)} · ${asArray(record.orderIds).length} orders · load ${scalar(record.totalDemand)}`, { sticky: true })
+      const center = clusterBounds.getCenter();
+      const name = scalar(record.batchId, `CLUSTER_${index + 1}`);
+      L.rectangle(clusterBounds.pad(0.42), { color, weight: 2.6, fillColor: color, fillOpacity: 0.14, dashArray: '8 7' })
+        .bindTooltip(`${name} · ${orderIds.length} orders · load ${scalar(record.totalDemand ?? record.load)}`, { sticky: true })
+        .addTo(layer);
+      L.marker(center, { icon: clusterBadgeIcon(name, orderIds.length, color), zIndexOffset: 1500 + index })
+        .bindTooltip(`${name} · ${orderIds.join(', ')}`, { sticky: true, className: 'mapCompactTooltip' })
         .addTo(layer);
       bounds.push(...points);
     }
+  });
+}
+
+function clusterBadgeIcon(label: string, count: number, color: string) {
+  return L.divIcon({
+    className: 'clusterBadgePin',
+    iconSize: [92, 28],
+    iconAnchor: [46, 14],
+    html: `<span style="--pin:${color}"><b>${label.replace('MAP_', '')}</b><em>${count} đơn</em></span>`
   });
 }
 
@@ -2262,7 +2729,7 @@ function drawDriverMatchLayer(layer: L.LayerGroup, data: PlaybackMapData, draftP
   const ordersById = new Map(data.orderPool.map((item) => [scalar(asRecord(item).orderId), asRecord(item)]));
   data.clusters.forEach((cluster) => {
     const record = asRecord(cluster);
-    const points = asArray(record.orderIds).flatMap((orderId) => {
+    const points = clusterOrderIds(record).flatMap((orderId) => {
       const id = String(orderId);
       const order = ordersById.get(id) ?? {};
       return orderCoordinates(order, id, draftPoints);
@@ -2303,7 +2770,7 @@ function StagePlayback({ stage, onStage, dispatchResult, liveState, compareResul
   const diagnostics = asRecord(asRecord(dispatchResult).diagnostics);
   const liveDiagnostics = asRecord(asRecord(liveState).diagnostics);
   const decisionTrace = asRecord(diagnostics.decisionTrace ?? asRecord(liveState).decisionTrace ?? liveDiagnostics.decisionTrace);
-  const stageData = playbackMapData(dispatchResult, liveState, compareResult, streamEvents);
+  const stageData = playbackMapData(dispatchResult, liveState, compareResult, streamEvents, draftPoints);
   const compareFinal = stageData.finalSelection;
   const seedRace = stageData.seedRace;
   const orderPool = stageData.orderPool;
@@ -2317,7 +2784,7 @@ function StagePlayback({ stage, onStage, dispatchResult, liveState, compareResul
   const rows = stage === 'input'
     ? [['Draft orders', completeOrders], ['Draft drivers', drivers], ['Sent points', draftPoints.filter((point) => point.status === 'SENT_TO_BACKEND').length]]
     : stage === 'cluster'
-      ? (clusters.length ? clusters.map((row) => [scalar(asRecord(row).batchId), asArray(asRecord(row).orderIds).join(', '), scalar(asRecord(row).totalDemand)]) : [['NO_BACKEND_CLUSTER', '--', '--']])
+      ? (clusters.length ? clusters.map((row) => [scalar(asRecord(row).batchId), clusterOrderIds(asRecord(row)).join(', '), scalar(asRecord(row).totalDemand ?? asRecord(row).load)]) : [['NO_BACKEND_CLUSTER', '--', '--']])
       : stage === 'driver'
         ? (candidates.length ? candidates.map((row) => [scalar(asRecord(row).batchId), driverLabel(scalar(asRecord(row).driverId)), scalar(asRecord(row).selectionScore), asRecord(row).selected ? 'SELECT' : 'REJECT']) : [['NO_BACKEND_DRIVER_TRACE', '--', '--', '--']])
         : stage === 'seed'
@@ -2382,11 +2849,12 @@ function LiveTab({ sessionId, liveDemo, liveState, queueItems, backendReady, liv
     const record = asRecord(item);
     return { orderId: scalar(record.orderId), status: 'BUFFERED' as LiveQueueStatus, message: `${scalar(record.priorityLevel)} · skipped ${scalar(record.skippedRounds, '0')} · score ${scalar(record.finalScore)}`, updatedAt: scalar(record.lastCheckedAt, time()) };
   });
-  const mergedQueue = [...backendQueueItems, ...queueItems.filter((item) => !backendQueueItems.some((backendItem) => backendItem.orderId === item.orderId))];
+  const assignedLocal = queueItems.filter((item) => item.status === 'ASSIGNED' || item.status === 'COMPLETED' || assignedOrderIds.has(item.orderId));
+  const mergedQueue = [...backendQueueItems, ...assignedLocal.filter((item) => !backendQueueItems.some((backendItem) => backendItem.orderId === item.orderId))];
   const grouped = {
     queued: mergedQueue.filter((item) => item.status === 'BUFFERED' || item.status === 'SENDING'),
     processing: queueItems.filter((item) => item.status === 'PROCESSING'),
-    assigned: mergedQueue.filter((item) => item.status === 'ASSIGNED' || assignedOrderIds.has(item.orderId))
+    assigned: mergedQueue.filter((item) => item.status === 'ASSIGNED' || item.status === 'COMPLETED' || assignedOrderIds.has(item.orderId))
   };
   return <Panel title="Live Control Only" icon={<Activity size={15} />}>
     <div className="tabPurpose">Điều khiển live thật: Start chỉ bật session; auto order/driver mặc định OFF và có thể bật/tắt riêng. Spam Order/Driver gửi thật về BE live.</div>
@@ -2414,6 +2882,13 @@ function BackendTimingPanel({ trace, routes }: { trace: Record<string, unknown>;
 }
 
 function DriverRuntimePanel({ drivers, trackedDriverId, onTrackDriver }: { drivers: DriverRuntimeView[]; trackedDriverId?: string; onTrackDriver: (driverId: string) => void }) {
+  const tracked = trackedDriverId ? drivers.find((driver) => driver.driverId === trackedDriverId) : undefined;
+  const stopChip = (stop: unknown) => {
+    const record = asRecord(stop);
+    const type = scalar(record.type, 'STOP');
+    const orderId = scalar(record.orderId, '');
+    return `${type === 'PICKUP' ? 'P' : type === 'DROPOFF' ? 'D' : type}:${orderId.replace(/^ORD_|^BORD_|^O50_/, '')}`;
+  };
   return <div className="driverRuntimePanel">
     <div className="liveQueueHeader"><b>Driver Runtime</b><span>{drivers.length} moving drivers</span></div>
     <div className="driverRuntimeGrid">
@@ -2421,6 +2896,12 @@ function DriverRuntimePanel({ drivers, trackedDriverId, onTrackDriver }: { drive
         <b>{driverLabel(driver.driverId)}</b><em>{driver.speedKmh} km/h</em><small>{driver.status}{driver.activeOrderId ? ` · ${driver.activeOrderId}` : ''} · moved {driver.movedMeters}m · tick {driver.movementTick} · poly {driver.polylineIndex}/{driver.polylineSize}</small>
       </button>) : <span className="queueEmpty">Chưa có driver runtime từ backend.</span>}
     </div>
+    {tracked && <div className="trackedDriverDetail">
+      <div><b>{driverLabel(tracked.driverId)}</b><span>{tracked.status} · next {tracked.nextStopType || '--'} {tracked.nextOrderId || ''}</span></div>
+      <p><strong>Picked</strong>{tracked.completedPickups.length ? tracked.completedPickups.join(', ') : 'none'}</p>
+      <p><strong>Dropped</strong>{tracked.completedDropoffs.length ? tracked.completedDropoffs.join(', ') : 'none'}</p>
+      <p><strong>Remaining route</strong>{tracked.remainingStopSequence.length ? tracked.remainingStopSequence.slice(0, 12).map(stopChip).join(' → ') : 'done/idle'}</p>
+    </div>}
   </div>;
 }
 
@@ -2551,7 +3032,7 @@ function DecisionStory({ tab, routes, compareRows, compareResult, dispatchResult
       <DecisionMiniTable title="Decision Insights" columns={['Signal', 'Value', 'Why it matters']} rows={insightRows} />
       <DecisionStep index="01" title="Input Validation" status={noTrace ? 'WAITING_BACKEND' : 'BACKEND'} summary="Tenant, idempotency, capacity, deadline, tọa độ và dữ liệu bắt buộc phải do backend trace xác nhận." />
       <DecisionMiniTable title="Order Pool Filter" columns={['Order', 'Demand', 'Deadline', 'Status', 'Feasible']} rows={orderPool.length ? orderPool.map((row) => [scalar(asRecord(row).orderId), scalar(asRecord(row).demand), scalar(asRecord(row).deadlineMinutes), scalar(asRecord(row).status), scalar(asRecord(row).feasible)]) : [['NO_BACKEND_TRACE', '--', '--', '--', '--']]} />
-      <DecisionMiniTable title="Spatial Clustering" columns={['Batch', 'Orders', 'Load', 'Driver', 'Status']} rows={clusterSelection.length ? clusterSelection.map((row) => [scalar(asRecord(row).batchId), asArray(asRecord(row).orderIds).join(', '), scalar(asRecord(row).totalDemand), driverLabel(scalar(asRecord(row).driverId)), scalar(asRecord(row).status)]) : [['NO_BACKEND_TRACE', '--', '--', '--', '--']]} />
+      <DecisionMiniTable title="Spatial Clustering" columns={['Batch', 'Orders', 'Load', 'Driver', 'Status']} rows={clusterSelection.length ? clusterSelection.map((row) => [scalar(asRecord(row).batchId), clusterOrderIds(asRecord(row)).join(', '), scalar(asRecord(row).totalDemand ?? asRecord(row).load), driverLabel(scalar(asRecord(row).driverId)), scalar(asRecord(row).status)]) : [['NO_BACKEND_TRACE', '--', '--', '--', '--']]} />
       <DecisionMiniTable title="Driver Candidate Selection" columns={['Order', 'Driver', 'Priority', 'Urgency', 'Fit', 'Final', 'Decision']} rows={driverCandidateSelection.length ? driverCandidateSelection.map((row) => [scalar(asRecord(row).orderId), driverLabel(scalar(asRecord(row).driverId)), scalar(asRecord(row).priorityLevel), scalar(asRecord(row).urgencyScore), scalar(asRecord(row).routeFitScore), scalar(asRecord(row).finalScore ?? asRecord(row).score), scalar(asRecord(row).decision)]) : [['NO_BACKEND_TRACE', '--', '--', '--', '--', '--', '--']]} highlightLast />
       <DecisionMiniTable title="Solver Seed Comparison" columns={['Rank', 'Seed', 'Source', 'Runtime', 'Distance', 'Late', 'Stops']} rows={seedRace.length ? seedRace.map((seed) => [scalar(asRecord(seed).rank), scalar(asRecord(seed).seedId), scalar(asRecord(seed).solver), scalar(asRecord(seed).runtimeDisplay ?? `${scalar(asRecord(seed).runtimeMs)}ms`), `${scalar(asRecord(seed).distanceKm)}km`, scalar(asRecord(seed).lateCount), asArray(asRecord(seed).stopSequencePreview).join(' | ') || 'BACKEND_SEED_SEQUENCE_MISSING']) : (compareRows.length ? compareRows : [bestSeed].filter(Boolean)).map((row) => [row?.rank ?? '--', row?.solver ?? 'WAITING', row?.solver ?? 'WAITING', row?.runtimeDisplay || `${row?.runtimeMs ?? '--'}ms`, `${row?.distanceKm ?? '--'}km`, String(row?.lateCount ?? '--'), row?.result ?? 'RUN_COMPARE'])} />
       <div className="decisionOutcome">

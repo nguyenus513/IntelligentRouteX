@@ -47,15 +47,32 @@ nav button.active { background: #fafafa; color: #000; }
 .realMap .leaflet-control-zoom a { background: #050505; color: #fff; border-bottom-color: var(--line-strong); }
 .realMap .leaflet-control-zoom a:hover { background: #18181b; color: #fff; }
 .realMap .leaflet-top.leaflet-left { left: auto; right: 0; }
-.realMap .leaflet-tooltip { background: rgba(0,0,0,.94); border: 1px solid #fff; color: #fff; box-shadow: none; font-family: inherit; font-size: 11px; font-weight: 900; letter-spacing: .04em; }
-.realMap .draftTooltip { background: rgba(0,0,0,.86); border-color: rgba(255,255,255,.42); color: #fff; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.realMap .leaflet-tooltip { background: rgba(0,0,0,.9); border: 1px solid rgba(255,255,255,.72); color: #fff; box-shadow: 0 10px 34px rgba(0,0,0,.45); font-family: inherit; font-size: 10px; font-weight: 900; letter-spacing: .03em; max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.realMap .draftTooltip, .realMap .mapCompactTooltip { background: rgba(0,0,0,.82); border-color: rgba(255,255,255,.32); color: #fff; font-size: 10px; letter-spacing: .04em; text-transform: none; }
 .draftPin { pointer-events: none; }
-.draftPin .pinHead { position: absolute; left: 3px; top: 0; width: 24px; height: 24px; display: grid; place-items: center; border: 3px solid var(--stroke); background: var(--pin); color: #000; border-radius: 999px 999px 999px 4px; transform: rotate(-45deg); box-shadow: 0 0 0 2px rgba(0,0,0,.75), 0 10px 28px rgba(0,0,0,.65); }
-.draftPin .pinHead b { transform: rotate(45deg); font-size: 10px; font-weight: 1000; line-height: 1; }
-.draftPin .pinNeedle { position: absolute; left: 13px; top: 27px; width: 4px; height: 10px; border-radius: 999px; background: var(--stroke); box-shadow: 0 0 0 1px rgba(0,0,0,.7); }
+.draftPin .pinHead { position: absolute; left: 2px; top: 2px; min-width: 32px; height: 32px; padding: 0 5px; display: grid; place-items: center; border: 2px solid var(--stroke); background: var(--pin); color: #000; border-radius: 999px; box-shadow: 0 0 0 2px rgba(0,0,0,.75), 0 10px 24px rgba(0,0,0,.62); }
+.draftPin .pinHead b { font-size: 8px; font-weight: 1000; line-height: 1; white-space: nowrap; }
+.draftPin.dropoff .pinHead { border-radius: 7px; }
+.draftPin.pickup .pinHead, .draftPin.dropoff .pinHead { width: 26px; height: 26px; min-width: 26px; padding: 0; }
+.draftPin.pickup .pinHead b, .draftPin.dropoff .pinHead b { font-size: 8px; }
+.draftPin.pickup .pinHead::after, .draftPin.dropoff .pinHead::after { content: ""; position: absolute; inset: -5px; border: 1px solid rgba(255,255,255,.62); border-radius: inherit; opacity: .8; }
+.draftPin em { position: absolute; left: 22px; top: -5px; padding: 2px 4px; border: 1px solid rgba(255,255,255,.56); border-radius: 999px; background: rgba(0,0,0,.86); color: #fff; font-size: 7px; font-style: normal; font-weight: 1000; letter-spacing: .06em; z-index: 2; }
+.draftPin .pinNeedle { position: absolute; left: 17px; top: 31px; width: 4px; height: 9px; border-radius: 999px; background: var(--stroke); box-shadow: 0 0 0 1px rgba(0,0,0,.7); }
+.draftPin.driver .pinHead { left: 4px; top: 0; min-width: 28px; height: 28px; border-radius: 999px 999px 999px 5px; transform: rotate(-45deg); }
+.draftPin.driver .pinHead b { color: #fff; z-index: 1; transform: rotate(45deg); }
 .draftPin.driver .pinCore { position: absolute; inset: 7px; border-radius: 999px; background: #000; transform: rotate(45deg); z-index: 0; }
-.draftPin.driver .pinHead b { color: #fff; z-index: 1; }
-.draftPin.sent .pinHead { box-shadow: 0 0 0 2px #fff, 0 0 22px rgba(255,255,255,.38), 0 12px 34px rgba(0,0,0,.7); }
+.draftPin.sent .pinHead { box-shadow: 0 0 0 1px #fff, 0 0 18px rgba(255,255,255,.3), 0 12px 30px rgba(0,0,0,.66); }
+.draftPin.buffered { opacity: .58; filter: saturate(.86); }
+.draftPin.buffered .pinHead { width: 18px; height: 18px; min-width: 18px; border-width: 1px; box-shadow: 0 0 0 1px rgba(0,0,0,.78), 0 8px 18px rgba(0,0,0,.54); }
+.draftPin.buffered .pinHead b { font-size: 6px; }
+.draftPin.buffered em { left: 12px; top: -7px; font-size: 6px; padding: 1px 3px; }
+.backendStopPin { pointer-events: auto; }
+.backendStopPin span { display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid #050505; border-radius: 999px; background: var(--pin); color: #000; box-shadow: 0 0 0 2px rgba(255,255,255,.86), 0 10px 28px rgba(0,0,0,.62); font-size: 8px; font-weight: 1000; letter-spacing: -.02em; }
+.backendStopPin.dropoff span { border-radius: 8px; }
+.backendStopPin.pickup span::after, .backendStopPin.dropoff span::after { content: ""; position: absolute; inset: -5px; border-radius: inherit; border: 1px solid color-mix(in srgb, var(--pin) 72%, #fff 28%); opacity: .72; }
+.clusterBadgePin span { display: flex; align-items: center; justify-content: center; gap: 7px; height: 26px; padding: 0 9px; border: 1px solid rgba(255,255,255,.82); background: color-mix(in srgb, var(--pin) 34%, #050505 66%); color: #fff; box-shadow: 0 12px 34px rgba(0,0,0,.7); font-size: 9px; font-weight: 1000; letter-spacing: .06em; text-transform: uppercase; }
+.clusterBadgePin b { max-width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clusterBadgePin em { color: #000; background: #fff; padding: 2px 5px; font-style: normal; font-size: 8px; }
 .backendLock { display: inline-flex; width: fit-content; margin-top: 8px; padding: 6px 8px; border: 1px solid rgba(255,176,0,.5); color: #ffcf66; background: rgba(255,176,0,.1); font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .08em; }
 .driverLegend { position: absolute; z-index: 6; left: 22px; bottom: 22px; width: min(250px, calc(100% - 44px)); padding: 12px 13px; border: 1px solid rgba(255,255,255,.22); background: rgba(0,0,0,.74); box-shadow: 0 18px 60px rgba(0,0,0,.6); backdrop-filter: blur(10px); display: grid; gap: 8px; }
 .driverLegend b { color: #fff; font-size: 10px; line-height: 1; text-transform: uppercase; letter-spacing: .14em; }
@@ -342,6 +359,11 @@ textarea, pre { width: 100%; min-height: 300px; margin: 0; padding: 14px; backgr
 .driverRuntimeGrid b { color: #fff; font-size: 10px; }
 .driverRuntimeGrid em { color: #7dd3fc; font-style: normal; font-size: 9px; font-weight: 950; text-transform: uppercase; }
 .driverRuntimeGrid small { grid-column: 1 / -1; color: #a1a1aa; font-size: 10px; line-height: 1.35; }
+.trackedDriverDetail { margin-top: 10px; padding: 10px; border: 1px solid rgba(0,229,255,.28); background: rgba(0,229,255,.06); display: grid; gap: 7px; }
+.trackedDriverDetail div { display: flex; justify-content: space-between; gap: 10px; color: #fff; font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .06em; }
+.trackedDriverDetail span { color: #7dd3fc; }
+.trackedDriverDetail p { margin: 0; color: #d4d4d8; font-size: 10px; line-height: 1.45; }
+.trackedDriverDetail strong { display: inline-block; min-width: 92px; color: #fff; text-transform: uppercase; letter-spacing: .07em; }
 .apiSummaryGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
 .apiSummaryGrid span { border: 1px solid #27272a; background: linear-gradient(180deg, #08080a, #020202); padding: 11px; }
 .apiSummaryGrid small { display: block; color: #71717a; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; }

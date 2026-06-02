@@ -46,10 +46,24 @@ public final class PyvrpSeedContributor implements ExternalSeedContributor {
             Path input = root.resolve(trace + "-input.json");
             Path output = root.resolve(trace + "-output.json");
             OBJECT_MAPPER.writeValue(input.toFile(), instance(request, matrixSnapshot));
-            Process process = new ProcessBuilder("py", "-3", "scripts/run_pyvrp_seed.py",
-                    "--input", input.toString(),
-                    "--output", output.toString(),
-                    "--time-limit-ms", "650")
+            List<String> command = new ArrayList<>();
+            String portablePython = System.getenv("PYVRP_PYTHON");
+            if (portablePython != null && !portablePython.isBlank()) {
+                command.add(portablePython);
+            } else if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
+                command.add("py");
+                command.add("-3");
+            } else {
+                command.add("python3");
+            }
+            command.add("scripts/run_pyvrp_seed.py");
+            command.add("--input");
+            command.add(input.toString());
+            command.add("--output");
+            command.add(output.toString());
+            command.add("--time-limit-ms");
+            command.add("650");
+            Process process = new ProcessBuilder(command)
                     .redirectErrorStream(true)
                     .start();
             boolean completed = process.waitFor(15, TimeUnit.SECONDS);

@@ -63,6 +63,8 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { Fail "BOOTJAR_FAILED" "Gradle bootJar failed." }
     Push-Location (Join-Path $Root "playground")
     try {
+        $previousApiBase = $env:VITE_IRX_API_BASE
+        $env:VITE_IRX_API_BASE = ""
         if (Test-Path "node_modules") {
             npm install
             if ($LASTEXITCODE -ne 0) { Fail "NPM_INSTALL_FAILED" "npm install failed." }
@@ -72,7 +74,10 @@ if (-not $SkipBuild) {
         }
         npm run build
         if ($LASTEXITCODE -ne 0) { Fail "FE_BUILD_FAILED" "Frontend build failed." }
-    } finally { Pop-Location }
+    } finally {
+        $env:VITE_IRX_API_BASE = $previousApiBase
+        Pop-Location
+    }
 }
 
 $libsDir = Join-Path $Root "build/libs"
@@ -86,14 +91,19 @@ $python = Require-Path (Join-Path $PythonDir "python.exe") "portable Python exec
 $vroom = Require-Path $VroomExe "VROOM executable"
 $osrmRouted = Require-Path (Join-Path $OsrmDir "osrm-routed.exe") "OSRM routed executable"
 $osrmData = Require-Path $OsrmDataDir "prebuilt OSRM data directory"
-$osrmMain = Get-ChildItem $osrmData -Filter "*.osrm" | Select-Object -First 1
-if (-not $osrmMain) { Fail "MISSING_OSRM_MAP" "OSRM data directory must contain at least one .osrm file." }
+$osrmMain = Get-ChildItem $osrmData -Filter "*.osrm*" | Select-Object -First 1
+if (-not $osrmMain) { Fail "MISSING_OSRM_MAP" "OSRM data directory must contain prebuilt .osrm* files." }
 
 & $python -c "import pyvrp; print(pyvrp.__version__ if hasattr(pyvrp, '__version__') else 'pyvrp-ok')"
 if ($LASTEXITCODE -ne 0) { Fail "PYVRP_IMPORT_FAILED" "Portable Python cannot import pyvrp." }
 
+New-Item -ItemType Directory -Force -Path (Join-Path $BundlePath "app"), (Join-Path $BundlePath "runtime") | Out-Null
 Copy-Item -Force $jar.FullName (Join-Path $BundlePath "app/irx-backend.jar")
 Copy-Dir $frontendDist (Join-Path $BundlePath "app/public")
+New-Item -ItemType Directory -Force -Path (Join-Path $BundlePath "scripts") | Out-Null
+foreach ($pyvrpScript in @("run_pyvrp_seed.py", "pyvrp_vrptw_bridge.py")) {
+    Copy-Item -Force (Join-Path $Root "scripts/$pyvrpScript") (Join-Path $BundlePath "scripts/$pyvrpScript")
+}
 Copy-Dir $jre (Join-Path $BundlePath "runtime/jre")
 Copy-Dir $PythonDir (Join-Path $BundlePath "runtime/python")
 New-Item -ItemType Directory -Force -Path (Join-Path $BundlePath "runtime/vroom") | Out-Null
@@ -131,13 +141,19 @@ set "IRX_API_KEY=demo-key"
 set "IRX_TENANT_ID=demo"
 set "LOG_DIR=%IRX_HOME%\data\logs"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
-for %%F in ("%IRX_HOME%\data\osrm\*.osrm") do set "OSRM_FILE=%%~fF"
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":18116"') do taskkill /PID %%a /F >nul 2>nul
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5001"') do taskkill /PID %%a /F >nul 2>nul
+timeout /t 1 /nobreak >nul
+for %%F in ("%IRX_HOME%\data\osrm\*.osrm*") do (
+  if /I "%%~xF"==".osrm" set "OSRM_FILE=%%~fF"
+)
+if not defined OSRM_FILE set "OSRM_FILE=%IRX_HOME%\data\osrm\hcmc-demo.osrm"
 if not exist "%JAVA_EXE%" echo Missing Java runtime & exit /b 10
 if not exist "%PYVRP_PYTHON%" echo Missing Python runtime & exit /b 11
 if not exist "%VROOM_BIN%" echo Missing VROOM runtime & exit /b 12
 if not exist "%IRX_HOME%\runtime\osrm\osrm-routed.exe" echo Missing OSRM runtime & exit /b 13
 if not defined OSRM_FILE echo Missing OSRM map & exit /b 14
-start "IRX OSRM" /min "%IRX_HOME%\runtime\osrm\osrm-routed.exe" --algorithm ch "%OSRM_FILE%" --port 5001 > "%LOG_DIR%\osrm.log" 2> "%LOG_DIR%\osrm.err.log"
+start "IRX OSRM" /min /D "%IRX_HOME%\data\osrm" "%IRX_HOME%\runtime\osrm\osrm-routed.exe" --algorithm ch "hcmc-demo.osrm" --port 5001 > "%LOG_DIR%\osrm.log" 2> "%LOG_DIR%\osrm.err.log"
 timeout /t 3 /nobreak >nul
 start "IRX Backend" /min "%JAVA_EXE%" -jar "%IRX_HOME%\app\irx-backend.jar" --spring.config.additional-location="%IRX_HOME%\config\application-portable.yml" --server.port=18116 > "%LOG_DIR%\backend.log" 2> "%LOG_DIR%\backend.err.log"
 timeout /t 8 /nobreak >nul

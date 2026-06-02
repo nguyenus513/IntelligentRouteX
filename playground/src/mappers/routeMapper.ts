@@ -100,7 +100,7 @@ export function mapRoutesFromBackend(result: unknown): RouteMapResult {
   });
 
   const stops = routes.flatMap((route) => route.stops);
-  return { routes, stops, hasBackendGeometry: routes.some((route) => route.path.length > 1) };
+  return { routes, stops, hasBackendGeometry: routes.length > 0 && routes.every(hasValidRoadGeometry) };
 }
 
 export function compareRowsFromResult(result: unknown): CompareRow[] {
@@ -153,7 +153,13 @@ function mapRoutesFromRouteSource(routeSource: unknown[], solverKey = 'SOLVER'):
       etaMinutes: numberOrUndefined(routeRecord.totalEtaMinutes ?? routeRecord.etaMinutes)
     };
   });
-  return { routes, stops: routes.flatMap((route) => route.stops), hasBackendGeometry: routes.some((route) => route.path.length > 1) };
+  return { routes, stops: routes.flatMap((route) => route.stops), hasBackendGeometry: routes.length > 0 && routes.every(hasValidRoadGeometry) };
+}
+
+function hasValidRoadGeometry(route: UiRoute) {
+  return route.geometryMode === 'ROAD_ROUTE'
+    && route.path.length >= 2
+    && route.path.every((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
 }
 
 function routeArrayFromSolverRecord(record: Record<string, unknown>, solverKey: string): unknown[] | undefined {

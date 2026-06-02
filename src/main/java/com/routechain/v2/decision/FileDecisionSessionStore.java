@@ -69,7 +69,7 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
         List<String> critiqueRefs = new ArrayList<>();
         List<String> readRefs = new ArrayList<>();
         for (String upstreamRef : input.upstreamRefs()) {
-            Path stageRoot = traceRoot(input).resolve(sanitize(upstreamRef));
+            Path stageRoot = traceRoot(input).resolve(safePathPart(upstreamRef, 72));
             Path summaryPath = stageRoot.resolve("stage_summary.json");
             Path refsPath = stageRoot.resolve("stage_refs.json");
             Path resultPath = stageRoot.resolve("stage_result.json");
@@ -155,9 +155,9 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
         summary.put("tokenUsage", result.tokenUsage());
         summary.put("retryCount", result.retryCount());
         summary.put("rawResponseHash", result.rawResponseHash());
-        writeJson(passRoot.resolve(sanitize(passType) + ".json"), summary);
+        writeJson(passRoot.resolve(safePathPart(passType, 72) + ".json"), summary);
         if (result.rawResponseBody() != null && !result.rawResponseBody().isBlank()) {
-            writeJson(rawRoot.resolve(sanitize(passType) + "-provider-response.json"), Map.of(
+            writeJson(rawRoot.resolve(safePathPart(passType, 72) + "-provider-response.json"), Map.of(
                     "schemaVersion", "decision-session-raw-provider-response/v1",
                     "traceId", input.traceId(),
                     "stageName", input.stageName().wireName(),
@@ -212,17 +212,17 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
 
     private Path traceRoot(DecisionStageInputV1 input) {
         return baseDirectory
-                .resolve(sanitize(input.runId()))
-                .resolve(sanitize(input.tickId()))
-                .resolve(sanitize(input.traceId()));
+                .resolve(safePathPart(input.runId(), 56))
+                .resolve(safePathPart(input.tickId(), 56))
+                .resolve(safePathPart(input.traceId(), 72));
     }
 
     private Path stageRoot(DecisionStageInputV1 input) {
-        return traceRoot(input).resolve(sanitize(input.stageName().wireName()));
+        return traceRoot(input).resolve(safePathPart(input.stageName().wireName(), 72));
     }
 
     private String sessionNamespace(DecisionStageInputV1 input) {
-        return sanitize(input.runId()) + "/" + sanitize(input.tickId()) + "/" + sanitize(input.traceId());
+        return safePathPart(input.runId(), 56) + "/" + safePathPart(input.tickId(), 56) + "/" + safePathPart(input.traceId(), 72);
     }
 
     private void writeJson(Path path, Object payload) {
@@ -349,5 +349,15 @@ public final class FileDecisionSessionStore implements DecisionSessionStore {
 
     private String sanitize(String raw) {
         return raw == null || raw.isBlank() ? "unknown" : raw.replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
+
+    private String safePathPart(String raw, int maxLength) {
+        String sanitized = sanitize(raw);
+        if (sanitized.length() <= maxLength) {
+            return sanitized;
+        }
+        String hash = Integer.toHexString(String.valueOf(raw).hashCode());
+        int prefixLength = Math.max(8, maxLength - hash.length() - 1);
+        return sanitized.substring(0, Math.min(prefixLength, sanitized.length())) + "-" + hash;
     }
 }

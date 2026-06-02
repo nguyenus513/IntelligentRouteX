@@ -24,17 +24,26 @@ public final class DecisionStageLogger {
             return;
         }
         try {
-            Files.createDirectories(baseDirectory.resolve(sanitize(family)));
-            String suffix = stageKey == null || stageKey.isBlank() ? "" : "-" + sanitize(stageKey);
-            Path file = baseDirectory.resolve(sanitize(family))
-                    .resolve(sanitize(traceId) + suffix + ".json");
+            String safeFamily = safePathPart(family, 64);
+            Files.createDirectories(baseDirectory.resolve(safeFamily));
+            String suffix = stageKey == null || stageKey.isBlank() ? "" : "-" + safePathPart(stageKey, 72);
+            Path file = baseDirectory.resolve(safeFamily)
+                    .resolve(safePathPart(traceId, 72) + suffix + ".json");
             objectMapper.writeValue(file.toFile(), payload);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to write decision trace family " + family, exception);
         }
     }
 
-    private String sanitize(String raw) {
-        return raw.replaceAll("[^a-zA-Z0-9._-]", "_");
+    private String safePathPart(String raw, int maxLength) {
+        String sanitized = raw == null || raw.isBlank()
+                ? "unknown"
+                : raw.replaceAll("[^a-zA-Z0-9._-]", "_");
+        if (sanitized.length() <= maxLength) {
+            return sanitized;
+        }
+        String hash = Integer.toHexString(raw.hashCode());
+        int prefixLength = Math.max(8, maxLength - hash.length() - 1);
+        return sanitized.substring(0, Math.min(prefixLength, sanitized.length())) + "-" + hash;
     }
 }

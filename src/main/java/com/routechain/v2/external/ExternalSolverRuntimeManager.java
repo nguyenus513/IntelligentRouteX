@@ -58,7 +58,10 @@ public final class ExternalSolverRuntimeManager {
     }
 
     private ExternalSolverAvailability checkPyvrp() {
-        List<String> command = isWindows()
+        String portablePython = System.getenv("PYVRP_PYTHON");
+        List<String> command = portablePython != null && !portablePython.isBlank()
+                ? List.of(portablePython, "-c", "import pyvrp; print(getattr(pyvrp, '__version__', 'unknown'))")
+                : isWindows()
                 ? List.of("py", "-3", "-c", "import pyvrp; print(getattr(pyvrp, '__version__', 'unknown'))")
                 : List.of("python3", "-c", "import pyvrp; print(getattr(pyvrp, '__version__', 'unknown'))");
         return checkCommand("pyvrp", command, "PYVRP_REQUIRED_BUT_NOT_AVAILABLE", 5);

@@ -22,6 +22,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.kafka:spring-kafka")
+    runtimeOnly("org.postgresql:postgresql:42.7.4")
     implementation("org.springframework.boot:spring-boot-configuration-processor")
     implementation("com.google.ortools:ortools-java:9.14.6206")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
