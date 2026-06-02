@@ -12,6 +12,14 @@ IRX is a Java/Spring Boot dispatch optimization platform with a React control-to
 
 ## Quick Start
 
+Install Python solver/ML runtime dependencies:
+
+```powershell
+py -3 -m pip install --upgrade pip
+py -3 -m pip install -r requirements.txt
+powershell -ExecutionPolicy Bypass -File scripts\check-ml-runtime.ps1
+```
+
 Compile backend:
 
 ```powershell

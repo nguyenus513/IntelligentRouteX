@@ -1,0 +1,18 @@
+# IRX clone-time Python runtime dependencies.
+# Install: py -3 -m pip install -r requirements.txt
+
+# Solver/runtime seeds
+pyvrp
+ortools
+
+# Data + benchmark utilities
+requests
+numpy
+pandas
+scipy
+networkx
+
+# ML/adaptive evidence runtime
+scikit-learn
+joblib
+torch

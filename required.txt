@@ -1,10 +1,22 @@
 # IRX Control Tower runtime Python dependencies.
-# Install with: py -3 -m pip install -r required.txt
+# Preferred install: py -3 -m pip install -r requirements.txt
+# Legacy install:    py -3 -m pip install -r required.txt
+
+# Solver/runtime seeds
 pyvrp
 ortools
+
+# Data + benchmark utilities
 requests
 numpy
 pandas
+scipy
+networkx
+
+# ML/adaptive evidence runtime
+scikit-learn
+joblib
+torch
 
 # Non-pip machine requirements for start.bat:
 # - Java 21 in PATH
