@@ -9,6 +9,9 @@
   "sourceCommit": "fe0e45b6df118af03c5f42db8b93a351f7629131",
   "sourceCheckpointPath": "checkpoints/100/rf-transformer.ckpt",
   "sourceCheckpointDigest": "sha256:eb09cee46108bac04012c2702f7cd4aac64341064167363255f02f2e63167f90",
+  "localCheckpointPath": "checkpoints/100/rf-transformer.ckpt",
+  "localCheckpointDigest": "sha256:eb09cee46108bac04012c2702f7cd4aac64341064167363255f02f2e63167f90",
+  "inferenceBackend": "checkpoint-present-json-policy",
   "alternatives": {
     "maxGeneratedRoutes": 3,
     "baseScore": 0.6,

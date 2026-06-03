@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import hashlib
 import itertools
 import json
 import os
+import sys
 import time
+import warnings
 from pathlib import Path
 
 import yaml
@@ -19,6 +23,8 @@ PROMOTED_ARTIFACT_SCHEMA_VERSION = "routefinder-promoted-artifact/v2"
 MATERIALIZATION_METADATA_SCHEMA_VERSION = "routefinder-materialization/v2"
 
 app = FastAPI(title="ml-routefinder-worker")
+_TRANSFORMER_CACHE: dict[str, tuple[bool, str]] = {}
+_TRANSFORMER_OBJECT_CACHE: dict[str, tuple[object, object]] = {}
 
 
 def _env_text(*keys: str, default: str = "") -> str:
@@ -62,14 +68,24 @@ def _worker_compile_mode() -> str:
     return _env_text("IRX_ROUTEFINDER_WORKER_COMPILE_MODE", "IRX_ML_WORKER_COMPILE_MODE", default="eager")
 
 
-def _worker_version_audit(*, model_loaded: bool, warmup_done: bool) -> dict:
+def _require_transformer_load() -> bool:
+    return _env_text("IRX_ROUTEFINDER_REQUIRE_TRANSFORMER_LOAD", default="false").lower() in {"1", "true", "yes", "on"}
+
+
+def _worker_version_audit(*, model_loaded: bool, warmup_done: bool, checkpoint_loaded: bool = False, transformer_loaded: bool = False, transformer_load_reason: str = "", inference_backend: str = "json-policy") -> dict:
     requested_device = _env_text("IRX_ROUTEFINDER_WORKER_DEVICE", "IRX_ML_WORKER_DEVICE", default="cpu")
     gpu_requested = requested_device.lower() in {"auto", "gpu", "cuda", "cuda:0"} or requested_device.lower().startswith("cuda")
+    gpu_reason = "routefinder-transformer-loaded-on-cpu" if transformer_loaded and gpu_requested else "routefinder-checkpoint-present-but-python-inference-not-wired" if checkpoint_loaded and gpu_requested else "routefinder-json-heuristic-has-no-gpu-backend" if gpu_requested else "cpu-selected"
     return {
         "device": _worker_device(),
         "requestedDevice": requested_device,
         "gpuAcceleration": False,
-        "gpuAccelerationReason": "routefinder-json-heuristic-has-no-gpu-backend" if gpu_requested else "cpu-selected",
+        "gpuAccelerationReason": gpu_reason,
+        "checkpointLoaded": checkpoint_loaded,
+        "transformerLoaded": transformer_loaded,
+        "transformerLoadReason": transformer_load_reason,
+        "requiresVrpFeaturePayload": transformer_loaded,
+        "inferenceBackend": inference_backend,
         "dtype": _worker_dtype(),
         "gpuMemoryAllocatedMb": _worker_gpu_memory_allocated_mb(),
         "batchSize": _worker_batch_size(),
@@ -202,7 +218,167 @@ def _validate_promoted_artifact(artifact: dict) -> str:
     for field in required_fields:
         if not _has_text(artifact.get(field)):
             return "promoted-artifact-provenance-missing"
+    if artifact.get("inferenceBackend") == "checkpoint-present-json-policy":
+        if not _has_text(artifact.get("localCheckpointPath")) or not _has_text(artifact.get("localCheckpointDigest")):
+            return "promoted-artifact-checkpoint-missing"
     return ""
+
+
+def _checkpoint_validation(model_directory: Path, artifact: dict) -> str:
+    local_checkpoint_path = artifact.get("localCheckpointPath")
+    if not _has_text(local_checkpoint_path):
+        return ""
+    checkpoint_path = (model_directory / local_checkpoint_path).resolve()
+    if not checkpoint_path.exists() or not checkpoint_path.is_file():
+        return "local-checkpoint-missing"
+    expected_digest = artifact.get("localCheckpointDigest") or artifact.get("sourceCheckpointDigest")
+    actual_digest = "sha256:" + hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
+    if _has_text(expected_digest) and actual_digest != expected_digest:
+        return "local-checkpoint-digest-mismatch"
+    return ""
+
+
+def _routefinder_source_path() -> Path:
+    return Path(_env_text("IRX_ROUTEFINDER_SOURCE_PATH", default=str(APP_DIR.parent.parent / "build" / "materialization" / "routefinder" / "source"))).resolve()
+
+
+def _patch_torchrl_legacy_specs() -> None:
+    try:
+        import torchrl.data.tensor_specs as specs
+    except Exception:
+        return
+    aliases = {
+        "CompositeSpec": "Composite",
+        "BoundedTensorSpec": "Bounded",
+        "UnboundedContinuousTensorSpec": "Unbounded",
+        "UnboundedDiscreteTensorSpec": "Unbounded",
+    }
+    for legacy, modern in aliases.items():
+        if not hasattr(specs, legacy) and hasattr(specs, modern):
+            setattr(specs, legacy, getattr(specs, modern))
+
+
+def _try_load_transformer_model(model_directory: Path, artifact: dict) -> tuple[bool, str]:
+    local_checkpoint_path = artifact.get("localCheckpointPath")
+    if not _has_text(local_checkpoint_path):
+        return False, "local-checkpoint-path-missing"
+    checkpoint_path = (model_directory / local_checkpoint_path).resolve()
+    cache_key = str(checkpoint_path)
+    if cache_key in _TRANSFORMER_CACHE:
+        return _TRANSFORMER_CACHE[cache_key]
+    source_path = _routefinder_source_path()
+    if source_path.exists() and str(source_path) not in sys.path:
+        sys.path.insert(0, str(source_path))
+    try:
+        import torch
+        _patch_torchrl_legacy_specs()
+        from routefinder.models import RouteFinderBase, RouteFinderMoE
+        from routefinder.models.baselines.mtpomo import MTPOMO
+        from routefinder.models.baselines.mvmoe import MVMoE
+    except Exception as exc:
+        result = (False, "routefinder-runtime-import-failed:" + exc.__class__.__name__)
+        _TRANSFORMER_CACHE[cache_key] = result
+        return result
+    try:
+        warnings.filterwarnings("ignore", message=".*weights_only.*", category=FutureWarning)
+        checkpoint_text = str(checkpoint_path).lower()
+        if "mvmoe" in checkpoint_text:
+            module = MVMoE
+        elif "mtpomo" in checkpoint_text:
+            module = MTPOMO
+        elif "moe" in checkpoint_text:
+            module = RouteFinderMoE
+        else:
+            module = RouteFinderBase
+        model = module.load_from_checkpoint(str(checkpoint_path), map_location="cpu", strict=False, weights_only=False)
+        model.policy.to("cpu").eval()
+        torch.set_grad_enabled(False)
+        from routefinder.envs import MTVRPEnv
+        from routefinder.envs.mtvrp.generator import MTVRPGenerator
+        env = MTVRPEnv(generator=MTVRPGenerator(num_loc=1, variant_preset="cvrp"))
+        _TRANSFORMER_OBJECT_CACHE[cache_key] = (model, env)
+        result = (True, "")
+    except Exception as exc:
+        result = (False, "routefinder-transformer-load-failed:" + exc.__class__.__name__)
+    _TRANSFORMER_CACHE[cache_key] = result
+    return result
+
+
+def _transformer_objects(model_directory: Path, artifact: dict) -> tuple[object | None, object | None]:
+    local_checkpoint_path = artifact.get("localCheckpointPath")
+    if not _has_text(local_checkpoint_path):
+        return None, None
+    checkpoint_path = (model_directory / local_checkpoint_path).resolve()
+    _try_load_transformer_model(model_directory, artifact)
+    return _TRANSFORMER_OBJECT_CACHE.get(str(checkpoint_path), (None, None))
+
+
+def _normalise_locs(nodes: list[dict]) -> list[list[float]]:
+    lats = [float(node.get("latitude", 0.0)) for node in nodes]
+    lngs = [float(node.get("longitude", 0.0)) for node in nodes]
+    min_lat, max_lat = min(lats), max(lats)
+    min_lng, max_lng = min(lngs), max(lngs)
+    lat_span = max(1e-9, max_lat - min_lat)
+    lng_span = max(1e-9, max_lng - min_lng)
+    return [[(lat - min_lat) / lat_span, (lng - min_lng) / lng_span] for lat, lng in zip(lats, lngs)]
+
+
+def _transformer_route(payload: dict, artifact: dict) -> dict | None:
+    nodes = payload.get("vrpNodes") or []
+    if len(nodes) < 2:
+        return None
+    depot = next((node for node in nodes if str(node.get("nodeType", "")).lower() == "depot"), nodes[0])
+    customers = [node for node in nodes if node is not depot and str(node.get("nodeType", "")).lower() != "depot"]
+    if not customers:
+        return None
+    model_directory = _model_directory(_artifact_path(_load_manifest_entry()))
+    model, _cached_env = _transformer_objects(model_directory, artifact)
+    if model is None:
+        return None
+    try:
+        import torch
+        from routefinder.envs import MTVRPEnv
+        from routefinder.envs.mtvrp.generator import MTVRPGenerator
+        env = MTVRPEnv(generator=MTVRPGenerator(num_loc=len(customers), variant_preset="cvrp"))
+        td = env.generator._generate(torch.Size([1]))
+        ordered_nodes = [depot, *customers]
+        locs = torch.tensor([_normalise_locs(ordered_nodes)], dtype=torch.float32)
+        td["locs"] = locs
+        capacity = max(1.0, float(payload.get("vehicleCapacity", len(customers))))
+        demand = torch.tensor([[max(0.0, float(node.get("demand", 1.0))) / capacity for node in customers]], dtype=torch.float32)
+        td["demand_linehaul"] = demand
+        td["demand_backhaul"] = torch.zeros_like(demand)
+        td["vehicle_capacity"] = torch.ones((1, 1), dtype=torch.float32)
+        td["capacity_original"] = torch.full((1, 1), capacity, dtype=torch.float32)
+        reset = env.reset(td)
+        with torch.inference_mode():
+            out = model.policy(reset, env, phase="test", num_starts=1, return_actions=True)
+        action_ids = [int(value) for value in out.get("actions", torch.empty((1, 0), dtype=torch.long))[0].tolist()]
+        stop_order = []
+        for action in action_ids:
+            if action <= 0 or action > len(customers):
+                continue
+            order_id = customers[action - 1].get("orderId") or customers[action - 1].get("order_id") or customers[action - 1].get("nodeId")
+            if order_id and order_id not in stop_order:
+                stop_order.append(str(order_id))
+        if not stop_order:
+            return None
+        reward = float(out.get("reward", torch.tensor([0.0]))[0].item())
+        return {
+            "stopOrder": stop_order,
+            "projectedPickupEtaMinutes": float(payload.get("projectedPickupEtaMinutes", 0.0)),
+            "projectedCompletionEtaMinutes": max(float(payload.get("projectedPickupEtaMinutes", 0.0)), float(payload.get("projectedCompletionEtaMinutes", 0.0)) - max(0.0, reward) * 0.01),
+            "routeScore": _clamp(0.75 + max(-0.25, min(0.25, reward * 0.01))),
+            "traceReasons": ["routefinder-transformer-inference", f"actions:{action_ids}"],
+        }
+    except Exception as exc:
+        return {
+            "stopOrder": payload.get("baselineStopOrder", []),
+            "projectedPickupEtaMinutes": float(payload.get("projectedPickupEtaMinutes", 0.0)),
+            "projectedCompletionEtaMinutes": float(payload.get("projectedCompletionEtaMinutes", 0.0)),
+            "routeScore": 0.0,
+            "traceReasons": ["routefinder-transformer-inference-failed", exc.__class__.__name__],
+        }
 
 
 def _route_payload(payload: dict) -> dict:
@@ -272,6 +448,9 @@ def _generate_alternatives(payload: dict, artifact: dict) -> list[dict]:
         ),
     )
     ranked = []
+    transformer_route = _transformer_route(payload, artifact)
+    if transformer_route is not None and transformer_route.get("stopOrder"):
+        ranked.append(transformer_route)
     for stop_order in _candidate_routes(payload):
         pickup_eta, completion_eta = _route_projection(stop_order, payload, config)
         ranked.append(
@@ -280,7 +459,7 @@ def _generate_alternatives(payload: dict, artifact: dict) -> list[dict]:
                 "projectedPickupEtaMinutes": pickup_eta,
                 "projectedCompletionEtaMinutes": completion_eta,
                 "routeScore": _route_score(stop_order, payload, config),
-                "traceReasons": ["routefinder-alternative", f"signature:{_signature(stop_order)}"],
+                "traceReasons": ["routefinder-json-policy-alternative", f"signature:{_signature(stop_order)}"],
             }
         )
     ranked.sort(key=lambda route: (-route["routeScore"], route["projectedPickupEtaMinutes"], _signature(route["stopOrder"])))
@@ -352,7 +531,14 @@ def _version_payload(manifest_entry: dict | None,
         "localArtifactPath": str(artifact_path) if artifact_path is not None else "",
         "materializationMode": materialization_mode,
         "loadedModelFingerprint": loaded_model_fingerprint,
-        **_worker_version_audit(model_loaded=model_loaded, warmup_done=warmup_done),
+        **_worker_version_audit(
+            model_loaded=model_loaded,
+            warmup_done=warmup_done,
+            checkpoint_loaded=bool(manifest_entry.get("_checkpoint_loaded")),
+            transformer_loaded=bool(manifest_entry.get("_transformer_loaded")),
+            transformer_load_reason=str(manifest_entry.get("_transformer_load_reason", "")),
+            inference_backend=str(manifest_entry.get("_inference_backend", "json-policy")),
+        ),
     }
 
 
@@ -457,6 +643,28 @@ def _readiness() -> tuple[bool, str, dict | None, dict | None, dict]:
     artifact_validation = _validate_promoted_artifact(artifact)
     if artifact_validation:
         return False, artifact_validation, manifest_entry, artifact, version_payload
+    model_directory = _model_directory(artifact_path)
+    checkpoint_validation = _checkpoint_validation(model_directory, artifact)
+    if checkpoint_validation:
+        return False, checkpoint_validation, manifest_entry, artifact, version_payload
+    transformer_loaded = False
+    transformer_load_reason = ""
+    if artifact.get("localCheckpointPath"):
+        transformer_loaded, transformer_load_reason = _try_load_transformer_model(model_directory, artifact)
+        if _require_transformer_load() and not transformer_loaded:
+            return False, transformer_load_reason, manifest_entry, artifact, version_payload
+    manifest_entry = dict(manifest_entry)
+    manifest_entry["_checkpoint_loaded"] = bool(artifact.get("localCheckpointPath"))
+    manifest_entry["_transformer_loaded"] = transformer_loaded
+    manifest_entry["_transformer_load_reason"] = transformer_load_reason
+    manifest_entry["_inference_backend"] = "checkpoint-transformer-loaded-json-policy" if transformer_loaded else artifact.get("inferenceBackend", "json-policy")
+    version_payload = _version_payload(
+        manifest_entry,
+        artifact_path=artifact_path,
+        loaded_from_local=loaded_from_local,
+        materialization_mode=materialization_mode,
+        loaded_model_fingerprint=loaded_model_fingerprint,
+    )
     if ready_requires_local_load:
         if metadata.get("sourceRepository") != artifact.get("sourceRepository"):
             return False, "materialization-source-repository-mismatch", manifest_entry, artifact, version_payload

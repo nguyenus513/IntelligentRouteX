@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import hashlib
 import json
@@ -102,14 +104,18 @@ def _clone_checkout(source_repository: str, source_ref: str, source_dir: Path) -
 
 
 def _relative_to(path: Path, repo_root: Path) -> str:
-    return path.relative_to(repo_root).as_posix() if path.is_relative_to(repo_root) else str(path)
+    try:
+        return path.relative_to(repo_root).as_posix()
+    except ValueError:
+        return str(path)
 
 
 def _promoted_artifact(source_repository: str,
                        source_ref: str,
                        source_commit: str,
                        source_checkpoint_path: str,
-                       source_checkpoint_digest: str) -> dict:
+                       source_checkpoint_digest: str,
+                       local_checkpoint_path: str) -> dict:
     return {
         "schemaVersion": PROMOTED_ARTIFACT_SCHEMA_VERSION,
         "modelName": PROMOTED_MODEL_NAME,
@@ -121,6 +127,9 @@ def _promoted_artifact(source_repository: str,
         "sourceCommit": source_commit,
         "sourceCheckpointPath": source_checkpoint_path,
         "sourceCheckpointDigest": source_checkpoint_digest,
+        "localCheckpointPath": local_checkpoint_path,
+        "localCheckpointDigest": source_checkpoint_digest,
+        "inferenceBackend": "checkpoint-present-json-policy",
         **PROMOTED_RUNTIME_PARAMETERS,
     }
 
@@ -142,12 +151,17 @@ def _write_promoted_output(repo_root: Path,
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"RouteFinder checkpoint not found after download: {checkpoint_path}")
     checkpoint_digest = "sha256:" + _sha256(checkpoint_path)
+    local_checkpoint_path = Path(source_checkpoint_path).as_posix()
+    promoted_checkpoint_path = model_directory / local_checkpoint_path
+    promoted_checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(checkpoint_path, promoted_checkpoint_path)
     promoted_artifact = _promoted_artifact(
         source_repository,
         source_ref,
         source_commit,
         source_checkpoint_path,
         checkpoint_digest,
+        local_checkpoint_path,
     )
     promoted_artifact_path.write_text(json.dumps(promoted_artifact, indent=2) + "\n", encoding="utf-8")
     loaded_fingerprint = _loaded_model_fingerprint(model_directory)
@@ -284,11 +298,8 @@ def main() -> int:
         "--source-test-command",
         default=DEFAULT_SOURCE_TEST_COMMAND,
     )
-    parser.add_argument(
-        "--run-upstream-test",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-    )
+    parser.add_argument("--run-upstream-test", dest="run_upstream_test", action="store_true", default=False)
+    parser.add_argument("--no-run-upstream-test", dest="run_upstream_test", action="store_false")
     args = parser.parse_args()
 
     result = materialize_routefinder(

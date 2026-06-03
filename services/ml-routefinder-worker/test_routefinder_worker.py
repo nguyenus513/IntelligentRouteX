@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import importlib.util
 import hashlib
 import json
@@ -184,6 +186,73 @@ class RouteFinderWorkerReadyTest(unittest.TestCase):
         self.assertFalse(audit["gpuAcceleration"])
         self.assertEqual("routefinder-json-heuristic-has-no-gpu-backend", audit["gpuAccelerationReason"])
 
+    def test_checkpoint_artifact_requires_local_checkpoint_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            model_root, artifact_path, _fingerprint = self._write_materialized_model(temp_root)
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            artifact["inferenceBackend"] = "checkpoint-present-json-policy"
+            artifact["localCheckpointPath"] = "checkpoints/100/rf-transformer.ckpt"
+            artifact["localCheckpointDigest"] = artifact["sourceCheckpointDigest"]
+            artifact_path.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
+            fingerprint = routefinder_app._loaded_model_fingerprint(model_root / "model")
+            self._write_metadata(temp_root, model_root, fingerprint, complete=True)
+            manifest_path = self._write_manifest(temp_root, fingerprint=fingerprint)
+
+            with patch.dict(os.environ, {"IRX_MODEL_MANIFEST_PATH": str(manifest_path)}):
+                ready, reason, _manifest, _artifact, _version_payload = routefinder_app._readiness()
+
+            self.assertFalse(ready)
+            self.assertEqual("local-checkpoint-missing", reason)
+
+    def test_checkpoint_artifact_reports_checkpoint_loaded(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            model_root, artifact_path, _fingerprint = self._write_materialized_model(temp_root)
+            checkpoint_path = model_root / "model" / "checkpoints" / "100" / "rf-transformer.ckpt"
+            checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+            checkpoint_path.write_bytes(b"fake-routefinder-checkpoint")
+            digest = "sha256:" + hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            artifact["inferenceBackend"] = "checkpoint-present-json-policy"
+            artifact["localCheckpointPath"] = "checkpoints/100/rf-transformer.ckpt"
+            artifact["localCheckpointDigest"] = digest
+            artifact["sourceCheckpointDigest"] = digest
+            artifact_path.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
+            fingerprint = routefinder_app._loaded_model_fingerprint(model_root / "model")
+            self._write_metadata(temp_root, model_root, fingerprint, complete=True, checkpoint_digest=digest)
+            manifest_path = self._write_manifest(temp_root, fingerprint=fingerprint)
+
+            with patch.dict(os.environ, {"IRX_MODEL_MANIFEST_PATH": str(manifest_path)}):
+                ready, reason, _manifest, _artifact, version_payload = routefinder_app._readiness()
+
+            self.assertTrue(ready)
+            self.assertEqual("", reason)
+            self.assertTrue(version_payload["checkpointLoaded"])
+            self.assertEqual("checkpoint-present-json-policy", version_payload["inferenceBackend"])
+
+    def test_transformer_route_is_added_to_candidate_pool(self) -> None:
+        payload = {
+            "anchorOrderId": "O1",
+            "baselineStopOrder": ["O1", "O2"],
+            "bundleOrderIds": ["O1", "O2"],
+            "projectedPickupEtaMinutes": 5.0,
+            "projectedCompletionEtaMinutes": 20.0,
+            "maxAlternatives": 3,
+        }
+        transformer_route = {
+            "stopOrder": ["O2", "O1"],
+            "projectedPickupEtaMinutes": 5.0,
+            "projectedCompletionEtaMinutes": 18.0,
+            "routeScore": 0.99,
+            "traceReasons": ["routefinder-transformer-inference"],
+        }
+        with patch.object(routefinder_app, "_transformer_route", return_value=transformer_route):
+            routes = routefinder_app._generate_alternatives(payload, MODEL_ARTIFACT)
+
+        self.assertEqual(["O2", "O1"], routes[0]["stopOrder"])
+        self.assertIn("routefinder-transformer-inference", routes[0]["traceReasons"])
+
     def _write_materialized_model(self, temp_root: Path) -> tuple[Path, Path, str]:
         model_root = temp_root / "services" / "models" / "materialized" / "routefinder"
         model_dir = model_root / "model"
@@ -194,7 +263,7 @@ class RouteFinderWorkerReadyTest(unittest.TestCase):
         self._write_metadata(temp_root, model_root, fingerprint, complete=True)
         return model_root, artifact_path, fingerprint
 
-    def _write_metadata(self, temp_root: Path, model_root: Path, fingerprint: str, *, complete: bool) -> None:
+    def _write_metadata(self, temp_root: Path, model_root: Path, fingerprint: str, *, complete: bool, checkpoint_digest: str = "sha256:checkpoint") -> None:
         model_dir = model_root / "model"
         metadata = {
             "schemaVersion": "routefinder-materialization/v2",
@@ -206,7 +275,7 @@ class RouteFinderWorkerReadyTest(unittest.TestCase):
             "sourceDownloadCommand": "python scripts/download_hf.py --models --no-data",
             "sourceTestCommand": "python test.py --checkpoint checkpoints/100/rf-transformer.ckpt",
             "sourceCheckpointPath": "checkpoints/100/rf-transformer.ckpt",
-            "sourceCheckpointDigest": "sha256:checkpoint",
+            "sourceCheckpointDigest": checkpoint_digest,
             "materializedAt": "2026-04-18T00:00:00+00:00",
             "modelArtifactPath": (model_root / "model" / "routefinder-model.json").relative_to(
                 temp_root / "services" / "models").as_posix(),

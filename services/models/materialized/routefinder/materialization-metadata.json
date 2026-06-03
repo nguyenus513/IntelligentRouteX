@@ -10,14 +10,19 @@
   "sourceTestCommand": "python test.py --checkpoint checkpoints/100/rf-transformer.ckpt",
   "sourceCheckpointPath": "checkpoints/100/rf-transformer.ckpt",
   "sourceCheckpointDigest": "sha256:eb09cee46108bac04012c2702f7cd4aac64341064167363255f02f2e63167f90",
-  "materializedAt": "2026-04-17T19:34:36.242885+00:00",
+  "materializedAt": "2026-06-02T17:09:37.084055+00:00",
   "modelArtifactPath": "materialized/routefinder/model/routefinder-model.json",
-  "loadedModelFingerprint": "sha256:b61f325ea67688bfa39bbece94f11c10023178070cbab3bd790c2922cbbef1bc",
+  "loadedModelFingerprint": "sha256:d2f0451a0e3da3ff7e3ab1bd58cfdcf5acef748da481507fdc027b096a93340d",
   "fileManifest": [
     {
+      "path": "checkpoints/100/rf-transformer.ckpt",
+      "size": 20147300,
+      "sha256": "eb09cee46108bac04012c2702f7cd4aac64341064167363255f02f2e63167f90"
+    },
+    {
       "path": "routefinder-model.json",
-      "size": 1087,
-      "sha256": "dae34d8eaeff4e40934e41cb0b12796757fed919460a49d4cb0291467d1fce6f"
+      "size": 1312,
+      "sha256": "a1fa42105acad68c67dc72defd16f359a159a28f929f72be4f0176daeb52911e"
     }
   ]
 }

@@ -48,7 +48,7 @@ workers:
   - worker_name: ml-routefinder-worker
     model_name: routefinder-local
     model_version: 2026.04.18-v2
-    artifact_digest: sha256:dae34d8eaeff4e40934e41cb0b12796757fed919460a49d4cb0291467d1fce6f
+    artifact_digest: sha256:a1fa42105acad68c67dc72defd16f359a159a28f929f72be4f0176daeb52911e
     rollback_artifact_digest: sha256:pending-rollback
     runtime_image: ghcr.io/minwsun/intelligentroutex/ml-routefinder-worker:bootstrap
     compatibility_contract_version: dispatch-v2-ml/v1
@@ -58,7 +58,7 @@ workers:
     materialization_mode: HF_CHECKPOINT_PROMOTION
     ready_requires_local_load: true
     offline_boot_supported: true
-    loaded_model_fingerprint: sha256:b61f325ea67688bfa39bbece94f11c10023178070cbab3bd790c2922cbbef1bc
+    loaded_model_fingerprint: sha256:d2f0451a0e3da3ff7e3ab1bd58cfdcf5acef748da481507fdc027b096a93340d
     source_repository: https://github.com/ai4co/routefinder.git
     source_ref: fe0e45b6df118af03c5f42db8b93a351f7629131
     source_checkpoint_path: checkpoints/100/rf-transformer.ckpt

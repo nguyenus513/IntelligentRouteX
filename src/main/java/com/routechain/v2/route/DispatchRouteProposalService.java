@@ -460,6 +460,7 @@ public final class DispatchRouteProposalService {
     private RouteFinderFeatureVector featureVector(String traceId,
                                                    RouteProposalCandidate seed,
                                                    DispatchCandidateContext context) {
+        List<String> orderIds = context.bundle(seed.proposal().bundleId()).orderIds().stream().sorted().toList();
         return new RouteFinderFeatureVector(
                 "routefinder-feature-vector/v1",
                 traceId,
@@ -468,15 +469,51 @@ public final class DispatchRouteProposalService {
                 seed.proposal().driverId(),
                 seed.proposal().source().name(),
                 seed.proposal().stopOrder(),
-                context.bundle(seed.proposal().bundleId()).orderIds().stream().sorted().toList(),
+                orderIds,
                 seed.proposal().projectedPickupEtaMinutes(),
                 seed.proposal().projectedCompletionEtaMinutes(),
                 seed.driverCandidate().rerankScore(),
                 context.bundleScore(seed.proposal().bundleId()),
                 seed.pickupAnchor().score(),
-                context.averagePairSupport(context.bundle(seed.proposal().bundleId()).orderIds()),
+                context.averagePairSupport(orderIds),
                 context.bundle(seed.proposal().bundleId()).boundaryCross(),
-                Math.max(1, properties.getMl().getRoutefinder().getMaxAlternativesPerDriverCandidate()));
+                Math.max(1, properties.getMl().getRoutefinder().getMaxAlternativesPerDriverCandidate()),
+                routeFinderNodes(seed, context, orderIds),
+                Math.max(1.0, orderIds.size()));
+    }
+
+    private List<RouteFinderFeatureVector.RouteFinderNode> routeFinderNodes(RouteProposalCandidate seed,
+                                                                             DispatchCandidateContext context,
+                                                                             List<String> orderIds) {
+        List<RouteFinderFeatureVector.RouteFinderNode> nodes = new ArrayList<>();
+        var driver = context.driver(seed.proposal().driverId());
+        if (driver != null) {
+            nodes.add(new RouteFinderFeatureVector.RouteFinderNode(
+                    "DEPOT:" + driver.driverId(),
+                    "",
+                    "depot",
+                    driver.currentLocation().latitude(),
+                    driver.currentLocation().longitude(),
+                    0.0,
+                    0.0,
+                    Math.max(1.0, seed.proposal().projectedCompletionEtaMinutes() + 30.0),
+                    0.0));
+        }
+        for (String orderId : orderIds) {
+            var order = context.order(orderId);
+            if (order == null) continue;
+            nodes.add(new RouteFinderFeatureVector.RouteFinderNode(
+                    "ORDER:" + order.orderId(),
+                    order.orderId(),
+                    "customer",
+                    order.dropoffPoint().latitude(),
+                    order.dropoffPoint().longitude(),
+                    1.0,
+                    0.0,
+                    Math.max(1.0, order.promisedEtaMinutes()),
+                    1.0));
+        }
+        return nodes;
     }
 
     private RouteProposalCandidate selectSeed(List<RouteProposalCandidate> tupleCandidates) {
